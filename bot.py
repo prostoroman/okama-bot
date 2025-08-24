@@ -100,6 +100,7 @@ class OkamaFinanceBot:
 /test [symbols] - Тест интеграции Okama
 /testai - Тест подключения к YandexGPT API
 /debug [symbols] - Отладка данных портфеля
+/fallback - Тест fallback механизма при сбоях AI
 
 Чат с YandexGPT:
 /chat [question] - Получить финансовый совет от YandexGPT
@@ -113,6 +114,7 @@ class OkamaFinanceBot:
 • /monte_carlo AGG.US SPY.US 20 100 norm
 • /allocation RGBITR.INDX MCFTR.INDX GC.COMM
 • /debug RGBITR.INDX MCFTR.INDX
+• /fallback - Тест fallback механизма
 
 Естественный язык:
 Вы также можете просто написать естественным языком:
@@ -924,6 +926,50 @@ Use This To:
                 
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка отладки: {str(e)}")
+    
+    async def test_fallback_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Test fallback mechanism when AI service fails"""
+        try:
+            await update.message.reply_text("🧪 Тестирование fallback механизма...")
+            
+            # Test different AI methods to see fallback behavior
+            test_results = []
+            
+            # Test 1: Simple query analysis
+            try:
+                result = self.yandexgpt_service.analyze_query("test portfolio analysis")
+                test_results.append(f"✅ analyze_query: {result.get('intent', 'unknown')}")
+            except Exception as e:
+                test_results.append(f"❌ analyze_query: {str(e)}")
+            
+            # Test 2: Financial advice
+            try:
+                result = self.yandexgpt_service.get_financial_advice("How to diversify portfolio?")
+                if "технических проблем" in result:
+                    test_results.append("✅ get_financial_advice: fallback activated")
+                else:
+                    test_results.append("✅ get_financial_advice: AI working")
+            except Exception as e:
+                test_results.append(f"❌ get_financial_advice: {str(e)}")
+            
+            # Test 3: Portfolio optimization
+            try:
+                result = self.yandexgpt_service.suggest_improvements(["RGBITR.INDX"], {"volatility": 0.15})
+                if "технических проблем" in result:
+                    test_results.append("✅ suggest_improvements: fallback activated")
+                else:
+                    test_results.append("✅ suggest_improvements: AI working")
+            except Exception as e:
+                test_results.append(f"❌ suggest_improvements: {str(e)}")
+            
+            # Format results
+            result_text = "🧪 Результаты тестирования fallback механизма:\n\n" + "\n".join(test_results)
+            result_text += "\n\n💡 Fallback механизм обеспечивает работу бота даже при проблемах с AI сервисом."
+            
+            await update.message.reply_text(result_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка тестирования fallback: {str(e)}")
         
     def run(self):
         """Run the bot"""
@@ -945,6 +991,7 @@ Use This To:
         application.add_handler(CommandHandler("test", self.test_command))
         application.add_handler(CommandHandler("testai", self.test_ai_command))
         application.add_handler(CommandHandler("debug", self.debug_command))
+        application.add_handler(CommandHandler("fallback", self.test_fallback_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))

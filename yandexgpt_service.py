@@ -99,6 +99,7 @@ Format responses professionally with clear sections, bullet points, and relevant
             return analysis
             
         except Exception as e:
+            print(f"AI service error in analyze_query: {e}")
             # Fallback to simple keyword matching
             return self._fallback_analysis(user_message)
     
@@ -155,7 +156,12 @@ Format responses professionally with clear sections, bullet points, and relevant
             return response
             
         except Exception as e:
-            return f"I'm having trouble connecting to my AI assistant right now. Please try again later. Error: {str(e)}"
+            print(f"AI service error in get_financial_advice: {e}")
+            return "Из-за технических проблем с AI сервисом, вот общие финансовые рекомендации:\n\n" + \
+                   "• Диверсифицируйте портфель по различным классам активов\n" + \
+                   "• Учитывайте ваш профиль риска и инвестиционный горизонт\n" + \
+                   "• Регулярно пересматривайте и ребалансируйте портфель\n" + \
+                   "• Рассмотрите консультацию с финансовым советником"
     
     def enhance_analysis_results(self, analysis_type: str, results: Dict, user_query: str) -> str:
         """Enhance analysis results with YandexGPT insights"""
@@ -181,7 +187,8 @@ Format responses professionally with clear sections, bullet points, and relevant
             return response
             
         except Exception as e:
-            return "Analysis completed successfully. The results show the financial metrics you requested."
+            print(f"AI service error in enhance_analysis_results: {e}")
+            return "Анализ завершен успешно. Результаты показывают запрошенные финансовые метрики."
     
     def suggest_improvements(self, portfolio_symbols: List[str], current_metrics: Dict) -> str:
         """Suggest portfolio improvements based on current metrics"""
@@ -206,7 +213,12 @@ Format responses professionally with clear sections, bullet points, and relevant
             return response
             
         except Exception as e:
-            return "Consider consulting with a financial advisor for personalized portfolio optimization advice."
+            print(f"AI service error in suggest_improvements: {e}")
+            return "Из-за технических проблем с AI сервисом, вот общие рекомендации по оптимизации портфеля:\n\n" + \
+                   "• Диверсифицируйте по различным классам активов (акции, облигации, товары)\n" + \
+                   "• Учитывайте ваш профиль риска и инвестиционный горизонт\n" + \
+                   "• Регулярно ребалансируйте портфель\n" + \
+                   "• Рассмотрите консультацию с финансовым советником"
     
     def _call_yandex_api(self, system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> str:
         """Make a call to YandexGPT API"""
@@ -253,6 +265,17 @@ Format responses professionally with clear sections, bullet points, and relevant
                 "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
             }
             
+            # Alternative format with different models for fallback
+            alt_data_fallback = {
+                "modelUri": f"gpt://{self.folder_id}/yandexgpt",
+                "completionOptions": {
+                    "temperature": str(temperature),
+                    "maxTokens": str(max_tokens),
+                    "stream": False
+                },
+                "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
+            }
+            
             # Alternative model URIs to try with configured folder ID (yandexgpt-pro first)
             alt_model_uris = [
                 f"gpt://{self.folder_id}/yandexgpt-pro",
@@ -288,6 +311,86 @@ Format responses professionally with clear sections, bullet points, and relevant
                 else:
                     print(f"Alternative format also failed: {response.status_code}")
             
+            # If we get a 500 error (internal server error), try different models
+            if response.status_code == 500:
+                print(f"Primary model (yandexgpt-pro) failed with 500, trying fallback models...")
+                
+                # First try alternative format with yandexgpt-pro
+                print("Trying alternative format with yandexgpt-pro...")
+                try:
+                    alt_response = requests.post(
+                        self.base_url,
+                        headers=headers,
+                        json=alt_data,
+                        timeout=30
+                    )
+                    
+                    if alt_response.status_code == 200:
+                        print("✓ Alternative format with yandexgpt-pro succeeded!")
+                        response = alt_response
+                    else:
+                        print(f"Alternative format with yandexgpt-pro failed: {alt_response.status_code}")
+                        
+                        # Try alternative models one by one
+                        for model_uri in alt_model_uris[1:]:  # Skip the first one (yandexgpt-pro) since it failed
+                            print(f"Trying fallback model: {model_uri}")
+                            
+                            # Try both formats with fallback models
+                            for format_data in [data, alt_data_fallback]:
+                                format_data_copy = format_data.copy()
+                                format_data_copy["modelUri"] = model_uri
+                                
+                                try:
+                                    fallback_response = requests.post(
+                                        self.base_url,
+                                        headers=headers,
+                                        json=format_data_copy,
+                                        timeout=30
+                                    )
+                                    
+                                    if fallback_response.status_code == 200:
+                                        print(f"✓ Fallback model {model_uri} succeeded!")
+                                        response = fallback_response
+                                        break
+                                    else:
+                                        print(f"Fallback model {model_uri} with format failed: {fallback_response.status_code}")
+                                        
+                                except Exception as fallback_error:
+                                    print(f"Error trying fallback model {model_uri}: {fallback_error}")
+                                    continue
+                            
+                            if response.status_code == 200:
+                                break
+                                
+                except Exception as alt_error:
+                    print(f"Error trying alternative format: {alt_error}")
+                    
+                    # Continue with model fallback
+                    for model_uri in alt_model_uris[1:]:
+                        print(f"Trying fallback model: {model_uri}")
+                        
+                        fallback_data = data.copy()
+                        fallback_data["modelUri"] = model_uri
+                        
+                        try:
+                            fallback_response = requests.post(
+                                self.base_url,
+                                headers=headers,
+                                json=fallback_data,
+                                timeout=30
+                            )
+                            
+                            if fallback_response.status_code == 200:
+                                print(f"✓ Fallback model {model_uri} succeeded!")
+                                response = fallback_response
+                                break
+                            else:
+                                print(f"Fallback model {model_uri} failed: {fallback_response.status_code}")
+                                
+                        except Exception as fallback_error:
+                            print(f"Error trying fallback model {model_uri}: {fallback_error}")
+                            continue
+            
             print(f"YandexGPT API response status: {response.status_code}")
             print(f"YandexGPT API response headers: {dict(response.headers)}")
             
@@ -316,9 +419,9 @@ Format responses professionally with clear sections, bullet points, and relevant
                 # Try to parse error response
                 try:
                     error_data = response.json()
-                    error_message = error_data.get("message", "Unknown error")
-                    error_code = error_data.get("code", "No error code")
-                    error_details = error_data.get("details", "No details")
+                    error_message = error_data.get("error", {}).get("message", "Unknown error")
+                    error_code = error_data.get("error", {}).get("grpcCode", "No error code")
+                    error_details = error_data.get("error", {}).get("details", "No details")
                     print(f"Error message: {error_message}")
                     print(f"Error code: {error_code}")
                     print(f"Error details: {error_details}")
@@ -347,6 +450,10 @@ Format responses professionally with clear sections, bullet points, and relevant
             import traceback
             traceback.print_exc()
             return f"Unexpected error: {str(e)}"
+        
+        # If we reach here, all attempts failed
+        print("All YandexGPT API attempts failed")
+        return "Из-за технических проблем с AI сервисом, попробуйте позже или используйте базовые команды бота для анализа портфеля."
     
     def test_api_connection(self) -> Dict:
         """Test method to debug YandexGPT API connection"""
