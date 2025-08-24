@@ -213,12 +213,13 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 "Content-Type": "application/json"
             }
             
-            # Use the correct YandexGPT API endpoint and model
+            # Use the correct YandexGPT API format
+            # Try different request formats based on Yandex documentation
             data = {
                 "modelUri": "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-lite",
                 "completionOptions": {
-                    "temperature": temperature,
-                    "maxTokens": str(max_tokens),  # Yandex expects string
+                    "temperature": str(temperature),  # Ensure string format
+                    "maxTokens": str(max_tokens),    # Ensure string format
                     "stream": False
                 },
                 "messages": [
@@ -233,14 +234,51 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 ]
             }
             
-            print(f"Calling YandexGPT API with data: {json.dumps(data, indent=2)}")
+            # Alternative format if the first one fails
+            alt_data = {
+                "modelUri": "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-lite",
+                "completionOptions": {
+                    "temperature": str(temperature),
+                    "maxTokens": str(max_tokens),
+                    "stream": False
+                },
+                "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
+            }
             
+            # Alternative model URIs to try
+            alt_model_uris = [
+                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-lite",
+                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt",
+                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-pro",
+                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-2"
+            ]
+            
+            print(f"Calling YandexGPT API with primary format: {json.dumps(data, indent=2)}")
+            
+            # Try primary format first
             response = requests.post(
                 self.base_url,
                 headers=headers,
                 json=data,
                 timeout=30
             )
+            
+            # If primary format fails with 400, try alternative format
+            if response.status_code == 400:
+                print(f"Primary format failed with 400, trying alternative format...")
+                print(f"Alternative format: {json.dumps(alt_data, indent=2)}")
+                
+                response = requests.post(
+                    self.base_url,
+                    headers=headers,
+                    json=alt_data,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    print("✓ Alternative format succeeded!")
+                else:
+                    print(f"Alternative format also failed: {response.status_code}")
             
             print(f"YandexGPT API response status: {response.status_code}")
             print(f"YandexGPT API response headers: {dict(response.headers)}")
@@ -271,11 +309,24 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 try:
                     error_data = response.json()
                     error_message = error_data.get("message", "Unknown error")
+                    error_code = error_data.get("code", "No error code")
+                    error_details = error_data.get("details", "No details")
                     print(f"Error message: {error_message}")
-                except:
-                    error_message = response.text
-                
-                return f"AI service error ({response.status_code}): {error_message}"
+                    print(f"Error code: {error_code}")
+                    print(f"Error details: {error_details}")
+                    
+                    # Return more detailed error information
+                    if error_message != "Unknown error":
+                        return f"AI service error ({response.status_code}): {error_message}"
+                    elif error_code != "No error code":
+                        return f"AI service error ({response.status_code}): Code {error_code}"
+                    else:
+                        return f"AI service error ({response.status_code}): {response.text[:200]}"
+                        
+                except Exception as parse_error:
+                    print(f"Could not parse error response: {parse_error}")
+                    # Return the raw response text for debugging
+                    return f"AI service error ({response.status_code}): {response.text[:200]}"
                 
         except requests.exceptions.Timeout:
             print("YandexGPT API request timed out")

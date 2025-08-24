@@ -129,18 +129,66 @@ class OkamaService:
     def generate_performance_chart(self, portfolio: ok.Portfolio) -> bytes:
         """Generate portfolio performance chart"""
         try:
+            print(f"Generating performance chart for portfolio...")
+            
+            # Check available attributes
+            available_attrs = [attr for attr in dir(portfolio) if not attr.startswith('_')]
+            print(f"Available portfolio attributes: {available_attrs}")
+            
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
             
-            # Cumulative returns
-            portfolio.cumulative_returns.plot(ax=ax1, title='Cumulative Returns')
-            ax1.set_ylabel('Cumulative Return')
-            ax1.grid(True)
+            # Try to plot cumulative returns with fallback
+            try:
+                if hasattr(portfolio, 'cumulative_returns') and not portfolio.cumulative_returns.empty:
+                    portfolio.cumulative_returns.plot(ax=ax1, title='Cumulative Returns')
+                    ax1.set_ylabel('Cumulative Return')
+                    ax1.grid(True)
+                elif hasattr(portfolio, 'returns') and not portfolio.returns.empty:
+                    # Fallback to regular returns
+                    portfolio.returns.cumsum().plot(ax=ax1, title='Cumulative Returns (from returns)')
+                    ax1.set_ylabel('Cumulative Return')
+                    ax1.grid(True)
+                else:
+                    # Create a simple placeholder
+                    ax1.text(0.5, 0.5, 'Cumulative Returns\n(Data not available)', 
+                            ha='center', va='center', transform=ax1.transAxes)
+                    ax1.set_title('Cumulative Returns')
+                    ax1.grid(True)
+            except Exception as e:
+                print(f"Error plotting cumulative returns: {e}")
+                ax1.text(0.5, 0.5, 'Cumulative Returns\n(Error plotting)', 
+                        ha='center', va='center', transform=ax1.transAxes)
+                ax1.set_title('Cumulative Returns')
+                ax1.grid(True)
             
-            # Rolling volatility
-            portfolio.rolling_volatility.plot(ax=ax2, title='Rolling Volatility (30 days)')
-            ax2.set_ylabel('Volatility')
-            ax2.set_xlabel('Date')
-            ax2.grid(True)
+            # Try to plot rolling volatility with fallback
+            try:
+                if hasattr(portfolio, 'rolling_volatility') and not portfolio.rolling_volatility.empty:
+                    portfolio.rolling_volatility.plot(ax=ax2, title='Rolling Volatility (30 days)')
+                    ax2.set_ylabel('Volatility')
+                    ax2.set_xlabel('Date')
+                    ax2.grid(True)
+                elif hasattr(portfolio, 'volatility'):
+                    # Fallback to static volatility
+                    ax2.axhline(y=portfolio.volatility, color='r', linestyle='-', 
+                               label=f'Volatility: {portfolio.volatility:.2%}')
+                    ax2.set_ylabel('Volatility')
+                    ax2.set_xlabel('Time')
+                    ax2.set_title('Portfolio Volatility')
+                    ax2.legend()
+                    ax2.grid(True)
+                else:
+                    # Create a simple placeholder
+                    ax2.text(0.5, 0.5, 'Volatility\n(Data not available)', 
+                            ha='center', va='center', transform=ax2.transAxes)
+                    ax2.set_title('Portfolio Volatility')
+                    ax2.grid(True)
+            except Exception as e:
+                print(f"Error plotting volatility: {e}")
+                ax2.text(0.5, 0.5, 'Volatility\n(Error plotting)', 
+                        ha='center', va='center', transform=ax2.transAxes)
+                ax2.set_title('Portfolio Volatility')
+                ax2.grid(True)
             
             plt.tight_layout()
             
@@ -152,7 +200,24 @@ class OkamaService:
             
             return img_buffer.getvalue()
         except Exception as e:
-            raise Exception(f"Error generating performance chart: {str(e)}")
+            print(f"Error generating performance chart: {e}")
+            # Create a simple error chart
+            try:
+                fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+                ax.text(0.5, 0.5, f'Chart Generation Error\n{str(e)}', 
+                       ha='center', va='center', transform=ax.transAxes)
+                ax.set_title('Portfolio Performance Chart')
+                ax.grid(True)
+                
+                img_buffer = io.BytesIO()
+                plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+                img_buffer.seek(0)
+                plt.close()
+                
+                return img_buffer.getvalue()
+            except:
+                # If even the error chart fails, raise the original error
+                raise Exception(f"Error generating performance chart: {str(e)}")
     
     def generate_correlation_matrix(self, symbols: List[str]) -> bytes:
         """Generate correlation matrix heatmap"""
@@ -169,19 +234,55 @@ class OkamaService:
                     asset = ok.Asset(symbol)
                     print(f"Asset created successfully for {symbol}")
                     
+                    # Debug: Print available attributes
+                    available_attrs = [attr for attr in dir(asset) if not attr.startswith('_')]
+                    print(f"Available attributes for {symbol}: {available_attrs}")
+                    
+                    # Try different possible price data attributes
+                    price_data = None
+                    price_source = None
+                    
+                    # Check for price_ts first
                     if hasattr(asset, 'price_ts'):
                         price_data = asset.price_ts
-                        print(f"Price data for {symbol}: {type(price_data)}, length: {len(price_data) if hasattr(price_data, '__len__') else 'N/A'}")
-                        
-                        if not price_data.empty if hasattr(price_data, 'empty') else len(price_data) > 0:
-                            data[symbol] = price_data
-                            print(f"✓ Added {symbol} to correlation data")
-                        else:
-                            print(f"✗ {symbol} has empty price data")
-                            failed_symbols.append(f"{symbol} (empty data)")
+                        price_source = 'price_ts'
+                    # Check for price_data
+                    elif hasattr(asset, 'price_data'):
+                        price_data = asset.price_data
+                        price_source = 'price_data'
+                    # Check for prices
+                    elif hasattr(asset, 'prices'):
+                        price_data = asset.prices
+                        price_source = 'prices'
+                    # Check for close
+                    elif hasattr(asset, 'close'):
+                        price_data = asset.close
+                        price_source = 'close'
+                    # Check for historical_data
+                    elif hasattr(asset, 'historical_data'):
+                        price_data = asset.historical_data
+                        price_source = 'historical_data'
                     else:
-                        print(f"✗ {symbol} has no price_ts attribute")
-                        failed_symbols.append(f"{symbol} (no price_ts)")
+                        print(f"✗ {symbol} has no recognizable price data attribute")
+                        failed_symbols.append(f"{symbol} (no price data found)")
+                        continue
+                    
+                    print(f"Found price data in '{price_source}' for {symbol}: {type(price_data)}")
+                    
+                    # Check if we have valid data
+                    if price_data is not None:
+                        if hasattr(price_data, 'empty') and not price_data.empty:
+                            data[symbol] = price_data
+                            print(f"✓ Added {symbol} to correlation data (pandas DataFrame)")
+                        elif hasattr(price_data, '__len__') and len(price_data) > 0:
+                            data[symbol] = price_data
+                            print(f"✓ Added {symbol} to correlation data (length: {len(price_data)})")
+                        else:
+                            print(f"✗ {symbol} has empty price data in {price_source}")
+                            failed_symbols.append(f"{symbol} (empty {price_source})")
+                    else:
+                        print(f"✗ {symbol} has None price data in {price_source}")
+                        failed_symbols.append(f"{symbol} (None {price_source})")
                         
                 except Exception as e:
                     print(f"✗ Error processing {symbol}: {e}")
@@ -192,10 +293,17 @@ class OkamaService:
             print(f"Failed symbols: {failed_symbols}")
             
             if len(data) < 2:
-                error_msg = f"Need at least 2 valid symbols for correlation matrix. "
-                error_msg += f"Processed: {len(data)}, Failed: {len(failed_symbols)}. "
-                error_msg += f"Failed symbols: {', '.join(failed_symbols)}"
-                raise Exception(error_msg)
+                print(f"⚠️ Not enough price data for correlation matrix. Trying fallback method...")
+                
+                # Try to create a simple correlation matrix using available metrics
+                try:
+                    return self._generate_fallback_correlation_matrix(symbols)
+                except Exception as fallback_error:
+                    print(f"Fallback method also failed: {fallback_error}")
+                    error_msg = f"Need at least 2 valid symbols for correlation matrix. "
+                    error_msg += f"Processed: {len(data)}, Failed: {len(failed_symbols)}. "
+                    error_msg += f"Failed symbols: {', '.join(failed_symbols)}"
+                    raise Exception(error_msg)
             
             # Create DataFrame and calculate correlation
             df = pd.DataFrame(data)
@@ -232,16 +340,45 @@ class OkamaService:
             print(f"Efficient frontier points: {type(ef_points)}, length: {len(ef_points) if hasattr(ef_points, '__len__') else 'N/A'}")
             
             plt.figure(figsize=(12, 8))
-            plt.scatter(ef_points['Risk'], ef_points['Return'], alpha=0.6, s=50)
-            plt.plot(ef_points['Risk'], ef_points['Return'], 'b-', linewidth=2)
+            
+            # Check if we have efficient frontier points
+            if hasattr(ef_points, '__len__') and len(ef_points) > 0:
+                try:
+                    if hasattr(ef_points, 'columns') and 'Risk' in ef_points.columns and 'Return' in ef_points.columns:
+                        plt.scatter(ef_points['Risk'], ef_points['Return'], alpha=0.6, s=50)
+                        plt.plot(ef_points['Risk'], ef_points['Return'], 'b-', linewidth=2)
+                        print("✓ Plotted efficient frontier curve")
+                    else:
+                        print("⚠️ Efficient frontier points don't have expected 'Risk' and 'Return' columns")
+                        # Try to plot as generic data
+                        if hasattr(ef_points, 'iloc'):
+                            plt.scatter(ef_points.iloc[:, 0], ef_points.iloc[:, 1], alpha=0.6, s=50)
+                            plt.plot(ef_points.iloc[:, 0], ef_points.iloc[:, 1], 'b-', linewidth=2)
+                            print("✓ Plotted efficient frontier using generic data")
+                        else:
+                            print("⚠️ Could not plot efficient frontier curve")
+                except Exception as e:
+                    print(f"✗ Error plotting efficient frontier curve: {e}")
+            else:
+                print("⚠️ No efficient frontier points available")
             
             # Mark individual assets
             for i, symbol in enumerate(symbols):
                 try:
                     asset = ok.Asset(symbol)
-                    plt.scatter(asset.volatility, asset.mean_return, 
-                              s=100, marker='o', label=symbol, alpha=0.8)
-                except:
+                    
+                    # Use getattr with fallbacks for asset attributes
+                    volatility = getattr(asset, 'volatility', 0)
+                    mean_return = getattr(asset, 'mean_return', 0)
+                    
+                    if volatility != 0 and mean_return != 0:
+                        plt.scatter(volatility, mean_return, 
+                                  s=100, marker='o', label=symbol, alpha=0.8)
+                        print(f"✓ Added asset {symbol} to efficient frontier plot")
+                    else:
+                        print(f"⚠️ Asset {symbol} has missing volatility or return data")
+                except Exception as e:
+                    print(f"✗ Error processing asset {symbol}: {e}")
                     continue
             
             plt.xlabel('Volatility (Risk)')
@@ -412,3 +549,112 @@ class OkamaService:
             
         except Exception as e:
             return {'error': f"Test failed: {str(e)}"}
+    
+    def _generate_fallback_correlation_matrix(self, symbols: List[str]) -> bytes:
+        """Generate a fallback correlation matrix when price data is not available"""
+        try:
+            print(f"Generating fallback correlation matrix for symbols: {symbols}")
+            
+            # Try to get basic metrics for correlation
+            metrics_data = {}
+            for symbol in symbols:
+                try:
+                    asset = ok.Asset(symbol)
+                    
+                    # Get basic metrics that might be available
+                    metrics = {}
+                    metric_names = ['volatility', 'mean_return', 'total_return', 'sharpe_ratio']
+                    
+                    for metric in metric_names:
+                        if hasattr(asset, metric):
+                            value = getattr(asset, metric)
+                            if value is not None and value != 0:
+                                metrics[metric] = value
+                    
+                    if metrics:
+                        metrics_data[symbol] = metrics
+                        print(f"✓ Got metrics for {symbol}: {list(metrics.keys())}")
+                    else:
+                        print(f"⚠️ No metrics available for {symbol}")
+                        
+                except Exception as e:
+                    print(f"✗ Error getting metrics for {symbol}: {e}")
+                    continue
+            
+            if len(metrics_data) < 2:
+                raise Exception("Not enough metrics data for fallback correlation matrix")
+            
+            # Create a simple correlation matrix from available metrics
+            plt.figure(figsize=(10, 8))
+            
+            # Create a simple visualization showing available metrics
+            fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+            fig.suptitle('Asset Metrics Overview (Fallback)', fontsize=16)
+            
+            # Plot volatility comparison
+            if any('volatility' in metrics for metrics in metrics_data.values()):
+                volatilities = [metrics.get('volatility', 0) for metrics in metrics_data.values()]
+                symbols_list = list(metrics_data.keys())
+                axes[0, 0].bar(symbols_list, volatilities)
+                axes[0, 0].set_title('Volatility Comparison')
+                axes[0, 0].set_ylabel('Volatility')
+                axes[0, 0].tick_params(axis='x', rotation=45)
+            
+            # Plot return comparison
+            if any('mean_return' in metrics for metrics in metrics_data.values()):
+                returns = [metrics.get('mean_return', 0) for metrics in metrics_data.values()]
+                axes[0, 1].bar(symbols_list, returns)
+                axes[0, 1].set_title('Mean Return Comparison')
+                axes[0, 1].set_ylabel('Mean Return')
+                axes[0, 1].tick_params(axis='x', rotation=45)
+            
+            # Plot Sharpe ratio comparison
+            if any('sharpe_ratio' in metrics for metrics in metrics_data.values()):
+                sharpe_ratios = [metrics.get('sharpe_ratio', 0) for metrics in metrics_data.values()]
+                axes[1, 0].bar(symbols_list, sharpe_ratios)
+                axes[1, 0].set_title('Sharpe Ratio Comparison')
+                axes[1, 0].set_ylabel('Sharpe Ratio')
+                axes[1, 0].tick_params(axis='x', rotation=45)
+            
+            # Create a simple correlation-like matrix
+            if len(metrics_data) >= 2:
+                # Use volatility as a proxy for correlation (simplified)
+                volatilities = [metrics.get('volatility', 0) for metrics in metrics_data.values()]
+                correlation_matrix = np.corrcoef(volatilities) if len(volatilities) > 1 else np.array([[1]])
+                
+                im = axes[1, 1].imshow(correlation_matrix, cmap='coolwarm', vmin=-1, vmax=1)
+                axes[1, 1].set_title('Volatility Correlation (Proxy)')
+                axes[1, 1].set_xticks(range(len(symbols_list)))
+                axes[1, 1].set_yticks(range(len(symbols_list)))
+                axes[1, 1].set_xticklabels(symbols_list)
+                axes[1, 1].set_yticklabels(symbols_list)
+                
+                # Add colorbar
+                plt.colorbar(im, ax=axes[1, 1])
+            
+            plt.tight_layout()
+            
+            # Save to bytes
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            print("✓ Fallback correlation matrix generated successfully")
+            return img_buffer.getvalue()
+            
+        except Exception as e:
+            print(f"✗ Fallback correlation matrix generation failed: {e}")
+            # Create a simple error chart
+            fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+            ax.text(0.5, 0.5, f'Correlation Matrix Error\n{str(e)}', 
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Asset Correlation Matrix')
+            ax.grid(True)
+            
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            return img_buffer.getvalue()
