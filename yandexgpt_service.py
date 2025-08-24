@@ -5,7 +5,34 @@ from typing import Dict, List, Optional
 from config import Config
 
 class YandexGPTService:
-    """Service class for YandexGPT integration"""
+    """
+    Service class for YandexGPT integration with Okama platform support.
+    
+    This service includes enhanced prompts and methods to properly format financial
+    instrument names according to Okama namespace conventions:
+    
+    - CBR: Central Banks official currency exchange rates
+    - CC: Cryptocurrency pairs with USD  
+    - COMM: Commodities prices
+    - FX: FOREX currency market
+    - INDX: Indexes
+    - INFL: Inflation
+    - LSE: London Stock Exchange
+    - MOEX: Moscow Exchange
+    - PF: Investment Portfolios
+    - PIF: Russian open-end mutual funds
+    - RATE: Bank deposit rates
+    - RATIO: Financial ratios
+    - RE: Real estate prices
+    - US: US Stock Exchanges and mutual funds
+    - XAMS: Euronext Amsterdam
+    - XETR: XETRA Exchange
+    - XFRA: Frankfurt Stock Exchange
+    - XSTU: Stuttgart Exchange
+    - XTAE: Tel Aviv Stock Exchange (TASE)
+    
+    The service automatically converts common instrument names to proper Okama format.
+    """
     
     def __init__(self):
         self.api_key = Config.YANDEX_API_KEY
@@ -49,6 +76,38 @@ Your core competencies include:
 - Behavioral finance and market psychology
 - Regulatory compliance and best practices
 
+IMPORTANT: When processing user commands in free form, you MUST convert instrument names to the format understood by Okama platform using the following namespace mapping:
+
+{'CBR': 'Central Banks official currency exchange rates',
+ 'CC': 'Cryptocurrency pairs with USD',
+ 'COMM': 'Commodities prices',
+ 'FX': 'FOREX currency market',
+ 'INDX': 'Indexes',
+ 'INFL': 'Inflation',
+ 'LSE': 'London Stock Exchange',
+ 'MOEX': 'Moscow Exchange',
+ 'PF': 'Investment Portfolios',
+ 'PIF': 'Russian open-end mutual funds',
+ 'RATE': 'Bank deposit rates',
+ 'RATIO': 'Financial ratios',
+ 'RE': 'Real estate prices',
+ 'US': 'US Stock Exchanges and mutual funds',
+ 'XAMS': 'Euronext Amsterdam',
+ 'XETR': 'XETRA Exchange',
+ 'XFRA': 'Frankfurt Stock Exchange',
+ 'XSTU': 'Stuttgart Exchange',
+ 'XTAE': 'Tel Aviv Stock Exchange (TASE)'}
+
+EXAMPLES of proper formatting:
+- "S&P 500" → "SPX.INDX"
+- "Apple stock" → "AAPL.US"
+- "Bitcoin" → "BTC.CC"
+- "Gold" → "XAU.COMM"
+- "EUR/USD" → "EURUSD.FX"
+- "Sberbank" → "SBER.MOEX"
+- "Tesla" → "TSLA.US"
+- "Oil" → "BRENT.COMM"
+
 When providing financial analysis:
 1. Use quantitative methods and data-driven insights
 2. Explain complex financial concepts with clear examples
@@ -57,6 +116,7 @@ When providing financial analysis:
 5. Include relevant financial ratios and metrics
 6. Consider market conditions and economic factors
 7. Recommend consulting licensed financial advisors for major decisions
+8. ALWAYS format instrument names using the Okama namespace format above
 
 Format responses professionally with clear sections, bullet points, and relevant financial terminology. Be precise, thorough, and educational."""
 
@@ -67,25 +127,32 @@ Format responses professionally with clear sections, bullet points, and relevant
             analysis_prompt = f"""
             Analyze this user message and extract the following information:
             1. Intent (portfolio, risk, correlation, efficient_frontier, compare, chat, other)
-            2. Symbols mentioned (stock tickers, ETF symbols)
+            2. Symbols mentioned (stock tickers, ETF symbols) - IMPORTANT: Convert to Okama format
             3. Time period mentioned
             4. Specific metrics requested
             
             User message: "{user_message}"
             
+            CRITICAL: You MUST convert any mentioned financial instruments to Okama namespace format:
+            - Stocks: "AAPL.US", "SBER.MOEX", "TSLA.US"
+            - Indexes: "SPX.INDX", "RTSI.INDX", "DAX.INDX"
+            - Commodities: "XAU.COMM", "BRENT.COMM", "SILVER.COMM"
+            - Forex: "EURUSD.FX", "GBPUSD.FX"
+            - Crypto: "BTC.CC", "ETH.CC"
+            
             Return the analysis as JSON with these fields:
             - intent: string
-            - symbols: list of strings
+            - symbols: list of strings (in Okama format)
             - time_period: string or null
             - metrics: list of strings
             - is_chat: boolean (true if it's a general question)
             """
             
             response = self._call_yandex_api(
-                system_prompt="You are a helpful assistant that analyzes user queries and returns JSON responses.",
+                system_prompt="You are a helpful assistant that analyzes user queries and returns JSON responses. You MUST convert financial instrument names to Okama namespace format.",
                 user_prompt=analysis_prompt,
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=300
             )
             
             # Extract and parse JSON response
@@ -117,6 +184,35 @@ Format responses professionally with clear sections, bullet points, and relevant
         
         # Extract symbols (including namespace like .INDX, .US, .COMM)
         symbols = re.findall(r'\b[A-Z]{1,6}\.[A-Z]{2,4}\b', user_message)
+        
+        # Try to extract and convert common instrument names to Okama format
+        # Common stock patterns
+        stock_patterns = {
+            r'\bapple\b': 'AAPL.US',
+            r'\btesla\b': 'TSLA.US',
+            r'\bgoogle\b': 'GOOGL.US',
+            r'\bmicrosoft\b': 'MSFT.US',
+            r'\bamazon\b': 'AMZN.US',
+            r'\bsberbank\b': 'SBER.MOEX',
+            r'\bгазпром\b': 'GAZP.MOEX',
+            r'\bлукойл\b': 'LKOH.MOEX',
+            r'\bbitcoin\b': 'BTC.CC',
+            r'\beth\b': 'ETH.CC',
+            r'\bgold\b': 'XAU.COMM',
+            r'\bsilver\b': 'XAG.COMM',
+            r'\boil\b': 'BRENT.COMM',
+            r'\bsp\s*500\b': 'SPX.INDX',
+            r'\bnasdaq\b': 'IXIC.INDX',
+            r'\brts\b': 'RTSI.INDX',
+            r'\beur\s*usd\b': 'EURUSD.FX',
+            r'\bgbp\s*usd\b': 'GBPUSD.FX'
+        }
+        
+        # Convert common names to Okama format
+        for pattern, okama_symbol in stock_patterns.items():
+            if re.search(pattern, message_lower):
+                if okama_symbol not in symbols:
+                    symbols.append(okama_symbol)
         
         # Debug: print extracted symbols
         print(f"DEBUG: Extracted symbols from '{user_message}': {symbols}")
@@ -170,6 +266,77 @@ Format responses professionally with clear sections, bullet points, and relevant
                    "• Учитывайте ваш профиль риска и инвестиционный горизонт\n" + \
                    "• Регулярно пересматривайте и ребалансируйте портфель\n" + \
                    "• Рассмотрите консультацию с финансовым советником"
+    
+    def process_freeform_command(self, user_message: str) -> Dict:
+        """Process free-form commands and convert instrument names to Okama format"""
+        try:
+            # Special prompt for free-form command processing
+            freeform_prompt = f"""
+            Process this user command and convert it to a structured format for Okama platform.
+            
+            User command: "{user_message}"
+            
+            Your task:
+            1. Identify what the user wants to do (portfolio analysis, risk assessment, comparison, etc.)
+            2. Extract and convert ALL mentioned financial instruments to Okama namespace format
+            3. Determine the appropriate command structure
+            
+            CRITICAL FORMATTING RULES:
+            - Stocks: "AAPL.US", "SBER.MOEX", "TSLA.US"
+            - Indexes: "SPX.INDX", "RTSI.INDX", "DAX.INDX" 
+            - Commodities: "XAU.COMM", "BRENT.COMM", "SILVER.COMM"
+            - Forex: "EURUSD.FX", "GBPUSD.FX"
+            - Crypto: "BTC.CC", "ETH.CC"
+            - Mutual Funds: "SBRF.PIF", "VTSAX.US"
+            
+            Return JSON with:
+            - command_type: string (portfolio, risk, correlation, compare, efficient_frontier, chat)
+            - symbols: list of strings (in Okama format)
+            - parameters: dict with additional parameters
+            - original_query: string (user's original message)
+            - suggested_command: string (formatted command for Okama)
+            """
+            
+            response = self._call_yandex_api(
+                system_prompt="You are a financial command processor that converts free-form requests to Okama platform format. You MUST use Okama namespace formatting for all financial instruments.",
+                user_prompt=freeform_prompt,
+                temperature=0.1,
+                max_tokens=400
+            )
+            
+            # Extract and parse JSON response
+            content = response
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                # Ensure required fields exist
+                result.setdefault('command_type', 'chat')
+                result.setdefault('symbols', [])
+                result.setdefault('parameters', {})
+                result.setdefault('original_query', user_message)
+                result.setdefault('suggested_command', '')
+                return result
+            else:
+                # Fallback parsing
+                return {
+                    "command_type": "chat",
+                    "symbols": [],
+                    "parameters": {},
+                    "original_query": user_message,
+                    "suggested_command": "",
+                    "error": "Could not parse AI response"
+                }
+                
+        except Exception as e:
+            print(f"AI service error in process_freeform_command: {e}")
+            return {
+                "command_type": "chat",
+                "symbols": [],
+                "parameters": {},
+                "original_query": user_message,
+                "suggested_command": "",
+                "error": f"Processing error: {str(e)}"
+            }
     
     def enhance_analysis_results(self, analysis_type: str, results: Dict, user_query: str) -> str:
         """Enhance analysis results with YandexGPT insights"""

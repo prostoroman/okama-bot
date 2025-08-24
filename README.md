@@ -12,6 +12,7 @@ A powerful **Telegram bot** that combines **YandexGPT AI** with **Okama financia
 - 🎯 **Efficient Frontier** - Portfolio optimization and risk-return analysis
 - 📋 **Asset Comparison** - Side-by-side performance comparison
 - 💬 **AI Financial Advisor** - YandexGPT-powered financial advice and insights
+- 🎯 **Smart Instrument Recognition** - Automatic conversion of common names to Okama format
 - 🖼️ **Rich Visualizations** - Charts, graphs, and heatmaps for all analyses
 - 📱 **Telegram Bot** - Chat-based financial analysis
 - 🌐 **Render Service** - 24/7 availability as background service
@@ -71,13 +72,14 @@ python bot.py
 
 ### 💬 Natural Language
 
-You can also just type naturally:
+You can also just type naturally - the AI will automatically convert instrument names to the proper Okama format:
 
-- "Analyze my portfolio AGG.US SPY.US"
-- "What's the risk of GC.COMM?"
-- "Compare RGBITR.INDX vs MCFTR.INDX"
-- "How to optimize my portfolio?"
-- "Ask YandexGPT about diversification strategies"
+- "Analyze my portfolio with Apple and Tesla" → Uses "AAPL.US" and "TSLA.US"
+- "What's the risk of gold and oil?" → Uses "XAU.COMM" and "BRENT.COMM"
+- "Compare S&P 500 vs Bitcoin" → Uses "SPX.INDX" vs "BTC.CC"
+- "Show me Sberbank and Gazprom stocks" → Uses "SBER.MOEX" and "GAZP.MOEX"
+- "EUR/USD correlation with GBP/USD" → Uses "EURUSD.FX" and "GBPUSD.FX"
+- "How to optimize my portfolio with Google, Microsoft, and Amazon?" → Uses "GOOGL.US", "MSFT.US", "AMZN.US"
 
 ### 📊 Examples
 
@@ -96,6 +98,11 @@ You can also just type naturally:
 
 # YandexGPT chat
 /chat What is diversification?
+
+# Natural language (AI automatically formats)
+"Покажи анализ портфеля с Apple и Tesla"
+"Сравни S&P 500 и Bitcoin"
+"Оцени риск по акциям Сбербанка"
 ```
 
 ## 🏗️ Architecture
@@ -109,9 +116,31 @@ You can also just type naturally:
 │ • Message       │    │ • Risk Metrics   │    │ • Financial     │
 │   processing    │    │ • Charts         │    │   Advice        │
 │ • Image         │    │ • Correlation    │    │ • Insights      │
-│   generation    │    │ • Optimization   │    │                 │
+│   generation    │    │ • Optimization   │    │ • Auto-format   │
+│                 │    │                  │    │   Instruments   │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │
+                                ▼
+                    ┌─────────────────────────┐
+                    │   Smart Instrument      │
+                    │   Recognition Engine    │
+                    │                         │
+                    │ • Apple → AAPL.US      │
+                    │ • Bitcoin → BTC.CC     │
+                    │ • Gold → XAU.COMM      │
+                    │ • S&P 500 → SPX.INDX   │
+                    │ • Sberbank → SBER.MOEX │
+                    └─────────────────────────┘
 ```
+
+### 🔄 Data Flow
+
+1. **User Input**: Natural language command (e.g., "Show me Apple and Tesla")
+2. **AI Processing**: YandexGPT analyzes intent and converts instrument names
+3. **Format Conversion**: Common names → Okama format (AAPL.US, TSLA.US)
+4. **Analysis Execution**: Okama service performs financial analysis
+5. **Result Enhancement**: AI provides insights and interpretation
+6. **Response Delivery**: Formatted results with charts and explanations
 
 ## 📊 Analysis Features
 
@@ -150,6 +179,38 @@ The bot uses **YandexGPT** to:
 - **Answer financial questions** and provide advice
 - **Enhance analysis results** with AI-powered insights
 - **Suggest portfolio improvements** based on analysis
+- **Automatically convert instrument names** to Okama format
+
+### 🎯 Smart Instrument Recognition
+
+The AI automatically converts common financial instrument names to the proper Okama namespace format:
+
+- **Stocks**: "Apple" → "AAPL.US", "Сбербанк" → "SBER.MOEX"
+- **Indices**: "S&P 500" → "SPX.INDX", "RTS" → "RTSI.INDX"
+- **Commodities**: "Gold" → "XAU.COMM", "Oil" → "BRENT.COMM"
+- **Forex**: "EUR/USD" → "EURUSD.FX"
+- **Crypto**: "Bitcoin" → "BTC.CC"
+
+### 🌍 Supported Namespaces
+
+The bot supports all Okama platform namespaces:
+
+| Namespace | Description | Examples |
+|-----------|-------------|----------|
+| `CBR` | Central Banks rates | USD.CBR, EUR.CBR |
+| `CC` | Cryptocurrency pairs | BTC.CC, ETH.CC |
+| `COMM` | Commodities prices | XAU.COMM, BRENT.COMM |
+| `FX` | FOREX currency market | EURUSD.FX, GBPUSD.FX |
+| `INDX` | Market indices | SPX.INDX, RTSI.INDX |
+| `MOEX` | Moscow Exchange | SBER.MOEX, GAZP.MOEX |
+| `US` | US Stock Exchanges | AAPL.US, TSLA.US |
+| `PIF` | Russian mutual funds | SBRF.PIF |
+| `LSE` | London Stock Exchange | BP.LSE |
+| `XAMS` | Euronext Amsterdam | ASML.XAMS |
+| `XETR` | XETRA Exchange | SAP.XETR |
+| `XFRA` | Frankfurt Exchange | BMW.XFRA |
+| `XSTU` | Stuttgart Exchange | DAI.XSTU |
+| `XTAE` | Tel Aviv Exchange | TEVA.XTAE |
 
 ## 🔧 Configuration
 
@@ -171,13 +232,44 @@ The bot uses **YandexGPT** to:
 
 ## 📈 Supported Assets
 
-The bot supports various financial instruments through the Okama library:
+The bot supports various financial instruments through the Okama library and automatically converts common names to the proper format:
 
-- **Indices** (e.g., RGBITR.INDX, MCFTR.INDX)
-- **ETFs** (e.g., AGG.US, SPY.US)
-- **Commodities** (e.g., GC.COMM)
-- **Stocks** (if supported by data source)
-- **Crypto** (if available)
+### 🏢 **Stocks**
+- **US Stocks**: Apple (AAPL.US), Tesla (TSLA.US), Google (GOOGL.US)
+- **Russian Stocks**: Sberbank (SBER.MOEX), Gazprom (GAZP.MOEX), Lukoil (LKOH.MOEX)
+- **European Stocks**: BP (BP.LSE), SAP (SAP.XETR), BMW (BMW.XFRA)
+
+### 📊 **Indices**
+- **US Indices**: S&P 500 (SPX.INDX), NASDAQ (IXIC.INDX)
+- **Russian Indices**: RTS (RTSI.INDX), MOEX (IMOEX.INDX)
+- **European Indices**: DAX (DAX.INDX), CAC 40 (CAC.INDX)
+
+### 🥇 **Commodities**
+- **Precious Metals**: Gold (XAU.COMM), Silver (XAG.COMM)
+- **Energy**: Oil (BRENT.COMM), Natural Gas (NG.COMM)
+- **Agricultural**: Corn (ZC.COMM), Wheat (ZW.COMM)
+
+### 💱 **Forex**
+- **Major Pairs**: EUR/USD (EURUSD.FX), GBP/USD (GBPUSD.FX)
+- **Cross Pairs**: EUR/GBP (EURGBP.FX), USD/JPY (USDJPY.FX)
+
+### 🪙 **Cryptocurrency**
+- **Major Crypto**: Bitcoin (BTC.CC), Ethereum (ETH.CC)
+- **Altcoins**: Litecoin (LTC.CC), Ripple (XRP.CC)
+
+### 🏦 **Bonds & Rates**
+- **Government Bonds**: US Treasuries (US10Y.RATE)
+- **Central Bank Rates**: USD (USD.CBR), EUR (EUR.CBR)
+
+### 📈 **ETFs & Mutual Funds**
+- **US ETFs**: SPY (SPY.US), AGG (AGG.US), QQQ (QQQ.US)
+- **Russian Funds**: SBRF (SBRF.PIF), VTBX (VTBX.PIF)
+
+### 🏠 **Real Estate**
+- **REITs**: Real estate investment trusts (VNQ.US)
+- **Property Indices**: Real estate market indices (RE.INDX)
+
+**Note**: The AI automatically converts common names like "Apple", "Bitcoin", "Gold" to their proper Okama format (AAPL.US, BTC.CC, XAU.COMM).
 
 ## 🛠️ Development
 
@@ -205,6 +297,27 @@ okama-bot/
 2. **New Command**: Add handler to `bot.py`
 3. **New AI Feature**: Extend `YandexGPTService`
 4. **New Visualization**: Create chart generation method
+
+### Testing
+
+Run the test suite to verify Okama formatting functionality:
+
+```bash
+# Test the new instrument formatting features
+python test_okama_formatting.py
+
+# This will test:
+# - System prompt content
+# - analyze_query method
+# - process_freeform_command method
+# - fallback analysis with common names
+```
+
+The test suite verifies that:
+- All Okama namespaces are properly included in prompts
+- Common instrument names are correctly converted
+- AI responses maintain proper formatting
+- Fallback analysis works with pattern matching
 
 ## 🚀 Deployment Options
 
@@ -244,6 +357,12 @@ The bot is configured to run as a Render background service using Python 3.13.
    - Check available memory
    - Verify image format support
 
+5. **Instrument name formatting issues**
+   - Check YandexGPT API configuration
+   - Verify namespace mapping is correct
+   - Test with simple instrument names first
+   - Check fallback pattern matching
+
 ### Debug Mode
 
 Enable debug logging:
@@ -275,9 +394,13 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [Okama Library](https://github.com/mbk-dev/okama) - Financial analysis and portfolio optimization
 - [python-telegram-bot](https://python-telegram-bot.org/) - Telegram Bot API wrapper
-- [Yandex Cloud](https://cloud.yandex.com/) - YandexGPT API for AI-powered insights
+- [Yandex Cloud](https://cloud.yandex.com/) - YandexGPT API for AI-powered insights and smart instrument recognition
 - [Matplotlib](https://matplotlib.org/) - Chart generation and visualization
 - [Render](https://render.com/) - Hosting platform
+
+### 🆕 New Features
+
+**Smart Instrument Recognition**: The bot now automatically converts common financial instrument names to the proper Okama format using AI-powered analysis. This makes it much easier for users to interact with the bot using natural language while ensuring all commands are properly formatted for the Okama platform.
 
 ---
 

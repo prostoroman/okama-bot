@@ -97,10 +97,6 @@ class OkamaFinanceBot:
 /pension [symbols] [weights] [amount] [cashflow] [rebalancing] - Пенсионный портфель
 /monte_carlo [symbols] [years] [scenarios] [distribution] - Прогнозирование Монте-Карло
 /allocation [symbols] - Детальный анализ распределения активов
-/test [symbols] - Тест интеграции Okama
-/testai - Тест подключения к YandexGPT API
-/debug [symbols] - Отладка данных портфеля
-/fallback - Тест fallback механизма при сбоях AI
 
 Чат с YandexGPT:
 /chat [question] - Получить финансовый совет от YandexGPT
@@ -113,8 +109,6 @@ class OkamaFinanceBot:
 • /pension RGBITR.INDX MCFTR.INDX 0.6 0.4 1000000 -50000 year
 • /monte_carlo AGG.US SPY.US 20 100 norm
 • /allocation RGBITR.INDX MCFTR.INDX GC.COMM
-• /debug RGBITR.INDX MCFTR.INDX
-• /fallback - Тест fallback механизма
 
 Естественный язык:
 Вы также можете просто написать естественным языком:
@@ -774,202 +768,7 @@ Use This To:
         except Exception as e:
             await update.message.reply_text(f"❌ Error getting AI response: {str(e)}")
 
-    async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /test command to debug Okama integration"""
-        try:
-            if not context.args:
-                await update.message.reply_text(
-                    "Тестовая команда\n\n"
-                    "Пожалуйста, укажите символы для тестирования:\n"
-                    "/test RGBITR.INDX MCFTR.INDX\n\n"
-                    "Это протестирует интеграцию с Okama и покажет доступные атрибуты."
-                )
-                return
-            
-            symbols = [s.upper() for s in context.args]
-            await update.message.reply_text(f"🧪 Testing Okama integration with symbols: {', '.join(symbols)}...")
-            
-            # Test individual assets
-            results = []
-            for symbol in symbols:
-                result = self.okama_service.test_asset_data(symbol)
-                results.append(result)
-            
-            # Format results
-            test_text = "🧪 Asset Data Test Results:\n\n"
-            for result in results:
-                if result['status'] == 'success':
-                    test_text += f"✅ {result['symbol']}:\n"
-                    test_text += f"   Data sources: {', '.join([f'{k}: {v}' for k, v in result['data_sources'].items()])}\n"
-                    test_text += f"   Metrics: {', '.join([f'{k}: {v}' for k, v in result['metrics'].items()])}\n\n"
-                else:
-                    test_text += f"❌ {result['symbol']}: {result['error']}\n\n"
-            
-            await update.message.reply_text(test_text)
-            
-            # Run the original test
-            test_results = self.okama_service.test_okama_integration(symbols)
-            
-            # Format results
-            result_text = f"🧪 Okama Integration Test Results\n\n"
-            result_text += f"Symbols tested: {', '.join(symbols)}\n"
-            result_text += f"Okama version: {test_results.get('okama_version', 'Unknown')}\n\n"
-            
-            if 'assets' in test_results:
-                result_text += "Asset Tests:\n"
-                for symbol, status in test_results['assets'].items():
-                    result_text += f"• {symbol}: {status}\n"
-            
-            result_text += f"\nPortfolio Test: {test_results.get('portfolio', 'N/A')}"
-            
-            if 'error' in test_results:
-                result_text += f"\n\n❌ Test Error: {test_results['error']}"
-            
-            await update.message.reply_text(result_text)
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error running test: {str(e)}")
-    
-    async def test_ai_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /testai command to test YandexGPT API connection"""
-        try:
-            await update.message.reply_text("Тестирование подключения к YandexGPT API...")
-            
-            # Test the API connection
-            test_results = self.yandexgpt_service.test_api_connection()
-            
-            # Format results
-            result_text = f"Результаты теста YandexGPT API\n\n"
-            result_text += f"Статус: {test_results.get('status', 'Неизвестно')}\n"
-            result_text += f"Сообщение: {test_results.get('message', 'Нет сообщения')}\n\n"
-            
-            if 'config' in test_results:
-                config = test_results['config']
-                result_text += "Конфигурация:\n"
-                result_text += f"• API ключ: {'✓ Установлен' if config.get('api_key_set') else '✗ НЕ УСТАНОВЛЕН'}\n"
-                result_text += f"• ID папки: {'✓ Установлен' if config.get('folder_id_set') else '✗ НЕ УСТАНОВЛЕН'}\n"
-                result_text += f"• Базовый URL: {config.get('base_url', 'Неизвестно')}\n\n"
-            
-            if 'response' in test_results:
-                result_text += f"Ответ API: {test_results['response']}\n\n"
-            
-            if test_results.get('status') == 'error':
-                result_text += "❌ Тест API не удался. Проверьте конфигурацию."
-            elif test_results.get('status') == 'success':
-                result_text += "✅ Тест API успешен!"
-            else:
-                result_text += "⚠️ Тест API имел проблемы."
-            
-            await update.message.reply_text(result_text)
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error testing AI: {str(e)}")
 
-    async def debug_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /debug command to debug portfolio data issues"""
-        try:
-            if not context.args:
-                await update.message.reply_text(
-                    "Отладка данных портфеля\n\n"
-                    "Пожалуйста, укажите символы для отладки:\n"
-                    "/debug RGBITR.INDX MCFTR.INDX\n\n"
-                    "Это покажет доступные данные и атрибуты портфеля."
-                )
-                return
-            
-            symbols = [s.upper() for s in context.args]
-            await update.message.reply_text(f"🔍 Отладка данных портфеля для: {', '.join(symbols)}...")
-            
-            try:
-                # Create portfolio
-                portfolio = self.okama_service.create_portfolio(symbols)
-                
-                # Debug portfolio data
-                debug_info = self.okama_service.debug_portfolio_data(portfolio)
-                
-                # Format debug information
-                debug_text = f"🔍 Отладка портфеля: {', '.join(symbols)}\n\n"
-                
-                if 'error' in debug_info:
-                    debug_text += f"❌ Ошибка отладки: {debug_info['error']}"
-                else:
-                    debug_text += f"Тип портфеля: {debug_info.get('portfolio_type', 'Unknown')}\n\n"
-                    
-                    debug_text += "Доступные атрибуты:\n"
-                    for attr in debug_info.get('available_attributes', [])[:20]:  # Show first 20
-                        debug_text += f"• {attr}\n"
-                    
-                    if len(debug_info.get('available_attributes', [])) > 20:
-                        debug_text += f"... и еще {len(debug_info.get('available_attributes', [])) - 20} атрибутов\n"
-                    
-                    debug_text += "\nКлючевые источники данных:\n"
-                    for attr, info in debug_info.get('data_sources', {}).items():
-                        if info.get('type') != 'Not available':
-                            debug_text += f"• {attr}: {info.get('type')}"
-                            if 'empty' in info:
-                                debug_text += f" (пустой: {info['empty']})"
-                            if 'shape' in info and info['shape'] != 'N/A':
-                                debug_text += f" [форма: {info['shape']}]"
-                            if 'length' in info and info['length'] != 'N/A':
-                                debug_text += f" [длина: {info['length']}]"
-                            debug_text += "\n"
-                    
-                    if debug_info.get('errors'):
-                        debug_text += "\nОшибки:\n"
-                        for error in debug_info['errors']:
-                            debug_text += f"• {error}\n"
-                
-                await update.message.reply_text(debug_text)
-                
-            except Exception as e:
-                await update.message.reply_text(f"❌ Ошибка создания портфеля для отладки: {str(e)}")
-                
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка отладки: {str(e)}")
-    
-    async def test_fallback_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Test fallback mechanism when AI service fails"""
-        try:
-            await update.message.reply_text("🧪 Тестирование fallback механизма...")
-            
-            # Test different AI methods to see fallback behavior
-            test_results = []
-            
-            # Test 1: Simple query analysis
-            try:
-                result = self.yandexgpt_service.analyze_query("test portfolio analysis")
-                test_results.append(f"✅ analyze_query: {result.get('intent', 'unknown')}")
-            except Exception as e:
-                test_results.append(f"❌ analyze_query: {str(e)}")
-            
-            # Test 2: Financial advice
-            try:
-                result = self.yandexgpt_service.get_financial_advice("How to diversify portfolio?")
-                if "технических проблем" in result:
-                    test_results.append("✅ get_financial_advice: fallback activated")
-                else:
-                    test_results.append("✅ get_financial_advice: AI working")
-            except Exception as e:
-                test_results.append(f"❌ get_financial_advice: {str(e)}")
-            
-            # Test 3: Portfolio optimization
-            try:
-                result = self.yandexgpt_service.suggest_improvements(["RGBITR.INDX"], {"volatility": 0.15})
-                if "технических проблем" in result:
-                    test_results.append("✅ suggest_improvements: fallback activated")
-                else:
-                    test_results.append("✅ suggest_improvements: AI working")
-            except Exception as e:
-                test_results.append(f"❌ suggest_improvements: {str(e)}")
-            
-            # Format results
-            result_text = "🧪 Результаты тестирования fallback механизма:\n\n" + "\n".join(test_results)
-            result_text += "\n\n💡 Fallback механизм обеспечивает работу бота даже при проблемах с AI сервисом."
-            
-            await update.message.reply_text(result_text)
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка тестирования fallback: {str(e)}")
         
     def run(self):
         """Run the bot"""
@@ -988,10 +787,6 @@ Use This To:
         application.add_handler(CommandHandler("pension", self.pension_command))
         application.add_handler(CommandHandler("monte_carlo", self.monte_carlo_command))
         application.add_handler(CommandHandler("allocation", self.allocation_command))
-        application.add_handler(CommandHandler("test", self.test_command))
-        application.add_handler(CommandHandler("testai", self.test_ai_command))
-        application.add_handler(CommandHandler("debug", self.debug_command))
-        application.add_handler(CommandHandler("fallback", self.test_fallback_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
