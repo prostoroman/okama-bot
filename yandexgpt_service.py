@@ -102,7 +102,10 @@ Keep responses concise but informative. Use bullet points and clear formatting w
         message_lower = user_message.lower()
         
         # Extract symbols (including namespace like .INDX, .US, .COMM)
-        symbols = re.findall(r'\b[A-Z]{1,5}\.[A-Z]{2,4}\b', user_message)
+        symbols = re.findall(r'\b[A-Z]{1,6}\.[A-Z]{2,4}\b', user_message)
+        
+        # Debug: print extracted symbols
+        print(f"DEBUG: Extracted symbols from '{user_message}': {symbols}")
         
         # Determine intent
         if any(word in message_lower for word in ['portfolio', 'portfolios']):

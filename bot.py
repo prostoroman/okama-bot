@@ -303,6 +303,12 @@ class OkamaFinanceBot:
     async def _analyze_portfolio(self, update: Update, symbols: List[str]):
         """Analyze portfolio performance"""
         try:
+            # Filter out empty strings and validate symbols
+            symbols = [s.strip() for s in symbols if s.strip()]
+            if not symbols:
+                await update.message.reply_text("❌ Ошибка: Не указаны символы для анализа")
+                return
+                
             await update.message.reply_text(f"📊 Analyzing portfolio: {', '.join(symbols)}...")
             
             # Create portfolio
@@ -347,6 +353,12 @@ AI Insights:
     async def _analyze_risk(self, update: Update, symbols: List[str]):
         """Analyze risk metrics"""
         try:
+            # Filter out empty strings and validate symbols
+            symbols = [s.strip() for s in symbols if s.strip()]
+            if not symbols:
+                await update.message.reply_text("❌ Ошибка: Не указаны символы для анализа")
+                return
+                
             await update.message.reply_text(f"Анализ рисков для: {', '.join(symbols)}...")
             
             # Get individual asset risk metrics
@@ -389,6 +401,12 @@ Individual Asset Risk:
     async def _analyze_correlation(self, update: Update, symbols: List[str]):
         """Analyze asset correlations"""
         try:
+            # Filter out empty strings and validate symbols
+            symbols = [s.strip() for s in symbols if s.strip()]
+            if not symbols:
+                await update.message.reply_text("❌ Ошибка: Не указаны символы для анализа")
+                return
+                
             await update.message.reply_text(f"🔗 Analyzing correlations for: {', '.join(symbols)}...")
             
             # Generate correlation matrix
@@ -421,6 +439,12 @@ Interpretation:
     async def _generate_efficient_frontier(self, update: Update, symbols: List[str]):
         """Generate efficient frontier plot"""
         try:
+            # Filter out empty strings and validate symbols
+            symbols = [s.strip() for s in symbols if s.strip()]
+            if not symbols:
+                await update.message.reply_text("❌ Ошибка: Не указаны символы для анализа")
+                return
+                
             await update.message.reply_text(f"🎯 Generating efficient frontier for: {', '.join(symbols)}...")
             
             # Generate efficient frontier
@@ -452,6 +476,12 @@ Use This To:
     async def _compare_assets(self, update: Update, symbols: List[str]):
         """Compare multiple assets"""
         try:
+            # Filter out empty strings and validate symbols
+            symbols = [s.strip() for s in symbols if s.strip()]
+            if not symbols:
+                await update.message.reply_text("❌ Ошибка: Не указаны символы для анализа")
+                return
+                
             await update.message.reply_text(f"📋 Comparing assets: {', '.join(symbols)}...")
             
             # Compare assets
