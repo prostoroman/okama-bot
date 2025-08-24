@@ -2,6 +2,7 @@
 """
 Startup script for Okama Finance Bot on Render
 This script ensures proper initialization and health checks
+EXPLICITLY CONFIGURED AS A BACKGROUND WORKER - NO PORT BINDING
 """
 
 import os
@@ -38,6 +39,20 @@ def check_environment():
     logger.info("✅ All required environment variables are set")
     return True
 
+def verify_render_config():
+    """Verify this is running as a Render background worker"""
+    if os.getenv('RENDER'):
+        logger.info("✅ Running on Render platform")
+        if os.getenv('RENDER_SERVICE_TYPE') == 'background':
+            logger.info("✅ Confirmed as background worker service")
+            return True
+        else:
+            logger.warning("⚠️ RENDER_SERVICE_TYPE not set to 'background'")
+            return False
+    else:
+        logger.info("✅ Running locally (not on Render)")
+        return True
+
 def run_health_check():
     """Run health check script"""
     try:
@@ -61,9 +76,14 @@ def health_check_worker():
 
 def main():
     """Main startup function"""
-    print("🚀 Okama Finance Bot v2.0 - Render Startup")
+    print("🚀 Okama Finance Bot v2.0 - Render Background Worker Startup")
     print(f"✅ Python version: {sys.version}")
     print(f"✅ Environment: {'RENDER' if os.getenv('RENDER') else 'LOCAL'}")
+    print("🔒 IMPORTANT: This is a BACKGROUND WORKER - no ports will be bound")
+    
+    # Verify Render configuration
+    if not verify_render_config():
+        print("⚠️ Warning: Render configuration may not be optimal")
     
     # Check environment
     if not check_environment():
@@ -85,7 +105,8 @@ def main():
         print("🤖 Creating bot instance...")
         bot = OkamaFinanceBotV2()
         
-        print("🚀 Starting bot...")
+        print("🚀 Starting bot as background worker...")
+        print("🔒 No web server will be started - this is a Telegram bot only")
         bot.run()
         
     except Exception as e:

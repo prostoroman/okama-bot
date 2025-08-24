@@ -1,0 +1,41 @@
+# Render ignore file for Okama Finance Bot
+# Exclude unnecessary files from build process
+
+# Development files
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git files
+.git/
+.gitignore
+
+# Documentation (keep only essential)
+docs/
+*.md
+!README.md
+!QUICK_START.md
+
+# Test files (not needed in production)
+tests/
+.pytest_cache/
+
+# Local configuration
+config.env
+*.log
