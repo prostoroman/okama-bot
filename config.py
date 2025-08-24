@@ -12,8 +12,9 @@ class Config:
     BOT_USERNAME = os.getenv('BOT_USERNAME', 'okama_finance_bot')
     ADMIN_USER_ID = os.getenv('ADMIN_USER_ID')
     
-    # OpenAI Configuration
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+    # YandexGPT Configuration
+    YANDEX_API_KEY = os.getenv('YANDEX_API_KEY')
+    YANDEX_FOLDER_ID = os.getenv('YANDEX_FOLDER_ID')
     
     # Okama Configuration
     OKAMA_API_KEY = os.getenv('OKAMA_API_KEY')
@@ -31,7 +32,7 @@ class Config:
         '/correlation': 'Show asset correlation matrix',
         '/efficient_frontier': 'Generate efficient frontier plot',
         '/compare': 'Compare multiple assets',
-        '/chat': 'Chat with ChatGPT about finance'
+        '/chat': 'Chat with YandexGPT about finance'
     }
     
     @classmethod
@@ -41,8 +42,10 @@ class Config:
         
         if not cls.TELEGRAM_BOT_TOKEN:
             missing.append('TELEGRAM_BOT_TOKEN')
-        if not cls.OPENAI_API_KEY:
-            missing.append('OPENAI_API_KEY')
+        if not cls.YANDEX_API_KEY:
+            missing.append('YANDEX_API_KEY')
+        if not cls.YANDEX_FOLDER_ID:
+            missing.append('YANDEX_FOLDER_ID')
             
         if missing:
             raise ValueError(f"Missing required configuration: {', '.join(missing)}")

@@ -13,7 +13,7 @@ if sys.version_info < (3, 8):
 
 from config import Config
 from okama_service import OkamaService
-from chatgpt_service import ChatGPTService
+from yandexgpt_service import YandexGPTService
 
 # Configure logging
 logging.basicConfig(
@@ -23,14 +23,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class OkamaFinanceBot:
-    """Main Telegram bot class for financial analysis with Okama and ChatGPT"""
+    """Main Telegram bot class for financial analysis with Okama and YandexGPT"""
     
     def __init__(self):
         """Initialize the bot with required services"""
         Config.validate()
         
         self.okama_service = OkamaService()
-        self.chatgpt_service = ChatGPTService()
+        self.yandexgpt_service = YandexGPTService()
         
         # User session storage
         self.user_sessions = {}
@@ -45,7 +45,7 @@ class OkamaFinanceBot:
         
         welcome_message = f"""🤖 Welcome to Okama Finance Bot!
 
-Hi {user_name}! I'm your AI-powered financial analysis assistant.
+Hi {user_name}! I'm your YandexGPT-powered financial analysis assistant.
 
 What I can do:
 • 📊 Portfolio analysis and optimization
@@ -53,7 +53,7 @@ What I can do:
 • 🔗 Asset correlation analysis
 • 🎯 Efficient frontier generation
 • 📋 Asset comparison and benchmarking
-• 💬 Chat with AI about finance
+• 💬 Chat with YandexGPT about finance
 
 Quick Start:
 • Send me symbols like "RGBITR.INDX MCFTR.INDX GC.COMM"
@@ -67,7 +67,7 @@ Commands:
 /correlation - Correlation matrix
 /efficient_frontier - Efficient frontier
 /compare - Asset comparison
-/chat - Chat with AI
+/chat - Chat with YandexGPT
 
 Ready to analyze your investments? 🚀"""
         
@@ -75,7 +75,7 @@ Ready to analyze your investments? 🚀"""
             [InlineKeyboardButton("📊 Portfolio Analysis", callback_data="portfolio_help")],
             [InlineKeyboardButton("📈 Risk Metrics", callback_data="risk_help")],
             [InlineKeyboardButton("🔗 Correlation", callback_data="correlation_help")],
-            [InlineKeyboardButton("💬 Chat with AI", callback_data="chat_help")]
+            [InlineKeyboardButton("💬 Chat with YandexGPT", callback_data="chat_help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -95,8 +95,8 @@ Core Analysis Commands:
 /efficient_frontier [symbols] - Create efficient frontier plot
 /compare [symbols] - Compare multiple assets
 
-AI Chat:
-/chat [question] - Get financial advice from AI
+YandexGPT Chat:
+/chat [question] - Get financial advice from YandexGPT
 
 Examples:
 • /portfolio RGBITR.INDX MCFTR.INDX
@@ -212,8 +212,8 @@ Just type your question or use the commands above!"""
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         
         try:
-            # Analyze user intent using ChatGPT
-            analysis = self.chatgpt_service.analyze_query(user_message)
+            # Analyze user intent using YandexGPT
+            analysis = self.yandexgpt_service.analyze_query(user_message)
             
             if analysis['is_chat']:
                 await self._handle_chat(update, user_message)
@@ -290,12 +290,12 @@ Just type your question or use the commands above!"""
             )
         elif query.data == "chat_help":
             await query.edit_message_text(
-                "💬 AI Chat\n\n"
+                "💬 YandexGPT Chat\n\n"
                 "Ask me anything about finance:\n"
                 "• What is diversification?\n"
                 "• How to calculate Sharpe ratio?\n"
                 "• Best practices for portfolio rebalancing\n\n"
-                "I'll provide expert financial advice!"
+                "I'll provide expert financial advice powered by YandexGPT!"
             )
     
     async def _analyze_portfolio(self, update: Update, symbols: List[str]):
@@ -313,7 +313,7 @@ Just type your question or use the commands above!"""
             chart_image = self.okama_service.generate_performance_chart(portfolio)
             
             # Get AI insights
-            insights = self.chatgpt_service.enhance_analysis_results(
+            insights = self.yandexgpt_service.enhance_analysis_results(
                 "portfolio", metrics, f"portfolio analysis for {', '.join(symbols)}"
             )
             
@@ -393,7 +393,7 @@ Individual Asset Risk:
             correlation_image = self.okama_service.generate_correlation_matrix(symbols)
             
             # Get AI insights
-            insights = self.chatgpt_service.enhance_analysis_results(
+            insights = self.yandexgpt_service.enhance_analysis_results(
                 "correlation", {"symbols": symbols}, f"correlation analysis for {', '.join(symbols)}"
             )
             
@@ -489,7 +489,7 @@ Performance Metrics:
             await update.message.reply_text("🤔 Thinking...")
             
             # Get AI response
-            response = self.chatgpt_service.get_financial_advice(question)
+            response = self.yandexgpt_service.get_financial_advice(question)
             
             # Send response
             await update.message.reply_text(

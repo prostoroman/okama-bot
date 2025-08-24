@@ -1,6 +1,6 @@
 # 🤖 Okama Finance Bot
 
-A powerful **Telegram bot** that combines **ChatGPT AI** with **Okama financial library** to provide comprehensive financial analysis, portfolio optimization, and AI-powered investment advice.
+A powerful **Telegram bot** that combines **YandexGPT AI** with **Okama financial library** to provide comprehensive financial analysis, portfolio optimization, and AI-powered investment advice.
 
 **Deploy as a Render background service for 24/7 availability!** 🚀
 
@@ -11,7 +11,7 @@ A powerful **Telegram bot** that combines **ChatGPT AI** with **Okama financial 
 - 🔗 **Correlation Matrix** - Visual asset relationship analysis
 - 🎯 **Efficient Frontier** - Portfolio optimization and risk-return analysis
 - 📋 **Asset Comparison** - Side-by-side performance comparison
-- 💬 **AI Financial Advisor** - ChatGPT-powered financial advice and insights
+- 💬 **AI Financial Advisor** - YandexGPT-powered financial advice and insights
 - 🖼️ **Rich Visualizations** - Charts, graphs, and heatmaps for all analyses
 - 📱 **Telegram Bot** - Chat-based financial analysis
 - 🌐 **Render Service** - 24/7 availability as background service
@@ -77,6 +77,7 @@ You can also just type naturally:
 - "What's the risk of GC.COMM?"
 - "Compare RGBITR.INDX vs MCFTR.INDX"
 - "How to optimize my portfolio?"
+- "Ask YandexGPT about diversification strategies"
 
 ### 📊 Examples
 
@@ -93,7 +94,7 @@ You can also just type naturally:
 # Asset comparison
 /compare AGG.US SPY.US GC.COMM
 
-# AI chat
+# YandexGPT chat
 /chat What is diversification?
 ```
 
@@ -101,7 +102,7 @@ You can also just type naturally:
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Telegram Bot  │    │   Okama Service  │    │ ChatGPT Service │
+│   Telegram Bot  │    │   Okama Service  │    │ YandexGPT Service │
 │                 │    │                  │    │                 │
 │ • Command       │◄──►│ • Portfolio      │    │ • Query         │
 │   handlers      │    │   Analysis       │    │   Analysis      │
@@ -142,7 +143,7 @@ You can also just type naturally:
 
 ## 🤖 AI Integration
 
-The bot uses **ChatGPT** to:
+The bot uses **YandexGPT** to:
 
 - **Analyze user intent** from natural language
 - **Provide financial insights** and interpretation
@@ -190,7 +191,7 @@ okama-bot/
 ├── bot.py                  # Main Telegram bot
 ├── config.py               # Configuration management
 ├── okama_service.py        # Okama library integration
-├── chatgpt_service.py      # ChatGPT API integration
+├── yandexgpt_service.py    # YandexGPT API integration
 ├── requirements.txt        # Python dependencies
 ├── render.yaml             # Render deployment config
 ├── build.sh                # Build script for Render
@@ -202,7 +203,7 @@ okama-bot/
 
 1. **New Analysis Type**: Add method to `OkamaService`
 2. **New Command**: Add handler to `bot.py`
-3. **New AI Feature**: Extend `ChatGPTService`
+3. **New AI Feature**: Extend `YandexGPTService`
 4. **New Visualization**: Create chart generation method
 
 ## 🚀 Deployment Options
@@ -274,7 +275,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [Okama Library](https://github.com/mbk-dev/okama) - Financial analysis and portfolio optimization
 - [python-telegram-bot](https://python-telegram-bot.org/) - Telegram Bot API wrapper
-- [OpenAI](https://openai.com/) - ChatGPT API for AI-powered insights
+- [Yandex Cloud](https://cloud.yandex.com/) - YandexGPT API for AI-powered insights
 - [Matplotlib](https://matplotlib.org/) - Chart generation and visualization
 - [Render](https://render.com/) - Hosting platform
 
