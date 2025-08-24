@@ -408,7 +408,24 @@ class OkamaService:
             for symbol in symbols:
                 try:
                     asset = ok.Asset(symbol)
-                    assets_data[symbol] = asset.price_ts
+                    
+                    # Try to get price data with fallback
+                    price_data = None
+                    if hasattr(asset, 'price_ts'):
+                        price_data = asset.price_ts
+                    elif hasattr(asset, 'price_data'):
+                        price_data = asset.price_data
+                    elif hasattr(asset, 'prices'):
+                        price_data = asset.prices
+                    elif hasattr(asset, 'close'):
+                        price_data = asset.close
+                    elif hasattr(asset, 'historical_data'):
+                        price_data = asset.historical_data
+                    
+                    if price_data is not None and hasattr(price_data, 'empty') and not price_data.empty:
+                        assets_data[symbol] = price_data
+                    else:
+                        print(f"⚠️ No valid price data found for {symbol}")
                     
                     # Get asset metrics with fallback handling
                     comparison_metrics[symbol] = {
@@ -424,16 +441,26 @@ class OkamaService:
             # Create comparison chart
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
             
-            # Price comparison (normalized)
-            for symbol, prices in assets_data.items():
-                if not prices.empty:
-                    normalized_prices = prices / prices.iloc[0] * 100
-                    normalized_prices.plot(ax=ax1, label=symbol, linewidth=2)
-            
-            ax1.set_title('Asset Price Comparison (Normalized to 100)')
-            ax1.set_ylabel('Normalized Price')
-            ax1.legend()
-            ax1.grid(True)
+            # Price comparison (normalized) - only if we have price data
+            if assets_data:
+                for symbol, prices in assets_data.items():
+                    if hasattr(prices, 'empty') and not prices.empty and hasattr(prices, 'iloc'):
+                        try:
+                            normalized_prices = prices / prices.iloc[0] * 100
+                            normalized_prices.plot(ax=ax1, label=symbol, linewidth=2)
+                        except Exception as e:
+                            print(f"⚠️ Error plotting prices for {symbol}: {e}")
+                
+                ax1.set_title('Asset Price Comparison (Normalized to 100)')
+                ax1.set_ylabel('Normalized Price')
+                ax1.legend()
+                ax1.grid(True)
+            else:
+                # No price data available
+                ax1.text(0.5, 0.5, 'Price data not available\nfor comparison', 
+                         ha='center', va='center', transform=ax1.transAxes)
+                ax1.set_title('Asset Price Comparison (No Data)')
+                ax1.set_ylabel('Normalized Price')
             
             # Risk-return scatter
             returns = []
@@ -442,20 +469,30 @@ class OkamaService:
             
             for symbol, metrics in comparison_metrics.items():
                 if 'error' not in metrics:
-                    returns.append(metrics['annual_return'])
-                    volatilities.append(metrics['volatility'])
-                    labels.append(symbol)
+                    annual_return = metrics.get('annual_return', 0)
+                    volatility = metrics.get('volatility', 0)
+                    if annual_return != 0 and volatility != 0:
+                        returns.append(annual_return)
+                        volatilities.append(volatility)
+                        labels.append(symbol)
             
-            if returns and volatilities:
+            if returns and volatilities and len(returns) >= 2:
                 ax2.scatter(volatilities, returns, s=100, alpha=0.7)
                 for i, label in enumerate(labels):
                     ax2.annotate(label, (volatilities[i], returns[i]), 
                                xytext=(5, 5), textcoords='offset points')
-            
-            ax2.set_xlabel('Volatility')
-            ax2.set_ylabel('Annual Return')
-            ax2.set_title('Risk-Return Profile')
-            ax2.grid(True)
+                
+                ax2.set_xlabel('Volatility')
+                ax2.set_ylabel('Annual Return')
+                ax2.set_title('Risk-Return Profile')
+                ax2.grid(True)
+            else:
+                # Not enough data for scatter plot
+                ax2.text(0.5, 0.5, 'Insufficient data for\nrisk-return analysis', 
+                         ha='center', va='center', transform=ax2.transAxes)
+                ax2.set_xlabel('Volatility')
+                ax2.set_ylabel('Annual Return')
+                ax2.set_title('Risk-Return Profile (No Data)')
             
             plt.tight_layout()
             
@@ -771,3 +808,326 @@ class OkamaService:
             plt.close()
             
             return img_buffer.getvalue()
+
+    def create_pension_portfolio(self, symbols: List[str], weights: List[float], 
+                                ccy: str = 'RUB', initial_amount: float = 1000000,
+                                cashflow: float = -50000, rebalancing_period: str = 'year') -> ok.Portfolio:
+        """Create a pension portfolio with cash flows and rebalancing"""
+        try:
+            print(f"Creating pension portfolio: {symbols} with weights {weights}")
+            print(f"Currency: {ccy}, Initial: {initial_amount}, Cashflow: {cashflow}, Rebalancing: {rebalancing_period}")
+            
+            portfolio = ok.Portfolio(
+                symbols,
+                ccy=ccy,
+                weights=weights,
+                inflation=True,
+                symbol="Pension_Portfolio.PF",
+                rebalancing_period=rebalancing_period,
+                cashflow=cashflow,
+                initial_amount=initial_amount,
+                discount_rate=None
+            )
+            
+            print(f"✓ Pension portfolio created successfully")
+            return portfolio
+            
+        except Exception as e:
+            print(f"✗ Error creating pension portfolio: {e}")
+            raise Exception(f"Error creating pension portfolio: {str(e)}")
+
+    def generate_monte_carlo_forecast(self, portfolio: ok.Portfolio, years: int = 30, 
+                                    n_scenarios: int = 50, distribution: str = "norm") -> bytes:
+        """Generate Monte Carlo forecast for portfolio"""
+        try:
+            print(f"Generating Monte Carlo forecast: {years} years, {n_scenarios} scenarios, {distribution} distribution")
+            
+            # Generate forecast
+            forecast_data = portfolio.dcf.plot_forecast_monte_carlo(
+                distr=distribution,
+                years=years,
+                backtest=True,
+                n=n_scenarios
+            )
+            
+            # Get the current figure and save it
+            fig = plt.gcf()
+            fig.set_size_inches(12, 8)
+            
+            # Save to bytes
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            print(f"✓ Monte Carlo forecast generated successfully")
+            return img_buffer.getvalue()
+            
+        except Exception as e:
+            print(f"✗ Error generating Monte Carlo forecast: {e}")
+            return self._create_info_chart(
+                [portfolio.symbols], 
+                f"Monte Carlo forecast error: {str(e)}"
+            )
+
+    def get_inflation_analysis(self, portfolio: ok.Portfolio) -> Tuple[Dict, bytes]:
+        """Get inflation-adjusted portfolio analysis"""
+        try:
+            print(f"Getting inflation analysis for portfolio")
+            
+            # Get wealth index with inflation
+            wealth_data = portfolio.dcf.wealth_index
+            
+            # Create inflation-adjusted chart
+            plt.figure(figsize=(12, 8))
+            
+            # Plot wealth index and inflation
+            if hasattr(wealth_data, 'plot'):
+                wealth_data.plot()
+                plt.title('Portfolio Wealth Index with Inflation')
+                plt.xlabel('Date')
+                plt.ylabel('Value')
+                plt.grid(True, alpha=0.3)
+                plt.legend()
+            else:
+                # Fallback if plot method doesn't work
+                if hasattr(wealth_data, 'index') and hasattr(wealth_data, 'values'):
+                    plt.plot(wealth_data.index, wealth_data.values, label='Portfolio Value')
+                    plt.title('Portfolio Wealth Index')
+                    plt.xlabel('Date')
+                    plt.ylabel('Value')
+                    plt.grid(True, alpha=0.3)
+                    plt.legend()
+                else:
+                    raise Exception("Cannot access wealth index data")
+            
+            # Save to bytes
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            # Get inflation metrics
+            inflation_metrics = {
+                'current_value': wealth_data.iloc[-1] if hasattr(wealth_data, 'iloc') else 'N/A',
+                'total_return': getattr(portfolio, 'total_return', 'N/A'),
+                'inflation_adjusted_return': 'N/A'  # Would need to calculate this
+            }
+            
+            print(f"✓ Inflation analysis completed successfully")
+            return inflation_metrics, img_buffer.getvalue()
+            
+        except Exception as e:
+            print(f"✗ Error getting inflation analysis: {e}")
+            return {'error': str(e)}, self._create_info_chart(
+                [portfolio.symbols], 
+                f"Inflation analysis error: {str(e)}"
+            )
+
+    def compare_portfolio_strategies(self, strategies: List[Dict]) -> Tuple[Dict, bytes]:
+        """Compare different portfolio strategies"""
+        try:
+            print(f"Comparing {len(strategies)} portfolio strategies")
+            
+            portfolios = []
+            for i, strategy in enumerate(strategies):
+                try:
+                    portfolio = ok.Portfolio(
+                        strategy['symbols'],
+                        ccy=strategy.get('ccy', 'RUB'),
+                        weights=strategy.get('weights'),
+                        inflation=strategy.get('inflation', True),
+                        symbol=f"Strategy_{i+1}.PF"
+                    )
+                    portfolios.append({
+                        'name': strategy.get('name', f'Strategy {i+1}'),
+                        'portfolio': portfolio,
+                        'config': strategy
+                    })
+                    print(f"✓ Created portfolio for {strategy.get('name', f'Strategy {i+1}')}")
+                except Exception as e:
+                    print(f"✗ Error creating portfolio for strategy {i+1}: {e}")
+                    continue
+            
+            if len(portfolios) < 2:
+                raise Exception("Need at least 2 valid portfolios for comparison")
+            
+            # Create comparison chart
+            fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+            fig.suptitle('Portfolio Strategy Comparison', fontsize=16)
+            
+            # Compare returns
+            returns_data = []
+            names = []
+            for p in portfolios:
+                try:
+                    total_return = getattr(p['portfolio'], 'total_return', 0)
+                    returns_data.append(total_return)
+                    names.append(p['name'])
+                except:
+                    returns_data.append(0)
+                    names.append(p['name'])
+            
+            axes[0, 0].bar(names, returns_data)
+            axes[0, 0].set_title('Total Returns Comparison')
+            axes[0, 0].set_ylabel('Return')
+            axes[0, 0].tick_params(axis='x', rotation=45)
+            
+            # Compare volatility
+            volatility_data = []
+            for p in portfolios:
+                try:
+                    volatility = getattr(p['portfolio'], 'volatility', 0)
+                    volatility_data.append(volatility)
+                except:
+                    volatility_data.append(0)
+            
+            axes[0, 1].bar(names, volatility_data)
+            axes[0, 1].set_title('Volatility Comparison')
+            axes[0, 1].set_ylabel('Volatility')
+            axes[0, 1].tick_params(axis='x', rotation=45)
+            
+            # Compare Sharpe ratios
+            sharpe_data = []
+            for p in portfolios:
+                try:
+                    sharpe = getattr(p['portfolio'], 'sharpe_ratio', 0)
+                    sharpe_data.append(sharpe)
+                except:
+                    sharpe_data.append(0)
+            
+            axes[1, 0].bar(names, sharpe_data)
+            axes[1, 0].set_title('Sharpe Ratio Comparison')
+            axes[1, 0].set_ylabel('Sharpe Ratio')
+            axes[1, 0].tick_params(axis='x', rotation=45)
+            
+            # Compare max drawdown
+            drawdown_data = []
+            for p in portfolios:
+                try:
+                    drawdown = getattr(p['portfolio'], 'max_drawdown', 0)
+                    drawdown_data.append(abs(drawdown))  # Make positive for visualization
+                except:
+                    drawdown_data.append(0)
+            
+            axes[1, 1].bar(names, drawdown_data)
+            axes[1, 1].set_title('Max Drawdown Comparison')
+            axes[1, 1].set_ylabel('Max Drawdown')
+            axes[1, 1].tick_params(axis='x', rotation=45)
+            
+            plt.tight_layout()
+            
+            # Save to bytes
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            # Prepare comparison metrics
+            comparison_metrics = {}
+            for p in portfolios:
+                try:
+                    comparison_metrics[p['name']] = {
+                        'total_return': getattr(p['portfolio'], 'total_return', 'N/A'),
+                        'volatility': getattr(p['portfolio'], 'volatility', 'N/A'),
+                        'sharpe_ratio': getattr(p['portfolio'], 'sharpe_ratio', 'N/A'),
+                        'max_drawdown': getattr(p['portfolio'], 'max_drawdown', 'N/A'),
+                        'symbols': p['config']['symbols'],
+                        'weights': p['config'].get('weights', 'Equal'),
+                        'currency': p['config'].get('ccy', 'RUB')
+                    }
+                except Exception as e:
+                    comparison_metrics[p['name']] = {'error': str(e)}
+            
+            print(f"✓ Portfolio strategies comparison completed successfully")
+            return comparison_metrics, img_buffer.getvalue()
+            
+        except Exception as e:
+            print(f"✗ Error comparing portfolio strategies: {e}")
+            return {'error': str(e)}, self._create_info_chart(
+                [s.get('symbols', []) for s in strategies], 
+                f"Strategy comparison error: {str(e)}"
+            )
+
+    def get_asset_allocation_analysis(self, portfolio: ok.Portfolio) -> Tuple[Dict, bytes]:
+        """Get detailed asset allocation analysis"""
+        try:
+            print(f"Getting asset allocation analysis for portfolio")
+            
+            # Get portfolio table
+            portfolio_table = portfolio.table
+            
+            # Create allocation chart
+            fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+            fig.suptitle('Asset Allocation Analysis', fontsize=16)
+            
+            # Pie chart of weights
+            if hasattr(portfolio, 'weights') and portfolio.weights is not None:
+                weights = portfolio.weights
+                symbols = portfolio.symbols
+                axes[0, 0].pie(weights, labels=symbols, autopct='%1.1f%%', startangle=90)
+                axes[0, 0].set_title('Portfolio Weights')
+            else:
+                axes[0, 0].text(0.5, 0.5, 'Weights not available', ha='center', va='center')
+                axes[0, 0].set_title('Portfolio Weights')
+            
+            # Asset performance comparison
+            if hasattr(portfolio_table, 'columns') and 'total_return' in portfolio_table.columns:
+                returns = portfolio_table['total_return'].values
+                symbols = portfolio_table.index.tolist()
+                axes[0, 1].bar(symbols, returns)
+                axes[0, 1].set_title('Individual Asset Returns')
+                axes[0, 1].set_ylabel('Return')
+                axes[0, 1].tick_params(axis='x', rotation=45)
+            else:
+                axes[0, 1].text(0.5, 0.5, 'Return data not available', ha='center', va='center')
+                axes[0, 1].set_title('Individual Asset Returns')
+            
+            # Risk comparison
+            if hasattr(portfolio_table, 'columns') and 'volatility' in portfolio_table.columns:
+                volatilities = portfolio_table['volatility'].values
+                axes[1, 0].bar(symbols, volatilities)
+                axes[1, 0].set_title('Individual Asset Volatility')
+                axes[1, 0].set_ylabel('Volatility')
+                axes[1, 0].tick_params(axis='x', rotation=45)
+            else:
+                axes[1, 0].text(0.5, 0.5, 'Volatility data not available', ha='center', va='center')
+                axes[1, 0].set_title('Individual Asset Volatility')
+            
+            # Sharpe ratio comparison
+            if hasattr(portfolio_table, 'columns') and 'sharpe_ratio' in portfolio_table.columns:
+                sharpe_ratios = portfolio_table['sharpe_ratio'].values
+                axes[1, 1].bar(symbols, sharpe_ratios)
+                axes[1, 1].set_title('Individual Asset Sharpe Ratios')
+                axes[1, 1].set_ylabel('Sharpe Ratio')
+                axes[1, 1].tick_params(axis='x', rotation=45)
+            else:
+                axes[1, 1].text(0.5, 0.5, 'Sharpe ratio data not available', ha='center', va='center')
+                axes[1, 1].set_title('Individual Asset Sharpe Ratios')
+            
+            plt.tight_layout()
+            
+            # Save to bytes
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            # Prepare allocation metrics
+            allocation_metrics = {
+                'total_assets': len(portfolio.symbols),
+                'currency': getattr(portfolio, 'ccy', 'Unknown'),
+                'total_value': getattr(portfolio, 'total_value', 'N/A'),
+                'weights': portfolio.weights.tolist() if hasattr(portfolio, 'weights') and portfolio.weights is not None else 'Equal',
+                'symbols': portfolio.symbols
+            }
+            
+            print(f"✓ Asset allocation analysis completed successfully")
+            return allocation_metrics, img_buffer.getvalue()
+            
+        except Exception as e:
+            print(f"✗ Error getting asset allocation analysis: {e}")
+            return {'error': str(e)}, self._create_info_chart(
+                [portfolio.symbols], 
+                f"Asset allocation analysis error: {str(e)}"
+            )

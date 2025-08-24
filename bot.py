@@ -94,6 +94,7 @@ class OkamaFinanceBot:
 /correlation [symbols] - Генерация матрицы корреляции
 /efficient_frontier [symbols] - Создание графика эффективной границы
 /compare [symbols] - Сравнение нескольких активов
+/pension [symbols] [weights] [amount] [cashflow] [rebalancing] - Пенсионный портфель
 /test [symbols] - Тест интеграции Okama
 /testai - Тест подключения к YandexGPT API
 
@@ -105,6 +106,7 @@ class OkamaFinanceBot:
 • /risk AGG.US SPY.US
 • /correlation RGBITR.INDX MCFTR.INDX GC.COMM
 • /compare AGG.US SPY.US GC.COMM
+• /pension RGBITR.INDX MCFTR.INDX 0.6 0.4 1000000 -50000 year
 
 Естественный язык:
 Вы также можете просто написать естественным языком:
@@ -202,6 +204,43 @@ class OkamaFinanceBot:
         
         question = " ".join(context.args)
         await self._handle_chat(update, question)
+
+    async def pension_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /pension command for pension portfolio analysis"""
+        if not context.args or len(context.args) < 3:
+            await update.message.reply_text(
+                "Пенсионный портфель\n\n"
+                "Пожалуйста, укажите символы, веса и параметры:\n"
+                "/pension RGBITR.INDX MCFTR.INDX GC.COMM 0.6 0.3 0.1 1000000 -50000 year\n\n"
+                "Формат: /pension [символы] [веса] [начальная_сумма] [ежемесячный_поток] [период_ребалансировки]\n"
+                "Пример: /pension RGBITR.INDX MCFTR.INDX 0.6 0.4 1000000 -50000 year"
+            )
+            return
+        
+        try:
+            # Parse arguments
+            args = context.args
+            if len(args) >= 6:  # Full format with weights
+                symbols = args[:3]  # First 3 are symbols
+                weights = [float(w) for w in args[3:6]]  # Next 3 are weights
+                initial_amount = float(args[6]) if len(args) > 6 else 1000000
+                cashflow = float(args[7]) if len(args) > 7 else -50000
+                rebalancing = args[8] if len(args) > 8 else 'year'
+            else:
+                # Simple format: symbols only
+                symbols = args
+                weights = None  # Equal weights
+                initial_amount = 1000000
+                cashflow = -50000
+                rebalancing = 'year'
+            
+            symbols = [s.upper() for s in symbols]
+            await self._analyze_pension_portfolio(update, symbols, weights, initial_amount, cashflow, rebalancing)
+            
+        except ValueError as e:
+            await update.message.reply_text(f"❌ Ошибка в параметрах: {str(e)}")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка создания пенсионного портфеля: {str(e)}")
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages"""
@@ -514,7 +553,61 @@ Performance Metrics:
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error comparing assets: {str(e)}")
-    
+
+    async def _analyze_pension_portfolio(self, update: Update, symbols: List[str], weights: Optional[List[float]], 
+                                       initial_amount: float, cashflow: float, rebalancing: str):
+        """Analyze pension portfolio with cash flows"""
+        try:
+            await update.message.reply_text(
+                f"🏦 Создание пенсионного портфеля: {', '.join(symbols)}...\n"
+                f"Начальная сумма: {initial_amount:,.0f}\n"
+                f"Ежемесячный поток: {cashflow:+,.0f}\n"
+                f"Ребалансировка: {rebalancing}"
+            )
+            
+            # Create pension portfolio
+            portfolio = self.okama_service.create_pension_portfolio(
+                symbols, weights, 'RUB', initial_amount, cashflow, rebalancing
+            )
+            
+            # Get portfolio metrics
+            metrics = self.okama_service.get_portfolio_performance(portfolio)
+            
+            # Get inflation analysis
+            inflation_metrics, inflation_chart = self.okama_service.get_inflation_analysis(portfolio)
+            
+            # Format metrics message
+            weights_text = f"[{', '.join([f'{w:.1%}' for w in (weights or [1/len(symbols)]*len(symbols))])}]"
+            
+            metrics_text = f"""🏦 Пенсионный портфель: {', '.join(symbols)}
+
+Конфигурация:
+• Веса: {weights_text}
+• Начальная сумма: {initial_amount:,.0f}
+• Ежемесячный поток: {cashflow:+,.0f}
+• Ребалансировка: {rebalancing}
+
+Метрики производительности:
+• Общая доходность: {metrics.get('total_return', 'N/A')}
+• Годовая доходность: {metrics.get('annual_return', 'N/A')}
+• Волатильность: {metrics.get('volatility', 'N/A')}
+• Коэффициент Шарпа: {metrics.get('sharpe_ratio', 'N/A')}
+• Максимальная просадка: {metrics.get('max_drawdown', 'N/A')}
+
+Анализ с учетом инфляции:
+• Текущая стоимость: {inflation_metrics.get('current_value', 'N/A')}
+• Доходность с учетом инфляции: {inflation_metrics.get('inflation_adjusted_return', 'N/A')}"""
+            
+            # Send inflation chart with caption
+            await update.get_bot().send_photo(
+                chat_id=update.effective_chat.id,
+                photo=io.BytesIO(inflation_chart),
+                caption=metrics_text
+            )
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка анализа пенсионного портфеля: {str(e)}")
+
     async def _handle_chat(self, update: Update, question: str):
         """Handle AI chat requests"""
         try:
@@ -530,7 +623,7 @@ Performance Metrics:
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error getting AI response: {str(e)}")
-    
+
     async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /test command to debug Okama integration"""
         try:
@@ -636,6 +729,7 @@ Performance Metrics:
         application.add_handler(CommandHandler("efficient_frontier", self.efficient_frontier_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("chat", self.chat_command))
+        application.add_handler(CommandHandler("pension", self.pension_command))
         application.add_handler(CommandHandler("test", self.test_command))
         application.add_handler(CommandHandler("testai", self.test_ai_command))
         
