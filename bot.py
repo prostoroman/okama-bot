@@ -95,6 +95,8 @@ class OkamaFinanceBot:
 /efficient_frontier [symbols] - Создание графика эффективной границы
 /compare [symbols] - Сравнение нескольких активов
 /pension [symbols] [weights] [amount] [cashflow] [rebalancing] - Пенсионный портфель
+/monte_carlo [symbols] [years] [scenarios] [distribution] - Прогнозирование Монте-Карло
+/allocation [symbols] - Детальный анализ распределения активов
 /test [symbols] - Тест интеграции Okama
 /testai - Тест подключения к YandexGPT API
 
@@ -107,6 +109,8 @@ class OkamaFinanceBot:
 • /correlation RGBITR.INDX MCFTR.INDX GC.COMM
 • /compare AGG.US SPY.US GC.COMM
 • /pension RGBITR.INDX MCFTR.INDX 0.6 0.4 1000000 -50000 year
+• /monte_carlo AGG.US SPY.US 20 100 norm
+• /allocation RGBITR.INDX MCFTR.INDX GC.COMM
 
 Естественный язык:
 Вы также можете просто написать естественным языком:
@@ -241,7 +245,62 @@ class OkamaFinanceBot:
             await update.message.reply_text(f"❌ Ошибка в параметрах: {str(e)}")
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка создания пенсионного портфеля: {str(e)}")
-    
+
+    async def monte_carlo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /monte_carlo command for portfolio forecasting"""
+        if not context.args or len(context.args) < 3:
+            await update.message.reply_text(
+                "Прогнозирование методом Монте-Карло\n\n"
+                "Пожалуйста, укажите символы и параметры:\n"
+                "/monte_carlo RGBITR.INDX MCFTR.INDX 30 50 norm\n\n"
+                "Формат: /monte_carlo [символы] [годы] [сценарии] [распределение]\n"
+                "Пример: /monte_carlo AGG.US SPY.US 20 100 norm\n"
+                "Распределения: norm (нормальное), lognorm (логарифмически нормальное)"
+            )
+            return
+        
+        try:
+            # Parse arguments
+            args = context.args
+            symbols = args[:-3]  # All but last 3 are symbols
+            years = int(args[-3])
+            n_scenarios = int(args[-2])
+            distribution = args[-1]
+            
+            symbols = [s.upper() for s in symbols]
+            
+            # Validate parameters
+            if years <= 0 or years > 50:
+                await update.message.reply_text("❌ Годы должны быть от 1 до 50")
+                return
+            if n_scenarios <= 0 or n_scenarios > 1000:
+                await update.message.reply_text("❌ Количество сценариев должно быть от 1 до 1000")
+                return
+            if distribution not in ['norm', 'lognorm']:
+                await update.message.reply_text("❌ Поддерживаемые распределения: norm, lognorm")
+                return
+            
+            await self._generate_monte_carlo_forecast(update, symbols, years, n_scenarios, distribution)
+            
+        except ValueError as e:
+            await update.message.reply_text(f"❌ Ошибка в параметрах: {str(e)}")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка прогнозирования: {str(e)}")
+
+    async def allocation_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /allocation command for detailed asset allocation analysis"""
+        if not context.args:
+            await update.message.reply_text(
+                "Анализ распределения активов\n\n"
+                "Пожалуйста, укажите символы:\n"
+                "/allocation RGBITR.INDX MCFTR.INDX GC.COMM\n\n"
+                "Или просто отправьте мне символы напрямую!"
+            )
+            return
+        
+        symbols = [s.upper() for s in context.args]
+        await self._analyze_asset_allocation(update, symbols)
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages"""
         user_message = update.message.text.strip()
@@ -608,6 +667,93 @@ Performance Metrics:
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка анализа пенсионного портфеля: {str(e)}")
 
+    async def _generate_monte_carlo_forecast(self, update: Update, symbols: List[str], years: int, n_scenarios: int, distribution: str):
+        """Generate Monte Carlo portfolio forecasting"""
+        try:
+            await update.message.reply_text(
+                f"🔮 Прогнозирование портфеля методом Монте-Карло для: {', '.join(symbols)}...\n"
+                f"Период: {years} лет\n"
+                f"Сценарии: {n_scenarios}\n"
+                f"Распределение: {distribution}"
+            )
+            
+            # Generate Monte Carlo forecast
+            forecast_image = self.okama_service.generate_monte_carlo_forecast(symbols, years, n_scenarios, distribution)
+            
+            caption = f"""🔮 Monte Carlo Forecast: {', '.join(symbols)}
+
+What This Shows:
+• Probability of achieving a specific future value
+• Distribution of potential returns
+• Risk and return trade-offs
+• Simulate future market conditions
+
+Use This To:
+• Forecast portfolio performance
+• Assess risk tolerance
+• Plan for future investments"""
+            
+            await update.get_bot().send_photo(
+                chat_id=update.effective_chat.id,
+                photo=io.BytesIO(forecast_image),
+                caption=caption
+            )
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error generating Monte Carlo forecast: {str(e)}")
+
+    async def allocation_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /allocation command for detailed asset allocation analysis"""
+        if not context.args:
+            await update.message.reply_text(
+                "Анализ распределения активов\n\n"
+                "Пожалуйста, укажите символы:\n"
+                "/allocation RGBITR.INDX MCFTR.INDX GC.COMM\n\n"
+                "Или просто отправьте мне символы напрямую!"
+            )
+            return
+        
+        symbols = [s.upper() for s in context.args]
+        await self._analyze_asset_allocation(update, symbols)
+
+    async def _analyze_asset_allocation(self, update: Update, symbols: List[str]):
+        """Analyze detailed asset allocation"""
+        try:
+            await update.message.reply_text(f"📊 Анализ распределения активов для: {', '.join(symbols)}...")
+            
+            # Create portfolio for analysis
+            portfolio = self.okama_service.create_portfolio(symbols)
+            
+            # Get asset allocation analysis
+            allocation_metrics, allocation_chart = self.okama_service.get_asset_allocation_analysis(portfolio)
+            
+            # Format allocation message
+            allocation_text = f"""📊 Анализ распределения активов: {', '.join(symbols)}
+
+Общая информация:
+• Количество активов: {allocation_metrics.get('total_assets', 'N/A')}
+• Валюта портфеля: {allocation_metrics.get('currency', 'N/A')}
+• Общая стоимость: {allocation_metrics.get('total_value', 'N/A')}
+
+Распределение весов:
+• {', '.join([f'{symbol}: {weight:.1%}' for symbol, weight in zip(allocation_metrics.get('symbols', []), allocation_metrics.get('weights', []))])}
+
+Детальный анализ показывает:
+• Индивидуальные характеристики активов
+• Сравнение метрик производительности
+• Анализ рисков по каждому активу
+• Рекомендации по оптимизации"""
+            
+            # Send allocation chart with caption
+            await update.get_bot().send_photo(
+                chat_id=update.effective_chat.id,
+                photo=io.BytesIO(allocation_chart),
+                caption=allocation_text
+            )
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка анализа распределения активов: {str(e)}")
+
     async def _handle_chat(self, update: Update, question: str):
         """Handle AI chat requests"""
         try:
@@ -730,6 +876,8 @@ Performance Metrics:
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("chat", self.chat_command))
         application.add_handler(CommandHandler("pension", self.pension_command))
+        application.add_handler(CommandHandler("monte_carlo", self.monte_carlo_command))
+        application.add_handler(CommandHandler("allocation", self.allocation_command))
         application.add_handler(CommandHandler("test", self.test_command))
         application.add_handler(CommandHandler("testai", self.test_ai_command))
         
