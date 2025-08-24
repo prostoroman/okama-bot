@@ -216,10 +216,10 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 "Content-Type": "application/json"
             }
             
-            # Use the correct YandexGPT API format
+            # Use the correct YandexGPT API format with configured folder ID
             # Try different request formats based on Yandex documentation
             data = {
-                "modelUri": "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-lite",
+                "modelUri": f"gpt://{self.folder_id}/yandexgpt-lite",
                 "completionOptions": {
                     "temperature": str(temperature),  # Ensure string format
                     "maxTokens": str(max_tokens),    # Ensure string format
@@ -239,7 +239,7 @@ Keep responses concise but informative. Use bullet points and clear formatting w
             
             # Alternative format if the first one fails
             alt_data = {
-                "modelUri": "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-lite",
+                "modelUri": f"gpt://{self.folder_id}/yandexgpt-lite",
                 "completionOptions": {
                     "temperature": str(temperature),
                     "maxTokens": str(max_tokens),
@@ -248,12 +248,12 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
             }
             
-            # Alternative model URIs to try
+            # Alternative model URIs to try with configured folder ID
             alt_model_uris = [
-                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-lite",
-                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt",
-                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-pro",
-                "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-2"
+                f"gpt://{self.folder_id}/yandexgpt-lite",
+                f"gpt://{self.folder_id}/yandexgpt",
+                f"gpt://{self.folder_id}/yandexgpt-pro",
+                f"gpt://{self.folder_id}/yandexgpt-2"
             ]
             
             print(f"Calling YandexGPT API with primary format: {json.dumps(data, indent=2)}")
