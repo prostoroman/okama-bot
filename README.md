@@ -190,6 +190,7 @@ okama-bot/
 ├── chatgpt_service.py      # ChatGPT API integration
 ├── requirements.txt        # Python dependencies
 ├── render.yaml             # Render deployment config
+├── build.sh                # Build script for Render
 ├── config.env.example      # Environment variables template
 └── README.md               # This file
 ```

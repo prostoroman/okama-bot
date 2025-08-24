@@ -2,7 +2,6 @@ import logging
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-from telegram.constants import ParseMode
 import io
 from typing import Dict, List, Optional
 
@@ -33,12 +32,16 @@ class OkamaFinanceBot:
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         user = update.effective_user
-        welcome_message = f"""
-🤖 *Welcome to Okama Finance Bot!* 
+        # Escape user input to prevent Markdown parsing issues
+        user_name = user.first_name or "User"
+        # Remove any special characters that could break Markdown
+        user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
+        
+        welcome_message = f"""🤖 Welcome to Okama Finance Bot!
 
-Hi {user.first_name}! I'm your AI-powered financial analysis assistant.
+Hi {user_name}! I'm your AI-powered financial analysis assistant.
 
-*What I can do:*
+What I can do:
 • 📊 Portfolio analysis and optimization
 • 📈 Risk assessment and metrics
 • 🔗 Asset correlation analysis
@@ -46,12 +49,12 @@ Hi {user.first_name}! I'm your AI-powered financial analysis assistant.
 • 📋 Asset comparison and benchmarking
 • 💬 Chat with AI about finance
 
-*Quick Start:*
+Quick Start:
 • Send me stock symbols like "AAPL MSFT GOOGL"
 • Ask "Analyze portfolio AAPL MSFT"
 • Use commands like /portfolio, /risk, /correlation
 
-*Commands:*
+Commands:
 /help - Show all available commands
 /portfolio - Portfolio analysis
 /risk - Risk metrics
@@ -60,8 +63,7 @@ Hi {user.first_name}! I'm your AI-powered financial analysis assistant.
 /compare - Asset comparison
 /chat - Chat with AI
 
-Ready to analyze your investments? 🚀
-        """
+Ready to analyze your investments? 🚀"""
         
         keyboard = [
             [InlineKeyboardButton("📊 Portfolio Analysis", callback_data="portfolio_help")],
@@ -73,53 +75,49 @@ Ready to analyze your investments? 🚀
         
         await update.message.reply_text(
             welcome_message,
-            parse_mode=ParseMode.MARKDOWN,
             reply_markup=reply_markup
         )
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
-        help_text = """
-📚 *Available Commands & Features*
+        help_text = """📚 Available Commands & Features
 
-*Core Analysis Commands:*
+Core Analysis Commands:
 /portfolio [symbols] - Analyze portfolio performance
 /risk [symbols] - Calculate risk metrics (VaR, CVaR, volatility)
 /correlation [symbols] - Generate correlation matrix
 /efficient_frontier [symbols] - Create efficient frontier plot
 /compare [symbols] - Compare multiple assets
 
-*AI Chat:*
+AI Chat:
 /chat [question] - Get financial advice from AI
 
-*Examples:*
-• `/portfolio AAPL MSFT GOOGL`
-• `/risk SPY QQQ`
-• `/correlation AAPL MSFT GOOGL`
-• `/compare AAPL MSFT GOOGL TSLA`
+Examples:
+• /portfolio AAPL MSFT GOOGL
+• /risk SPY QQQ
+• /correlation AAPL MSFT GOOGL
+• /compare AAPL MSFT GOOGL TSLA
 
-*Natural Language:*
+Natural Language:
 You can also just type naturally:
 • "Analyze my portfolio AAPL MSFT"
 • "What's the risk of SPY?"
 • "Compare AAPL vs MSFT"
 • "How to optimize my portfolio?"
 
-*Need Help?*
-Just type your question or use the commands above!
-        """
+Need Help?
+Just type your question or use the commands above!"""
         
-        await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(help_text)
     
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command"""
         if not context.args:
             await update.message.reply_text(
-                "📊 *Portfolio Analysis*\n\n"
+                "📊 Portfolio Analysis\n\n"
                 "Please provide stock symbols:\n"
-                "`/portfolio AAPL MSFT GOOGL`\n\n"
-                "Or just send me the symbols directly!",
-                parse_mode=ParseMode.MARKDOWN
+                "/portfolio AAPL MSFT GOOGL\n\n"
+                "Or just send me the symbols directly!"
             )
             return
         
@@ -130,11 +128,10 @@ Just type your question or use the commands above!
         """Handle /risk command"""
         if not context.args:
             await update.message.reply_text(
-                "📈 *Risk Analysis*\n\n"
+                "📈 Risk Analysis\n\n"
                 "Please provide stock symbols:\n"
-                "`/risk SPY QQQ`\n\n"
-                "Or just send me the symbols directly!",
-                parse_mode=ParseMode.MARKDOWN
+                "/risk SPY QQQ\n\n"
+                "Or just send me the symbols directly!"
             )
             return
         
@@ -145,11 +142,10 @@ Just type your question or use the commands above!
         """Handle /correlation command"""
         if not context.args:
             await update.message.reply_text(
-                "🔗 *Correlation Analysis*\n\n"
+                "🔗 Correlation Analysis\n\n"
                 "Please provide stock symbols:\n"
-                "`/correlation AAPL MSFT GOOGL`\n\n"
-                "Or just send me the symbols directly!",
-                parse_mode=ParseMode.MARKDOWN
+                "/correlation AAPL MSFT GOOGL\n\n"
+                "Or just send me the symbols directly!"
             )
             return
         
@@ -160,11 +156,10 @@ Just type your question or use the commands above!
         """Handle /efficient_frontier command"""
         if not context.args:
             await update.message.reply_text(
-                "🎯 *Efficient Frontier*\n\n"
+                "🎯 Efficient Frontier\n\n"
                 "Please provide stock symbols:\n"
-                "`/efficient_frontier AAPL MSFT GOOGL`\n\n"
-                "Or just send me the symbols directly!",
-                parse_mode=ParseMode.MARKDOWN
+                "/efficient_frontier AAPL MSFT GOOGL\n\n"
+                "Or just send me the symbols directly!"
             )
             return
         
@@ -175,11 +170,10 @@ Just type your question or use the commands above!
         """Handle /compare command"""
         if not context.args:
             await update.message.reply_text(
-                "📋 *Asset Comparison*\n\n"
+                "📋 Asset Comparison\n\n"
                 "Please provide stock symbols:\n"
-                "`/compare AAPL MSFT GOOGL`\n\n"
-                "Or just send me the symbols directly!",
-                parse_mode=ParseMode.MARKDOWN
+                "/compare AAPL MSFT GOOGL\n\n"
+                "Or just send me the symbols directly!"
             )
             return
         
@@ -190,12 +184,11 @@ Just type your question or use the commands above!
         """Handle /chat command"""
         if not context.args:
             await update.message.reply_text(
-                "💬 *AI Chat*\n\n"
+                "💬 AI Chat\n\n"
                 "Ask me anything about finance:\n"
-                "`/chat What is diversification?`\n"
-                "`/chat How to calculate Sharpe ratio?`\n\n"
-                "Or just type your question directly!",
-                parse_mode=ParseMode.MARKDOWN
+                "/chat What is diversification?\n"
+                "/chat How to calculate Sharpe ratio?\n\n"
+                "Or just type your question directly!"
             )
             return
         
@@ -258,49 +251,45 @@ Just type your question or use the commands above!
         
         if query.data == "portfolio_help":
             await query.edit_message_text(
-                "📊 *Portfolio Analysis*\n\n"
+                "📊 Portfolio Analysis\n\n"
                 "Send me stock symbols to analyze:\n"
-                "• `AAPL MSFT GOOGL`\n"
-                "• `/portfolio SPY QQQ`\n\n"
+                "• AAPL MSFT GOOGL\n"
+                "• /portfolio SPY QQQ\n\n"
                 "I'll show you:\n"
                 "• Performance metrics\n"
                 "• Risk analysis\n"
-                "• Charts and insights",
-                parse_mode=ParseMode.MARKDOWN
+                "• Charts and insights"
             )
         elif query.data == "risk_help":
             await query.edit_message_text(
-                "📈 *Risk Analysis*\n\n"
+                "📈 Risk Analysis\n\n"
                 "Send me stock symbols to analyze risk:\n"
-                "• `SPY QQQ`\n"
-                "• `/risk AAPL MSFT`\n\n"
+                "• SPY QQQ\n"
+                "• /risk AAPL MSFT\n\n"
                 "I'll show you:\n"
                 "• Volatility metrics\n"
                 "• VaR and CVaR\n"
-                "• Correlation matrix",
-                parse_mode=ParseMode.MARKDOWN
+                "• Correlation matrix"
             )
         elif query.data == "correlation_help":
             await query.edit_message_text(
-                "🔗 *Correlation Analysis*\n\n"
+                "🔗 Correlation Analysis\n\n"
                 "Send me stock symbols to see correlations:\n"
-                "• `AAPL MSFT GOOGL`\n"
-                "• `/correlation SPY QQQ`\n\n"
+                "• AAPL MSFT GOOGL\n"
+                "• /correlation SPY QQQ\n\n"
                 "I'll show you:\n"
                 "• Correlation heatmap\n"
                 "• Relationship insights\n"
-                "• Diversification analysis",
-                parse_mode=ParseMode.MARKDOWN
+                "• Diversification analysis"
             )
         elif query.data == "chat_help":
             await query.edit_message_text(
-                "💬 *AI Chat*\n\n"
+                "💬 AI Chat\n\n"
                 "Ask me anything about finance:\n"
-                "• `What is diversification?`\n"
-                "• `How to calculate Sharpe ratio?`\n"
-                "• `Best practices for portfolio rebalancing`\n\n"
-                "I'll provide expert financial advice!",
-                parse_mode=ParseMode.MARKDOWN
+                "• What is diversification?\n"
+                "• How to calculate Sharpe ratio?\n"
+                "• Best practices for portfolio rebalancing\n\n"
+                "I'll provide expert financial advice!"
             )
     
     async def _analyze_portfolio(self, update: Update, symbols: List[str]):
@@ -323,10 +312,9 @@ Just type your question or use the commands above!
             )
             
             # Format metrics message
-            metrics_text = f"""
-📊 *Portfolio Analysis: {', '.join(symbols)}*
+            metrics_text = f"""📊 Portfolio Analysis: {', '.join(symbols)}
 
-*Performance Metrics:*
+Performance Metrics:
 • Total Return: {metrics.get('total_return', 'N/A')}
 • Annual Return: {metrics.get('annual_return', 'N/A')}
 • Volatility: {metrics.get('volatility', 'N/A')}
@@ -335,16 +323,14 @@ Just type your question or use the commands above!
 • VaR (95%): {metrics.get('var_95', 'N/A')}
 • CVaR (95%): {metrics.get('cvar_95', 'N/A')}
 
-*AI Insights:*
-{insights}
-            """
+AI Insights:
+{insights}"""
             
             # Send chart with caption
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(chart_image),
-                caption=metrics_text,
-                parse_mode=ParseMode.MARKDOWN
+                caption=metrics_text
             )
             
         except Exception as e:
@@ -364,31 +350,29 @@ Just type your question or use the commands above!
             correlation_image = self.okama_service.generate_correlation_matrix(symbols)
             
             # Format risk metrics
-            risk_text = f"""
-📈 *Risk Analysis: {', '.join(symbols)}*
+            risk_text = f"""📈 Risk Analysis: {', '.join(symbols)}
 
-*Individual Asset Risk:*
+Individual Asset Risk:
 """
             for symbol, data in risk_data.items():
                 if 'error' not in data:
                     risk_text += f"""
-• *{symbol}:*
+• {symbol}:
   - Volatility: {data.get('volatility', 'N/A')}
   - VaR (95%): {data.get('var_95', 'N/A')}
   - CVaR (95%): {data.get('cvar_95', 'N/A')}
   - Max Drawdown: {data.get('max_drawdown', 'N/A')}
 """
                 else:
-                    risk_text += f"• *{symbol}:* Error - {data['error']}\n"
+                    risk_text += f"• {symbol}: Error - {data['error']}\n"
             
-            risk_text += "\n*Correlation Matrix Below*"
+            risk_text += "\nCorrelation Matrix Below"
             
             # Send correlation matrix
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(correlation_image),
-                caption=risk_text,
-                parse_mode=ParseMode.MARKDOWN
+                caption=risk_text
             )
             
         except Exception as e:
@@ -407,23 +391,20 @@ Just type your question or use the commands above!
                 "correlation", {"symbols": symbols}, f"correlation analysis for {', '.join(symbols)}"
             )
             
-            caption = f"""
-🔗 *Correlation Matrix: {', '.join(symbols)}*
+            caption = f"""🔗 Correlation Matrix: {', '.join(symbols)}
 
-*AI Insights:*
+AI Insights:
 {insights}
 
-*Interpretation:*
+Interpretation:
 • Values closer to 1 = Strong positive correlation
 • Values closer to -1 = Strong negative correlation  
-• Values closer to 0 = Low correlation
-            """
+• Values closer to 0 = Low correlation"""
             
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(correlation_image),
-                caption=caption,
-                parse_mode=ParseMode.MARKDOWN
+                caption=caption
             )
             
         except Exception as e:
@@ -437,27 +418,24 @@ Just type your question or use the commands above!
             # Generate efficient frontier
             frontier_image = self.okama_service.generate_efficient_frontier(symbols)
             
-            caption = f"""
-🎯 *Efficient Frontier: {', '.join(symbols)}*
+            caption = f"""🎯 Efficient Frontier: {', '.join(symbols)}
 
-*What This Shows:*
+What This Shows:
 • The optimal risk-return combinations
 • Each point represents a different portfolio allocation
 • Lower left = Lower risk, lower return
 • Upper right = Higher risk, higher return
 • The curve shows the most efficient portfolios
 
-*Use This To:*
+Use This To:
 • Find your optimal risk tolerance
 • Compare portfolio efficiency
-• Optimize asset allocation
-            """
+• Optimize asset allocation"""
             
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(frontier_image),
-                caption=caption,
-                parse_mode=ParseMode.MARKDOWN
+                caption=caption
             )
             
         except Exception as e:
@@ -472,15 +450,14 @@ Just type your question or use the commands above!
             comparison_metrics, comparison_image = self.okama_service.compare_assets(symbols)
             
             # Format comparison text
-            comparison_text = f"""
-📋 *Asset Comparison: {', '.join(symbols)}*
+            comparison_text = f"""📋 Asset Comparison: {', '.join(symbols)}
 
-*Performance Metrics:*
+Performance Metrics:
 """
             for symbol, metrics in comparison_metrics.items():
                 if 'error' not in metrics:
                     comparison_text += f"""
-• *{symbol}:*
+• {symbol}:
   - Total Return: {metrics.get('total_return', 'N/A'):.2%}
   - Annual Return: {metrics.get('annual_return', 'N/A'):.2%}
   - Volatility: {metrics.get('volatility', 'N/A'):.2%}
@@ -488,14 +465,13 @@ Just type your question or use the commands above!
   - Max Drawdown: {metrics.get('max_drawdown', 'N/A'):.2%}
 """
                 else:
-                    comparison_text += f"• *{symbol}:* Error - {metrics['error']}\n"
+                    comparison_text += f"• {symbol}: Error - {metrics['error']}\n"
             
             # Send comparison chart
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(comparison_image),
-                caption=comparison_text,
-                parse_mode=ParseMode.MARKDOWN
+                caption=comparison_text
             )
             
         except Exception as e:
@@ -511,8 +487,7 @@ Just type your question or use the commands above!
             
             # Send response
             await update.message.reply_text(
-                f"💬 *AI Financial Advisor*\n\n{response}",
-                parse_mode=ParseMode.MARKDOWN
+                f"💬 AI Financial Advisor\n\n{response}"
             )
             
         except Exception as e:
