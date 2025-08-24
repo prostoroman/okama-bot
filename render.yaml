@@ -4,8 +4,12 @@ services:
     env: python
     plan: starter
     buildCommand: chmod +x build.sh && ./build.sh
-    startCommand: python bot.py
+    startCommand: python start_bot.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.7
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: PYTHONUNBUFFERED
+        value: "1"
     autoDeploy: true

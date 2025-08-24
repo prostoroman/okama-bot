@@ -1,8 +1,8 @@
 setuptools>=65.0.0
 wheel>=0.38.0
-python-telegram-bot==20.7
-openai==1.3.7
-okama==1.2.0
+python-telegram-bot>=21.0.0
+openai>=1.3.0
+okama>=1.2.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 pandas>=2.0.0
