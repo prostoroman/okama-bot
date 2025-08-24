@@ -94,6 +94,8 @@ Core Analysis Commands:
 /correlation [symbols] - Generate correlation matrix
 /efficient_frontier [symbols] - Create efficient frontier plot
 /compare [symbols] - Compare multiple assets
+/test [symbols] - Test Okama integration
+/testai - Test YandexGPT API connection
 
 YandexGPT Chat:
 /chat [question] - Get financial advice from YandexGPT
@@ -498,6 +500,79 @@ Performance Metrics:
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error getting AI response: {str(e)}")
+    
+    async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /test command to debug Okama integration"""
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "🧪 Test Command\n\n"
+                    "Please provide symbols to test:\n"
+                    "/test RGBITR.INDX MCFTR.INDX\n\n"
+                    "This will test the Okama integration and show available attributes."
+                )
+                return
+            
+            symbols = [s.upper() for s in context.args]
+            await update.message.reply_text(f"🧪 Testing Okama integration with symbols: {', '.join(symbols)}...")
+            
+            # Run the test
+            test_results = self.okama_service.test_okama_integration(symbols)
+            
+            # Format results
+            result_text = f"🧪 Okama Integration Test Results\n\n"
+            result_text += f"Symbols tested: {', '.join(symbols)}\n"
+            result_text += f"Okama version: {test_results.get('okama_version', 'Unknown')}\n\n"
+            
+            if 'assets' in test_results:
+                result_text += "Asset Tests:\n"
+                for symbol, status in test_results['assets'].items():
+                    result_text += f"• {symbol}: {status}\n"
+            
+            result_text += f"\nPortfolio Test: {test_results.get('portfolio', 'N/A')}"
+            
+            if 'error' in test_results:
+                result_text += f"\n\n❌ Test Error: {test_results['error']}"
+            
+            await update.message.reply_text(result_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error running test: {str(e)}")
+    
+    async def test_ai_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /testai command to test YandexGPT API connection"""
+        try:
+            await update.message.reply_text("🧪 Testing YandexGPT API connection...")
+            
+            # Test the API connection
+            test_results = self.yandexgpt_service.test_api_connection()
+            
+            # Format results
+            result_text = f"🧪 YandexGPT API Test Results\n\n"
+            result_text += f"Status: {test_results.get('status', 'Unknown')}\n"
+            result_text += f"Message: {test_results.get('message', 'No message')}\n\n"
+            
+            if 'config' in test_results:
+                config = test_results['config']
+                result_text += "Configuration:\n"
+                result_text += f"• API Key: {'✓ Set' if config.get('api_key_set') else '✗ NOT SET'}\n"
+                result_text += f"• Folder ID: {'✓ Set' if config.get('folder_id_set') else '✗ NOT SET'}\n"
+                result_text += f"• Base URL: {config.get('base_url', 'Unknown')}\n\n"
+            
+            if 'response' in test_results:
+                result_text += f"API Response: {test_results['response']}\n\n"
+            
+            if test_results.get('status') == 'error':
+                result_text += "❌ API test failed. Check your configuration."
+            elif test_results.get('status') == 'success':
+                result_text += "✅ API test successful!"
+            else:
+                result_text += "⚠️ API test had issues."
+            
+            await update.message.reply_text(result_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error testing AI: {str(e)}")
         
     def run(self):
         """Run the bot"""
@@ -513,6 +588,8 @@ Performance Metrics:
         application.add_handler(CommandHandler("efficient_frontier", self.efficient_frontier_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("chat", self.chat_command))
+        application.add_handler(CommandHandler("test", self.test_command))
+        application.add_handler(CommandHandler("testai", self.test_ai_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))

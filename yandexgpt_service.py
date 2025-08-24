@@ -11,6 +11,22 @@ class YandexGPTService:
         self.api_key = Config.YANDEX_API_KEY
         self.folder_id = Config.YANDEX_FOLDER_ID
         self.base_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+        # Alternative endpoints to try if the main one fails:
+        self.fallback_urls = [
+            "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
+            "https://llm.api.cloud.yandex.net/foundationModels/v1/chat/completions",
+            "https://llm.api.cloud.yandex.net/foundationModels/v1/textGeneration"
+        ]
+        
+        # Debug configuration
+        print(f"YandexGPT Service initialized:")
+        print(f"  API Key: {'Set' if self.api_key else 'NOT SET'}")
+        print(f"  Folder ID: {'Set' if self.folder_id else 'NOT SET'}")
+        print(f"  Base URL: {self.base_url}")
+        
+        if not self.api_key or not self.folder_id:
+            print("⚠️  WARNING: Missing YandexGPT configuration!")
+            print("   Please set YANDEX_API_KEY and YANDEX_FOLDER_ID in your environment variables")
         
         # System prompt for financial analysis
         self.system_prompt = """You are a financial analysis expert assistant. You help users understand financial concepts, analyze investment strategies, and interpret financial data.
@@ -85,8 +101,8 @@ Keep responses concise but informative. Use bullet points and clear formatting w
         """Fallback analysis using keyword matching"""
         message_lower = user_message.lower()
         
-        # Extract symbols (uppercase letter combinations)
-        symbols = re.findall(r'\b[A-Z]{1,5}\b', user_message)
+        # Extract symbols (including namespace like .INDX, .US, .COMM)
+        symbols = re.findall(r'\b[A-Z]{1,5}\.[A-Z]{2,4}\b', user_message)
         
         # Determine intent
         if any(word in message_lower for word in ['portfolio', 'portfolios']):
@@ -187,16 +203,23 @@ Keep responses concise but informative. Use bullet points and clear formatting w
     def _call_yandex_api(self, system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> str:
         """Make a call to YandexGPT API"""
         try:
+            # Check if API key and folder ID are configured
+            if not self.api_key or not self.folder_id:
+                print("Missing YandexGPT API configuration")
+                return "AI service is not properly configured. Please check your API settings."
+            
             headers = {
                 "Authorization": f"Api-Key {self.api_key}",
                 "Content-Type": "application/json"
             }
             
+            # Use the correct YandexGPT API endpoint and model
             data = {
                 "modelUri": "gpt://b1g8c7pcd9kq2v6u9q3r/yandexgpt-lite",
                 "completionOptions": {
                     "temperature": temperature,
-                    "maxTokens": max_tokens
+                    "maxTokens": str(max_tokens),  # Yandex expects string
+                    "stream": False
                 },
                 "messages": [
                     {
@@ -210,6 +233,8 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 ]
             }
             
+            print(f"Calling YandexGPT API with data: {json.dumps(data, indent=2)}")
+            
             response = requests.post(
                 self.base_url,
                 headers=headers,
@@ -217,13 +242,98 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 timeout=30
             )
             
+            print(f"YandexGPT API response status: {response.status_code}")
+            print(f"YandexGPT API response headers: {dict(response.headers)}")
+            
             if response.status_code == 200:
                 result = response.json()
-                return result.get("result", {}).get("alternatives", [{}])[0].get("message", {}).get("text", "")
+                print(f"YandexGPT API success response: {json.dumps(result, indent=2)}")
+                
+                # Extract the response text from the result
+                alternatives = result.get("result", {}).get("alternatives", [])
+                if alternatives and len(alternatives) > 0:
+                    message = alternatives[0].get("message", {})
+                    text = message.get("text", "")
+                    if text:
+                        return text
+                    else:
+                        print(f"No text found in message: {message}")
+                        return "AI response received but no text content found."
+                else:
+                    print(f"No alternatives found in result: {result}")
+                    return "AI response received but no content found."
             else:
-                print(f"YandexGPT API error: {response.status_code} - {response.text}")
-                return "I'm having trouble connecting to my AI assistant right now. Please try again later."
+                print(f"YandexGPT API error: {response.status_code}")
+                print(f"Response text: {response.text}")
+                print(f"Response headers: {dict(response.headers)}")
+                
+                # Try to parse error response
+                try:
+                    error_data = response.json()
+                    error_message = error_data.get("message", "Unknown error")
+                    print(f"Error message: {error_message}")
+                except:
+                    error_message = response.text
+                
+                return f"AI service error ({response.status_code}): {error_message}"
+                
+        except requests.exceptions.Timeout:
+            print("YandexGPT API request timed out")
+            return "AI service request timed out. Please try again."
+        except requests.exceptions.RequestException as e:
+            print(f"YandexGPT API request error: {e}")
+            return f"AI service request error: {str(e)}"
+        except Exception as e:
+            print(f"Unexpected error calling YandexGPT API: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"Unexpected error: {str(e)}"
+    
+    def test_api_connection(self) -> Dict:
+        """Test method to debug YandexGPT API connection"""
+        try:
+            print("🧪 Testing YandexGPT API connection...")
+            
+            # Check configuration
+            config_status = {
+                'api_key_set': bool(self.api_key),
+                'folder_id_set': bool(self.folder_id),
+                'base_url': self.base_url
+            }
+            
+            if not self.api_key or not self.folder_id:
+                return {
+                    'status': 'error',
+                    'message': 'Missing API configuration',
+                    'config': config_status
+                }
+            
+            # Test simple API call
+            test_response = self._call_yandex_api(
+                system_prompt="You are a helpful assistant.",
+                user_prompt="Say 'Hello, API test successful!'",
+                temperature=0.1,
+                max_tokens=50
+            )
+            
+            if "API test successful" in test_response:
+                return {
+                    'status': 'success',
+                    'message': 'API connection working',
+                    'response': test_response,
+                    'config': config_status
+                }
+            else:
+                return {
+                    'status': 'partial',
+                    'message': 'API responded but with unexpected content',
+                    'response': test_response,
+                    'config': config_status
+                }
                 
         except Exception as e:
-            print(f"Error calling YandexGPT API: {e}")
-            return "I'm having trouble connecting to my AI assistant right now. Please try again later."
+            return {
+                'status': 'error',
+                'message': f'Test failed: {str(e)}',
+                'config': config_status if 'config_status' in locals() else 'Unknown'
+            }

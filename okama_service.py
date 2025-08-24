@@ -26,6 +26,20 @@ class OkamaService:
                 weights = [1.0 / len(symbols)] * len(symbols)
             
             portfolio = ok.Portfolio(symbols, weights=weights)
+            
+            # Debug: Print available attributes and methods
+            print(f"Portfolio created successfully for symbols: {symbols}")
+            print(f"Portfolio type: {type(portfolio)}")
+            print(f"Available attributes: {[attr for attr in dir(portfolio) if not attr.startswith('_')]}")
+            
+            # Check if key attributes exist
+            key_attrs = ['total_return', 'mean_return', 'volatility', 'sharpe_ratio', 'max_drawdown', 'cumulative_returns']
+            for attr in key_attrs:
+                if hasattr(portfolio, attr):
+                    print(f"✓ {attr}: {getattr(portfolio, attr)}")
+                else:
+                    print(f"✗ {attr}: Not available")
+            
             return portfolio
         except Exception as e:
             raise Exception(f"Error creating portfolio: {str(e)}")
@@ -33,15 +47,18 @@ class OkamaService:
     def get_portfolio_performance(self, portfolio: ok.Portfolio) -> Dict:
         """Get comprehensive portfolio performance metrics"""
         try:
-            # Basic metrics
+            # Get portfolio statistics using the correct Okama API
+            stats = portfolio.stats
+            
+            # Basic metrics - using the correct attribute names
             metrics = {
-                'total_return': portfolio.total_return,
-                'annual_return': portfolio.mean_return,
-                'volatility': portfolio.volatility,
-                'sharpe_ratio': portfolio.sharpe_ratio,
-                'max_drawdown': portfolio.max_drawdown,
-                'var_95': portfolio.var_95,
-                'cvar_95': portfolio.cvar_95
+                'total_return': portfolio.cumulative_returns.iloc[-1] if not portfolio.cumulative_returns.empty else 0,
+                'annual_return': portfolio.mean_return if hasattr(portfolio, 'mean_return') else stats.get('mean_return', 0),
+                'volatility': portfolio.volatility if hasattr(portfolio, 'volatility') else stats.get('volatility', 0),
+                'sharpe_ratio': portfolio.sharpe_ratio if hasattr(portfolio, 'sharpe_ratio') else stats.get('sharpe_ratio', 0),
+                'max_drawdown': portfolio.max_drawdown if hasattr(portfolio, 'max_drawdown') else stats.get('max_drawdown', 0),
+                'var_95': portfolio.var_95 if hasattr(portfolio, 'var_95') else stats.get('var_95', 0),
+                'cvar_95': portfolio.cvar_95 if hasattr(portfolio, 'cvar_95') else stats.get('cvar_95', 0)
             }
             
             # Convert to more readable format
@@ -59,7 +76,55 @@ class OkamaService:
             
             return formatted_metrics
         except Exception as e:
-            raise Exception(f"Error getting portfolio performance: {str(e)}")
+            # Fallback to basic portfolio data if stats method fails
+            try:
+                print(f"Primary method failed, trying fallback: {e}")
+                
+                # Try to get basic portfolio information
+                if hasattr(portfolio, 'cumulative_returns') and not portfolio.cumulative_returns.empty:
+                    total_return = portfolio.cumulative_returns.iloc[-1]
+                else:
+                    total_return = 0
+                
+                # Try to get other metrics from available attributes
+                metrics = {
+                    'total_return': total_return,
+                    'annual_return': getattr(portfolio, 'mean_return', 0),
+                    'volatility': getattr(portfolio, 'volatility', 0),
+                    'sharpe_ratio': getattr(portfolio, 'sharpe_ratio', 0),
+                    'max_drawdown': getattr(portfolio, 'max_drawdown', 0),
+                    'var_95': getattr(portfolio, 'var_95', 0),
+                    'cvar_95': getattr(portfolio, 'cvar_95', 0)
+                }
+                
+                # Format metrics
+                formatted_metrics = {}
+                for key, value in metrics.items():
+                    if isinstance(value, (int, float)):
+                        if 'return' in key or 'ratio' in key:
+                            formatted_metrics[key] = f"{value:.2%}"
+                        elif 'volatility' in key or 'drawdown' in key or 'var' in key:
+                            formatted_metrics[key] = f"{value:.2%}"
+                        else:
+                            formatted_metrics[key] = f"{value:.4f}"
+                    else:
+                        formatted_metrics[key] = str(value)
+                
+                return formatted_metrics
+                
+            except Exception as fallback_error:
+                print(f"Fallback method also failed: {fallback_error}")
+                # Return basic portfolio info
+                return {
+                    'total_return': 'N/A',
+                    'annual_return': 'N/A',
+                    'volatility': 'N/A',
+                    'sharpe_ratio': 'N/A',
+                    'max_drawdown': 'N/A',
+                    'var_95': 'N/A',
+                    'cvar_95': 'N/A',
+                    'note': 'Limited metrics available'
+                }
     
     def generate_performance_chart(self, portfolio: ok.Portfolio) -> bytes:
         """Generate portfolio performance chart"""
@@ -92,17 +157,45 @@ class OkamaService:
     def generate_correlation_matrix(self, symbols: List[str]) -> bytes:
         """Generate correlation matrix heatmap"""
         try:
+            print(f"Generating correlation matrix for symbols: {symbols}")
+            
             # Get historical data for symbols
             data = {}
+            failed_symbols = []
+            
             for symbol in symbols:
                 try:
+                    print(f"Processing symbol: {symbol}")
                     asset = ok.Asset(symbol)
-                    data[symbol] = asset.price_ts
-                except:
+                    print(f"Asset created successfully for {symbol}")
+                    
+                    if hasattr(asset, 'price_ts'):
+                        price_data = asset.price_ts
+                        print(f"Price data for {symbol}: {type(price_data)}, length: {len(price_data) if hasattr(price_data, '__len__') else 'N/A'}")
+                        
+                        if not price_data.empty if hasattr(price_data, 'empty') else len(price_data) > 0:
+                            data[symbol] = price_data
+                            print(f"✓ Added {symbol} to correlation data")
+                        else:
+                            print(f"✗ {symbol} has empty price data")
+                            failed_symbols.append(f"{symbol} (empty data)")
+                    else:
+                        print(f"✗ {symbol} has no price_ts attribute")
+                        failed_symbols.append(f"{symbol} (no price_ts)")
+                        
+                except Exception as e:
+                    print(f"✗ Error processing {symbol}: {e}")
+                    failed_symbols.append(f"{symbol} (error: {str(e)})")
                     continue
             
+            print(f"Successfully processed symbols: {list(data.keys())}")
+            print(f"Failed symbols: {failed_symbols}")
+            
             if len(data) < 2:
-                raise Exception("Need at least 2 valid symbols for correlation matrix")
+                error_msg = f"Need at least 2 valid symbols for correlation matrix. "
+                error_msg += f"Processed: {len(data)}, Failed: {len(failed_symbols)}. "
+                error_msg += f"Failed symbols: {', '.join(failed_symbols)}"
+                raise Exception(error_msg)
             
             # Create DataFrame and calculate correlation
             df = pd.DataFrame(data)
@@ -128,11 +221,15 @@ class OkamaService:
     def generate_efficient_frontier(self, symbols: List[str]) -> bytes:
         """Generate efficient frontier plot"""
         try:
+            print(f"Generating efficient frontier for symbols: {symbols}")
+            
             # Create efficient frontier
             ef = ok.EfficientFrontier(symbols)
+            print(f"EfficientFrontier created successfully")
             
             # Generate efficient frontier
             ef_points = ef.efficient_frontier_points
+            print(f"Efficient frontier points: {type(ef_points)}, length: {len(ef_points) if hasattr(ef_points, '__len__') else 'N/A'}")
             
             plt.figure(figsize=(12, 8))
             plt.scatter(ef_points['Risk'], ef_points['Return'], alpha=0.6, s=50)
@@ -173,12 +270,14 @@ class OkamaService:
                 try:
                     asset = ok.Asset(symbol)
                     assets_data[symbol] = asset.price_ts
+                    
+                    # Get asset metrics with fallback handling
                     comparison_metrics[symbol] = {
-                        'total_return': asset.total_return,
-                        'annual_return': asset.mean_return,
-                        'volatility': asset.volatility,
-                        'sharpe_ratio': asset.sharpe_ratio,
-                        'max_drawdown': asset.max_drawdown
+                        'total_return': getattr(asset, 'total_return', 0),
+                        'annual_return': getattr(asset, 'mean_return', 0),
+                        'volatility': getattr(asset, 'volatility', 0),
+                        'sharpe_ratio': getattr(asset, 'sharpe_ratio', 0),
+                        'max_drawdown': getattr(asset, 'max_drawdown', 0)
                     }
                 except Exception as e:
                     comparison_metrics[symbol] = {'error': str(e)}
@@ -237,13 +336,79 @@ class OkamaService:
             asset = ok.Asset(symbol)
             return {
                 'symbol': symbol,
-                'total_return': f"{asset.total_return:.2%}",
-                'annual_return': f"{asset.mean_return:.2%}",
-                'volatility': f"{asset.volatility:.2%}",
-                'sharpe_ratio': f"{asset.sharpe_ratio:.2f}",
-                'max_drawdown': f"{asset.max_drawdown:.2%}",
-                'var_95': f"{asset.var_95:.2%}",
-                'cvar_95': f"{asset.cvar_95:.2%}"
+                'total_return': f"{getattr(asset, 'total_return', 0):.2%}",
+                'annual_return': f"{getattr(asset, 'mean_return', 0):.2%}",
+                'volatility': f"{getattr(asset, 'volatility', 0):.2%}",
+                'sharpe_ratio': f"{getattr(asset, 'sharpe_ratio', 0):.2f}",
+                'max_drawdown': f"{getattr(asset, 'max_drawdown', 0):.2%}",
+                'var_95': f"{getattr(asset, 'var_95', 0):.2%}",
+                'cvar_95': f"{getattr(asset, 'cvar_95', 0):.2%}"
             }
         except Exception as e:
             return {'symbol': symbol, 'error': str(e)}
+    
+    def test_okama_integration(self, symbols: List[str]) -> Dict:
+        """Test method to debug Okama integration issues"""
+        try:
+            print(f"Testing Okama integration with symbols: {symbols}")
+            
+            # Test individual assets
+            asset_info = {}
+            for symbol in symbols:
+                try:
+                    asset = ok.Asset(symbol)
+                    print(f"\nAsset {symbol}:")
+                    print(f"  Type: {type(asset)}")
+                    print(f"  Available attributes: {[attr for attr in dir(asset) if not attr.startswith('_')]}")
+                    
+                    # Test key attributes
+                    key_attrs = ['total_return', 'mean_return', 'volatility', 'sharpe_ratio', 'max_drawdown']
+                    for attr in key_attrs:
+                        if hasattr(asset, attr):
+                            value = getattr(asset, attr)
+                            print(f"  ✓ {attr}: {value}")
+                        else:
+                            print(f"  ✗ {attr}: Not available")
+                    
+                    asset_info[symbol] = "OK"
+                except Exception as e:
+                    print(f"  ✗ Error with {symbol}: {e}")
+                    asset_info[symbol] = f"Error: {str(e)}"
+            
+            # Test portfolio creation
+            try:
+                portfolio = ok.Portfolio(symbols)
+                print(f"\nPortfolio created successfully:")
+                print(f"  Type: {type(portfolio)}")
+                print(f"  Available attributes: {[attr for attr in dir(portfolio) if not attr.startswith('_')]}")
+                
+                # Test portfolio methods
+                if hasattr(portfolio, 'stats'):
+                    try:
+                        stats = portfolio.stats
+                        print(f"  ✓ stats method: {stats}")
+                    except Exception as e:
+                        print(f"  ✗ stats method error: {e}")
+                
+                if hasattr(portfolio, 'cumulative_returns'):
+                    try:
+                        cum_returns = portfolio.cumulative_returns
+                        print(f"  ✓ cumulative_returns: {type(cum_returns)}")
+                        if hasattr(cum_returns, 'iloc'):
+                            print(f"    Last value: {cum_returns.iloc[-1] if not cum_returns.empty else 'Empty'}")
+                    except Exception as e:
+                        print(f"  ✗ cumulative_returns error: {e}")
+                
+                portfolio_info = "OK"
+            except Exception as e:
+                print(f"  ✗ Portfolio creation error: {e}")
+                portfolio_info = f"Error: {str(e)}"
+            
+            return {
+                'assets': asset_info,
+                'portfolio': portfolio_info,
+                'okama_version': ok.__version__ if hasattr(ok, '__version__') else 'Unknown'
+            }
+            
+        except Exception as e:
+            return {'error': f"Test failed: {str(e)}"}
