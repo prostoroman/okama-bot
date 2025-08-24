@@ -23,29 +23,34 @@ class YandexGPTService:
         print(f"  API Key: {'Set' if self.api_key else 'NOT SET'}")
         print(f"  Folder ID: {'Set' if self.folder_id else 'NOT SET'}")
         print(f"  Base URL: {self.base_url}")
+        print(f"  Primary Model: yandexgpt-pro")
         
         if not self.api_key or not self.folder_id:
             print("⚠️  WARNING: Missing YandexGPT configuration!")
             print("   Please set YANDEX_API_KEY and YANDEX_FOLDER_ID in your environment variables")
         
-        # System prompt for financial analysis
-        self.system_prompt = """You are a financial analysis expert assistant. You help users understand financial concepts, analyze investment strategies, and interpret financial data.
+        # System prompt for financial analysis (optimized for yandexgpt-pro)
+        self.system_prompt = """You are a senior financial analyst and investment advisor with extensive expertise in quantitative finance, portfolio theory, and market analysis. You provide professional-grade financial insights and recommendations.
 
-Your expertise includes:
-- Portfolio analysis and optimization
-- Risk management and assessment
-- Investment strategies and asset allocation
-- Financial metrics interpretation
-- Market analysis and trends
+Your core competencies include:
+- Modern Portfolio Theory (MPT) and efficient frontier analysis
+- Risk metrics: VaR, CVaR, Sharpe ratio, Sortino ratio, maximum drawdown
+- Asset allocation strategies and portfolio optimization
+- Factor analysis and risk decomposition
+- Alternative investments and derivatives
+- Behavioral finance and market psychology
+- Regulatory compliance and best practices
 
-When analyzing financial data or providing investment advice:
-1. Always consider risk vs. return trade-offs
-2. Explain complex concepts in simple terms
-3. Provide actionable insights when possible
-4. Mention that past performance doesn't guarantee future results
-5. Suggest consulting with financial advisors for major decisions
+When providing financial analysis:
+1. Use quantitative methods and data-driven insights
+2. Explain complex financial concepts with clear examples
+3. Provide specific, actionable recommendations
+4. Always emphasize risk management and diversification
+5. Include relevant financial ratios and metrics
+6. Consider market conditions and economic factors
+7. Recommend consulting licensed financial advisors for major decisions
 
-Keep responses concise but informative. Use bullet points and clear formatting when appropriate."""
+Format responses professionally with clear sections, bullet points, and relevant financial terminology. Be precise, thorough, and educational."""
 
     def analyze_query(self, user_message: str) -> Dict:
         """Analyze user query to determine intent and extract parameters"""
@@ -219,7 +224,7 @@ Keep responses concise but informative. Use bullet points and clear formatting w
             # Use the correct YandexGPT API format with configured folder ID
             # Try different request formats based on Yandex documentation
             data = {
-                "modelUri": f"gpt://{self.folder_id}/yandexgpt-lite",
+                "modelUri": f"gpt://{self.folder_id}/yandexgpt-pro",
                 "completionOptions": {
                     "temperature": str(temperature),  # Ensure string format
                     "maxTokens": str(max_tokens),    # Ensure string format
@@ -239,7 +244,7 @@ Keep responses concise but informative. Use bullet points and clear formatting w
             
             # Alternative format if the first one fails
             alt_data = {
-                "modelUri": f"gpt://{self.folder_id}/yandexgpt-lite",
+                "modelUri": f"gpt://{self.folder_id}/yandexgpt-pro",
                 "completionOptions": {
                     "temperature": str(temperature),
                     "maxTokens": str(max_tokens),
@@ -248,11 +253,11 @@ Keep responses concise but informative. Use bullet points and clear formatting w
                 "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
             }
             
-            # Alternative model URIs to try with configured folder ID
+            # Alternative model URIs to try with configured folder ID (yandexgpt-pro first)
             alt_model_uris = [
-                f"gpt://{self.folder_id}/yandexgpt-lite",
-                f"gpt://{self.folder_id}/yandexgpt",
                 f"gpt://{self.folder_id}/yandexgpt-pro",
+                f"gpt://{self.folder_id}/yandexgpt",
+                f"gpt://{self.folder_id}/yandexgpt-lite",
                 f"gpt://{self.folder_id}/yandexgpt-2"
             ]
             
