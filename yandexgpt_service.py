@@ -18,12 +18,20 @@ class YandexGPTService:
             "https://llm.api.cloud.yandex.net/foundationModels/v1/textGeneration"
         ]
         
+        # Model priority order - start with most capable models
+        self.model_priority = [
+            "yandexgpt",
+            "yandexgpt-pro",
+            "yandexgpt-lite",
+            "yandexgpt-2"
+        ]
+        
         # Debug configuration
         print(f"YandexGPT Service initialized:")
         print(f"  API Key: {'Set' if self.api_key else 'NOT SET'}")
         print(f"  Folder ID: {'Set' if self.folder_id else 'NOT SET'}")
         print(f"  Base URL: {self.base_url}")
-        print(f"  Primary Model: yandexgpt-pro")
+        print(f"  Model Priority: {', '.join(self.model_priority)}")
         
         if not self.api_key or not self.folder_id:
             print("⚠️  WARNING: Missing YandexGPT configuration!")
@@ -221,7 +229,7 @@ Format responses professionally with clear sections, bullet points, and relevant
                    "• Рассмотрите консультацию с финансовым советником"
     
     def _call_yandex_api(self, system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> str:
-        """Make a call to YandexGPT API"""
+        """Make a call to YandexGPT API with robust fallback to different models"""
         try:
             # Check if API key and folder ID are configured
             if not self.api_key or not self.folder_id:
@@ -233,227 +241,117 @@ Format responses professionally with clear sections, bullet points, and relevant
                 "Content-Type": "application/json"
             }
             
-            # Use the correct YandexGPT API format with configured folder ID
-            # Try different request formats based on Yandex documentation
-            data = {
-                "modelUri": f"gpt://{self.folder_id}/yandexgpt-pro",
-                "completionOptions": {
-                    "temperature": str(temperature),  # Ensure string format
-                    "maxTokens": str(max_tokens),    # Ensure string format
-                    "stream": False
-                },
-                "messages": [
-                    {
-                        "role": "system",
-                        "text": system_prompt
-                    },
-                    {
-                        "role": "user",
-                        "text": user_prompt
-                    }
-                ]
-            }
-            
-            # Alternative format if the first one fails
-            alt_data = {
-                "modelUri": f"gpt://{self.folder_id}/yandexgpt-pro",
-                "completionOptions": {
-                    "temperature": str(temperature),
-                    "maxTokens": str(max_tokens),
-                    "stream": False
-                },
-                "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
-            }
-            
-            # Alternative format with different models for fallback
-            alt_data_fallback = {
-                "modelUri": f"gpt://{self.folder_id}/yandexgpt",
-                "completionOptions": {
-                    "temperature": str(temperature),
-                    "maxTokens": str(max_tokens),
-                    "stream": False
-                },
-                "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
-            }
-            
-            # Alternative model URIs to try with configured folder ID (yandexgpt-pro first)
-            alt_model_uris = [
-                f"gpt://{self.folder_id}/yandexgpt-pro",
-                f"gpt://{self.folder_id}/yandexgpt",
-                f"gpt://{self.folder_id}/yandexgpt-lite",
-                f"gpt://{self.folder_id}/yandexgpt-2"
-            ]
-            
-            print(f"Calling YandexGPT API with primary format: {json.dumps(data, indent=2)}")
-            
-            # Try primary format first
-            response = requests.post(
-                self.base_url,
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            
-            # If primary format fails with 400, try alternative format
-            if response.status_code == 400:
-                print(f"Primary format failed with 400, trying alternative format...")
-                print(f"Alternative format: {json.dumps(alt_data, indent=2)}")
+            # Try each model in priority order
+            for model_name in self.model_priority:
+                print(f"🔄 Trying model: {model_name}")
                 
-                response = requests.post(
-                    self.base_url,
-                    headers=headers,
-                    json=alt_data,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    print("✓ Alternative format succeeded!")
-                else:
-                    print(f"Alternative format also failed: {response.status_code}")
-            
-            # If we get a 500 error (internal server error), try different models
-            if response.status_code == 500:
-                print(f"Primary model (yandexgpt-pro) failed with 500, trying fallback models...")
-                
-                # First try alternative format with yandexgpt-pro
-                print("Trying alternative format with yandexgpt-pro...")
-                try:
-                    alt_response = requests.post(
-                        self.base_url,
-                        headers=headers,
-                        json=alt_data,
-                        timeout=30
-                    )
-                    
-                    if alt_response.status_code == 200:
-                        print("✓ Alternative format with yandexgpt-pro succeeded!")
-                        response = alt_response
-                    else:
-                        print(f"Alternative format with yandexgpt-pro failed: {alt_response.status_code}")
+                # Try both request formats for each model
+                for format_name, request_data in [
+                    ("Primary format", self._create_primary_request(model_name, system_prompt, user_prompt, temperature, max_tokens)),
+                    ("Alternative format", self._create_alternative_request(model_name, system_prompt, user_prompt, temperature, max_tokens))
+                ]:
+                    try:
+                        print(f"  📝 Using {format_name}...")
                         
-                        # Try alternative models one by one
-                        for model_uri in alt_model_uris[1:]:  # Skip the first one (yandexgpt-pro) since it failed
-                            print(f"Trying fallback model: {model_uri}")
+                        response = requests.post(
+                            self.base_url,
+                            headers=headers,
+                            json=request_data,
+                            timeout=30
+                        )
+                        
+                        print(f"  📊 Response status: {response.status_code}")
+                        
+                        if response.status_code == 200:
+                            print(f"✅ Model {model_name} succeeded with {format_name}!")
+                            return self._parse_successful_response(response)
+                        elif response.status_code == 500:
+                            print(f"❌ Model {model_name} failed with 500 (internal server error)")
+                            break  # Try next model
+                        elif response.status_code == 400:
+                            print(f"⚠️  Model {model_name} failed with 400 (bad request) - trying next format")
+                            continue  # Try next format with same model
+                        else:
+                            print(f"❌ Model {model_name} failed with {response.status_code}")
+                            print(f"  Response: {response.text[:200]}")
+                            break  # Try next model
                             
-                            # Try both formats with fallback models
-                            for format_data in [data, alt_data_fallback]:
-                                format_data_copy = format_data.copy()
-                                format_data_copy["modelUri"] = model_uri
-                                
-                                try:
-                                    fallback_response = requests.post(
-                                        self.base_url,
-                                        headers=headers,
-                                        json=format_data_copy,
-                                        timeout=30
-                                    )
-                                    
-                                    if fallback_response.status_code == 200:
-                                        print(f"✓ Fallback model {model_uri} succeeded!")
-                                        response = fallback_response
-                                        break
-                                    else:
-                                        print(f"Fallback model {model_uri} with format failed: {fallback_response.status_code}")
-                                        
-                                except Exception as fallback_error:
-                                    print(f"Error trying fallback model {model_uri}: {fallback_error}")
-                                    continue
-                            
-                            if response.status_code == 200:
-                                break
-                                
-                except Exception as alt_error:
-                    print(f"Error trying alternative format: {alt_error}")
-                    
-                    # Continue with model fallback
-                    for model_uri in alt_model_uris[1:]:
-                        print(f"Trying fallback model: {model_uri}")
-                        
-                        fallback_data = data.copy()
-                        fallback_data["modelUri"] = model_uri
-                        
-                        try:
-                            fallback_response = requests.post(
-                                self.base_url,
-                                headers=headers,
-                                json=fallback_data,
-                                timeout=30
-                            )
-                            
-                            if fallback_response.status_code == 200:
-                                print(f"✓ Fallback model {model_uri} succeeded!")
-                                response = fallback_response
-                                break
-                            else:
-                                print(f"Fallback model {model_uri} failed: {fallback_response.status_code}")
-                                
-                        except Exception as fallback_error:
-                            print(f"Error trying fallback model {model_uri}: {fallback_error}")
-                            continue
+                    except requests.exceptions.Timeout:
+                        print(f"⏰ Timeout with {model_name} using {format_name}")
+                        continue
+                    except Exception as format_error:
+                        print(f"❌ Error with {model_name} using {format_name}: {format_error}")
+                        continue
+                
+                # If we get here, this model failed completely, try next one
+                print(f"🔄 Moving to next model...")
             
-            print(f"YandexGPT API response status: {response.status_code}")
-            print(f"YandexGPT API response headers: {dict(response.headers)}")
-            
-            if response.status_code == 200:
-                result = response.json()
-                print(f"YandexGPT API success response: {json.dumps(result, indent=2)}")
+            # If we reach here, all models failed
+            print("❌ All models failed")
+            return "Из-за технических проблем с AI сервисом, попробуйте позже или используйте базовые команды бота для анализа портфеля."
                 
-                # Extract the response text from the result
-                alternatives = result.get("result", {}).get("alternatives", [])
-                if alternatives and len(alternatives) > 0:
-                    message = alternatives[0].get("message", {})
-                    text = message.get("text", "")
-                    if text:
-                        return text
-                    else:
-                        print(f"No text found in message: {message}")
-                        return "AI response received but no text content found."
-                else:
-                    print(f"No alternatives found in result: {result}")
-                    return "AI response received but no content found."
-            else:
-                print(f"YandexGPT API error: {response.status_code}")
-                print(f"Response text: {response.text}")
-                print(f"Response headers: {dict(response.headers)}")
-                
-                # Try to parse error response
-                try:
-                    error_data = response.json()
-                    error_message = error_data.get("error", {}).get("message", "Unknown error")
-                    error_code = error_data.get("error", {}).get("grpcCode", "No error code")
-                    error_details = error_data.get("error", {}).get("details", "No details")
-                    print(f"Error message: {error_message}")
-                    print(f"Error code: {error_code}")
-                    print(f"Error details: {error_details}")
-                    
-                    # Return more detailed error information
-                    if error_message != "Unknown error":
-                        return f"AI service error ({response.status_code}): {error_message}"
-                    elif error_code != "No error code":
-                        return f"AI service error ({response.status_code}): Code {error_code}"
-                    else:
-                        return f"AI service error ({response.status_code}): {response.text[:200]}"
-                        
-                except Exception as parse_error:
-                    print(f"Could not parse error response: {parse_error}")
-                    # Return the raw response text for debugging
-                    return f"AI service error ({response.status_code}): {response.text[:200]}"
-                
-        except requests.exceptions.Timeout:
-            print("YandexGPT API request timed out")
-            return "AI service request timed out. Please try again."
-        except requests.exceptions.RequestException as e:
-            print(f"YandexGPT API request error: {e}")
-            return f"AI service request error: {str(e)}"
         except Exception as e:
-            print(f"Unexpected error calling YandexGPT API: {e}")
+            print(f"❌ Unexpected error in _call_yandex_api: {e}")
             import traceback
             traceback.print_exc()
             return f"Unexpected error: {str(e)}"
-        
-        # If we reach here, all attempts failed
-        print("All YandexGPT API attempts failed")
-        return "Из-за технических проблем с AI сервисом, попробуйте позже или используйте базовые команды бота для анализа портфеля."
+    
+    def _create_primary_request(self, model_name: str, system_prompt: str, user_prompt: str, temperature: float, max_tokens: int) -> dict:
+        """Create primary request format for YandexGPT API"""
+        return {
+            "modelUri": f"gpt://{self.folder_id}/{model_name}",
+            "completionOptions": {
+                "temperature": str(temperature),
+                "maxTokens": str(max_tokens),
+                "stream": False
+            },
+            "messages": [
+                {
+                    "role": "system",
+                    "text": system_prompt
+                },
+                {
+                    "role": "user",
+                    "text": user_prompt
+                }
+            ]
+        }
+    
+    def _create_alternative_request(self, model_name: str, system_prompt: str, user_prompt: str, temperature: float, max_tokens: int) -> dict:
+        """Create alternative request format for YandexGPT API"""
+        return {
+            "modelUri": f"gpt://{self.folder_id}/{model_name}",
+            "completionOptions": {
+                "temperature": str(temperature),
+                "maxTokens": str(max_tokens),
+                "stream": False
+            },
+            "text": f"{system_prompt}\n\nUser: {user_prompt}\n\nAssistant:"
+        }
+    
+    def _parse_successful_response(self, response) -> str:
+        """Parse successful API response and extract text content"""
+        try:
+            result = response.json()
+            print(f"📄 Parsing response: {json.dumps(result, indent=2)}")
+            
+            # Extract the response text from the result
+            alternatives = result.get("result", {}).get("alternatives", [])
+            if alternatives and len(alternatives) > 0:
+                message = alternatives[0].get("message", {})
+                text = message.get("text", "")
+                if text:
+                    return text
+                else:
+                    print(f"⚠️  No text found in message: {message}")
+                    return "AI response received but no text content found."
+            else:
+                print(f"⚠️  No alternatives found in result: {result}")
+                return "AI response received but no content found."
+                
+        except Exception as parse_error:
+            print(f"❌ Error parsing response: {parse_error}")
+            return f"AI response received but could not parse: {response.text[:200]}"
     
     def test_api_connection(self) -> Dict:
         """Test method to debug YandexGPT API connection"""
