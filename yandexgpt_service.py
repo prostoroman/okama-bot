@@ -2,7 +2,7 @@ import requests
 import json
 import re
 from typing import Dict, List, Optional
-from config import Config
+import config
 
 class YandexGPTService:
     """
@@ -35,8 +35,8 @@ class YandexGPTService:
     """
     
     def __init__(self):
-        self.api_key = Config.YANDEX_API_KEY
-        self.folder_id = Config.YANDEX_FOLDER_ID
+        self.api_key = config.Config.YANDEX_API_KEY
+        self.folder_id = config.Config.YANDEX_FOLDER_ID
         self.base_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
         # Alternative endpoints to try if the main one fails:
         self.fallback_urls = [

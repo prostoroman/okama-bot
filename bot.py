@@ -11,8 +11,8 @@ if sys.version_info < (3, 8):
     print("ERROR: Python 3.8+ required. Current version:", sys.version)
     sys.exit(1)
 
-from config import Config
-from okama_service import OkamaService
+import config
+from services.okama_service import OkamaServiceV2
 from yandexgpt_service import YandexGPTService
 
 # Configure logging
@@ -22,14 +22,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class OkamaFinanceBot:
-    """Main Telegram bot class for financial analysis with Okama and YandexGPT"""
+class OkamaFinanceBotV2:
+    """Updated Telegram bot class for financial analysis with Okama v1.5.0 and YandexGPT"""
     
     def __init__(self):
         """Initialize the bot with required services"""
-        Config.validate()
+        config.Config.validate()
         
-        self.okama_service = OkamaService()
+        self.okama_service = OkamaServiceV2()
         self.yandexgpt_service = YandexGPTService()
         
         # User session storage
@@ -43,9 +43,9 @@ class OkamaFinanceBot:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""Добро пожаловать в Okama Finance Bot!
+        welcome_message = f"""Добро пожаловать в Okama Finance Bot v2.0!
 
-Привет {user_name}! Я ваш помощник по финансовому анализу на базе YandexGPT.
+Привет {user_name}! Я ваш помощник по финансовому анализу на базе YandexGPT и Okama v1.5.0.
 
 Что я умею:
 • Анализ и оптимизация портфеля
@@ -53,6 +53,8 @@ class OkamaFinanceBot:
 • Анализ корреляции активов
 • Генерация эффективной границы
 • Сравнение активов
+• Пенсионное планирование
+• Прогнозирование Монте-Карло
 • Чат с YandexGPT о финансах
 
 Быстрый старт:
@@ -67,6 +69,9 @@ class OkamaFinanceBot:
 /correlation - Матрица корреляции
 /efficient_frontier - Эффективная граница
 /compare - Сравнение активов
+/pension - Пенсионный портфель
+/monte_carlo - Прогнозирование Монте-Карло
+/allocation - Анализ распределения активов
 /chat - Чат с YandexGPT
 
 Готовы анализировать ваши инвестиции?"""
@@ -86,7 +91,7 @@ class OkamaFinanceBot:
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
-        help_text = """Доступные команды и функции
+        help_text = """Доступные команды и функции v2.0
 
 Основные команды анализа:
 /portfolio [symbols] - Анализ производительности портфеля
@@ -97,6 +102,9 @@ class OkamaFinanceBot:
 /pension [symbols] [weights] [amount] [cashflow] [rebalancing] - Пенсионный портфель
 /monte_carlo [symbols] [years] [scenarios] [distribution] - Прогнозирование Монте-Карло
 /allocation [symbols] - Детальный анализ распределения активов
+/test [symbols] - Тест интеграции Okama v1.5.0
+/testai - Тест подключения к YandexGPT API
+/debug [symbols] - Отладка данных портфеля
 
 Чат с YandexGPT:
 /chat [question] - Получить финансовый совет от YandexGPT
@@ -109,6 +117,7 @@ class OkamaFinanceBot:
 • /pension RGBITR.INDX MCFTR.INDX 0.6 0.4 1000000 -50000 year
 • /monte_carlo AGG.US SPY.US 20 100 norm
 • /allocation RGBITR.INDX MCFTR.INDX GC.COMM
+• /debug RGBITR.INDX MCFTR.INDX
 
 Естественный язык:
 Вы также можете просто написать естественным языком:
@@ -322,8 +331,8 @@ class OkamaFinanceBot:
                 
                 if not symbols:
                     await update.message.reply_text(
-                                        "I couldn't identify any symbols in your message. "
-                "Please provide symbols like RGBITR.INDX, MCFTR.INDX, GC.COMM, AGG.US, SPY.US, etc."
+                        "I couldn't identify any symbols in your message. "
+                        "Please provide symbols like RGBITR.INDX, MCFTR.INDX, GC.COMM, AGG.US, SPY.US, etc."
                     )
                     return
                 
@@ -429,6 +438,7 @@ Performance Metrics:
 • Annual Return: {metrics.get('annual_return', 'N/A')}
 • Volatility: {metrics.get('volatility', 'N/A')}
 • Sharpe Ratio: {metrics.get('sharpe_ratio', 'N/A')}
+• Sortino Ratio: {metrics.get('sortino_ratio', 'N/A')}
 • Max Drawdown: {metrics.get('max_drawdown', 'N/A')}
 • VaR (95%): {metrics.get('var_95', 'N/A')}
 • CVaR (95%): {metrics.get('cvar_95', 'N/A')}
@@ -675,8 +685,11 @@ Performance Metrics:
                 f"Распределение: {distribution}"
             )
             
+            # Create portfolio for forecasting
+            portfolio = self.okama_service.create_portfolio(symbols)
+            
             # Generate Monte Carlo forecast
-            forecast_image = self.okama_service.generate_monte_carlo_forecast(symbols, years, n_scenarios, distribution)
+            forecast_image = self.okama_service.generate_monte_carlo_forecast(portfolio, years, n_scenarios, distribution)
             
             caption = f"""🔮 Monte Carlo Forecast: {', '.join(symbols)}
 
@@ -699,20 +712,6 @@ Use This To:
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error generating Monte Carlo forecast: {str(e)}")
-
-    async def allocation_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /allocation command for detailed asset allocation analysis"""
-        if not context.args:
-            await update.message.reply_text(
-                "Анализ распределения активов\n\n"
-                "Пожалуйста, укажите символы:\n"
-                "/allocation RGBITR.INDX MCFTR.INDX GC.COMM\n\n"
-                "Или просто отправьте мне символы напрямую!"
-            )
-            return
-        
-        symbols = [s.upper() for s in context.args]
-        await self._analyze_asset_allocation(update, symbols)
 
     async def _analyze_asset_allocation(self, update: Update, symbols: List[str]):
         """Analyze detailed asset allocation"""
@@ -768,12 +767,152 @@ Use This To:
         except Exception as e:
             await update.message.reply_text(f"❌ Error getting AI response: {str(e)}")
 
+    async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /test command to debug Okama integration"""
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "Тестовая команда\n\n"
+                    "Пожалуйста, укажите символы для тестирования:\n"
+                    "/test RGBITR.INDX MCFTR.INDX\n\n"
+                    "Это протестирует интеграцию с Okama v1.5.0 и покажет доступные атрибуты."
+                )
+                return
+            
+            symbols = [s.upper() for s in context.args]
+            await update.message.reply_text(f"🧪 Testing Okama v1.5.0 integration with symbols: {', '.join(symbols)}...")
+            
+            # Run the integration test
+            test_results = self.okama_service.test_okama_integration(symbols)
+            
+            # Format results
+            result_text = f"🧪 Okama v1.5.0 Integration Test Results\n\n"
+            result_text += f"Symbols tested: {', '.join(symbols)}\n"
+            result_text += f"Okama version: {test_results.get('okama_version', 'Unknown')}\n\n"
+            
+            if 'assets' in test_results:
+                result_text += "Asset Tests:\n"
+                for symbol, status in test_results['assets'].items():
+                    result_text += f"• {symbol}: {status}\n"
+            
+            result_text += f"\nPortfolio Test: {test_results.get('portfolio', 'N/A')}"
+            
+            if 'error' in test_results:
+                result_text += f"\n\n❌ Test Error: {test_results['error']}"
+            
+            await update.message.reply_text(result_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error running test: {str(e)}")
+    
+    async def test_ai_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /testai command to test YandexGPT API connection"""
+        try:
+            await update.message.reply_text("Тестирование подключения к YandexGPT API...")
+            
+            # Test the API connection
+            test_results = self.yandexgpt_service.test_api_connection()
+            
+            # Format results
+            result_text = f"Результаты теста YandexGPT API\n\n"
+            result_text += f"Статус: {test_results.get('status', 'Неизвестно')}\n"
+            result_text += f"Сообщение: {test_results.get('message', 'Нет сообщения')}\n\n"
+            
+            if 'config' in test_results:
+                config = test_results['config']
+                result_text += "Конфигурация:\n"
+                result_text += f"• API ключ: {'✓ Установлен' if config.get('api_key_set') else '✗ НЕ УСТАНОВЛЕН'}\n"
+                result_text += f"• ID папки: {'✓ Установлен' if config.get('folder_id_set') else '✗ НЕ УСТАНОВЛЕН'}\n"
+                result_text += f"• Базовый URL: {config.get('base_url', 'Неизвестно')}\n\n"
+            
+            if 'response' in test_results:
+                result_text += f"Ответ API: {test_results['response']}\n\n"
+            
+            if test_results.get('status') == 'error':
+                result_text += "❌ Тест API не удался. Проверьте конфигурацию."
+            elif test_results.get('status') == 'success':
+                result_text += "✅ Тест API успешен!"
+            else:
+                result_text += "⚠️ Тест API имел проблемы."
+            
+            await update.message.reply_text(result_text)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error testing AI: {str(e)}")
 
+    async def debug_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /debug command to debug portfolio data issues"""
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "Отладка данных портфеля\n\n"
+                    "Пожалуйста, укажите символы для отладки:\n"
+                    "/debug RGBITR.INDX MCFTR.INDX\n\n"
+                    "Это покажет доступные данные и атрибуты портфеля."
+                )
+                return
+            
+            symbols = [s.upper() for s in context.args]
+            await update.message.reply_text(f"🔍 Отладка данных портфеля для: {', '.join(symbols)}...")
+            
+            try:
+                # Create portfolio
+                portfolio = self.okama_service.create_portfolio(symbols)
+                
+                # Debug portfolio data
+                debug_info = self.okama_service.debug_portfolio_data(portfolio)
+                
+                # Format debug information
+                debug_text = f"🔍 Отладка портфеля: {', '.join(symbols)}\n\n"
+                
+                if 'error' in debug_info:
+                    debug_text += f"❌ Ошибка отладки: {debug_info['error']}"
+                else:
+                    debug_text += f"Тип портфеля: {debug_info.get('portfolio_type', 'Unknown')}\n\n"
+                    
+                    debug_text += "Доступные атрибуты:\n"
+                    for attr in debug_info.get('available_attributes', [])[:20]:  # Show first 20
+                        debug_text += f"• {attr}\n"
+                    
+                    if len(debug_info.get('available_attributes', [])) > 20:
+                        debug_text += f"... и еще {len(debug_info.get('available_attributes', [])) - 20} атрибутов\n"
+                    
+                    debug_text += "\nДоступные методы:\n"
+                    for method in debug_info.get('available_methods', [])[:20]:  # Show first 20
+                        debug_text += f"• {method}\n"
+                    
+                    if len(debug_info.get('available_methods', [])) > 20:
+                        debug_text += f"... и еще {len(debug_info.get('available_methods', [])) - 20} методов\n"
+                    
+                    debug_text += "\nКлючевые источники данных:\n"
+                    for attr, info in debug_info.get('data_sources', {}).items():
+                        if info.get('type') != 'Not available':
+                            debug_text += f"• {attr}: {info.get('type')}"
+                            if 'empty' in info:
+                                debug_text += f" (пустой: {info['empty']})"
+                            if 'shape' in info and info['shape'] != 'N/A':
+                                debug_text += f" [форма: {info['shape']}]"
+                            if 'length' in info and info['length'] != 'N/A':
+                                debug_text += f" [длина: {info['length']}]"
+                            debug_text += "\n"
+                    
+                    if debug_info.get('errors'):
+                        debug_text += "\nОшибки:\n"
+                        for error in debug_info['errors']:
+                            debug_text += f"• {error}\n"
+                
+                await update.message.reply_text(debug_text)
+                
+            except Exception as e:
+                await update.message.reply_text(f"❌ Ошибка создания портфеля для отладки: {str(e)}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка отладки: {str(e)}")
         
     def run(self):
         """Run the bot"""
         # Create application
-        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
+        application = Application.builder().token(config.Config.TELEGRAM_BOT_TOKEN).build()
         
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
@@ -787,18 +926,21 @@ Use This To:
         application.add_handler(CommandHandler("pension", self.pension_command))
         application.add_handler(CommandHandler("monte_carlo", self.monte_carlo_command))
         application.add_handler(CommandHandler("allocation", self.allocation_command))
+        application.add_handler(CommandHandler("test", self.test_command))
+        application.add_handler(CommandHandler("testai", self.test_ai_command))
+        application.add_handler(CommandHandler("debug", self.debug_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
         
         # Start the bot
-        logger.info("Starting Okama Finance Bot...")
+        logger.info("Starting Okama Finance Bot v2.0...")
         application.run_polling()
 
 if __name__ == "__main__":
     try:
-        print(f"Starting Okama Finance Bot with Python {sys.version}")
+        print(f"Starting Okama Finance Bot v2.0 with Python {sys.version}")
         print(f"Python version info: {sys.version_info}")
         
         if sys.version_info >= (3, 13):
@@ -806,7 +948,7 @@ if __name__ == "__main__":
         elif sys.version_info >= (3, 12):
             print("✅ Running on Python 3.12+ with latest python-telegram-bot")
         
-        bot = OkamaFinanceBot()
+        bot = OkamaFinanceBotV2()
         bot.run()
     except Exception as e:
         print(f"❌ Fatal error starting bot: {e}")
@@ -815,4 +957,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         sys.exit(1)
-        
