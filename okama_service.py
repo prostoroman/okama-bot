@@ -13,58 +13,53 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class OkamaService:
-    """Service class for Okama library operations"""
+    """Service class for Okama library operations - Updated for v1.5.0"""
     
     def __init__(self):
         self.plt_style = 'seaborn-v0_8'
         plt.style.use(self.plt_style)
         
-    def create_portfolio(self, symbols: List[str], weights: Optional[List[float]] = None) -> ok.Portfolio:
-        """Create a portfolio with given symbols and weights"""
+    def create_portfolio(self, symbols: List[str], weights: Optional[List[float]] = None, 
+                        ccy: str = 'RUB', inflation: bool = True) -> ok.Portfolio:
+        """Create a portfolio with given symbols and weights using correct Okama v1.5.0 API"""
         try:
             if weights is None:
                 weights = [1.0 / len(symbols)] * len(symbols)
             
-            portfolio = ok.Portfolio(symbols, weights=weights)
+            # Use correct Portfolio constructor with inflation parameter
+            portfolio = ok.Portfolio(
+                symbols, 
+                weights=weights, 
+                ccy=ccy,
+                inflation=inflation
+            )
             
-            # Debug: Print available attributes and methods
-            print(f"Portfolio created successfully for symbols: {symbols}")
+            print(f"✓ Portfolio created successfully for symbols: {symbols}")
             print(f"Portfolio type: {type(portfolio)}")
-            print(f"Available attributes: {[attr for attr in dir(portfolio) if not attr.startswith('_')]}")
-            
-            # Check if key attributes exist
-            key_attrs = ['total_return', 'mean_return', 'volatility', 'sharpe_ratio', 'max_drawdown', 'cumulative_returns']
-            for attr in key_attrs:
-                if hasattr(portfolio, attr):
-                    print(f"✓ {attr}: {getattr(portfolio, attr)}")
-                else:
-                    print(f"✗ {attr}: Not available")
             
             return portfolio
         except Exception as e:
             raise Exception(f"Error creating portfolio: {str(e)}")
     
     def get_portfolio_performance(self, portfolio: ok.Portfolio) -> Dict:
-        """Get comprehensive portfolio performance metrics"""
+        """Get comprehensive portfolio performance metrics using correct Okama v1.5.0 methods"""
         try:
-            # Get portfolio statistics using the correct Okama API
-            stats = portfolio.stats
-            
-            # Basic metrics - using the correct attribute names
+            # Use the correct methods from Okama v1.5.0
             metrics = {
-                'total_return': portfolio.cumulative_returns.iloc[-1] if not portfolio.cumulative_returns.empty else 0,
-                'annual_return': portfolio.mean_return if hasattr(portfolio, 'mean_return') else stats.get('mean_return', 0),
-                'volatility': portfolio.volatility if hasattr(portfolio, 'volatility') else stats.get('volatility', 0),
-                'sharpe_ratio': portfolio.sharpe_ratio if hasattr(portfolio, 'sharpe_ratio') else stats.get('sharpe_ratio', 0),
-                'max_drawdown': portfolio.max_drawdown if hasattr(portfolio, 'max_drawdown') else stats.get('max_drawdown', 0),
-                'var_95': portfolio.var_95 if hasattr(portfolio, 'var_95') else stats.get('var_95', 0),
-                'cvar_95': portfolio.cvar_95 if hasattr(portfolio, 'cvar_95') else stats.get('cvar_95', 0)
+                'total_return': portfolio.get_cumulative_return().iloc[-1] if hasattr(portfolio.get_cumulative_return(), 'iloc') else portfolio.get_cumulative_return(),
+                'annual_return': portfolio.get_cagr().iloc[-1] if hasattr(portfolio.get_cagr(), 'iloc') else portfolio.get_cagr(),
+                'volatility': self._calculate_portfolio_volatility(portfolio),
+                'sharpe_ratio': portfolio.get_sharpe_ratio(),
+                'sortino_ratio': portfolio.get_sortino_ratio(),
+                'max_drawdown': self._get_max_drawdown(portfolio),
+                'var_95': portfolio.get_var_historic(),
+                'cvar_95': portfolio.get_cvar_historic()
             }
             
             # Convert to more readable format
             formatted_metrics = {}
             for key, value in metrics.items():
-                if isinstance(value, (int, float)):
+                if isinstance(value, (int, float)) and not pd.isna(value):
                     if 'return' in key or 'ratio' in key:
                         formatted_metrics[key] = f"{value:.2%}"
                     elif 'volatility' in key or 'drawdown' in key or 'var' in key:
@@ -72,126 +67,104 @@ class OkamaService:
                     else:
                         formatted_metrics[key] = f"{value:.4f}"
                 else:
-                    formatted_metrics[key] = str(value)
+                    formatted_metrics[key] = 'N/A'
             
             return formatted_metrics
         except Exception as e:
-            # Fallback to basic portfolio data if stats method fails
-            try:
-                print(f"Primary method failed, trying fallback: {e}")
-                
-                # Try to get basic portfolio information
-                if hasattr(portfolio, 'cumulative_returns') and not portfolio.cumulative_returns.empty:
-                    total_return = portfolio.cumulative_returns.iloc[-1]
-                else:
-                    total_return = 0
-                
-                # Try to get other metrics from available attributes
-                metrics = {
-                    'total_return': total_return,
-                    'annual_return': getattr(portfolio, 'mean_return', 0),
-                    'volatility': getattr(portfolio, 'volatility', 0),
-                    'sharpe_ratio': getattr(portfolio, 'sharpe_ratio', 0),
-                    'max_drawdown': getattr(portfolio, 'max_drawdown', 0),
-                    'var_95': getattr(portfolio, 'var_95', 0),
-                    'cvar_95': getattr(portfolio, 'cvar_95', 0)
-                }
-                
-                # Format metrics
-                formatted_metrics = {}
-                for key, value in metrics.items():
-                    if isinstance(value, (int, float)):
-                        if 'return' in key or 'ratio' in key:
-                            formatted_metrics[key] = f"{value:.2%}"
-                        elif 'volatility' in key or 'drawdown' in key or 'var' in key:
-                            formatted_metrics[key] = f"{value:.2%}"
-                        else:
-                            formatted_metrics[key] = f"{value:.4f}"
-                    else:
-                        formatted_metrics[key] = str(value)
-                
-                return formatted_metrics
-                
-            except Exception as fallback_error:
-                print(f"Fallback method also failed: {fallback_error}")
-                # Return basic portfolio info
-                return {
-                    'total_return': 'N/A',
-                    'annual_return': 'N/A',
-                    'volatility': 'N/A',
-                    'sharpe_ratio': 'N/A',
-                    'max_drawdown': 'N/A',
-                    'var_95': 'N/A',
-                    'cvar_95': 'N/A',
-                    'note': 'Limited metrics available'
-                }
+            print(f"Error getting portfolio performance: {e}")
+            return self._get_fallback_metrics(portfolio)
+    
+    def _calculate_portfolio_volatility(self, portfolio: ok.Portfolio) -> float:
+        """Calculate portfolio volatility from returns data"""
+        try:
+            if hasattr(portfolio, 'assets_ror') and portfolio.assets_ror is not None:
+                # Calculate portfolio volatility from monthly returns
+                portfolio_returns = portfolio.assets_ror.sum(axis=1)
+                return portfolio_returns.std() * np.sqrt(12)  # Annualize monthly volatility
+            else:
+                return 0.0
+        except Exception as e:
+            print(f"Error calculating volatility: {e}")
+            return 0.0
+    
+    def _get_max_drawdown(self, portfolio: ok.Portfolio) -> float:
+        """Get maximum drawdown from portfolio data"""
+        try:
+            if hasattr(portfolio, 'drawdowns') and portfolio.drawdowns is not None:
+                return portfolio.drawdowns.min()
+            else:
+                return 0.0
+        except Exception as e:
+            print(f"Error getting max drawdown: {e}")
+            return 0.0
+    
+    def _get_fallback_metrics(self, portfolio: ok.Portfolio) -> Dict:
+        """Fallback method for getting basic portfolio metrics"""
+        try:
+            # Try to get basic information
+            basic_metrics = {}
+            
+            if hasattr(portfolio, 'get_cumulative_return'):
+                try:
+                    cum_return = portfolio.get_cumulative_return()
+                    basic_metrics['total_return'] = f"{cum_return:.2%}" if isinstance(cum_return, (int, float)) else 'N/A'
+                except:
+                    basic_metrics['total_return'] = 'N/A'
+            
+            if hasattr(portfolio, 'get_cagr'):
+                try:
+                    cagr = portfolio.get_cagr()
+                    basic_metrics['annual_return'] = f"{cagr:.2%}" if isinstance(cagr, (int, float)) else 'N/A'
+                except:
+                    basic_metrics['annual_return'] = 'N/A'
+            
+            # Fill missing metrics
+            for metric in ['volatility', 'sharpe_ratio', 'max_drawdown', 'var_95', 'cvar_95']:
+                if metric not in basic_metrics:
+                    basic_metrics[metric] = 'N/A'
+            
+            return basic_metrics
+            
+        except Exception as e:
+            print(f"Fallback method failed: {e}")
+            return {
+                'total_return': 'N/A',
+                'annual_return': 'N/A',
+                'volatility': 'N/A',
+                'sharpe_ratio': 'N/A',
+                'max_drawdown': 'N/A',
+                'var_95': 'N/A',
+                'cvar_95': 'N/A',
+                'note': 'Limited metrics available'
+            }
     
     def generate_performance_chart(self, portfolio: ok.Portfolio) -> bytes:
-        """Generate portfolio performance chart"""
+        """Generate portfolio performance chart using correct Okama v1.5.0 data sources"""
         try:
             print(f"Generating performance chart for portfolio...")
             
-            # Check available attributes
-            available_attrs = [attr for attr in dir(portfolio) if not attr.startswith('_')]
-            print(f"Available portfolio attributes: {available_attrs}")
-            
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
             
-            # Try to plot cumulative returns with multiple fallbacks
+            # Plot cumulative returns using correct data source
             try:
-                cumulative_data = None
-                data_source = None
-                
-                # Try multiple data sources
-                if hasattr(portfolio, 'cumulative_returns') and portfolio.cumulative_returns is not None:
-                    if hasattr(portfolio.cumulative_returns, 'empty') and not portfolio.cumulative_returns.empty:
-                        cumulative_data = portfolio.cumulative_returns
-                        data_source = 'cumulative_returns'
-                        print(f"✓ Using cumulative_returns data")
-                
-                if cumulative_data is None and hasattr(portfolio, 'returns') and portfolio.returns is not None:
-                    if hasattr(portfolio.returns, 'empty') and not portfolio.returns.empty:
-                        try:
-                            cumulative_data = portfolio.returns.cumsum()
-                            data_source = 'returns.cumsum()'
-                            print(f"✓ Using returns.cumsum() data")
-                        except Exception as cumsum_error:
-                            print(f"⚠️ Error calculating cumsum: {cumsum_error}")
-                
-                if cumulative_data is None and hasattr(portfolio, 'wealth_index') and portfolio.wealth_index is not None:
-                    if hasattr(portfolio.wealth_index, 'empty') and not portfolio.wealth_index.empty:
-                        cumulative_data = portfolio.wealth_index
-                        data_source = 'wealth_index'
-                        print(f"✓ Using wealth_index data")
-                
-                if cumulative_data is None and hasattr(portfolio, 'price_ts') and portfolio.price_ts is not None:
-                    if hasattr(portfolio.price_ts, 'empty') and not portfolio.price_ts.empty:
-                        try:
-                            # Calculate returns from price data
-                            returns = portfolio.price_ts.pct_change().dropna()
-                            cumulative_data = (1 + returns).cumprod()
-                            data_source = 'price_ts derived'
-                            print(f"✓ Using price_ts derived data")
-                        except Exception as price_error:
-                            print(f"⚠️ Error calculating from price_ts: {price_error}")
-                
-                # Plot the data if we found any
-                if cumulative_data is not None:
-                    try:
-                        cumulative_data.plot(ax=ax1, title=f'Cumulative Returns ({data_source})')
+                if hasattr(portfolio, 'get_cumulative_return'):
+                    cumulative_data = portfolio.get_cumulative_return()
+                    if hasattr(cumulative_data, 'plot'):
+                        cumulative_data.plot(ax=ax1, title='Cumulative Returns')
                         ax1.set_ylabel('Cumulative Return')
                         ax1.grid(True)
-                        print(f"✓ Successfully plotted cumulative returns from {data_source}")
-                    except Exception as plot_error:
-                        print(f"⚠️ Error plotting data from {data_source}: {plot_error}")
-                        raise plot_error
+                        print("✓ Successfully plotted cumulative returns")
+                    else:
+                        # Handle case where cumulative_data is not a pandas Series
+                        if hasattr(cumulative_data, '__len__'):
+                            ax1.plot(range(len(cumulative_data)), cumulative_data, title='Cumulative Returns')
+                            ax1.set_ylabel('Cumulative Return')
+                            ax1.grid(True)
+                            print("✓ Successfully plotted cumulative returns (array)")
+                        else:
+                            raise Exception("Cannot plot cumulative returns data")
                 else:
-                    # No data available
-                    print(f"⚠️ No cumulative returns data available from any source")
-                    ax1.text(0.5, 0.5, 'Cumulative Returns\n(Data not available)\n\nTried: cumulative_returns, returns.cumsum(),\nwealth_index, price_ts', 
-                            ha='center', va='center', transform=ax1.transAxes, fontsize=10)
-                    ax1.set_title('Cumulative Returns - No Data Available')
-                    ax1.grid(True)
+                    raise Exception("No cumulative returns method available")
                     
             except Exception as e:
                 print(f"✗ Error plotting cumulative returns: {e}")
@@ -200,70 +173,41 @@ class OkamaService:
                 ax1.set_title('Cumulative Returns - Error')
                 ax1.grid(True)
             
-            # Try to plot volatility with multiple fallbacks
+            # Plot drawdowns using correct data source
             try:
-                volatility_data = None
-                volatility_source = None
-                
-                # Try multiple volatility data sources
-                if hasattr(portfolio, 'rolling_volatility') and portfolio.rolling_volatility is not None:
-                    if hasattr(portfolio.rolling_volatility, 'empty') and not portfolio.rolling_volatility.empty:
-                        volatility_data = portfolio.rolling_volatility
-                        volatility_source = 'rolling_volatility'
-                        print(f"✓ Using rolling_volatility data")
-                
-                if volatility_data is None and hasattr(portfolio, 'volatility') and portfolio.volatility is not None:
-                    # Use static volatility as a horizontal line
-                    volatility_data = portfolio.volatility
-                    volatility_source = 'static_volatility'
-                    print(f"✓ Using static volatility: {portfolio.volatility:.2%}")
-                
-                if volatility_data is None and hasattr(portfolio, 'returns') and portfolio.returns is not None:
-                    if hasattr(portfolio.returns, 'empty') and not portfolio.returns.empty:
-                        try:
-                            # Calculate rolling volatility from returns
-                            rolling_vol = portfolio.returns.rolling(window=30).std() * np.sqrt(252)
-                            volatility_data = rolling_vol
-                            volatility_source = 'returns derived'
-                            print(f"✓ Using returns derived rolling volatility")
-                        except Exception as vol_error:
-                            print(f"⚠️ Error calculating rolling volatility: {vol_error}")
-                
-                # Plot the volatility data
-                if volatility_data is not None:
-                    try:
-                        if volatility_source == 'static_volatility':
-                            # Plot static volatility as horizontal line
-                            ax2.axhline(y=volatility_data, color='r', linestyle='-', 
-                                       label=f'Volatility: {volatility_data:.2%}')
-                            ax2.set_ylabel('Volatility')
-                            ax2.set_xlabel('Time')
-                            ax2.set_title('Portfolio Volatility (Static)')
-                            ax2.legend()
-                            ax2.grid(True)
-                        else:
-                            # Plot time series volatility
-                            volatility_data.plot(ax=ax2, title=f'Rolling Volatility ({volatility_source})')
-                            ax2.set_ylabel('Volatility')
-                            ax2.set_xlabel('Date')
-                            ax2.grid(True)
-                        print(f"✓ Successfully plotted volatility from {volatility_source}")
-                    except Exception as plot_error:
-                        print(f"⚠️ Error plotting volatility from {volatility_source}: {plot_error}")
-                        raise plot_error
-                else:
-                    # No volatility data available
-                    print(f"⚠️ No volatility data available from any source")
-                    ax2.text(0.5, 0.5, 'Volatility\n(Data not available)\n\nTried: rolling_volatility, static volatility,\nreturns derived', 
-                            ha='center', va='center', transform=ax2.transAxes, fontsize=10)
-                    ax2.set_title('Portfolio Volatility - No Data Available')
+                if hasattr(portfolio, 'drawdowns') and portfolio.drawdowns is not None:
+                    portfolio.drawdowns.plot(ax=ax2, title='Portfolio Drawdowns')
+                    ax2.set_ylabel('Drawdown')
+                    ax2.set_xlabel('Date')
                     ax2.grid(True)
-                    
+                    print("✓ Successfully plotted drawdowns")
+                else:
+                    # Try to calculate drawdowns from cumulative returns
+                    if hasattr(portfolio, 'get_cumulative_return'):
+                        try:
+                            cum_returns = portfolio.get_cumulative_return()
+                            if hasattr(cum_returns, '__len__') and len(cum_returns) > 1:
+                                # Calculate drawdowns
+                                peak = np.maximum.accumulate(cum_returns)
+                                drawdown = (cum_returns - peak) / peak
+                                ax2.plot(drawdown, title='Portfolio Drawdowns (Calculated)')
+                                ax2.set_ylabel('Drawdown')
+                                ax2.set_xlabel('Time')
+                                ax2.grid(True)
+                                print("✓ Successfully plotted calculated drawdowns")
+                            else:
+                                raise Exception("Insufficient data for drawdown calculation")
+                        except Exception as calc_error:
+                            print(f"⚠️ Error calculating drawdowns: {calc_error}")
+                            raise calc_error
+                    else:
+                        raise Exception("No drawdown data available")
+                        
             except Exception as e:
-                print(f"✗ Error plotting volatility: {e}")
-                ax2.text(0.5, 0.5, f'Volatility\n(Error: {str(e)[:50]}...)', 
+                print(f"✗ Error plotting drawdowns: {e}")
+                ax2.text(0.5, 0.5, f'Drawdowns\n(Error: {str(e)[:50]}...)', 
                         ha='center', va='center', transform=ax2.transAxes)
-                ax2.set_title('Portfolio Volatility - Error')
+                ax2.set_title('Portfolio Drawdowns - Error')
                 ax2.grid(True)
             
             plt.tight_layout()
@@ -277,23 +221,45 @@ class OkamaService:
             return img_buffer.getvalue()
         except Exception as e:
             print(f"Error generating performance chart: {e}")
-            # Create a simple error chart
-            try:
-                fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-                ax.text(0.5, 0.5, f'Chart Generation Error\n{str(e)}', 
-                       ha='center', va='center', transform=ax.transAxes)
-                ax.set_title('Portfolio Performance Chart')
-                ax.grid(True)
-                
-                img_buffer = io.BytesIO()
-                plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
-                img_buffer.seek(0)
-                plt.close()
-                
-                return img_buffer.getvalue()
-            except:
-                # If even the error chart fails, raise the original error
-                raise Exception(f"Error generating performance chart: {str(e)}")
+            return self._create_error_chart(f"Performance chart error: {str(e)}")
+    
+    def _create_error_chart(self, error_message: str) -> bytes:
+        """Create a simple error chart when chart generation fails"""
+        try:
+            fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+            ax.text(0.5, 0.5, f'Chart Generation Error\n{error_message}', 
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Portfolio Performance Chart')
+            ax.grid(True)
+            
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            return img_buffer.getvalue()
+        except:
+            # If even the error chart fails, return a simple placeholder
+            return self._create_placeholder_image()
+    
+    def _create_placeholder_image(self) -> bytes:
+        """Create a simple placeholder image when all else fails"""
+        try:
+            fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+            ax.text(0.5, 0.5, 'Chart Unavailable\nPlease try again later', 
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Chart Placeholder')
+            ax.axis('off')
+            
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            return img_buffer.getvalue()
+        except:
+            # Return empty bytes if everything fails
+            return b''
     
     def generate_correlation_matrix(self, symbols: List[str]) -> bytes:
         """Generate correlation matrix heatmap"""
@@ -583,18 +549,85 @@ class OkamaService:
             raise Exception(f"Error comparing assets: {str(e)}")
     
     def get_asset_info(self, symbol: str) -> Dict:
-        """Get basic information about an asset"""
+        """Get basic information about an asset using correct Okama v1.5.0 API"""
         try:
             asset = ok.Asset(symbol)
+            
+            # Get metrics using correct methods
+            metrics = {}
+            
+            # Try to get CAGR
+            try:
+                if hasattr(asset, 'get_cagr'):
+                    cagr = asset.get_cagr()
+                    metrics['annual_return'] = f"{cagr:.2%}" if isinstance(cagr, (int, float)) else 'N/A'
+                else:
+                    metrics['annual_return'] = 'N/A'
+            except:
+                metrics['annual_return'] = 'N/A'
+            
+            # Try to get cumulative return
+            try:
+                if hasattr(asset, 'get_cumulative_return'):
+                    cum_return = asset.get_cumulative_return()
+                    metrics['total_return'] = f"{cum_return:.2%}" if isinstance(cum_return, (int, float)) else 'N/A'
+                else:
+                    metrics['total_return'] = 'N/A'
+            except:
+                metrics['total_return'] = 'N/A'
+            
+            # Try to get volatility
+            try:
+                if hasattr(asset, 'ror') and asset.ror is not None:
+                    volatility = asset.ror.std() * np.sqrt(12)  # Annualize monthly volatility
+                    metrics['volatility'] = f"{volatility:.2%}"
+                else:
+                    metrics['volatility'] = 'N/A'
+            except:
+                metrics['volatility'] = 'N/A'
+            
+            # Try to get Sharpe ratio
+            try:
+                if hasattr(asset, 'get_sharpe_ratio'):
+                    sharpe = asset.get_sharpe_ratio()
+                    metrics['sharpe_ratio'] = f"{sharpe:.2f}" if isinstance(sharpe, (int, float)) else 'N/A'
+                else:
+                    metrics['sharpe_ratio'] = 'N/A'
+            except:
+                metrics['sharpe_ratio'] = 'N/A'
+            
+            # Try to get max drawdown
+            try:
+                if hasattr(asset, 'drawdowns') and asset.drawdowns is not None:
+                    max_dd = asset.drawdowns.min()
+                    metrics['max_drawdown'] = f"{max_dd:.2%}" if isinstance(max_dd, (int, float)) else 'N/A'
+                else:
+                    metrics['max_drawdown'] = 'N/A'
+            except:
+                metrics['max_drawdown'] = 'N/A'
+            
+            # Try to get VaR and CVaR
+            try:
+                if hasattr(asset, 'get_var_historic'):
+                    var = asset.get_var_historic()
+                    metrics['var_95'] = f"{var:.2%}" if isinstance(var, (int, float)) else 'N/A'
+                else:
+                    metrics['var_95'] = 'N/A'
+            except:
+                metrics['var_95'] = 'N/A'
+            
+            try:
+                if hasattr(asset, 'get_cvar_historic'):
+                    cvar = asset.get_cvar_historic()
+                    metrics['cvar_95'] = f"{cvar:.2%}" if isinstance(cvar, (int, float)) else 'N/A'
+                else:
+                    metrics['cvar_95'] = 'N/A'
+            except:
+                metrics['cvar_95'] = 'N/A'
+            
             return {
                 'symbol': symbol,
-                'total_return': f"{getattr(asset, 'total_return', 0):.2%}",
-                'annual_return': f"{getattr(asset, 'mean_return', 0):.2%}",
-                'volatility': f"{getattr(asset, 'volatility', 0):.2%}",
-                'sharpe_ratio': f"{getattr(asset, 'sharpe_ratio', 0):.2f}",
-                'max_drawdown': f"{getattr(asset, 'max_drawdown', 0):.2%}",
-                'var_95': f"{getattr(asset, 'var_95', 0):.2%}",
-                'cvar_95': f"{getattr(asset, 'cvar_95', 0):.2%}"
+                **metrics
             }
         except Exception as e:
             return {'symbol': symbol, 'error': str(e)}
@@ -613,14 +646,17 @@ class OkamaService:
                     print(f"  Type: {type(asset)}")
                     print(f"  Available attributes: {[attr for attr in dir(asset) if not attr.startswith('_')]}")
                     
-                    # Test key attributes
-                    key_attrs = ['total_return', 'mean_return', 'volatility', 'sharpe_ratio', 'max_drawdown']
-                    for attr in key_attrs:
-                        if hasattr(asset, attr):
-                            value = getattr(asset, attr)
-                            print(f"  ✓ {attr}: {value}")
+                    # Test key methods
+                    key_methods = ['get_cagr', 'get_cumulative_return', 'get_sharpe_ratio', 'get_var_historic', 'get_cvar_historic']
+                    for method in key_methods:
+                        if hasattr(asset, method):
+                            try:
+                                value = getattr(asset, method)()
+                                print(f"  ✓ {method}: {value}")
+                            except Exception as e:
+                                print(f"  ⚠️ {method} error: {e}")
                         else:
-                            print(f"  ✗ {attr}: Not available")
+                            print(f"  ✗ {method}: Not available")
                     
                     asset_info[symbol] = "OK"
                 except Exception as e:
@@ -629,27 +665,22 @@ class OkamaService:
             
             # Test portfolio creation
             try:
-                portfolio = ok.Portfolio(symbols)
+                portfolio = ok.Portfolio(symbols, inflation=True)
                 print(f"\nPortfolio created successfully:")
                 print(f"  Type: {type(portfolio)}")
-                print(f"  Available attributes: {[attr for attr in dir(portfolio) if not attr.startswith('_')]}")
+                print(f"  Available methods: {[m for m in dir(portfolio) if not m.startswith('_') and callable(getattr(portfolio, m))]}")
                 
                 # Test portfolio methods
-                if hasattr(portfolio, 'stats'):
-                    try:
-                        stats = portfolio.stats
-                        print(f"  ✓ stats method: {stats}")
-                    except Exception as e:
-                        print(f"  ✗ stats method error: {e}")
-                
-                if hasattr(portfolio, 'cumulative_returns'):
-                    try:
-                        cum_returns = portfolio.cumulative_returns
-                        print(f"  ✓ cumulative_returns: {type(cum_returns)}")
-                        if hasattr(cum_returns, 'iloc'):
-                            print(f"    Last value: {cum_returns.iloc[-1] if not cum_returns.empty else 'Empty'}")
-                    except Exception as e:
-                        print(f"  ✗ cumulative_returns error: {e}")
+                test_methods = ['get_cagr', 'get_cumulative_return', 'get_sharpe_ratio', 'get_var_historic', 'get_cvar_historic']
+                for method in test_methods:
+                    if hasattr(portfolio, method):
+                        try:
+                            result = getattr(portfolio, method)()
+                            print(f"  ✓ {method}: {result}")
+                        except Exception as e:
+                            print(f"  ⚠️ {method} error: {e}")
+                    else:
+                        print(f"  ✗ {method}: Not available")
                 
                 portfolio_info = "OK"
             except Exception as e:
@@ -1216,19 +1247,20 @@ class OkamaService:
             debug_info = {
                 'portfolio_type': type(portfolio).__name__,
                 'available_attributes': [],
+                'available_methods': [],
                 'data_sources': {},
                 'errors': []
             }
             
-            # Get all available attributes
-            available_attrs = [attr for attr in dir(portfolio) if not attr.startswith('_')]
-            debug_info['available_attributes'] = available_attrs
+            # Get all available attributes and methods
+            all_attrs = [attr for attr in dir(portfolio) if not attr.startswith('_')]
+            debug_info['available_attributes'] = [attr for attr in all_attrs if not callable(getattr(portfolio, attr))]
+            debug_info['available_methods'] = [attr for attr in all_attrs if callable(getattr(portfolio, attr))]
             
             # Test key data attributes
             key_attrs = [
-                'cumulative_returns', 'returns', 'wealth_index', 'price_ts',
-                'rolling_volatility', 'volatility', 'total_return', 'mean_return',
-                'sharpe_ratio', 'max_drawdown'
+                'close_monthly', 'assets_ror', 'drawdowns', 'annual_return_ts',
+                'assets_weights', 'currencies', 'currency'
             ]
             
             for attr in key_attrs:
