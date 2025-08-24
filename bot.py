@@ -1,6 +1,7 @@
 import sys
 import logging
 import asyncio
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
@@ -21,6 +22,15 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Health check for Render
+def health_check():
+    """Simple health check for Render deployment"""
+    print("✅ Health check: Okama Finance Bot is running")
+    print(f"✅ Environment: {'RENDER' if os.getenv('RENDER') else 'LOCAL'}")
+    print(f"✅ Python version: {sys.version}")
+    print(f"✅ Bot token configured: {'Yes' if Config.TELEGRAM_BOT_TOKEN else 'No'}")
+    return True
 
 class OkamaFinanceBotV2:
     """Updated Telegram bot class for financial analysis with Okama v1.5.0 and YandexGPT"""
@@ -943,12 +953,18 @@ if __name__ == "__main__":
         print(f"Starting Okama Finance Bot v2.0 with Python {sys.version}")
         print(f"Python version info: {sys.version_info}")
         
+        # Perform health check
+        health_check()
+        
         if sys.version_info >= (3, 13):
             print("✅ Running on Python 3.13+ with latest python-telegram-bot")
         elif sys.version_info >= (3, 12):
             print("✅ Running on Python 3.12+ with latest python-telegram-bot")
         
+        print("🚀 Initializing bot services...")
         bot = OkamaFinanceBotV2()
+        print("✅ Bot services initialized successfully")
+        print("🤖 Starting Telegram bot...")
         bot.run()
     except Exception as e:
         print(f"❌ Fatal error starting bot: {e}")
