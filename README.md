@@ -73,25 +73,25 @@ python bot.py
 
 You can also just type naturally:
 
-- "Analyze my portfolio AAPL MSFT"
-- "What's the risk of SPY?"
-- "Compare AAPL vs MSFT"
+- "Analyze my portfolio AGG.US SPY.US"
+- "What's the risk of GC.COMM?"
+- "Compare RGBITR.INDX vs MCFTR.INDX"
 - "How to optimize my portfolio?"
 
 ### 📊 Examples
 
 ```
 # Portfolio analysis
-/portfolio AAPL MSFT GOOGL
+/portfolio RGBITR.INDX MCFTR.INDX
 
 # Risk analysis
-/risk SPY QQQ
+/risk AGG.US SPY.US
 
 # Correlation analysis
-/correlation AAPL MSFT GOOGL
+/correlation RGBITR.INDX MCFTR.INDX GC.COMM
 
 # Asset comparison
-/compare AAPL MSFT GOOGL TSLA
+/compare AGG.US SPY.US GC.COMM
 
 # AI chat
 /chat What is diversification?
@@ -172,11 +172,11 @@ The bot uses **ChatGPT** to:
 
 The bot supports various financial instruments through the Okama library:
 
-- **Stocks** (e.g., AAPL, MSFT, GOOGL)
-- **ETFs** (e.g., SPY, QQQ, VTI)
-- **Indices** (e.g., ^GSPC, ^IXIC)
-- **Crypto** (if supported by data source)
-- **Commodities** (if available)
+- **Indices** (e.g., RGBITR.INDX, MCFTR.INDX)
+- **ETFs** (e.g., AGG.US, SPY.US)
+- **Commodities** (e.g., GC.COMM)
+- **Stocks** (if supported by data source)
+- **Crypto** (if available)
 
 ## 🛠️ Development
 

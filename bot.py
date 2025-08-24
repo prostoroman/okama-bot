@@ -50,8 +50,8 @@ What I can do:
 • 💬 Chat with AI about finance
 
 Quick Start:
-• Send me stock symbols like "AAPL MSFT GOOGL"
-• Ask "Analyze portfolio AAPL MSFT"
+• Send me symbols like "RGBITR.INDX MCFTR.INDX GC.COMM"
+• Ask "Analyze portfolio AGG.US SPY.US"
 • Use commands like /portfolio, /risk, /correlation
 
 Commands:
@@ -93,16 +93,16 @@ AI Chat:
 /chat [question] - Get financial advice from AI
 
 Examples:
-• /portfolio AAPL MSFT GOOGL
-• /risk SPY QQQ
-• /correlation AAPL MSFT GOOGL
-• /compare AAPL MSFT GOOGL TSLA
+• /portfolio RGBITR.INDX MCFTR.INDX
+• /risk AGG.US SPY.US
+• /correlation RGBITR.INDX MCFTR.INDX GC.COMM
+• /compare AGG.US SPY.US GC.COMM
 
 Natural Language:
 You can also just type naturally:
-• "Analyze my portfolio AAPL MSFT"
-• "What's the risk of SPY?"
-• "Compare AAPL vs MSFT"
+• "Analyze my portfolio AGG.US SPY.US"
+• "What's the risk of GC.COMM?"
+• "Compare RGBITR.INDX vs MCFTR.INDX"
 • "How to optimize my portfolio?"
 
 Need Help?
@@ -115,8 +115,8 @@ Just type your question or use the commands above!"""
         if not context.args:
             await update.message.reply_text(
                 "📊 Portfolio Analysis\n\n"
-                "Please provide stock symbols:\n"
-                "/portfolio AAPL MSFT GOOGL\n\n"
+                "Please provide symbols:\n"
+                "/portfolio RGBITR.INDX MCFTR.INDX\n\n"
                 "Or just send me the symbols directly!"
             )
             return
@@ -129,8 +129,8 @@ Just type your question or use the commands above!"""
         if not context.args:
             await update.message.reply_text(
                 "📈 Risk Analysis\n\n"
-                "Please provide stock symbols:\n"
-                "/risk SPY QQQ\n\n"
+                "Please provide symbols:\n"
+                "/risk AGG.US SPY.US\n\n"
                 "Or just send me the symbols directly!"
             )
             return
@@ -143,8 +143,8 @@ Just type your question or use the commands above!"""
         if not context.args:
             await update.message.reply_text(
                 "🔗 Correlation Analysis\n\n"
-                "Please provide stock symbols:\n"
-                "/correlation AAPL MSFT GOOGL\n\n"
+                "Please provide symbols:\n"
+                "/correlation RGBITR.INDX MCFTR.INDX GC.COMM\n\n"
                 "Or just send me the symbols directly!"
             )
             return
@@ -157,8 +157,8 @@ Just type your question or use the commands above!"""
         if not context.args:
             await update.message.reply_text(
                 "🎯 Efficient Frontier\n\n"
-                "Please provide stock symbols:\n"
-                "/efficient_frontier AAPL MSFT GOOGL\n\n"
+                "Please provide symbols:\n"
+                "/efficient_frontier RGBITR.INDX MCFTR.INDX\n\n"
                 "Or just send me the symbols directly!"
             )
             return
@@ -171,8 +171,8 @@ Just type your question or use the commands above!"""
         if not context.args:
             await update.message.reply_text(
                 "📋 Asset Comparison\n\n"
-                "Please provide stock symbols:\n"
-                "/compare AAPL MSFT GOOGL\n\n"
+                "Please provide symbols:\n"
+                "/compare AGG.US SPY.US GC.COMM\n\n"
                 "Or just send me the symbols directly!"
             )
             return
@@ -218,8 +218,8 @@ Just type your question or use the commands above!"""
                 
                 if not symbols:
                     await update.message.reply_text(
-                        "I couldn't identify any stock symbols in your message. "
-                        "Please provide stock tickers like AAPL, MSFT, GOOGL, etc."
+                                        "I couldn't identify any symbols in your message. "
+                "Please provide symbols like RGBITR.INDX, MCFTR.INDX, GC.COMM, AGG.US, SPY.US, etc."
                     )
                     return
                 
@@ -252,9 +252,9 @@ Just type your question or use the commands above!"""
         if query.data == "portfolio_help":
             await query.edit_message_text(
                 "📊 Portfolio Analysis\n\n"
-                "Send me stock symbols to analyze:\n"
-                "• AAPL MSFT GOOGL\n"
-                "• /portfolio SPY QQQ\n\n"
+                "Send me symbols to analyze:\n"
+                "• RGBITR.INDX MCFTR.INDX\n"
+                "• /portfolio AGG.US SPY.US\n\n"
                 "I'll show you:\n"
                 "• Performance metrics\n"
                 "• Risk analysis\n"
@@ -263,9 +263,9 @@ Just type your question or use the commands above!"""
         elif query.data == "risk_help":
             await query.edit_message_text(
                 "📈 Risk Analysis\n\n"
-                "Send me stock symbols to analyze risk:\n"
-                "• SPY QQQ\n"
-                "• /risk AAPL MSFT\n\n"
+                "Send me symbols to analyze risk:\n"
+                "• AGG.US SPY.US\n"
+                "• /risk GC.COMM\n\n"
                 "I'll show you:\n"
                 "• Volatility metrics\n"
                 "• VaR and CVaR\n"
@@ -274,9 +274,9 @@ Just type your question or use the commands above!"""
         elif query.data == "correlation_help":
             await query.edit_message_text(
                 "🔗 Correlation Analysis\n\n"
-                "Send me stock symbols to see correlations:\n"
-                "• AAPL MSFT GOOGL\n"
-                "• /correlation SPY QQQ\n\n"
+                "Send me symbols to see correlations:\n"
+                "• RGBITR.INDX MCFTR.INDX GC.COMM\n"
+                "• /correlation AGG.US SPY.US\n\n"
                 "I'll show you:\n"
                 "• Correlation heatmap\n"
                 "• Relationship insights\n"
