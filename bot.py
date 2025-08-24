@@ -335,7 +335,7 @@ AI Insights:
 {insights}"""
             
             # Send chart with caption
-            await context.bot.send_photo(
+            await update.get_bot().send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(chart_image),
                 caption=metrics_text
@@ -377,7 +377,7 @@ Individual Asset Risk:
             risk_text += "\nCorrelation Matrix Below"
             
             # Send correlation matrix
-            await context.bot.send_photo(
+            await update.get_bot().send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(correlation_image),
                 caption=risk_text
@@ -409,7 +409,7 @@ Interpretation:
 • Values closer to -1 = Strong negative correlation  
 • Values closer to 0 = Low correlation"""
             
-            await context.bot.send_photo(
+            await update.get_bot().send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(correlation_image),
                 caption=caption
@@ -440,7 +440,7 @@ Use This To:
 • Compare portfolio efficiency
 • Optimize asset allocation"""
             
-            await context.bot.send_photo(
+            await update.get_bot().send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(frontier_image),
                 caption=caption
@@ -476,7 +476,7 @@ Performance Metrics:
                     comparison_text += f"• {symbol}: Error - {metrics['error']}\n"
             
             # Send comparison chart
-            await context.bot.send_photo(
+            await update.get_bot().send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(comparison_image),
                 caption=comparison_text
