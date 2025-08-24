@@ -99,6 +99,7 @@ class OkamaFinanceBot:
 /allocation [symbols] - Детальный анализ распределения активов
 /test [symbols] - Тест интеграции Okama
 /testai - Тест подключения к YandexGPT API
+/debug [symbols] - Отладка данных портфеля
 
 Чат с YandexGPT:
 /chat [question] - Получить финансовый совет от YandexGPT
@@ -111,6 +112,7 @@ class OkamaFinanceBot:
 • /pension RGBITR.INDX MCFTR.INDX 0.6 0.4 1000000 -50000 year
 • /monte_carlo AGG.US SPY.US 20 100 norm
 • /allocation RGBITR.INDX MCFTR.INDX GC.COMM
+• /debug RGBITR.INDX MCFTR.INDX
 
 Естественный язык:
 Вы также можете просто написать естественным языком:
@@ -860,6 +862,68 @@ Use This To:
             
         except Exception as e:
             await update.message.reply_text(f"❌ Error testing AI: {str(e)}")
+
+    async def debug_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /debug command to debug portfolio data issues"""
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "Отладка данных портфеля\n\n"
+                    "Пожалуйста, укажите символы для отладки:\n"
+                    "/debug RGBITR.INDX MCFTR.INDX\n\n"
+                    "Это покажет доступные данные и атрибуты портфеля."
+                )
+                return
+            
+            symbols = [s.upper() for s in context.args]
+            await update.message.reply_text(f"🔍 Отладка данных портфеля для: {', '.join(symbols)}...")
+            
+            try:
+                # Create portfolio
+                portfolio = self.okama_service.create_portfolio(symbols)
+                
+                # Debug portfolio data
+                debug_info = self.okama_service.debug_portfolio_data(portfolio)
+                
+                # Format debug information
+                debug_text = f"🔍 Отладка портфеля: {', '.join(symbols)}\n\n"
+                
+                if 'error' in debug_info:
+                    debug_text += f"❌ Ошибка отладки: {debug_info['error']}"
+                else:
+                    debug_text += f"Тип портфеля: {debug_info.get('portfolio_type', 'Unknown')}\n\n"
+                    
+                    debug_text += "Доступные атрибуты:\n"
+                    for attr in debug_info.get('available_attributes', [])[:20]:  # Show first 20
+                        debug_text += f"• {attr}\n"
+                    
+                    if len(debug_info.get('available_attributes', [])) > 20:
+                        debug_text += f"... и еще {len(debug_info.get('available_attributes', [])) - 20} атрибутов\n"
+                    
+                    debug_text += "\nКлючевые источники данных:\n"
+                    for attr, info in debug_info.get('data_sources', {}).items():
+                        if info.get('type') != 'Not available':
+                            debug_text += f"• {attr}: {info.get('type')}"
+                            if 'empty' in info:
+                                debug_text += f" (пустой: {info['empty']})"
+                            if 'shape' in info and info['shape'] != 'N/A':
+                                debug_text += f" [форма: {info['shape']}]"
+                            if 'length' in info and info['length'] != 'N/A':
+                                debug_text += f" [длина: {info['length']}]"
+                            debug_text += "\n"
+                    
+                    if debug_info.get('errors'):
+                        debug_text += "\nОшибки:\n"
+                        for error in debug_info['errors']:
+                            debug_text += f"• {error}\n"
+                
+                await update.message.reply_text(debug_text)
+                
+            except Exception as e:
+                await update.message.reply_text(f"❌ Ошибка создания портфеля для отладки: {str(e)}")
+                
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка отладки: {str(e)}")
         
     def run(self):
         """Run the bot"""
@@ -880,6 +944,7 @@ Use This To:
         application.add_handler(CommandHandler("allocation", self.allocation_command))
         application.add_handler(CommandHandler("test", self.test_command))
         application.add_handler(CommandHandler("testai", self.test_ai_command))
+        application.add_handler(CommandHandler("debug", self.debug_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))

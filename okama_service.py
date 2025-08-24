@@ -137,57 +137,133 @@ class OkamaService:
             
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
             
-            # Try to plot cumulative returns with fallback
+            # Try to plot cumulative returns with multiple fallbacks
             try:
-                if hasattr(portfolio, 'cumulative_returns') and not portfolio.cumulative_returns.empty:
-                    portfolio.cumulative_returns.plot(ax=ax1, title='Cumulative Returns')
-                    ax1.set_ylabel('Cumulative Return')
-                    ax1.grid(True)
-                elif hasattr(portfolio, 'returns') and not portfolio.returns.empty:
-                    # Fallback to regular returns
-                    portfolio.returns.cumsum().plot(ax=ax1, title='Cumulative Returns (from returns)')
-                    ax1.set_ylabel('Cumulative Return')
-                    ax1.grid(True)
+                cumulative_data = None
+                data_source = None
+                
+                # Try multiple data sources
+                if hasattr(portfolio, 'cumulative_returns') and portfolio.cumulative_returns is not None:
+                    if hasattr(portfolio.cumulative_returns, 'empty') and not portfolio.cumulative_returns.empty:
+                        cumulative_data = portfolio.cumulative_returns
+                        data_source = 'cumulative_returns'
+                        print(f"✓ Using cumulative_returns data")
+                
+                if cumulative_data is None and hasattr(portfolio, 'returns') and portfolio.returns is not None:
+                    if hasattr(portfolio.returns, 'empty') and not portfolio.returns.empty:
+                        try:
+                            cumulative_data = portfolio.returns.cumsum()
+                            data_source = 'returns.cumsum()'
+                            print(f"✓ Using returns.cumsum() data")
+                        except Exception as cumsum_error:
+                            print(f"⚠️ Error calculating cumsum: {cumsum_error}")
+                
+                if cumulative_data is None and hasattr(portfolio, 'wealth_index') and portfolio.wealth_index is not None:
+                    if hasattr(portfolio.wealth_index, 'empty') and not portfolio.wealth_index.empty:
+                        cumulative_data = portfolio.wealth_index
+                        data_source = 'wealth_index'
+                        print(f"✓ Using wealth_index data")
+                
+                if cumulative_data is None and hasattr(portfolio, 'price_ts') and portfolio.price_ts is not None:
+                    if hasattr(portfolio.price_ts, 'empty') and not portfolio.price_ts.empty:
+                        try:
+                            # Calculate returns from price data
+                            returns = portfolio.price_ts.pct_change().dropna()
+                            cumulative_data = (1 + returns).cumprod()
+                            data_source = 'price_ts derived'
+                            print(f"✓ Using price_ts derived data")
+                        except Exception as price_error:
+                            print(f"⚠️ Error calculating from price_ts: {price_error}")
+                
+                # Plot the data if we found any
+                if cumulative_data is not None:
+                    try:
+                        cumulative_data.plot(ax=ax1, title=f'Cumulative Returns ({data_source})')
+                        ax1.set_ylabel('Cumulative Return')
+                        ax1.grid(True)
+                        print(f"✓ Successfully plotted cumulative returns from {data_source}")
+                    except Exception as plot_error:
+                        print(f"⚠️ Error plotting data from {data_source}: {plot_error}")
+                        raise plot_error
                 else:
-                    # Create a simple placeholder
-                    ax1.text(0.5, 0.5, 'Cumulative Returns\n(Data not available)', 
-                            ha='center', va='center', transform=ax1.transAxes)
-                    ax1.set_title('Cumulative Returns')
+                    # No data available
+                    print(f"⚠️ No cumulative returns data available from any source")
+                    ax1.text(0.5, 0.5, 'Cumulative Returns\n(Data not available)\n\nTried: cumulative_returns, returns.cumsum(),\nwealth_index, price_ts', 
+                            ha='center', va='center', transform=ax1.transAxes, fontsize=10)
+                    ax1.set_title('Cumulative Returns - No Data Available')
                     ax1.grid(True)
+                    
             except Exception as e:
-                print(f"Error plotting cumulative returns: {e}")
-                ax1.text(0.5, 0.5, 'Cumulative Returns\n(Error plotting)', 
+                print(f"✗ Error plotting cumulative returns: {e}")
+                ax1.text(0.5, 0.5, f'Cumulative Returns\n(Error: {str(e)[:50]}...)', 
                         ha='center', va='center', transform=ax1.transAxes)
-                ax1.set_title('Cumulative Returns')
+                ax1.set_title('Cumulative Returns - Error')
                 ax1.grid(True)
             
-            # Try to plot rolling volatility with fallback
+            # Try to plot volatility with multiple fallbacks
             try:
-                if hasattr(portfolio, 'rolling_volatility') and not portfolio.rolling_volatility.empty:
-                    portfolio.rolling_volatility.plot(ax=ax2, title='Rolling Volatility (30 days)')
-                    ax2.set_ylabel('Volatility')
-                    ax2.set_xlabel('Date')
-                    ax2.grid(True)
-                elif hasattr(portfolio, 'volatility'):
-                    # Fallback to static volatility
-                    ax2.axhline(y=portfolio.volatility, color='r', linestyle='-', 
-                               label=f'Volatility: {portfolio.volatility:.2%}')
-                    ax2.set_ylabel('Volatility')
-                    ax2.set_xlabel('Time')
-                    ax2.set_title('Portfolio Volatility')
-                    ax2.legend()
-                    ax2.grid(True)
+                volatility_data = None
+                volatility_source = None
+                
+                # Try multiple volatility data sources
+                if hasattr(portfolio, 'rolling_volatility') and portfolio.rolling_volatility is not None:
+                    if hasattr(portfolio.rolling_volatility, 'empty') and not portfolio.rolling_volatility.empty:
+                        volatility_data = portfolio.rolling_volatility
+                        volatility_source = 'rolling_volatility'
+                        print(f"✓ Using rolling_volatility data")
+                
+                if volatility_data is None and hasattr(portfolio, 'volatility') and portfolio.volatility is not None:
+                    # Use static volatility as a horizontal line
+                    volatility_data = portfolio.volatility
+                    volatility_source = 'static_volatility'
+                    print(f"✓ Using static volatility: {portfolio.volatility:.2%}")
+                
+                if volatility_data is None and hasattr(portfolio, 'returns') and portfolio.returns is not None:
+                    if hasattr(portfolio.returns, 'empty') and not portfolio.returns.empty:
+                        try:
+                            # Calculate rolling volatility from returns
+                            rolling_vol = portfolio.returns.rolling(window=30).std() * np.sqrt(252)
+                            volatility_data = rolling_vol
+                            volatility_source = 'returns derived'
+                            print(f"✓ Using returns derived rolling volatility")
+                        except Exception as vol_error:
+                            print(f"⚠️ Error calculating rolling volatility: {vol_error}")
+                
+                # Plot the volatility data
+                if volatility_data is not None:
+                    try:
+                        if volatility_source == 'static_volatility':
+                            # Plot static volatility as horizontal line
+                            ax2.axhline(y=volatility_data, color='r', linestyle='-', 
+                                       label=f'Volatility: {volatility_data:.2%}')
+                            ax2.set_ylabel('Volatility')
+                            ax2.set_xlabel('Time')
+                            ax2.set_title('Portfolio Volatility (Static)')
+                            ax2.legend()
+                            ax2.grid(True)
+                        else:
+                            # Plot time series volatility
+                            volatility_data.plot(ax=ax2, title=f'Rolling Volatility ({volatility_source})')
+                            ax2.set_ylabel('Volatility')
+                            ax2.set_xlabel('Date')
+                            ax2.grid(True)
+                        print(f"✓ Successfully plotted volatility from {volatility_source}")
+                    except Exception as plot_error:
+                        print(f"⚠️ Error plotting volatility from {volatility_source}: {plot_error}")
+                        raise plot_error
                 else:
-                    # Create a simple placeholder
-                    ax2.text(0.5, 0.5, 'Volatility\n(Data not available)', 
-                            ha='center', va='center', transform=ax2.transAxes)
-                    ax2.set_title('Portfolio Volatility')
+                    # No volatility data available
+                    print(f"⚠️ No volatility data available from any source")
+                    ax2.text(0.5, 0.5, 'Volatility\n(Data not available)\n\nTried: rolling_volatility, static volatility,\nreturns derived', 
+                            ha='center', va='center', transform=ax2.transAxes, fontsize=10)
+                    ax2.set_title('Portfolio Volatility - No Data Available')
                     ax2.grid(True)
+                    
             except Exception as e:
-                print(f"Error plotting volatility: {e}")
-                ax2.text(0.5, 0.5, 'Volatility\n(Error plotting)', 
+                print(f"✗ Error plotting volatility: {e}")
+                ax2.text(0.5, 0.5, f'Volatility\n(Error: {str(e)[:50]}...)', 
                         ha='center', va='center', transform=ax2.transAxes)
-                ax2.set_title('Portfolio Volatility')
+                ax2.set_title('Portfolio Volatility - Error')
                 ax2.grid(True)
             
             plt.tight_layout()
@@ -1131,3 +1207,58 @@ class OkamaService:
                 [portfolio.symbols], 
                 f"Asset allocation analysis error: {str(e)}"
             )
+
+    def debug_portfolio_data(self, portfolio: ok.Portfolio) -> Dict:
+        """Debug method to inspect what data is available in a portfolio"""
+        try:
+            print(f"Debugging portfolio data availability...")
+            
+            debug_info = {
+                'portfolio_type': type(portfolio).__name__,
+                'available_attributes': [],
+                'data_sources': {},
+                'errors': []
+            }
+            
+            # Get all available attributes
+            available_attrs = [attr for attr in dir(portfolio) if not attr.startswith('_')]
+            debug_info['available_attributes'] = available_attrs
+            
+            # Test key data attributes
+            key_attrs = [
+                'cumulative_returns', 'returns', 'wealth_index', 'price_ts',
+                'rolling_volatility', 'volatility', 'total_return', 'mean_return',
+                'sharpe_ratio', 'max_drawdown'
+            ]
+            
+            for attr in key_attrs:
+                try:
+                    if hasattr(portfolio, attr):
+                        value = getattr(portfolio, attr)
+                        if value is not None:
+                            if hasattr(value, 'empty'):
+                                debug_info['data_sources'][attr] = {
+                                    'type': type(value).__name__,
+                                    'empty': value.empty,
+                                    'shape': value.shape if hasattr(value, 'shape') else 'N/A',
+                                    'length': len(value) if hasattr(value, '__len__') else 'N/A'
+                                }
+                            else:
+                                debug_info['data_sources'][attr] = {
+                                    'type': type(value).__name__,
+                                    'value': str(value)[:100] if value is not None else 'None'
+                                }
+                        else:
+                            debug_info['data_sources'][attr] = {'type': 'None', 'value': 'None'}
+                    else:
+                        debug_info['data_sources'][attr] = {'type': 'Not available', 'value': 'N/A'}
+                except Exception as e:
+                    debug_info['errors'].append(f"Error testing {attr}: {str(e)}")
+                    debug_info['data_sources'][attr] = {'type': 'Error', 'error': str(e)}
+            
+            print(f"✓ Portfolio data debugging completed")
+            return debug_info
+            
+        except Exception as e:
+            print(f"✗ Error debugging portfolio data: {e}")
+            return {'error': str(e)}
