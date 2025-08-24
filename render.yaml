@@ -1,0 +1,11 @@
+services:
+  - type: background
+    name: okama-finance-bot
+    env: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+    autoDeploy: true
