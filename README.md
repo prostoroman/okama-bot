@@ -180,6 +180,9 @@ The bot supports various financial instruments through the Okama library:
 
 ## 🛠️ Development
 
+### Python Version
+This bot is designed to work with Python 3.13+ and uses the latest `python-telegram-bot` library for optimal compatibility.
+
 ### Project Structure
 
 ```
@@ -205,6 +208,7 @@ okama-bot/
 ## 🚀 Deployment Options
 
 ### 🌐 Render (Recommended)
+The bot is configured to run as a Render background service using Python 3.13.
 - **Free tier available**
 - **24/7 background service**
 - **Automatic deployments**

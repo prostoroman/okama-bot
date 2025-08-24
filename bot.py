@@ -1,9 +1,15 @@
+import sys
 import logging
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
 from typing import Dict, List, Optional
+
+# Check Python version compatibility
+if sys.version_info < (3, 8):
+    print("ERROR: Python 3.8+ required. Current version:", sys.version)
+    sys.exit(1)
 
 from config import Config
 from okama_service import OkamaService
@@ -517,6 +523,22 @@ Performance Metrics:
         application.run_polling()
 
 if __name__ == "__main__":
-    bot = OkamaFinanceBot()
-    bot.run()
+    try:
+        print(f"Starting Okama Finance Bot with Python {sys.version}")
+        print(f"Python version info: {sys.version_info}")
+        
+        if sys.version_info >= (3, 13):
+            print("✅ Running on Python 3.13+ with latest python-telegram-bot")
+        elif sys.version_info >= (3, 12):
+            print("✅ Running on Python 3.12+ with latest python-telegram-bot")
+        
+        bot = OkamaFinanceBot()
+        bot.run()
+    except Exception as e:
+        print(f"❌ Fatal error starting bot: {e}")
+        print(f"Python version: {sys.version}")
+        print(f"Python executable: {sys.executable}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
         
