@@ -1,5 +1,5 @@
 """
-Okama Finance Bot Configuration Package
+Okama Finance Bot Configuration Files Package
 
 This package contains configuration files:
 - config.env.example: Environment variables template

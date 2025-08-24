@@ -14,8 +14,8 @@ pip install -r requirements.txt
 
 ### 2. Конфигурация
 ```bash
-cp config/config.env.example config/config.env
-# Отредактируйте config/config.env, добавив ваши API ключи
+cp config_files/config.env.example config_files/config.env
+# Отредактируйте config_files/config.env, добавив ваши API ключи
 ```
 
 ### 3. Запуск
@@ -49,7 +49,7 @@ python -m tests.test_all_services
 
 1. **Проверьте версию Python**: требуется 3.8+
 2. **Активируйте виртуальное окружение**
-3. **Проверьте API ключи** в config/config.env
+3. **Проверьте API ключи** в config_files/config.env
 4. **Запустите тесты** для диагностики
 5. **Используйте команду** `/debug` в боте
 

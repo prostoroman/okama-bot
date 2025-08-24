@@ -27,7 +27,7 @@ okama-bot/
 │   ├── CHANGELOG.md               # Журнал изменений
 │   ├── FINAL_REPORT.md            # Финальный отчет
 │   └── RENAMING_INFO.md           # Информация о переименовании
-├── 📁 config/                      # Конфигурация
+├── 📁 config_files/                # Конфигурационные файлы
 │   ├── __init__.py                # Пакет конфигурации
 │   ├── config.env.example         # Шаблон переменных окружения
 │   ├── render.yaml                # Конфигурация Render

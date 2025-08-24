@@ -17,8 +17,8 @@ pip list | grep okama
 
 ### 3. Настройка конфигурации
 ```bash
-cp config/config.env.example config/config.env
-# Отредактируйте config/config.env, добавив ваши API ключи
+cp config_files/config.env.example config_files/config.env
+# Отредактируйте config_files/config.env, добавив ваши API ключи
 ```
 
 ### 4. Запуск бота

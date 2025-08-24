@@ -11,7 +11,7 @@ if sys.version_info < (3, 8):
     print("ERROR: Python 3.8+ required. Current version:", sys.version)
     sys.exit(1)
 
-import config
+from config import Config
 from services.okama_service import OkamaServiceV2
 from yandexgpt_service import YandexGPTService
 
@@ -27,7 +27,7 @@ class OkamaFinanceBotV2:
     
     def __init__(self):
         """Initialize the bot with required services"""
-        config.Config.validate()
+        Config.validate()
         
         self.okama_service = OkamaServiceV2()
         self.yandexgpt_service = YandexGPTService()
@@ -912,7 +912,7 @@ Use This To:
     def run(self):
         """Run the bot"""
         # Create application
-        application = Application.builder().token(config.Config.TELEGRAM_BOT_TOKEN).build()
+        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
         
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
