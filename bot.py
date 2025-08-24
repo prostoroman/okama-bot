@@ -546,7 +546,25 @@ Performance Metrics:
             symbols = [s.upper() for s in context.args]
             await update.message.reply_text(f"🧪 Testing Okama integration with symbols: {', '.join(symbols)}...")
             
-            # Run the test
+            # Test individual assets
+            results = []
+            for symbol in symbols:
+                result = self.okama_service.test_asset_data(symbol)
+                results.append(result)
+            
+            # Format results
+            test_text = "🧪 Asset Data Test Results:\n\n"
+            for result in results:
+                if result['status'] == 'success':
+                    test_text += f"✅ {result['symbol']}:\n"
+                    test_text += f"   Data sources: {', '.join([f'{k}: {v}' for k, v in result['data_sources'].items()])}\n"
+                    test_text += f"   Metrics: {', '.join([f'{k}: {v}' for k, v in result['metrics'].items()])}\n\n"
+                else:
+                    test_text += f"❌ {result['symbol']}: {result['error']}\n\n"
+            
+            await update.message.reply_text(test_text)
+            
+            # Run the original test
             test_results = self.okama_service.test_okama_integration(symbols)
             
             # Format results

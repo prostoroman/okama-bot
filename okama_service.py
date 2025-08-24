@@ -300,10 +300,12 @@ class OkamaService:
                     return self._generate_fallback_correlation_matrix(symbols)
                 except Exception as fallback_error:
                     print(f"Fallback method also failed: {fallback_error}")
+                    # Create an informational chart instead of raising an exception
                     error_msg = f"Need at least 2 valid symbols for correlation matrix. "
                     error_msg += f"Processed: {len(data)}, Failed: {len(failed_symbols)}. "
                     error_msg += f"Failed symbols: {', '.join(failed_symbols)}"
-                    raise Exception(error_msg)
+                    print(f"Creating info chart with error: {error_msg}")
+                    return self._create_info_chart(symbols, error_msg)
             
             # Create DataFrame and calculate correlation
             df = pd.DataFrame(data)
@@ -550,6 +552,61 @@ class OkamaService:
         except Exception as e:
             return {'error': f"Test failed: {str(e)}"}
     
+    def test_asset_data(self, symbol: str) -> Dict:
+        """Test what data is available for a specific asset"""
+        try:
+            print(f"Testing asset data for: {symbol}")
+            asset = ok.Asset(symbol)
+            
+            # Get all available attributes
+            available_attrs = [attr for attr in dir(asset) if not attr.startswith('_')]
+            
+            # Test specific data attributes
+            data_sources = {}
+            for attr in ['price_ts', 'price_data', 'prices', 'close', 'historical_data']:
+                if hasattr(asset, attr):
+                    data = getattr(asset, attr)
+                    if data is not None:
+                        if hasattr(data, 'empty'):
+                            data_sources[attr] = f"pandas DataFrame (empty: {data.empty})"
+                        elif hasattr(data, '__len__'):
+                            data_sources[attr] = f"data with length: {len(data)}"
+                        else:
+                            data_sources[attr] = f"data of type: {type(data)}"
+                    else:
+                        data_sources[attr] = "None"
+                else:
+                    data_sources[attr] = "Not available"
+            
+            # Test metrics
+            metrics = {}
+            metric_names = ['volatility', 'mean_return', 'total_return', 'sharpe_ratio', 'max_drawdown']
+            for metric in metric_names:
+                if hasattr(asset, metric):
+                    value = getattr(asset, metric)
+                    metrics[metric] = value if value is not None else "None"
+                else:
+                    metrics[metric] = "Not available"
+            
+            result = {
+                'symbol': symbol,
+                'available_attributes': available_attrs,
+                'data_sources': data_sources,
+                'metrics': metrics,
+                'status': 'success'
+            }
+            
+            print(f"✓ Asset data test completed for {symbol}")
+            return result
+            
+        except Exception as e:
+            print(f"✗ Error testing asset {symbol}: {e}")
+            return {
+                'symbol': symbol,
+                'error': str(e),
+                'status': 'error'
+            }
+    
     def _generate_fallback_correlation_matrix(self, symbols: List[str]) -> bytes:
         """Generate a fallback correlation matrix when price data is not available"""
         try:
@@ -581,8 +638,10 @@ class OkamaService:
                     print(f"✗ Error getting metrics for {symbol}: {e}")
                     continue
             
+            # If we don't have enough metrics data, create an informational chart instead
             if len(metrics_data) < 2:
-                raise Exception("Not enough metrics data for fallback correlation matrix")
+                print(f"⚠️ Not enough metrics data ({len(metrics_data)} symbols), creating informational chart")
+                return self._create_info_chart(symbols, "Insufficient data for correlation analysis")
             
             # Create a simple correlation matrix from available metrics
             plt.figure(figsize=(10, 8))
@@ -651,6 +710,60 @@ class OkamaService:
                    ha='center', va='center', transform=ax.transAxes)
             ax.set_title('Asset Correlation Matrix')
             ax.grid(True)
+            
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            return img_buffer.getvalue()
+
+    def _create_info_chart(self, symbols: List[str], message: str) -> bytes:
+        """Create an informational chart when data is insufficient"""
+        try:
+            print(f"Creating info chart for symbols: {symbols} with message: {message}")
+            
+            fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+            
+            # Create a simple informational display
+            ax.text(0.5, 0.7, 'Asset Analysis Information', 
+                   ha='center', va='center', transform=ax.transAxes, 
+                   fontsize=16, fontweight='bold')
+            
+            ax.text(0.5, 0.5, message, 
+                   ha='center', va='center', transform=ax.transAxes, 
+                   fontsize=12, wrap=True)
+            
+            ax.text(0.5, 0.3, f'Symbols: {", ".join(symbols)}', 
+                   ha='center', va='center', transform=ax.transAxes, 
+                   fontsize=10, style='italic')
+            
+            ax.text(0.5, 0.1, 'Try using different symbols or check data availability', 
+                   ha='center', va='center', transform=ax.transAxes, 
+                   fontsize=10, color='gray')
+            
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            ax.set_title('Asset Data Status', fontsize=14, pad=20)
+            
+            # Save to bytes
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            plt.close()
+            
+            print("✓ Info chart created successfully")
+            return img_buffer.getvalue()
+            
+        except Exception as e:
+            print(f"✗ Error creating info chart: {e}")
+            # Return a simple error image
+            fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+            ax.text(0.5, 0.5, f'Chart Generation Error\n{str(e)}', 
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Error')
+            ax.axis('off')
             
             img_buffer = io.BytesIO()
             plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
