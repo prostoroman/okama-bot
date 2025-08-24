@@ -43,39 +43,39 @@ class OkamaFinanceBot:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""🤖 Welcome to Okama Finance Bot!
+        welcome_message = f"""Добро пожаловать в Okama Finance Bot!
 
-Hi {user_name}! I'm your YandexGPT-powered financial analysis assistant.
+Привет {user_name}! Я ваш помощник по финансовому анализу на базе YandexGPT.
 
-What I can do:
-• 📊 Portfolio analysis and optimization
-• 📈 Risk assessment and metrics
-• 🔗 Asset correlation analysis
-• 🎯 Efficient frontier generation
-• 📋 Asset comparison and benchmarking
-• 💬 Chat with YandexGPT about finance
+Что я умею:
+• Анализ и оптимизация портфеля
+• Оценка рисков и метрики
+• Анализ корреляции активов
+• Генерация эффективной границы
+• Сравнение активов
+• Чат с YandexGPT о финансах
 
-Quick Start:
-• Send me symbols like "RGBITR.INDX MCFTR.INDX GC.COMM"
-• Ask "Analyze portfolio AGG.US SPY.US"
-• Use commands like /portfolio, /risk, /correlation
+Быстрый старт:
+• Отправьте мне символы как "RGBITR.INDX MCFTR.INDX GC.COMM"
+• Спросите "Проанализируй портфель AGG.US SPY.US"
+• Используйте команды /portfolio, /risk, /correlation
 
-Commands:
-/help - Show all available commands
-/portfolio - Portfolio analysis
-/risk - Risk metrics
-/correlation - Correlation matrix
-/efficient_frontier - Efficient frontier
-/compare - Asset comparison
-/chat - Chat with YandexGPT
+Команды:
+/help - Показать все доступные команды
+/portfolio - Анализ портфеля
+/risk - Метрики риска
+/correlation - Матрица корреляции
+/efficient_frontier - Эффективная граница
+/compare - Сравнение активов
+/chat - Чат с YandexGPT
 
-Ready to analyze your investments? 🚀"""
+Готовы анализировать ваши инвестиции?"""
         
         keyboard = [
-            [InlineKeyboardButton("📊 Portfolio Analysis", callback_data="portfolio_help")],
-            [InlineKeyboardButton("📈 Risk Metrics", callback_data="risk_help")],
-            [InlineKeyboardButton("🔗 Correlation", callback_data="correlation_help")],
-            [InlineKeyboardButton("💬 Chat with YandexGPT", callback_data="chat_help")]
+            [InlineKeyboardButton("Анализ портфеля", callback_data="portfolio_help")],
+            [InlineKeyboardButton("Метрики риска", callback_data="risk_help")],
+            [InlineKeyboardButton("Корреляция", callback_data="correlation_help")],
+            [InlineKeyboardButton("Чат с YandexGPT", callback_data="chat_help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -86,35 +86,35 @@ Ready to analyze your investments? 🚀"""
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
-        help_text = """📚 Available Commands & Features
+        help_text = """Доступные команды и функции
 
-Core Analysis Commands:
-/portfolio [symbols] - Analyze portfolio performance
-/risk [symbols] - Calculate risk metrics (VaR, CVaR, volatility)
-/correlation [symbols] - Generate correlation matrix
-/efficient_frontier [symbols] - Create efficient frontier plot
-/compare [symbols] - Compare multiple assets
-/test [symbols] - Test Okama integration
-/testai - Test YandexGPT API connection
+Основные команды анализа:
+/portfolio [symbols] - Анализ производительности портфеля
+/risk [symbols] - Расчет метрик риска (VaR, CVaR, волатильность)
+/correlation [symbols] - Генерация матрицы корреляции
+/efficient_frontier [symbols] - Создание графика эффективной границы
+/compare [symbols] - Сравнение нескольких активов
+/test [symbols] - Тест интеграции Okama
+/testai - Тест подключения к YandexGPT API
 
-YandexGPT Chat:
-/chat [question] - Get financial advice from YandexGPT
+Чат с YandexGPT:
+/chat [question] - Получить финансовый совет от YandexGPT
 
-Examples:
+Примеры:
 • /portfolio RGBITR.INDX MCFTR.INDX
 • /risk AGG.US SPY.US
 • /correlation RGBITR.INDX MCFTR.INDX GC.COMM
 • /compare AGG.US SPY.US GC.COMM
 
-Natural Language:
-You can also just type naturally:
-• "Analyze my portfolio AGG.US SPY.US"
-• "What's the risk of GC.COMM?"
-• "Compare RGBITR.INDX vs MCFTR.INDX"
-• "How to optimize my portfolio?"
+Естественный язык:
+Вы также можете просто написать естественным языком:
+• "Проанализируй мой портфель AGG.US SPY.US"
+• "Какой риск у GC.COMM?"
+• "Сравни RGBITR.INDX с MCFTR.INDX"
+• "Как оптимизировать мой портфель?"
 
-Need Help?
-Just type your question or use the commands above!"""
+Нужна помощь?
+Просто напишите ваш вопрос или используйте команды выше!"""
         
         await update.message.reply_text(help_text)
     
@@ -122,10 +122,10 @@ Just type your question or use the commands above!"""
         """Handle /portfolio command"""
         if not context.args:
             await update.message.reply_text(
-                "📊 Portfolio Analysis\n\n"
-                "Please provide symbols:\n"
+                "Анализ портфеля\n\n"
+                "Пожалуйста, укажите символы:\n"
                 "/portfolio RGBITR.INDX MCFTR.INDX\n\n"
-                "Or just send me the symbols directly!"
+                "Или просто отправьте мне символы напрямую!"
             )
             return
         
@@ -136,10 +136,10 @@ Just type your question or use the commands above!"""
         """Handle /risk command"""
         if not context.args:
             await update.message.reply_text(
-                "📈 Risk Analysis\n\n"
-                "Please provide symbols:\n"
+                "Анализ рисков\n\n"
+                "Пожалуйста, укажите символы:\n"
                 "/risk AGG.US SPY.US\n\n"
-                "Or just send me the symbols directly!"
+                "Или просто отправьте мне символы напрямую!"
             )
             return
         
@@ -150,10 +150,10 @@ Just type your question or use the commands above!"""
         """Handle /correlation command"""
         if not context.args:
             await update.message.reply_text(
-                "🔗 Correlation Analysis\n\n"
-                "Please provide symbols:\n"
+                "Анализ корреляции\n\n"
+                "Пожалуйста, укажите символы:\n"
                 "/correlation RGBITR.INDX MCFTR.INDX GC.COMM\n\n"
-                "Or just send me the symbols directly!"
+                "Или просто отправьте мне символы напрямую!"
             )
             return
         
@@ -164,10 +164,10 @@ Just type your question or use the commands above!"""
         """Handle /efficient_frontier command"""
         if not context.args:
             await update.message.reply_text(
-                "🎯 Efficient Frontier\n\n"
-                "Please provide symbols:\n"
+                "Эффективная граница\n\n"
+                "Пожалуйста, укажите символы:\n"
                 "/efficient_frontier RGBITR.INDX MCFTR.INDX\n\n"
-                "Or just send me the symbols directly!"
+                "Или просто отправьте мне символы напрямую!"
             )
             return
         
@@ -178,10 +178,10 @@ Just type your question or use the commands above!"""
         """Handle /compare command"""
         if not context.args:
             await update.message.reply_text(
-                "📋 Asset Comparison\n\n"
-                "Please provide symbols:\n"
+                "Сравнение активов\n\n"
+                "Пожалуйста, укажите символы:\n"
                 "/compare AGG.US SPY.US GC.COMM\n\n"
-                "Or just send me the symbols directly!"
+                "Или просто отправьте мне символы напрямую!"
             )
             return
         
@@ -259,45 +259,45 @@ Just type your question or use the commands above!"""
         
         if query.data == "portfolio_help":
             await query.edit_message_text(
-                "📊 Portfolio Analysis\n\n"
-                "Send me symbols to analyze:\n"
+                "Анализ портфеля\n\n"
+                "Отправьте мне символы для анализа:\n"
                 "• RGBITR.INDX MCFTR.INDX\n"
                 "• /portfolio AGG.US SPY.US\n\n"
-                "I'll show you:\n"
-                "• Performance metrics\n"
-                "• Risk analysis\n"
-                "• Charts and insights"
+                "Я покажу вам:\n"
+                "• Метрики производительности\n"
+                "• Анализ рисков\n"
+                "• Графики и выводы"
             )
         elif query.data == "risk_help":
             await query.edit_message_text(
-                "📈 Risk Analysis\n\n"
-                "Send me symbols to analyze risk:\n"
+                "Анализ рисков\n\n"
+                "Отправьте мне символы для анализа рисков:\n"
                 "• AGG.US SPY.US\n"
                 "• /risk GC.COMM\n\n"
-                "I'll show you:\n"
-                "• Volatility metrics\n"
-                "• VaR and CVaR\n"
-                "• Correlation matrix"
+                "Я покажу вам:\n"
+                "• Метрики волатильности\n"
+                "• VaR и CVaR\n"
+                "• Матрицу корреляции"
             )
         elif query.data == "correlation_help":
             await query.edit_message_text(
-                "🔗 Correlation Analysis\n\n"
-                "Send me symbols to see correlations:\n"
+                "Анализ корреляции\n\n"
+                "Отправьте мне символы для просмотра корреляций:\n"
                 "• RGBITR.INDX MCFTR.INDX GC.COMM\n"
                 "• /correlation AGG.US SPY.US\n\n"
-                "I'll show you:\n"
-                "• Correlation heatmap\n"
-                "• Relationship insights\n"
-                "• Diversification analysis"
+                "Я покажу вам:\n"
+                "• Тепловую карту корреляции\n"
+                "• Выводы о взаимосвязях\n"
+                "• Анализ диверсификации"
             )
         elif query.data == "chat_help":
             await query.edit_message_text(
-                "💬 YandexGPT Chat\n\n"
-                "Ask me anything about finance:\n"
-                "• What is diversification?\n"
-                "• How to calculate Sharpe ratio?\n"
-                "• Best practices for portfolio rebalancing\n\n"
-                "I'll provide expert financial advice powered by YandexGPT!"
+                "Чат с YandexGPT\n\n"
+                "Спросите меня о чем угодно по финансам:\n"
+                "• Что такое диверсификация?\n"
+                "• Как рассчитать коэффициент Шарпа?\n"
+                "• Лучшие практики ребалансировки портфеля\n\n"
+                "Я предоставлю экспертную финансовую консультацию на базе YandexGPT!"
             )
     
     async def _analyze_portfolio(self, update: Update, symbols: List[str]):
@@ -342,12 +342,12 @@ AI Insights:
             )
             
         except Exception as e:
-            await update.message.reply_text(f"❌ Error analyzing portfolio: {str(e)}")
+            await update.message.reply_text(f"❌ Ошибка анализа портфеля: {str(e)}")
     
     async def _analyze_risk(self, update: Update, symbols: List[str]):
         """Analyze risk metrics"""
         try:
-            await update.message.reply_text(f"📈 Analyzing risk for: {', '.join(symbols)}...")
+            await update.message.reply_text(f"Анализ рисков для: {', '.join(symbols)}...")
             
             # Get individual asset risk metrics
             risk_data = {}
@@ -506,10 +506,10 @@ Performance Metrics:
         try:
             if not context.args:
                 await update.message.reply_text(
-                    "🧪 Test Command\n\n"
-                    "Please provide symbols to test:\n"
+                    "Тестовая команда\n\n"
+                    "Пожалуйста, укажите символы для тестирования:\n"
                     "/test RGBITR.INDX MCFTR.INDX\n\n"
-                    "This will test the Okama integration and show available attributes."
+                    "Это протестирует интеграцию с Okama и покажет доступные атрибуты."
                 )
                 return
             
@@ -542,32 +542,32 @@ Performance Metrics:
     async def test_ai_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /testai command to test YandexGPT API connection"""
         try:
-            await update.message.reply_text("🧪 Testing YandexGPT API connection...")
+            await update.message.reply_text("Тестирование подключения к YandexGPT API...")
             
             # Test the API connection
             test_results = self.yandexgpt_service.test_api_connection()
             
             # Format results
-            result_text = f"🧪 YandexGPT API Test Results\n\n"
-            result_text += f"Status: {test_results.get('status', 'Unknown')}\n"
-            result_text += f"Message: {test_results.get('message', 'No message')}\n\n"
+            result_text = f"Результаты теста YandexGPT API\n\n"
+            result_text += f"Статус: {test_results.get('status', 'Неизвестно')}\n"
+            result_text += f"Сообщение: {test_results.get('message', 'Нет сообщения')}\n\n"
             
             if 'config' in test_results:
                 config = test_results['config']
-                result_text += "Configuration:\n"
-                result_text += f"• API Key: {'✓ Set' if config.get('api_key_set') else '✗ NOT SET'}\n"
-                result_text += f"• Folder ID: {'✓ Set' if config.get('folder_id_set') else '✗ NOT SET'}\n"
-                result_text += f"• Base URL: {config.get('base_url', 'Unknown')}\n\n"
+                result_text += "Конфигурация:\n"
+                result_text += f"• API ключ: {'✓ Установлен' if config.get('api_key_set') else '✗ НЕ УСТАНОВЛЕН'}\n"
+                result_text += f"• ID папки: {'✓ Установлен' if config.get('folder_id_set') else '✗ НЕ УСТАНОВЛЕН'}\n"
+                result_text += f"• Базовый URL: {config.get('base_url', 'Неизвестно')}\n\n"
             
             if 'response' in test_results:
-                result_text += f"API Response: {test_results['response']}\n\n"
+                result_text += f"Ответ API: {test_results['response']}\n\n"
             
             if test_results.get('status') == 'error':
-                result_text += "❌ API test failed. Check your configuration."
+                result_text += "❌ Тест API не удался. Проверьте конфигурацию."
             elif test_results.get('status') == 'success':
-                result_text += "✅ API test successful!"
+                result_text += "✅ Тест API успешен!"
             else:
-                result_text += "⚠️ API test had issues."
+                result_text += "⚠️ Тест API имел проблемы."
             
             await update.message.reply_text(result_text)
             
