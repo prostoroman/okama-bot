@@ -259,6 +259,10 @@ Format responses professionally with clear sections, bullet points, and relevant
                    "• Регулярно пересматривайте и ребалансируйте портфель\n" + \
                    "• Рассмотрите консультацию с финансовым советником"
     
+    def ask_question(self, question: str) -> str:
+        """Simple method to ask a question to YandexGPT (alias for get_financial_advice)"""
+        return self.get_financial_advice(question)
+    
     def process_freeform_command(self, user_message: str) -> Dict:
         """Process free-form commands and convert instrument names to Okama format"""
         try:
