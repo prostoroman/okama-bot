@@ -9,6 +9,8 @@ import sys
 import time
 import signal
 import threading
+import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from bot import OkamaFinanceBotV2
 
 def signal_handler(signum, frame):
@@ -42,6 +44,32 @@ def main():
     print("🚀 Okama Finance Bot Startup Script")
     print(f"🌍 Environment: {'RENDER' if os.getenv('RENDER') else 'LOCAL'}")
     print(f"🐍 Python version: {sys.version}")
+    
+    # Optional HTTP health server for platforms expecting an open PORT
+    port_env = os.getenv('PORT')
+    if port_env:
+        try:
+            bind_port = int(port_env)
+            class HealthHandler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    payload = {
+                        "status": "ok",
+                        "service": "okama-finance-bot",
+                        "environment": "RENDER" if os.getenv('RENDER') else "LOCAL"
+                    }
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(payload).encode('utf-8'))
+                def log_message(self, format, *args):
+                    return
+            def serve_health():
+                server = HTTPServer(('0.0.0.0', bind_port), HealthHandler)
+                print(f"🩺 Health server listening on 0.0.0.0:{bind_port}")
+                server.serve_forever()
+            threading.Thread(target=serve_health, daemon=True).start()
+        except Exception as e:
+            print(f"⚠️ Failed to start health server on PORT={port_env}: {e}")
     
     # Start the bot
     start_bot()

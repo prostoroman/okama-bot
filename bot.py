@@ -1,6 +1,9 @@
 import sys
 import logging
 import os
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
@@ -954,6 +957,32 @@ if __name__ == "__main__":
         
         # Perform health check
         health_check()
+        
+        # Optional HTTP health server for platforms expecting an open PORT
+        port_env = os.getenv('PORT')
+        if port_env:
+            try:
+                bind_port = int(port_env)
+                class HealthHandler(BaseHTTPRequestHandler):
+                    def do_GET(self):
+                        payload = {
+                            "status": "ok",
+                            "service": "okama-finance-bot",
+                            "environment": "RENDER" if os.getenv('RENDER') else "LOCAL"
+                        }
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(payload).encode('utf-8'))
+                    def log_message(self, format, *args):
+                        return
+                def serve_health():
+                    server = HTTPServer(('0.0.0.0', bind_port), HealthHandler)
+                    logger.info(f"Health server listening on 0.0.0.0:{bind_port}")
+                    server.serve_forever()
+                threading.Thread(target=serve_health, daemon=True).start()
+            except Exception as e:
+                logger.warning(f"Failed to start health server on PORT={port_env}: {e}")
         
         if sys.version_info >= (3, 13):
             logger.info("✅ Running on Python 3.13+ with latest python-telegram-bot")

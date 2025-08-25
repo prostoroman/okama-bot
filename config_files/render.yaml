@@ -1,9 +1,9 @@
 # Render configuration for Okama Finance Bot v2.0
-# This service handles port scanning briefly, then runs as a background worker
+# Background worker (no HTTP port required)
 
 services:
-  # Service that satisfies port scan then becomes background worker
-  - type: web
+  # Background worker service
+  - type: worker
     name: okama-finance-bot
     env: python
     plan: starter
@@ -11,10 +11,9 @@ services:
     # Build configuration
     buildCommand: pip install -r requirements.txt
     
-    # Start command - first satisfies port scan, then runs background worker
+    # Start command
     startCommand: python scripts/start_bot.py
     
-    # Port configuration for Render port scanning
     envVars:
       # Python configuration
       - key: PYTHON_VERSION
@@ -28,9 +27,7 @@ services:
       - key: RENDER
         value: "true"
       - key: RENDER_SERVICE_TYPE
-        value: "web"
-      - key: PORT
-        value: "8000"
+        value: "worker"
       
       # Bot configuration (set these in Render dashboard)
       - key: TELEGRAM_BOT_TOKEN
