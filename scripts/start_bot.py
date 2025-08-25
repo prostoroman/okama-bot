@@ -53,6 +53,25 @@ def verify_render_config():
         logger.info("✅ Running locally (not on Render)")
         return True
 
+def satisfy_port_scan():
+    """Satisfy Render's port scanning requirement"""
+    if os.getenv('RENDER'):
+        print("🌐 Render detected - satisfying port scan requirement...")
+        try:
+            # Run the web service to satisfy port scan
+            result = subprocess.run([sys.executable, 'scripts/web_service.py'], 
+                                  capture_output=True, text=True, timeout=60)
+            if result.returncode == 0:
+                print("✅ Port scan requirement satisfied")
+                return True
+            else:
+                print(f"⚠️ Web service returned code {result.returncode}")
+                return False
+        except Exception as e:
+            print(f"❌ Failed to satisfy port scan: {e}")
+            return False
+    return True
+
 def run_health_check():
     """Run health check script"""
     try:
@@ -84,6 +103,10 @@ def main():
     # Verify Render configuration
     if not verify_render_config():
         print("⚠️ Warning: Render configuration may not be optimal")
+    
+    # Satisfy port scan requirement if on Render
+    if not satisfy_port_scan():
+        print("⚠️ Warning: Port scan requirement not fully satisfied")
     
     # Check environment
     if not check_environment():
