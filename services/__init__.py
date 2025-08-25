@@ -1,32 +1,9 @@
 """
-Okama Finance Bot Services Package
+Services module for Okama Finance Bot
 
-This package contains all the specialized services for financial analysis:
-- CorrelationService: Asset correlation analysis
-- FrontierService: Efficient frontier generation
-- ComparisonService: Asset comparison
-- PensionService: Pension portfolio analysis
-- MonteCarloService: Monte Carlo forecasting
-- AllocationService: Asset allocation analysis
-- OkamaServiceV2: Main service coordinator
+This module provides services for financial analysis using the Okama library.
 """
 
-from .correlation_service import CorrelationService
-from .frontier_service import FrontierService
-from .comparison_service import ComparisonService
-from .pension_service import PensionService
-from .monte_carlo_service import MonteCarloService
-from .allocation_service import AllocationService
-from .okama_service import OkamaServiceV2
+from .asset_service import AssetService
 
-__all__ = [
-    'CorrelationService',
-    'FrontierService', 
-    'ComparisonService',
-    'PensionService',
-    'MonteCarloService',
-    'AllocationService',
-    'OkamaServiceV2'
-]
-
-__version__ = '2.0.0'
+__all__ = ['AssetService']
