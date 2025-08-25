@@ -54,12 +54,6 @@ class YandexGPTService:
         ]
         
         # Debug configuration
-        print(f"YandexGPT Service initialized:")
-        print(f"  API Key: {'Set' if self.api_key else 'NOT SET'}")
-        print(f"  Folder ID: {'Set' if self.folder_id else 'NOT SET'}")
-        print(f"  Base URL: {self.base_url}")
-        print(f"  Model Priority: {', '.join(self.model_priority)}")
-        
         if not self.api_key or not self.folder_id:
             print("⚠️  WARNING: Missing YandexGPT configuration!")
             print("   Please set YANDEX_API_KEY and YANDEX_FOLDER_ID in your environment variables")
@@ -174,7 +168,6 @@ Format responses professionally with clear sections, bullet points, and relevant
             return analysis
             
         except Exception as e:
-            print(f"AI service error in analyze_query: {e}")
             # Fallback to simple keyword matching
             return self._fallback_analysis(user_message)
     
@@ -215,8 +208,7 @@ Format responses professionally with clear sections, bullet points, and relevant
                 if okama_symbol not in symbols:
                     symbols.append(okama_symbol)
         
-        # Debug: print extracted symbols
-        print(f"DEBUG: Extracted symbols from '{user_message}': {symbols}")
+        # Debug: extracted symbols
         
         # Determine intent
         if any(word in message_lower for word in ['portfolio', 'portfolios']):
@@ -261,7 +253,6 @@ Format responses professionally with clear sections, bullet points, and relevant
             return response
             
         except Exception as e:
-            print(f"AI service error in get_financial_advice: {e}")
             return "Из-за технических проблем с AI сервисом, вот общие финансовые рекомендации:\n\n" + \
                    "• Диверсифицируйте портфель по различным классам активов\n" + \
                    "• Учитывайте ваш профиль риска и инвестиционный горизонт\n" + \
@@ -329,7 +320,6 @@ Format responses professionally with clear sections, bullet points, and relevant
                 }
                 
         except Exception as e:
-            print(f"AI service error in process_freeform_command: {e}")
             return {
                 "command_type": "chat",
                 "symbols": [],
@@ -363,7 +353,6 @@ Format responses professionally with clear sections, bullet points, and relevant
             return response
             
         except Exception as e:
-            print(f"AI service error in enhance_analysis_results: {e}")
             return "Анализ завершен успешно. Результаты показывают запрошенные финансовые метрики."
     
     def suggest_improvements(self, portfolio_symbols: List[str], current_metrics: Dict) -> str:
@@ -389,7 +378,6 @@ Format responses professionally with clear sections, bullet points, and relevant
             return response
             
         except Exception as e:
-            print(f"AI service error in suggest_improvements: {e}")
             return "Из-за технических проблем с AI сервисом, вот общие рекомендации по оптимизации портфеля:\n\n" + \
                    "• Диверсифицируйте по различным классам активов (акции, облигации, товары)\n" + \
                    "• Учитывайте ваш профиль риска и инвестиционный горизонт\n" + \
@@ -401,7 +389,6 @@ Format responses professionally with clear sections, bullet points, and relevant
         try:
             # Check if API key and folder ID are configured
             if not self.api_key or not self.folder_id:
-                print("Missing YandexGPT API configuration")
                 return "AI service is not properly configured. Please check your API settings."
             
             headers = {
@@ -411,16 +398,12 @@ Format responses professionally with clear sections, bullet points, and relevant
             
             # Try each model in priority order
             for model_name in self.model_priority:
-                print(f"🔄 Trying model: {model_name}")
-                
                 # Try both request formats for each model
                 for format_name, request_data in [
                     ("Primary format", self._create_primary_request(model_name, system_prompt, user_prompt, temperature, max_tokens)),
                     ("Alternative format", self._create_alternative_request(model_name, system_prompt, user_prompt, temperature, max_tokens))
                 ]:
                     try:
-                        print(f"  📝 Using {format_name}...")
-                        
                         response = requests.post(
                             self.base_url,
                             headers=headers,
@@ -428,40 +411,26 @@ Format responses professionally with clear sections, bullet points, and relevant
                             timeout=30
                         )
                         
-                        print(f"  📊 Response status: {response.status_code}")
-                        
                         if response.status_code == 200:
-                            print(f"✅ Model {model_name} succeeded with {format_name}!")
                             return self._parse_successful_response(response)
                         elif response.status_code == 500:
-                            print(f"❌ Model {model_name} failed with 500 (internal server error)")
                             break  # Try next model
                         elif response.status_code == 400:
-                            print(f"⚠️  Model {model_name} failed with 400 (bad request) - trying next format")
                             continue  # Try next format with same model
                         else:
-                            print(f"❌ Model {model_name} failed with {response.status_code}")
-                            print(f"  Response: {response.text[:200]}")
                             break  # Try next model
                             
                     except requests.exceptions.Timeout:
-                        print(f"⏰ Timeout with {model_name} using {format_name}")
                         continue
-                    except Exception as format_error:
-                        print(f"❌ Error with {model_name} using {format_name}: {format_error}")
+                    except Exception:
                         continue
                 
                 # If we get here, this model failed completely, try next one
-                print(f"🔄 Moving to next model...")
             
             # If we reach here, all models failed
-            print("❌ All models failed")
             return "Из-за технических проблем с AI сервисом, попробуйте позже или используйте базовые команды бота для анализа портфеля."
                 
         except Exception as e:
-            print(f"❌ Unexpected error in _call_yandex_api: {e}")
-            import traceback
-            traceback.print_exc()
             return f"Unexpected error: {str(e)}"
     
     def _create_primary_request(self, model_name: str, system_prompt: str, user_prompt: str, temperature: float, max_tokens: int) -> dict:
@@ -501,7 +470,6 @@ Format responses professionally with clear sections, bullet points, and relevant
         """Parse successful API response and extract text content"""
         try:
             result = response.json()
-            print(f"📄 Parsing response: {json.dumps(result, indent=2)}")
             
             # Extract the response text from the result
             alternatives = result.get("result", {}).get("alternatives", [])
@@ -511,21 +479,16 @@ Format responses professionally with clear sections, bullet points, and relevant
                 if text:
                     return text
                 else:
-                    print(f"⚠️  No text found in message: {message}")
                     return "AI response received but no text content found."
             else:
-                print(f"⚠️  No alternatives found in result: {result}")
                 return "AI response received but no content found."
                 
         except Exception as parse_error:
-            print(f"❌ Error parsing response: {parse_error}")
             return f"AI response received but could not parse: {response.text[:200]}"
     
     def test_api_connection(self) -> Dict:
         """Test method to debug YandexGPT API connection"""
         try:
-            print("🧪 Testing YandexGPT API connection...")
-            
             # Check configuration
             config_status = {
                 'api_key_set': bool(self.api_key),
