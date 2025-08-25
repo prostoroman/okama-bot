@@ -15,6 +15,39 @@ class ComparisonService:
         self.plt_style = 'seaborn-v0_8'
         plt.style.use(self.plt_style)
     
+    def _resolve_symbol(self, symbol: str) -> Tuple[str, ok.Asset]:
+        """Try to resolve a potentially unsupported ticker to a working Okama symbol.
+        Returns a tuple of (resolved_symbol, okama_asset). Raises last error if all fail.
+        """
+        # Ordered candidates to try
+        candidates = [symbol]
+        
+        # If looks like crypto with .CC suffix, try common Yahoo-style tickers
+        if symbol.endswith('.CC') and len(symbol) > 3:
+            base = symbol.rsplit('.CC', 1)[0]
+            # Typical candidates for crypto in many data sources (Yahoo et al.)
+            candidates.extend([
+                f"{base}-USD",
+                f"{base}.USD",
+                base,
+                f"{base}-USDT",
+                f"{base}.USDT",
+            ])
+        
+        last_error: Exception | None = None
+        for candidate in candidates:
+            try:
+                asset = ok.Asset(candidate)
+                return candidate, asset
+            except Exception as e:  # keep trying
+                last_error = e
+                continue
+        
+        # If nothing worked, raise the last seen error
+        if last_error is not None:
+            raise last_error
+        raise Exception(f"Unable to resolve symbol: {symbol}")
+    
     def compare_assets(self, symbols: List[str]) -> Tuple[Dict, bytes]:
         """Compare multiple assets and generate comparison chart using correct Okama v1.5.0 API"""
         try:
@@ -23,7 +56,8 @@ class ComparisonService:
             
             for symbol in symbols:
                 try:
-                    asset = ok.Asset(symbol)
+                    # Resolve symbol to something Okama understands (handles BTC.CC/ETH.CC, etc.)
+                    resolved_symbol, asset = self._resolve_symbol(symbol)
                     
                     # Try to get price data with fallback using correct Okama v1.5.0 attributes
                     price_data = None
@@ -37,6 +71,7 @@ class ComparisonService:
                         price_data = asset.nav_ts
                     
                     if price_data is not None and hasattr(price_data, 'empty') and not price_data.empty:
+                        # Store under the original requested symbol for user-facing labels
                         assets_data[symbol] = price_data
                     else:
                         print(f"⚠️ No valid price data found for {symbol}")
