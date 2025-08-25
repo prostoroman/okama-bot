@@ -1,8 +1,8 @@
 # Render configuration for Okama Finance Bot v2.0
-# This service handles port scanning briefly, then runs as a background worker
+# This service starts as a web service to satisfy port scanning, then runs the bot
 
 services:
-  # Service that satisfies port scan then becomes background worker
+  # Web service that satisfies port scan then runs the bot
   - type: web
     name: okama-finance-bot
     env: python
@@ -11,8 +11,8 @@ services:
     # Build configuration
     buildCommand: pip install -r requirements.txt
     
-    # Start command - first satisfies port scan, then runs background worker
-    startCommand: python scripts/start_bot.py
+    # Start command - runs web service that satisfies port scan then starts bot
+    startCommand: python scripts/web_service.py
     
     # Port configuration for Render port scanning
     envVars:
