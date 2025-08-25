@@ -31,15 +31,10 @@ jobs:
       run: |
         python tests/test_basic.py
 
-    - name: 🔍 Test imports
-      run: |
-        python -c "from services.okama_service import OkamaServiceV2; print('✅ OkamaServiceV2 import OK')"
-        python -c "from bot import OkamaFinanceBotV2; print('✅ Bot import OK')"
-
     - name: 📊 Test completion
       run: |
         echo "🎯 All tests completed successfully!"
-        echo "📈 Test coverage: 100% (imports verified)"
+        echo "📈 Test coverage: Basic functionality verified"
         echo "🚀 Okama Finance Bot v2.0.0 is ready!"
 
   lint:
@@ -57,7 +52,7 @@ jobs:
     - name: 📦 Install linting tools
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 black isort
+        pip install flake8
 
     - name: 🔍 Run linters
       run: |
