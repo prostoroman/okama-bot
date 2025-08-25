@@ -93,44 +93,20 @@ def start_web_service(port=8000):
         # Create server
         server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
         
-        # Start server in background thread
-        server_thread = threading.Thread(target=server.serve_forever)
-        server_thread.daemon = True
-        server_thread.start()
-        
         print(f"✅ Web service started on port {port}")
         print("🔒 Web service will continue running to satisfy Render requirements")
         
-        # Wait a bit for Render to detect the port
-        print("⏳ Waiting for Render port scan...")
-        time.sleep(60)  # Wait 1 minute for port scanning
-        
-        print("✅ Port scan requirement satisfied")
-        
-        # Start the bot
+        # Start the bot in background
         if start_bot_background():
             print("🚀 Bot is now running alongside web service")
             print("🌐 Web service will continue running on port 8000")
             print("🤖 Bot is active and processing Telegram messages")
-            
-            # Keep the main thread alive
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                print("🛑 Shutting down...")
-                server.shutdown()
-                server.server_close()
         else:
             print("❌ Failed to start bot, keeping web service running")
-            # Keep web service running even if bot fails
-            try:
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                print("🛑 Shutting down...")
-                server.shutdown()
-                server.server_close()
+        
+        # Start the server in the main thread (this is what Render needs)
+        print("🌐 Starting HTTP server in main thread...")
+        server.serve_forever()
         
         return True
         
@@ -144,6 +120,7 @@ def main():
     
     # Get port from environment or use default
     port = int(os.getenv('PORT', 8000))
+    print(f"🚀 Binding to port {port}")
     
     if start_web_service(port):
         print("✅ Service started successfully")
