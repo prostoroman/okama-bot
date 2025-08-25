@@ -1,6 +1,5 @@
 import sys
 import logging
-import asyncio
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -10,7 +9,7 @@ from typing import Dict, List, Optional
 # Check Python version compatibility
 if sys.version_info < (3, 8):
     print("ERROR: Python 3.8+ required. Current version:", sys.version)
-    sys.exit(1)
+    raise RuntimeError("Python 3.8+ required")
 
 from config import Config
 from services.okama_service import OkamaServiceV2
@@ -228,7 +227,7 @@ class OkamaFinanceBotV2:
 
     async def pension_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /pension command for pension portfolio analysis"""
-        if not context.args or len(context.args) < 3:
+        if not context.args:
             await update.message.reply_text(
                 "Пенсионный портфель\n\n"
                 "Пожалуйста, укажите символы, веса и параметры:\n"
@@ -423,7 +422,7 @@ class OkamaFinanceBotV2:
             if not symbols:
                 await update.message.reply_text("❌ Ошибка: Не указаны символы для анализа")
                 return
-                
+            
             await update.message.reply_text(f"📊 Analyzing portfolio: {', '.join(symbols)}...")
             
             # Create portfolio
