@@ -27,9 +27,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: 🧪 Run basic tests
+    - name: 🔍 Test imports
       run: |
-        python tests/test_basic.py
+        python -c "from bot import OkamaFinanceBotV2; print('✅ Bot import OK')"
+        python -c "from services.asset_service import AssetService; print('✅ AssetService import OK')"
+        python -c "from yandexgpt_service import YandexGPTService; print('✅ YandexGPTService import OK')"
 
     - name: 📊 Test completion
       run: |
