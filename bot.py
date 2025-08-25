@@ -188,46 +188,7 @@ class OkamaFinanceBot:
         question = " ".join(context.args)
         await self._handle_chat(update, question)
     
-    async def _get_asset_info(self, update: Update, symbol: str):
-        """Get comprehensive asset information"""
-        try:
-            await update.message.reply_text(f"🔍 Получаю информацию об активе {symbol}...")
-            
-            asset_info = self.asset_service.get_asset_info(symbol)
-            
-            if 'error' in asset_info:
-                await update.message.reply_text(f"❌ Ошибка: {asset_info['error']}")
-                return
-            
-            # Format the response
-            response = f"📊 **Информация об активе {symbol}**\n\n"
-            response += f"**Название:** {asset_info.get('name', 'N/A')}\n"
-            response += f"**Страна:** {asset_info.get('country', 'N/A')}\n"
-            response += f"**Биржа:** {asset_info.get('exchange', 'N/A')}\n"
-            response += f"**Валюта:** {asset_info.get('currency', 'N/A')}\n"
-            response += f"**Тип:** {asset_info.get('type', 'N/A')}\n"
-            response += f"**ISIN:** {asset_info.get('isin', 'N/A')}\n"
-            response += f"**Первый день:** {asset_info.get('first_date', 'N/A')}\n"
-            response += f"**Последний день:** {asset_info.get('last_date', 'N/A')}\n"
-            response += f"**Длина периода:** {asset_info.get('period_length', 'N/A')} лет\n\n"
-            
-            # Add performance metrics
-            if asset_info.get('current_price'):
-                response += f"**Текущая цена:** {asset_info.get('current_price')} {asset_info.get('currency', '')}\n"
-            
-            if asset_info.get('annual_return') != 'N/A':
-                response += f"**Годовая доходность:** {asset_info.get('annual_return')}\n"
-            
-            if asset_info.get('total_return') != 'N/A':
-                response += f"**Общая доходность:** {asset_info.get('total_return')}\n"
-            
-            if asset_info.get('volatility') != 'N/A':
-                response += f"**Волатильность:** {asset_info.get('volatility')}\n"
-            
-            await update.message.reply_text(response, parse_mode='Markdown')
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка при получении информации об активе: {str(e)}")
+
     
     async def _get_asset_info(self, update: Update, symbol: str):
         """Get comprehensive asset information"""

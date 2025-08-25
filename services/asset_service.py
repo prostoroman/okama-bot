@@ -7,6 +7,7 @@ using the Okama library.
 
 import logging
 from typing import Dict, Any, Optional
+from datetime import datetime
 import okama as ok
 
 logger = logging.getLogger(__name__)
@@ -99,8 +100,21 @@ class AssetService:
             # Get current price
             try:
                 price_data = asset.price
-                if price_data is not None and len(price_data) > 0:
-                    info['current_price'] = price_data.iloc[-1]
+                if price_data is not None:
+                    if hasattr(price_data, 'iloc') and hasattr(price_data, 'index'):
+                        # It's a pandas Series/DataFrame
+                        if len(price_data) > 0:
+                            info['current_price'] = price_data.iloc[-1]
+                    elif isinstance(price_data, (int, float)):
+                        # It's a single price value
+                        info['current_price'] = price_data
+                    else:
+                        # Try to get the last value
+                        try:
+                            if len(price_data) > 0:
+                                info['current_price'] = price_data[-1]
+                        except (TypeError, IndexError):
+                            info['current_price'] = 'N/A'
             except:
                 info['current_price'] = 'N/A'
             
@@ -170,12 +184,31 @@ class AssetService:
             # Get price data
             price_data = asset.price
             
-            if price_data is None or len(price_data) == 0:
+            # Check if price_data is valid and has data
+            if price_data is None:
                 return {'error': 'No price data available'}
             
-            # Get latest price
-            latest_price = price_data.iloc[-1]
-            latest_date = price_data.index[-1]
+            # Handle different types of price data
+            if hasattr(price_data, 'iloc') and hasattr(price_data, 'index'):
+                # It's a pandas Series/DataFrame
+                if len(price_data) == 0:
+                    return {'error': 'No price data available'}
+                
+                latest_price = price_data.iloc[-1]
+                latest_date = price_data.index[-1]
+            elif isinstance(price_data, (int, float)):
+                # It's a single price value
+                latest_price = price_data
+                latest_date = datetime.now()
+            else:
+                # Try to convert to list/array
+                try:
+                    if len(price_data) == 0:
+                        return {'error': 'No price data available'}
+                    latest_price = price_data[-1]
+                    latest_date = datetime.now()
+                except (TypeError, IndexError):
+                    return {'error': 'Invalid price data format'}
             
             info = {
                 'price': latest_price,
@@ -218,17 +251,55 @@ class AssetService:
             # Get dividend data
             dividend_data = asset.dividends
             
-            if dividend_data is None or len(dividend_data) == 0:
+            # Check if dividend_data is valid and has data
+            if dividend_data is None:
                 return {'error': 'No dividend data available'}
+            
+            # Handle different types of dividend data
+            if hasattr(dividend_data, 'iloc') and hasattr(dividend_data, 'index'):
+                # It's a pandas Series/DataFrame
+                if len(dividend_data) == 0:
+                    return {'error': 'No dividend data available'}
+            elif isinstance(dividend_data, (int, float)):
+                # It's a single value
+                if dividend_data == 0:
+                    return {'error': 'No dividend data available'}
+            else:
+                # Try to check length
+                try:
+                    if len(dividend_data) == 0:
+                        return {'error': 'No dividend data available'}
+                except (TypeError, AttributeError):
+                    return {'error': 'Invalid dividend data format'}
             
             # Convert to dictionary format
             dividends = {}
-            for date, amount in dividend_data.items():
-                dividends[str(date)] = amount
+            if hasattr(dividend_data, 'items'):
+                # It's a pandas Series or dict-like object
+                for date, amount in dividend_data.items():
+                    dividends[str(date)] = amount
+            elif hasattr(dividend_data, 'iloc') and hasattr(dividend_data, 'index'):
+                # It's a pandas Series
+                for i in range(len(dividend_data)):
+                    date = dividend_data.index[i]
+                    amount = dividend_data.iloc[i]
+                    dividends[str(date)] = amount
+            else:
+                # Fallback for other types
+                dividends['current'] = dividend_data
+            
+            # Calculate total periods based on data type
+            if hasattr(dividend_data, '__len__'):
+                try:
+                    total_periods = len(dividend_data)
+                except (TypeError, AttributeError):
+                    total_periods = 1
+            else:
+                total_periods = 1
             
             info = {
                 'currency': getattr(asset, 'currency', ''),
-                'total_periods': len(dividend_data),
+                'total_periods': total_periods,
                 'dividends': dividends
             }
             
