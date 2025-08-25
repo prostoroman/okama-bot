@@ -6,6 +6,12 @@ import io
 from typing import List, Dict, Tuple
 import warnings
 
+# Optional dependency for crypto fallback via Yahoo Finance
+try:
+    import yfinance as yf
+except Exception:  # ImportError or runtime issues
+    yf = None
+
 warnings.filterwarnings('ignore')
 
 class ComparisonService:
@@ -26,12 +32,11 @@ class ComparisonService:
         if symbol.endswith('.CC') and len(symbol) > 3:
             base = symbol.rsplit('.CC', 1)[0]
             # Typical candidates for crypto in many data sources (Yahoo et al.)
+            # Avoid dot-suffixed currency (e.g., .USD, .USDT) because Okama treats it as a namespace
+            # and avoid USDT variants which are not valid Okama namespaces.
             candidates.extend([
                 f"{base}-USD",
-                f"{base}.USD",
                 base,
-                f"{base}-USDT",
-                f"{base}.USDT",
             ])
         
         last_error: Exception | None = None
@@ -85,7 +90,26 @@ class ComparisonService:
                         'max_drawdown': self._get_asset_drawdown(asset)
                     }
                 except Exception as e:
-                    comparison_metrics[symbol] = {'error': str(e)}
+                    # Okama path failed. For crypto namespace (.CC) attempt Yahoo Finance fallback.
+                    if isinstance(symbol, str) and symbol.endswith('.CC'):
+                        base = symbol.rsplit('.CC', 1)[0]
+                        yf_symbol = f"{base}-USD"
+                        if yf is None:
+                            comparison_metrics[symbol] = {'error': f"Crypto fallback requires yfinance. Install yfinance to support {symbol}. Original error: {e}"}
+                            continue
+                        try:
+                            df = yf.download(yf_symbol, period='max', interval='1d', progress=False, auto_adjust=False)
+                            if df is not None and hasattr(df, 'empty') and not df.empty and 'Close' in df.columns:
+                                prices = df['Close'].dropna()
+                                if not prices.empty:
+                                    assets_data[symbol] = prices
+                                    comparison_metrics[symbol] = self._compute_metrics_from_prices(prices)
+                                    continue
+                            comparison_metrics[symbol] = {'error': f"No price data from Yahoo for {symbol} ({yf_symbol})"}
+                        except Exception as yf_err:
+                            comparison_metrics[symbol] = {'error': f"{str(e)} | Yahoo fallback error: {yf_err}"}
+                    else:
+                        comparison_metrics[symbol] = {'error': str(e)}
             
             # Create comparison chart
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
@@ -154,6 +178,66 @@ class ComparisonService:
             return comparison_metrics, img_buffer.getvalue()
         except Exception as e:
             raise Exception(f"Error comparing assets: {str(e)}")
+
+    def _compute_metrics_from_prices(self, prices: pd.Series) -> Dict[str, float]:
+        """Compute basic metrics from a price series using daily data.
+        This is used as a fallback for assets not supported by Okama (e.g., crypto via Yahoo Finance).
+        """
+        try:
+            prices = prices.dropna()
+            if prices.empty:
+                return {
+                    'total_return': 0.0,
+                    'annual_return': 0.0,
+                    'volatility': 0.0,
+                    'sharpe_ratio': 0.0,
+                    'max_drawdown': 0.0
+                }
+
+            # Basic returns
+            total_return = float(prices.iloc[-1] / prices.iloc[0] - 1.0)
+
+            # CAGR using calendar time
+            try:
+                start = prices.index[0]
+                end = prices.index[-1]
+                num_days = (end - start).days if hasattr(end, 'to_pydatetime') or hasattr(end, 'tzinfo') else len(prices)
+                years = max(num_days / 365.25, 1e-9)
+            except Exception:
+                years = max(len(prices) / 252.0, 1e-9)
+            annual_return = float((prices.iloc[-1] / prices.iloc[0]) ** (1.0 / years) - 1.0)
+
+            # Daily returns
+            r = prices.pct_change().dropna()
+            if r.empty:
+                volatility = 0.0
+                sharpe = 0.0
+            else:
+                mean_daily = float(r.mean())
+                std_daily = float(r.std())
+                volatility = float(std_daily * np.sqrt(252.0))
+                sharpe = float((mean_daily / std_daily) * np.sqrt(252.0)) if std_daily > 0 else 0.0
+
+            # Max drawdown
+            running_max = prices.cummax()
+            drawdowns = (prices / running_max - 1.0)
+            max_drawdown = float(drawdowns.min()) if not drawdowns.empty else 0.0
+
+            return {
+                'total_return': total_return,
+                'annual_return': annual_return,
+                'volatility': volatility,
+                'sharpe_ratio': sharpe,
+                'max_drawdown': max_drawdown
+            }
+        except Exception:
+            return {
+                'total_return': 0.0,
+                'annual_return': 0.0,
+                'volatility': 0.0,
+                'sharpe_ratio': 0.0,
+                'max_drawdown': 0.0
+            }
     
     def _get_asset_metric(self, asset: ok.Asset, method_name: str) -> float:
         """Get asset metric using specified method with error handling"""
