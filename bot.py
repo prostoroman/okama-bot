@@ -7,9 +7,9 @@ import io
 from typing import Dict, List, Optional
 
 # Check Python version compatibility
-if sys.version_info <= (3, 7):
-    print("ERROR: Python 3.8+ required. Current version:", sys.version)
-    raise RuntimeError("Python 3.8+ required")
+if sys.version_info < (3, 7):
+    print("ERROR: Python 3.7+ required. Current version:", sys.version)
+    raise RuntimeError("Python 3.7+ required")
 
 from config import Config
 from services.okama_service import OkamaServiceV2

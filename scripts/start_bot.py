@@ -1,71 +1,50 @@
 #!/usr/bin/env python3
 """
-Startup script for Okama Finance Bot (Local Development Only)
-This script is for local development and testing.
-For Render deployment, use scripts/web_service.py instead.
+Startup script for Okama Finance Bot
+This script can be used to start the bot directly or as a fallback
 """
 
 import os
 import sys
 import time
-import logging
+import signal
 import threading
+from bot import OkamaFinanceBotV2
 
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    print(f"\n🛑 Received signal {signum}, shutting down gracefully...")
+    sys.exit(0)
 
-def check_environment():
-    """Check if all required environment variables are set"""
-    required_vars = [
-        'TELEGRAM_BOT_TOKEN',
-        'YANDEX_API_KEY', 
-        'YANDEX_FOLDER_ID'
-    ]
-    
-    missing = []
-    for var in required_vars:
-        if not os.getenv(var):
-            missing.append(var)
-    
-    if missing:
-        logger.error(f"Missing required environment variables: {', '.join(missing)}")
-        return False
-    
-    logger.info("✅ All required environment variables are set")
-    return True
-
-def main():
-    """Main startup function for local development"""
-    print("🚀 Okama Finance Bot v2.0 - Local Development Mode")
-    print(f"✅ Python version: {sys.version}")
-    print("🔒 IMPORTANT: This is for LOCAL DEVELOPMENT only")
-    print("🌐 For Render deployment, use: python scripts/web_service.py")
-    
-    # Check environment
-    if not check_environment():
-        print("❌ Environment check failed")
-        sys.exit(1)
-    
-    # Import and start bot
+def start_bot():
+    """Start the bot"""
     try:
-        print("📦 Importing bot modules...")
-        from bot import OkamaFinanceBotV2
+        print("🤖 Starting Okama Finance Bot v2.0...")
         
-        print("🤖 Creating bot instance...")
+        # Create and start bot
         bot = OkamaFinanceBotV2()
-        
-        print("🚀 Starting bot in local development mode...")
         bot.run()
         
+    except KeyboardInterrupt:
+        print("\n🛑 Bot stopped by user")
     except Exception as e:
-        logger.error(f"Failed to start bot: {e}")
+        print(f"❌ Fatal error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
+def main():
+    """Main function"""
+    # Set up signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    print("🚀 Okama Finance Bot Startup Script")
+    print(f"🌍 Environment: {'RENDER' if os.getenv('RENDER') else 'LOCAL'}")
+    print(f"🐍 Python version: {sys.version}")
+    
+    # Start the bot
+    start_bot()
 
 if __name__ == "__main__":
     main()

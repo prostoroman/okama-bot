@@ -1,216 +1,136 @@
-# 🚀 Руководство по развертыванию Okama Finance Bot v2.0.0
+# Render Deployment Guide for Okama Finance Bot
 
-## ✅ Статус развертывания
+## 🚨 Current Issue: Port Scan Timeout
 
-**🎉 Проект успешно развернут на GitHub!**
-
-- **Репозиторий**: https://github.com/prostoroman/okama-bot
-- **Версия**: v2.0.0
-- **Статус**: ✅ Production Ready
-- **CI/CD**: ✅ Настроен
-
-## 🏗️ Что было развернуто
-
-### 1. 📁 Профессиональная структура проекта
+Your deployment is failing with:
 ```
-okama-bot/
-├── 📁 services/           # 7 специализированных сервисов
-├── 📁 tests/              # 3 тестовых файла
-├── 📁 docs/               # 6 документационных файлов
-├── 📁 config/             # 3 конфигурационных файла
-├── 📁 scripts/            # 1 скрипт развертывания
-├── .github/workflows/     # CI/CD автоматизация
-├── bot.py                 # Основной бот
-├── config.py              # Управление конфигурацией
-├── yandexgpt_service.py   # AI-сервис
-└── requirements.txt       # Зависимости
+Port scan timeout reached, no open ports detected. 
+Bind your service to at least one port. 
+If you don't need to receive traffic on any port, create a background worker instead.
 ```
 
-### 2. 🔧 Технические достижения
-- **Модульная архитектура** - разделение на специализированные сервисы
-- **Okama v1.5.0 совместимость** - полная поддержка новой версии
-- **Относительные импорты** - правильная структура Python пакетов
-- **Обработка ошибок** - robust fallback механизмы
-- **Тестирование** - 100% успешность всех тестов
+## 🔧 Solution: Web Service + Bot Architecture
 
-### 3. 🚀 CI/CD автоматизация
-- **GitHub Actions** - автоматическое тестирование
-- **Множественные версии Python** - 3.8, 3.9, 3.10, 3.11
-- **Автоматические релизы** - при создании тегов
-- **Проверка качества** - linting и security scanning
+The bot now uses a **hybrid approach**:
+1. **Web Service**: Binds to port 8000 to satisfy Render's port scanning requirements
+2. **Bot Process**: Runs in the background while the web service remains active
 
-## 📊 Статистика развертывания
+## 📁 Updated Files
 
-| Метрика | Значение |
-|---------|----------|
-| **Файлов изменено** | 30 |
-| **Добавлено строк** | 3,627 |
-| **Удалено строк** | 1,923 |
-| **Тестов пройдено** | 8/8 (100%) |
-| **Версия Okama** | 1.5.0 |
-| **Python версии** | 3.8+ |
+### 1. `scripts/web_service.py` (NEW)
+- Flask-based web service that binds to port 8000
+- Provides health check endpoints (`/health`, `/status`)
+- Starts the bot in a background thread
+- Satisfies Render's port scanning requirements
 
-## 🚀 Как использовать развернутый проект
+### 2. `requirements.txt` (UPDATED)
+- Added `Flask>=2.3.0` for the web service
 
-### 1. Клонирование
+### 3. `render.yaml` (UPDATED)
+- Configured to use `python scripts/web_service.py` as start command
+- Added health check configuration
+- Set proper port binding (8000)
+
+## 🚀 Deployment Steps
+
+### Step 1: Commit and Push Changes
 ```bash
-git clone https://github.com/prostoroman/okama-bot.git
-cd okama-bot
-git checkout v2.0.0  # или используйте main
+git add .
+git commit -m "Fix Render deployment: Add web service for port binding"
+git push origin main
 ```
 
-### 2. Установка
+### Step 2: Verify Render Configuration
+1. Go to your Render dashboard
+2. Ensure the service is configured as a **Web Service** (not Background Worker)
+3. Verify the start command is: `python scripts/web_service.py`
+4. Check that environment variables are set correctly
+
+### Step 3: Monitor Deployment
+- Watch the build logs for any errors
+- The web service should start and bind to port 8000
+- The bot should start in the background
+- Health checks should pass
+
+## 🧪 Local Testing
+
+Before deploying, test the web service locally:
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# или venv\Scripts\activate для Windows
-pip install -r requirements.txt
+# Install Flask
+pip install Flask
+
+# Test the web service
+python scripts/test_web_service.py
 ```
 
-### 3. Конфигурация
-```bash
-cp config/config.env.example config/config.env
-# Отредактируйте config/config.env, добавив ваши API ключи
-```
+This will:
+- Start the web service on port 8001
+- Test all endpoints
+- Verify the service works correctly
 
-### 4. Запуск
-```bash
-python bot.py
-```
+## 🔍 Troubleshooting
 
-## 🧪 Проверка работоспособности
+### If Deployment Still Fails:
 
-### Быстрая проверка
-```bash
-# Тест импортов
-python -c "from services.okama_service import OkamaServiceV2; print('✅ OK')"
-python -c "from bot import OkamaFinanceBotV2; print('✅ OK')"
+1. **Check Build Logs**: Look for Python import errors or missing dependencies
+2. **Verify Python Version**: Ensure Python 3.13+ is available
+3. **Check Environment Variables**: Ensure all required bot tokens are set
+4. **Alternative Start Command**: If web service fails, try:
+   ```yaml
+   startCommand: python scripts/start_bot.py
+   ```
 
-# Полное тестирование
-python -m tests.test_all_services
-```
+### Common Issues:
 
-### Ожидаемые результаты
-- ✅ **Импорты**: Все модули корректно импортируются
-- ✅ **Тесты**: Все 8 тестов проходят успешно
-- ✅ **Сервисы**: Все финансовые сервисы работают
-- ✅ **Интеграция**: Okama v1.5.0 полностью совместим
+- **Port Already in Use**: The web service checks port availability
+- **Missing Dependencies**: Flask is now included in requirements.txt
+- **Import Errors**: The bot imports are handled gracefully
 
-## 🔑 Необходимые API ключи
+## 📊 Health Check Endpoints
 
-| Сервис | Переменная | Где получить |
-|--------|------------|--------------|
-| **Telegram Bot** | `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/botfather) |
-| **YandexGPT** | `YANDEXGPT_API_KEY` | [Yandex Cloud](https://cloud.yandex.ru/) |
-| **YandexGPT** | `YANDEXGPT_FOLDER_ID` | [Yandex Cloud](https://cloud.yandex.ru/) |
+Once deployed, your service will provide:
 
-## 📱 Основные команды бота
+- **`/`**: Home page showing bot status
+- **`/health`**: Health check endpoint for Render
+- **`/status`**: Detailed bot status information
 
-- `/start` - Запуск бота
-- `/portfolio RGBITR.INDX MCFTR.INDX` - Анализ портфеля
-- `/risk AGG.US SPY.US` - Анализ рисков
-- `/correlation RGBITR.INDX MCFTR.INDX GC.COMM` - Корреляция
-- `/help` - Полная справка
+## 🔄 Fallback Options
 
-## 🔍 Мониторинг и поддержка
+If the web service approach fails, you can:
 
-### GitHub Actions
-- **Статус**: ✅ Настроены и работают
-- **Тестирование**: Автоматически при каждом push
-- **Релизы**: Автоматически при создании тегов
+1. **Use Background Worker**: Change service type in render.yaml
+2. **Direct Bot Start**: Use `python scripts/start_bot.py`
+3. **Custom Web Service**: Modify the Flask app as needed
 
-### Ветки и теги
-- **main** - основная ветка разработки
-- **v2.0.0** - тег релиза (production ready)
+## 📝 Environment Variables
 
-### Поддержка
-- **Issues**: https://github.com/prostoroman/okama-bot/issues
-- **Документация**: `docs/README.md`
-- **Быстрый старт**: `LAUNCH_INSTRUCTIONS.md`
+Ensure these are set in Render:
+- `TELEGRAM_BOT_TOKEN`
+- `YANDEX_API_KEY`
+- `YANDEX_FOLDER_ID`
+- `OKAMA_API_KEY` (if required)
+- `BOT_USERNAME`
+- `ADMIN_USER_ID`
 
-## 🎯 Следующие шаги
+## 🎯 Expected Behavior
 
-### 1. Настройка продакшена
-```bash
-# Создание продакшен ветки
-git checkout -b production
-git push origin production
+After successful deployment:
+1. ✅ Web service starts and binds to port 8000
+2. ✅ Bot starts in background thread
+3. ✅ Health checks pass
+4. ✅ Bot responds to Telegram messages
+5. ✅ Web service remains active for Render monitoring
 
-# Настройка мониторинга
-# Добавление метрик производительности
-# Настройка логирования
-```
+## 🆘 Need Help?
 
-### 2. Расширение функционала
-```bash
-# Добавление нового сервиса
-touch services/new_service.py
-# Реализация функционала
-# Добавление тестов
-# Обновление документации
-```
-
-### 3. Масштабирование
-- Настройка Docker контейнеризации
-- Добавление Kubernetes развертывания
-- Настройка load balancing
-- Мониторинг производительности
-
-## 🆘 Устранение неполадок
-
-### Проблема: "No module named 'services'"
-**Решение**: Убедитесь, что вы находитесь в корневой папке проекта
-
-### Проблема: "ImportError: cannot import name 'Config'"
-**Решение**: Используйте `import config` вместо `from config import Config`
-
-### Проблема: "Okama version not compatible"
-**Решение**: Проверьте версию: `pip show okama` (должна быть 1.5.0)
-
-### Проблема: "Tests failing"
-**Решение**: 
-1. Проверьте виртуальное окружение
-2. Убедитесь в установке всех зависимостей
-3. Проверьте доступность API ключей
-
-## 📈 Метрики успеха
-
-### Количественные показатели
-- **Тесты**: 8/8 (100% успех)
-- **Сервисы**: 7 специализированных модулей
-- **Документация**: 6+ файлов с примерами
-- **Совместимость**: Python 3.8+, Okama 1.5.0
-
-### Качественные показатели
-- **Архитектура**: Профессиональная модульная структура
-- **Код**: Чистый, документированный, тестируемый
-- **Документация**: Исчерпывающая с примерами
-- **CI/CD**: Автоматизированное тестирование и развертывание
-
-## 🎉 Поздравления!
-
-**Okama Finance Bot v2.0.0** успешно развернут и готов к использованию!
-
-### Ключевые достижения:
-- ✅ **Профессиональная структура** проекта
-- ✅ **100% совместимость** с Okama v1.5.0
-- ✅ **Полное тестирование** всех компонентов
-- ✅ **Исчерпывающая документация**
-- ✅ **Автоматизированный CI/CD**
-- ✅ **Готовность к продакшену**
-
-### Статус проекта:
-- **Разработка**: ✅ Завершена
-- **Тестирование**: ✅ Пройдено
-- **Документация**: ✅ Готова
-- **Развертывание**: ✅ Выполнено
-- **CI/CD**: ✅ Настроен
+If deployment still fails:
+1. Check the build logs for specific error messages
+2. Verify all dependencies are installed
+3. Test the web service locally first
+4. Consider using the background worker approach
 
 ---
 
-**🎯 Проект готов к использованию в продакшене!**
-
-**📊 Статус**: ✅ Полностью развернут  
-**🚀 Версия**: v2.0.0  
-**🔗 GitHub**: https://github.com/prostoroman/okama-bot  
-**📚 Документация**: `docs/README.md`
+**Last Updated**: $(date)
+**Status**: Ready for deployment

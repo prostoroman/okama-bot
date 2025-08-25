@@ -12,3 +12,6 @@ requests>=2.31.0
 Pillow>=10.0.0
 plotly>=5.15.0
 kaleido>=0.2.1
+
+# Web service dependencies
+Flask>=2.3.0

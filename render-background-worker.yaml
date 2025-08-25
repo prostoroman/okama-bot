@@ -1,23 +1,20 @@
-# Render configuration for Okama Finance Bot v2.0
-# This service starts as a web service to satisfy port scanning, then runs the bot
+# Alternative Render configuration for Okama Finance Bot v2.0
+# This service runs as a background worker (no port binding required)
 
 services:
-  # Web service that satisfies port scan then runs the bot
-  - type: web
-    name: okama-finance-bot
+  # Background worker service (no port binding required)
+  - type: worker
+    name: okama-finance-bot-worker
     env: python
     plan: starter
     
     # Build configuration
     buildCommand: pip install -r requirements.txt
     
-    # Start command - runs web service that satisfies port scan then starts bot
-    startCommand: python scripts/web_service.py
+    # Start command - runs the bot directly
+    startCommand: python scripts/start_bot.py
     
-    # Alternative start command if web service fails
-    # startCommand: python scripts/start_bot.py
-    
-    # Port configuration for Render port scanning
+    # Environment variables
     envVars:
       # Python configuration
       - key: PYTHON_VERSION
@@ -31,9 +28,7 @@ services:
       - key: RENDER
         value: "true"
       - key: RENDER_SERVICE_TYPE
-        value: "web"
-      - key: PORT
-        value: "8000"
+        value: "worker"
       
       # Bot configuration (set these in Render dashboard)
       - key: TELEGRAM_BOT_TOKEN
@@ -51,7 +46,6 @@ services:
     
     # Auto-deploy on git push
     autoDeploy: true
-    
-    # Health check configuration
-    healthCheckPath: /health
-    healthCheckTimeout: 300
+
+# Use this configuration if the web service approach fails
+# Simply rename this file to render.yaml and delete the old one

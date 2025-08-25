@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Web service for Render port scanning that transitions to running the bot
-This service binds to a port to satisfy Render's requirements,
+This service uses Flask to bind to a port to satisfy Render's requirements,
 then starts the bot as a background process while maintaining the web service.
 """
 
@@ -11,54 +11,72 @@ import time
 import socket
 import threading
 import subprocess
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import signal
+from flask import Flask, jsonify
 
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    """Health check handler that shows bot status"""
-    
-    def do_GET(self):
-        """Handle GET requests"""
-        if self.path == '/health':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            response = "Okama Finance Bot - Active\n"
-            response += f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            response += "Bot is running as a background process.\n"
-            response += "This web service exists to satisfy Render requirements.\n"
-            self.wfile.write(response.encode())
-        elif self.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Okama Finance Bot</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; }
-                    .status { color: green; font-weight: bold; }
-                </style>
-            </head>
-            <body>
-                <h1>🤖 Okama Finance Bot</h1>
-                <p class="status">✅ Bot is running successfully</p>
-                <p>This web service exists to satisfy Render's port scanning requirements.</p>
-                <p>The Telegram bot is running as a background process.</p>
-                <p><a href="/health">Health Check</a></p>
-            </body>
-            </html>
-            """
-            self.wfile.write(html.encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b"Not Found")
-    
-    def log_message(self, format, *args):
-        """Suppress logging"""
-        pass
+# Create Flask app
+app = Flask(__name__)
+
+# Global bot status
+bot_status = {
+    'running': False,
+    'start_time': None,
+    'last_error': None
+}
+
+@app.route('/')
+def home():
+    """Home page"""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Okama Finance Bot</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .status { color: green; font-weight: bold; }
+            .error { color: red; }
+        </style>
+    </head>
+    <body>
+        <h1>🤖 Okama Finance Bot</h1>
+        <p class="status">✅ Web service is running</p>
+        <p>This web service exists to satisfy Render's port scanning requirements.</p>
+        <p>The Telegram bot is running as a background process.</p>
+        <p><a href="/health">Health Check</a></p>
+        <p><a href="/status">Bot Status</a></p>
+    </body>
+    </html>
+    """
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'Okama Finance Bot Web Service',
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'bot_running': bot_status['running'],
+        'uptime': time.time() - bot_status['start_time'] if bot_status['start_time'] else None
+    })
+
+@app.route('/status')
+def status():
+    """Bot status endpoint"""
+    return jsonify({
+        'bot_status': bot_status,
+        'service': 'Okama Finance Bot',
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+def check_port_available(port):
+    """Check if port is available"""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('0.0.0.0', port))
+            return True
+    except OSError:
+        return False
 
 def start_bot_background():
     """Start the bot in a background thread"""
@@ -74,27 +92,41 @@ def start_bot_background():
                 bot.run()
             except Exception as e:
                 print(f"❌ Bot error: {e}")
+                bot_status['last_error'] = str(e)
+                bot_status['running'] = False
                 import traceback
                 traceback.print_exc()
         
         # Start bot in background thread
         bot_thread = threading.Thread(target=run_bot, daemon=True)
         bot_thread.start()
+        
+        # Update status
+        bot_status['running'] = True
+        bot_status['start_time'] = time.time()
+        bot_status['last_error'] = None
+        
         print("✅ Bot started in background thread")
         return True
         
     except Exception as e:
         print(f"❌ Failed to start bot: {e}")
+        bot_status['last_error'] = str(e)
+        bot_status['running'] = False
+        import traceback
+        traceback.print_exc()
         return False
 
 def start_web_service(port=8000):
     """Start web service and bot"""
     try:
-        # Create server
-        server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+        # Check if port is available
+        if not check_port_available(port):
+            print(f"❌ Port {port} is not available")
+            return False
         
-        print(f"✅ Web service started on port {port}")
-        print("🔒 Web service will continue running to satisfy Render requirements")
+        print(f"✅ Port {port} is available")
+        print(f"🌐 Starting Flask web service on 0.0.0.0:{port}")
         
         # Start the bot in background
         if start_bot_background():
@@ -104,23 +136,28 @@ def start_web_service(port=8000):
         else:
             print("❌ Failed to start bot, keeping web service running")
         
-        # Start the server in the main thread (this is what Render needs)
-        print("🌐 Starting HTTP server in main thread...")
-        server.serve_forever()
+        # Start Flask app
+        print("🌐 Starting Flask server...")
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
         
         return True
         
     except Exception as e:
         print(f"❌ Failed to start web service: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def main():
     """Main function"""
-    print("🌐 Starting Okama Finance Bot with web service...")
+    print("🌐 Starting Okama Finance Bot with Flask web service...")
     
     # Get port from environment or use default
     port = int(os.getenv('PORT', 8000))
     print(f"🚀 Binding to port {port}")
+    
+    # Ensure we're binding to the correct interface
+    print(f"🌐 Binding to 0.0.0.0:{port}")
     
     if start_web_service(port):
         print("✅ Service started successfully")
