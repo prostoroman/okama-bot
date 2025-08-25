@@ -196,8 +196,9 @@ Format responses professionally with clear sections, bullet points, and relevant
             r'\bsberbank\b': 'SBER.MOEX',
             r'\bгазпром\b': 'GAZP.MOEX',
             r'\bлукойл\b': 'LKOH.MOEX',
-            r'\bbitcoin\b': 'BTC.CC',
-            r'\beth\b': 'ETH.CC',
+            # Use Yahoo-style crypto tickers that Okama is more likely to support
+            r'\bbitcoin\b': 'BTC-USD',
+            r'\beth\b': 'ETH-USD',
             r'\bgold\b': 'XAU.COMM',
             r'\bsilver\b': 'XAG.COMM',
             r'\boil\b': 'BRENT.COMM',
