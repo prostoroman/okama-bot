@@ -95,7 +95,7 @@ IMPORTANT: When processing user commands in free form, you MUST convert instrume
 EXAMPLES of proper formatting:
 - "S&P 500" → "SPX.INDX"
 - "Apple stock" → "AAPL.US"
-- "Bitcoin" → "BTC.CC"
+- "Bitcoin" → "BTC.US" (Note: Some crypto may not be available in Okama)
 - "Gold" → "XAU.COMM"
 - "EUR/USD" → "EURUSD.FX"
 - "Sberbank" → "SBER.MOEX"
@@ -189,9 +189,9 @@ Format responses professionally with clear sections, bullet points, and relevant
             r'\bsberbank\b': 'SBER.MOEX',
             r'\bгазпром\b': 'GAZP.MOEX',
             r'\bлукойл\b': 'LKOH.MOEX',
-            # Use Yahoo-style crypto tickers that Okama is more likely to support
-            r'\bbitcoin\b': 'BTC-USD',
-            r'\beth\b': 'ETH-USD',
+            # Use more realistic crypto tickers that might be available in Okama
+            r'\bbitcoin\b': 'BTC.US',  # Try as US stock first
+            r'\beth\b': 'ETH.US',      # Try as US stock first
             r'\bgold\b': 'XAU.COMM',
             r'\bsilver\b': 'XAG.COMM',
             r'\boil\b': 'BRENT.COMM',

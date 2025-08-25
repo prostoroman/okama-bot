@@ -18,6 +18,42 @@ class AssetService:
     def __init__(self):
         """Initialize the AssetService"""
         self.logger = logging.getLogger(__name__)
+        
+        # Known working asset symbols for suggestions
+        self.known_assets = {
+            'US': ['VOO.US', 'SPY.US', 'QQQ.US', 'AGG.US', 'AAPL.US', 'TSLA.US', 'MSFT.US'],
+            'INDX': ['RGBITR.INDX', 'MCFTR.INDX', 'SPX.INDX', 'IXIC.INDX'],
+            'COMM': ['GC.COMM', 'SI.COMM', 'CL.COMM', 'BRENT.COMM'],
+            'FX': ['EURUSD.FX', 'GBPUSD.FX', 'USDJPY.FX'],
+            'MOEX': ['SBER.MOEX', 'GAZP.MOEX', 'LKOH.MOEX'],
+            'LSE': ['VOD.LSE', 'HSBA.LSE', 'BP.LSE']
+        }
+    
+    def _get_asset_suggestions(self, symbol: str) -> str:
+        """Get suggestions for alternative assets when the requested one is not found"""
+        # Extract the namespace from the symbol (e.g., 'CC' from 'BTC.CC')
+        if '.' in symbol:
+            namespace = symbol.split('.')[-1]
+        else:
+            namespace = 'US'  # Default to US stocks
+        
+        suggestions = []
+        
+        # Add suggestions from the same namespace
+        if namespace in self.known_assets:
+            suggestions.extend(self.known_assets[namespace][:3])  # First 3 suggestions
+        
+        # Add suggestions from other popular namespaces
+        if namespace != 'US' and 'US' in self.known_assets:
+            suggestions.extend(self.known_assets['US'][:2])
+        
+        if namespace != 'INDX' and 'INDX' in self.known_assets:
+            suggestions.extend(self.known_assets['INDX'][:2])
+        
+        if suggestions:
+            return f"Попробуйте эти доступные активы:\n" + "\n".join([f"• {s}" for s in suggestions])
+        else:
+            return "Попробуйте популярные активы: VOO.US, SPY.US, RGBITR.INDX, GC.COMM"
     
     def get_asset_info(self, symbol: str) -> Dict[str, Any]:
         """
@@ -102,8 +138,18 @@ class AssetService:
             return info
             
         except Exception as e:
-            self.logger.error(f"Error getting asset info for {symbol}: {str(e)}")
-            return {'error': f"Failed to get asset info: {str(e)}"}
+            error_msg = str(e)
+            self.logger.error(f"Error getting asset info for {symbol}: {error_msg}")
+            
+            # Check if it's a "not found" error
+            if "not found" in error_msg.lower() or "404" in error_msg:
+                suggestions = self._get_asset_suggestions(symbol)
+                return {
+                    'error': f"Актив {symbol} не найден в базе данных Okama.\n\n{suggestions}",
+                    'suggestions': suggestions
+                }
+            else:
+                return {'error': f"Ошибка при получении информации об активе: {error_msg}"}
     
     def get_asset_price(self, symbol: str) -> Dict[str, Any]:
         """
@@ -140,8 +186,18 @@ class AssetService:
             return info
             
         except Exception as e:
-            self.logger.error(f"Error getting asset price for {symbol}: {str(e)}")
-            return {'error': f"Failed to get asset price: {str(e)}"}
+            error_msg = str(e)
+            self.logger.error(f"Error getting asset price for {symbol}: {error_msg}")
+            
+            # Check if it's a "not found" error
+            if "not found" in error_msg.lower() or "404" in error_msg:
+                suggestions = self._get_asset_suggestions(symbol)
+                return {
+                    'error': f"Актив {symbol} не найден в базе данных Okama.\n\n{suggestions}",
+                    'suggestions': suggestions
+                }
+            else:
+                return {'error': f"Ошибка при получении цены: {error_msg}"}
     
     def get_asset_dividends(self, symbol: str) -> Dict[str, Any]:
         """
@@ -179,5 +235,15 @@ class AssetService:
             return info
             
         except Exception as e:
-            self.logger.error(f"Error getting asset dividends for {symbol}: {str(e)}")
-            return {'error': f"Failed to get asset dividends: {str(e)}"}
+            error_msg = str(e)
+            self.logger.error(f"Error getting asset dividends for {symbol}: {error_msg}")
+            
+            # Check if it's a "not found" error
+            if "not found" in error_msg.lower() or "404" in error_msg:
+                suggestions = self._get_asset_suggestions(symbol)
+                return {
+                    'error': f"Актив {symbol} не найден в базе данных Okama.\n\n{suggestions}",
+                    'suggestions': suggestions
+                }
+            else:
+                return {'error': f"Ошибка при получении дивидендов: {error_msg}"}

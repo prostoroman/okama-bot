@@ -71,6 +71,12 @@ class OkamaFinanceBot:
 • Спросите "Информация об SPY.US"
 • Используйте команды /asset, /price, /dividends
 
+Популярные активы:
+• VOO.US, SPY.US, QQQ.US (ETF)
+• RGBITR.INDX, MCFTR.INDX (Индексы)
+• GC.COMM, BRENT.COMM (Товары)
+• EURUSD.FX (Валюты)
+
 Команды:
 /help - Показать все доступные команды
 /asset [symbol] - Информация об активе
@@ -223,6 +229,54 @@ class OkamaFinanceBot:
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка при получении информации об активе: {str(e)}")
     
+    async def _get_asset_info(self, update: Update, symbol: str):
+        """Get comprehensive asset information"""
+        try:
+            await update.message.reply_text(f"📊 Получаю информацию об активе {symbol}...")
+            
+            asset_info = self.asset_service.get_asset_info(symbol)
+            
+            if 'error' in asset_info:
+                # Check if we have suggestions
+                if 'suggestions' in asset_info:
+                    await update.message.reply_text(
+                        f"❌ {asset_info['error']}",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await update.message.reply_text(f"❌ Ошибка: {asset_info['error']}")
+                return
+            
+            # Build response message
+            response = f"📊 **Информация об активе {symbol}**\n\n"
+            response += f"**Название:** {asset_info.get('name', 'N/A')}\n"
+            response += f"**Страна:** {asset_info.get('country', 'N/A')}\n"
+            response += f"**Биржа:** {asset_info.get('exchange', 'N/A')}\n"
+            response += f"**Валюта:** {asset_info.get('currency', 'N/A')}\n"
+            response += f"**Тип:** {asset_info.get('type', 'N/A')}\n"
+            response += f"**ISIN:** {asset_info.get('isin', 'N/A')}\n"
+            response += f"**Первый день:** {asset_info.get('first_date', 'N/A')}\n"
+            response += f"**Последний день:** {asset_info.get('last_date', 'N/A')}\n"
+            response += f"**Длина периода:** {asset_info.get('period_length', 'N/A')} лет\n\n"
+            
+            # Add performance metrics
+            if asset_info.get('current_price'):
+                response += f"**Текущая цена:** {asset_info.get('current_price')} {asset_info.get('currency', '')}\n"
+            
+            if asset_info.get('annual_return') != 'N/A':
+                response += f"**Годовая доходность:** {asset_info.get('annual_return')}\n"
+            
+            if asset_info.get('total_return') != 'N/A':
+                response += f"**Общая доходность:** {asset_info.get('total_return')}\n"
+            
+            if asset_info.get('volatility') != 'N/A':
+                response += f"**Волатильность:** {asset_info.get('volatility')}\n"
+            
+            await update.message.reply_text(response, parse_mode='Markdown')
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка при получении информации об активе: {str(e)}")
+    
     async def _get_asset_price(self, update: Update, symbol: str):
         """Get current asset price"""
         try:
@@ -231,7 +285,14 @@ class OkamaFinanceBot:
             price_info = self.asset_service.get_asset_price(symbol)
             
             if 'error' in price_info:
-                await update.message.reply_text(f"❌ Ошибка: {price_info['error']}")
+                # Check if we have suggestions
+                if 'suggestions' in price_info:
+                    await update.message.reply_text(
+                        f"❌ {price_info['error']}",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await update.message.reply_text(f"❌ Ошибка: {price_info['error']}")
                 return
             
             response = f"💰 **Цена актива {symbol}**\n\n"
@@ -251,7 +312,14 @@ class OkamaFinanceBot:
             dividend_info = self.asset_service.get_asset_dividends(symbol)
             
             if 'error' in dividend_info:
-                await update.message.reply_text(f"❌ Ошибка: {dividend_info['error']}")
+                # Check if we have suggestions
+                if 'suggestions' in dividend_info:
+                    await update.message.reply_text(
+                        f"❌ {dividend_info['error']}",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await update.message.reply_text(f"❌ Ошибка: {dividend_info['error']}")
                 return
             
             response = f"💵 **История дивидендов {symbol}**\n\n"
