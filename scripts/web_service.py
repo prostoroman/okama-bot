@@ -128,15 +128,18 @@ def start_web_service(port=8000):
         print(f"✅ Port {port} is available")
         print(f"🌐 Starting Flask web service on 0.0.0.0:{port}")
         
-        # Start the bot in background
-        if start_bot_background():
-            print("🚀 Bot is now running alongside web service")
-            print("🌐 Web service will continue running on port 8000")
-            print("🤖 Bot is active and processing Telegram messages")
-        else:
-            print("❌ Failed to start bot, keeping web service running")
+        # Start the bot in background (but don't fail if it doesn't start)
+        try:
+            if start_bot_background():
+                print("🚀 Bot is now running alongside web service")
+                print("🤖 Bot is active and processing Telegram messages")
+            else:
+                print("⚠️ Bot failed to start, but web service will continue")
+        except Exception as e:
+            print(f"⚠️ Bot startup error (non-critical): {e}")
+            print("🌐 Web service will continue running without bot")
         
-        # Start Flask app
+        # Start Flask app - this is the critical part for port binding
         print("🌐 Starting Flask server...")
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
         
@@ -159,11 +162,8 @@ def main():
     # Ensure we're binding to the correct interface
     print(f"🌐 Binding to 0.0.0.0:{port}")
     
-    if start_web_service(port):
-        print("✅ Service started successfully")
-    else:
-        print("❌ Failed to start service")
-        sys.exit(1)
+    # Start the web service - this will bind to the port
+    start_web_service(port)
 
 if __name__ == "__main__":
     main()
