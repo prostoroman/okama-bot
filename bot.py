@@ -17,6 +17,11 @@ if sys.version_info < (3, 7):
 from config import Config
 from services.asset_service import AssetService
 from yandexgpt_service import YandexGPTService
+from services.intent_parser import IntentParser
+from services.asset_resolver import AssetResolver
+from services.okama_handler import OkamaHandler
+from services.report_builder import ReportBuilder
+from services.analysis_engine import AnalysisEngine
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +48,11 @@ class OkamaFinanceBot:
         
         self.asset_service = AssetService()
         self.yandexgpt_service = YandexGPTService()
+        self.intent_parser = IntentParser()
+        self.asset_resolver = AssetResolver()
+        self.okama_handler = OkamaHandler()
+        self.report_builder = ReportBuilder()
+        self.analysis_engine = AnalysisEngine()
         
         # User session storage
         self.user_sessions = {}
@@ -370,32 +380,76 @@ class OkamaFinanceBot:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         
         try:
-            # Analyze user intent using YandexGPT
-            analysis = self.yandexgpt_service.analyze_query(user_message)
-            
-            if analysis['is_chat']:
+            # New pipeline: intent -> resolve assets -> okama -> report -> AI analysis
+            parsed = self.intent_parser.parse(user_message)
+
+            # Chat fallback
+            if parsed.intent == 'chat':
                 await self._handle_chat(update, user_message)
-            else:
-                # Handle analysis requests
-                symbols = analysis['symbols']
-                intent = analysis['intent']
-                
-                if not symbols:
-                    await update.message.reply_text(
-                        "I couldn't identify any symbols in your message. "
-                        "Please provide symbols like RGBITR.INDX, MCFTR.INDX, GC.COMM, AGG.US, SPY.US, etc."
-                    )
+                return
+
+            # Resolve assets as needed
+            resolved = self.asset_resolver.resolve(parsed.raw_assets) if parsed.raw_assets else []
+            valid_tickers = [r.ticker for r in resolved if r.valid]
+
+            # Dispatch by intent
+            report_text = None
+            images = []
+            ai_summary = None
+
+            if parsed.intent == 'asset_single':
+                if not valid_tickers:
+                    await update.message.reply_text("Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
                     return
-                
-                # Route to appropriate analysis method
-                if intent == 'asset':
-                    await self._get_asset_info(update, symbols[0])
-                elif intent == 'price':
-                    await self._get_asset_price(update, symbols[0])
-                elif intent == 'dividends':
-                    await self._get_asset_dividends(update, symbols[0])
+                result = self.okama_handler.get_single_asset(valid_tickers[0], base_currency=parsed.options.get('base_currency'))
+                report_text, images = self.report_builder.build_single_asset_report(result)
+                ai_summary = self.analysis_engine.summarize('single_asset', {"metrics": result.get("metrics", {})}, user_message)
+
+            elif parsed.intent == 'asset_compare' or (parsed.intent == 'macro'):
+                if len(valid_tickers) < 2:
+                    # If only one valid, treat as single asset
+                    if len(valid_tickers) == 1:
+                        result = self.okama_handler.get_single_asset(valid_tickers[0], base_currency=parsed.options.get('base_currency'))
+                        report_text, images = self.report_builder.build_single_asset_report(result)
+                        ai_summary = self.analysis_engine.summarize('single_asset', {"metrics": result.get("metrics", {})}, user_message)
+                    else:
+                        await update.message.reply_text("Для сравнения укажите как минимум два актива.")
+                        return
                 else:
-                    await self._handle_chat(update, user_message)
+                    result = self.okama_handler.get_multiple_assets(valid_tickers)
+                    report_text, images = self.report_builder.build_multi_asset_report(result)
+                    ai_summary = self.analysis_engine.summarize('asset_compare', {"metrics": result.get("metrics", {}), "correlation": result.get("correlation", {})}, user_message)
+
+            elif parsed.intent == 'portfolio':
+                if len(valid_tickers) < 2:
+                    await update.message.reply_text("Для анализа портфеля укажите как минимум два актива.")
+                    return
+                result = self.okama_handler.get_portfolio(valid_tickers)
+                report_text, images = self.report_builder.build_portfolio_report(result)
+                ai_summary = self.analysis_engine.summarize('portfolio', {"metrics": result.get("metrics", {})}, user_message)
+
+            elif parsed.intent == 'inflation':
+                result = self.okama_handler.get_inflation()
+                report_text, images = self.report_builder.build_inflation_report(result)
+                ai_summary = self.analysis_engine.summarize('inflation', {}, user_message)
+
+            else:
+                # Fallback to AI chat if intent not recognized
+                await self._handle_chat(update, user_message)
+                return
+
+            # Send text and AI summary
+            final_text = report_text or ""
+            if ai_summary:
+                final_text = f"{final_text}\n\nВыводы AI:\n{ai_summary}"
+            await self._send_long_text(update, final_text)
+
+            # Send images
+            for img_bytes in images:
+                try:
+                    await context.bot.send_photo(chat_id=update.effective_chat.id, photo=io.BytesIO(img_bytes))
+                except Exception:
+                    pass
                     
         except Exception as e:
             logger.error(f"Error handling message: {e}")
@@ -403,6 +457,16 @@ class OkamaFinanceBot:
                 "Sorry, I encountered an error processing your request. "
                 "Please try again or use /help for available commands."
             )
+
+    async def _send_long_text(self, update: Update, text: str):
+        if not text:
+            return
+        max_len = getattr(Config, 'MAX_MESSAGE_LENGTH', 4000)
+        start = 0
+        while start < len(text):
+            chunk = text[start:start + max_len]
+            await update.message.reply_text(chunk)
+            start += max_len
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks"""
