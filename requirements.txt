@@ -12,6 +12,10 @@ requests>=2.31.0
 Pillow>=10.0.0
 plotly>=5.15.0
 kaleido>=0.2.1
+<<<<<<< HEAD
 
 # Web service dependencies
 Flask>=2.3.0
+=======
+yfinance>=0.2.40
+>>>>>>> 64de95ff4d0ba4d6c41a0937983304e40c42ed27
