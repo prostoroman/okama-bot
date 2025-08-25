@@ -1,6 +1,4 @@
 # Core dependencies
-setuptools>=65.0.0
-wheel>=0.38.0
 python-telegram-bot[all]>=22.0.0
 okama>=1.2.0
 matplotlib>=3.7.0
@@ -12,7 +10,6 @@ requests>=2.31.0
 Pillow>=10.0.0
 plotly>=5.15.0
 kaleido>=0.2.1
-yfinance>=0.2.40
 
-# Web service dependencies
-Flask>=2.3.0
+# Optional: Web service dependencies (only if needed)
+# Flask>=2.3.0

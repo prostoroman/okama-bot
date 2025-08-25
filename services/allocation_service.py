@@ -18,7 +18,7 @@ class AllocationService:
     def get_asset_allocation_analysis(self, portfolio: ok.Portfolio) -> Tuple[Dict, bytes]:
         """Get detailed asset allocation analysis using correct Okama v1.5.0 API"""
         try:
-            print(f"Getting asset allocation analysis for portfolio")
+
             
             # Get portfolio table if available
             portfolio_table = None
@@ -44,14 +44,14 @@ class AllocationService:
                 
                 axes[0, 0].pie(weights_values, labels=symbols, autopct='%1.1f%%', startangle=90)
                 axes[0, 0].set_title('Portfolio Weights')
-                print("✓ Successfully plotted portfolio weights")
+
             else:
                 # Equal weights fallback
                 symbols = portfolio.symbols
                 equal_weights = [1/len(symbols)] * len(symbols)
                 axes[0, 0].pie(equal_weights, labels=symbols, autopct='%1.1f%%', startangle=90)
                 axes[0, 0].set_title('Portfolio Weights (Equal)')
-                print("⚠️ Using equal weights (weights not available)")
+
             
             # Asset performance comparison
             if portfolio_table is not None and hasattr(portfolio_table, 'columns'):
@@ -61,7 +61,7 @@ class AllocationService:
                     axes[0, 1].set_title('Individual Asset Returns')
                     axes[0, 1].set_ylabel('Return')
                     axes[0, 1].tick_params(axis='x', rotation=45)
-                    print("✓ Successfully plotted individual asset returns")
+
                 else:
                     # Try to get returns from individual assets
                     returns = self._get_individual_returns(portfolio)
@@ -70,7 +70,7 @@ class AllocationService:
                         axes[0, 1].set_title('Individual Asset Returns')
                         axes[0, 1].set_ylabel('Return')
                         axes[0, 1].tick_params(axis='x', rotation=45)
-                        print("✓ Successfully plotted individual asset returns (calculated)")
+
                     else:
                         axes[0, 1].text(0.5, 0.5, 'Return data not available', ha='center', va='center')
                         axes[0, 1].set_title('Individual Asset Returns')
@@ -82,7 +82,7 @@ class AllocationService:
                     axes[0, 1].set_title('Individual Asset Returns')
                     axes[0, 1].set_ylabel('Return')
                     axes[0, 1].tick_params(axis='x', rotation=45)
-                    print("✓ Successfully plotted individual asset returns (calculated)")
+                    
                 else:
                     axes[0, 1].text(0.5, 0.5, 'Return data not available', ha='center', va='center')
                     axes[0, 1].set_title('Individual Asset Returns')
@@ -94,7 +94,7 @@ class AllocationService:
                 axes[1, 0].set_title('Individual Asset Volatility')
                 axes[1, 0].set_ylabel('Volatility')
                 axes[1, 0].tick_params(axis='x', rotation=45)
-                print("✓ Successfully plotted individual asset volatilities")
+
             else:
                 axes[1, 0].text(0.5, 0.5, 'Volatility data not available', ha='center', va='center')
                 axes[1, 0].set_title('Individual Asset Volatility')
@@ -106,7 +106,7 @@ class AllocationService:
                 axes[1, 1].set_title('Individual Asset Sharpe Ratios')
                 axes[1, 1].set_ylabel('Sharpe Ratio')
                 axes[1, 1].tick_params(axis='x', rotation=45)
-                print("✓ Successfully plotted individual asset Sharpe ratios")
+
             else:
                 axes[1, 1].text(0.5, 0.5, 'Sharpe ratio data not available', ha='center', va='center')
                 axes[1, 1].set_title('Individual Asset Sharpe Ratios')
@@ -128,11 +128,10 @@ class AllocationService:
                 'symbols': portfolio.symbols
             }
             
-            print(f"✓ Asset allocation analysis completed successfully")
+
             return allocation_metrics, img_buffer.getvalue()
             
         except Exception as e:
-            print(f"✗ Error getting asset allocation analysis: {e}")
             return {'error': str(e)}, self._create_error_chart(f"Asset allocation analysis error: {str(e)}")
     
     def _get_individual_returns(self, portfolio: ok.Portfolio) -> List[float]:
