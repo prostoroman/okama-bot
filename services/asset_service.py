@@ -9,6 +9,10 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 import okama as ok
+import io
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +334,48 @@ class AssetService:
                 'timestamp': str(latest_date)
             }
             
+            # Try to generate a price chart from the historical series if available
+            try:
+                series_for_plot = None
+                try:
+                    import pandas as pd  # type: ignore
+                except Exception:
+                    pd = None  # type: ignore
+                raw = asset.price
+                if pd is not None and hasattr(raw, 'iloc') and hasattr(raw, 'index') and len(raw) > 1:
+                    if getattr(raw, 'ndim', 1) == 1:
+                        series_for_plot = raw.dropna()
+                    else:
+                        df_non_nan = raw.dropna(how='all') if hasattr(raw, 'dropna') else raw
+                        if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
+                            try:
+                                first_col = df_non_nan.columns[0]
+                                series_for_plot = df_non_nan[first_col].dropna()
+                            except Exception:
+                                series_for_plot = None
+                if series_for_plot is not None and len(series_for_plot) > 1:
+                    # Convert PeriodIndex to Timestamp if needed
+                    try:
+                        if hasattr(series_for_plot.index, 'to_timestamp'):
+                            series_for_plot = series_for_plot.copy()
+                            series_for_plot.index = series_for_plot.index.to_timestamp()
+                    except Exception:
+                        pass
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
+                    ax.set_title(f'Динамика цены: {symbol}', fontsize=12)
+                    ax.set_xlabel('Дата')
+                    ax.set_ylabel(f'Цена ({getattr(asset, "currency", "")})')
+                    ax.grid(True, linestyle='--', alpha=0.3)
+                    fig.tight_layout()
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                    plt.close(fig)
+                    info['chart'] = buf.getvalue()
+            except Exception:
+                # Silently ignore plotting errors
+                pass
+            
             return info
             
         except Exception as e:
@@ -513,6 +559,58 @@ class AssetService:
                 'total_periods': total_periods,
                 'dividends': dividends
             }
+            
+            # Try to generate a dividends chart from the historical series if available
+            try:
+                series_for_plot = None
+                try:
+                    import pandas as pd  # type: ignore
+                except Exception:
+                    pd = None  # type: ignore
+                raw = dividend_data
+                if pd is not None and hasattr(raw, 'iloc') and hasattr(raw, 'index') and len(raw) > 0:
+                    # Ensure Series
+                    if getattr(raw, 'ndim', 1) == 1:
+                        series_for_plot = raw.dropna()
+                    else:
+                        # If DataFrame, try first column
+                        df_non_nan = raw.dropna(how='all') if hasattr(raw, 'dropna') else raw
+                        if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
+                            try:
+                                first_col = df_non_nan.columns[0]
+                                series_for_plot = df_non_nan[first_col].dropna()
+                            except Exception:
+                                series_for_plot = None
+                if series_for_plot is not None and len(series_for_plot) > 0:
+                    # Keep only positive values and take last 30 for readability
+                    try:
+                        series_for_plot = series_for_plot[series_for_plot > 0]
+                    except Exception:
+                        pass
+                    if len(series_for_plot) > 30:
+                        series_for_plot = series_for_plot.iloc[-30:]
+                    # Convert PeriodIndex to Timestamp if needed
+                    try:
+                        if hasattr(series_for_plot.index, 'to_timestamp'):
+                            series_for_plot = series_for_plot.copy()
+                            series_for_plot.index = series_for_plot.index.to_timestamp()
+                    except Exception:
+                        pass
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    ax.bar(series_for_plot.index, series_for_plot.values, color='#2ca02c')
+                    ax.set_title(f'Дивиденды: {symbol}', fontsize=12)
+                    ax.set_xlabel('Дата')
+                    ax.set_ylabel(f'Сумма ({getattr(asset, "currency", "")})')
+                    ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+                    fig.autofmt_xdate()
+                    fig.tight_layout()
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                    plt.close(fig)
+                    info['chart'] = buf.getvalue()
+            except Exception:
+                # Silently ignore plotting errors
+                pass
             
             return info
             

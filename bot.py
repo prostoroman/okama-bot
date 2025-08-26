@@ -329,6 +329,16 @@ class OkamaFinanceBot:
             response += f"**Время:** {price_info.get('timestamp', 'N/A')}\n"
             
             await update.message.reply_text(response, parse_mode='Markdown')
+            # Send chart if provided
+            chart_bytes = price_info.get('chart')
+            if chart_bytes:
+                try:
+                    await update.message.reply_photo(
+                        photo=io.BytesIO(chart_bytes),
+                        caption="📈 Историческая цена"
+                    )
+                except Exception:
+                    pass
             
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка при получении цены: {str(e)}")
@@ -366,6 +376,16 @@ class OkamaFinanceBot:
                         response += f"• {date}: Нет дивидендов\n"
             
             await update.message.reply_text(response, parse_mode='Markdown')
+            # Send chart if provided
+            chart_bytes = dividend_info.get('chart')
+            if chart_bytes:
+                try:
+                    await update.message.reply_photo(
+                        photo=io.BytesIO(chart_bytes),
+                        caption="💵 Дивиденды"
+                    )
+                except Exception:
+                    pass
             
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка при получении дивидендов: {str(e)}")
