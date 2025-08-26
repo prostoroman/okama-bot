@@ -489,7 +489,11 @@ class AssetService:
                         'start_date': str(filtered_adj_close.index[0])[:10],
                         'end_date': str(filtered_adj_close.index[-1])[:10],
                         'period': '1Y',
-                        'currency': currency
+                        'currency': currency,
+                        'current_price': float(filtered_adj_close.iloc[-1]),
+                        'start_price': float(filtered_adj_close.iloc[0]),
+                        'min_price': float(filtered_adj_close.min()),
+                        'max_price': float(filtered_adj_close.max())
                     }
             
             if monthly_data is not None and len(monthly_data) > 0:
@@ -506,7 +510,11 @@ class AssetService:
                         'start_date': str(filtered_monthly.index[0])[:10],
                         'end_date': str(filtered_monthly.index[-1])[:10],
                         'period': '10Y',
-                        'currency': currency
+                        'currency': currency,
+                        'current_price': float(filtered_monthly.iloc[-1]),
+                        'start_price': float(filtered_monthly.iloc[0]),
+                        'min_price': float(filtered_monthly.min()),
+                        'max_price': float(filtered_monthly.max())
                     }
             
             # If no charts were created, try fallback methods
@@ -539,7 +547,11 @@ class AssetService:
                                 'start_date': str(filtered_fallback.index[0])[:10],
                                 'end_date': str(filtered_fallback.index[-1])[:10],
                                 'period': fallback_period,
-                                'currency': currency
+                                'currency': currency,
+                                'current_price': float(filtered_fallback.iloc[-1]),
+                                'start_price': float(filtered_fallback.iloc[0]),
+                                'min_price': float(filtered_fallback.min()),
+                                'max_price': float(filtered_fallback.max())
                             }
             
             # Check if we have any charts
