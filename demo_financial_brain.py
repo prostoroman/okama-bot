@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from services.financial_brain import OkamaFinancialBrain
+from services.financial_brain_enhanced import EnhancedOkamaFinancialBrain
 import logging
 
 # Настройка логирования
@@ -25,7 +25,7 @@ def demo_financial_brain():
     
     try:
         # Инициализация
-        brain = OkamaFinancialBrain()
+        brain = EnhancedOkamaFinancialBrain()
         print("✅ Financial Brain инициализирован успешно")
         
         # Демонстрация декомпозиции запросов
@@ -103,9 +103,9 @@ def demo_financial_brain():
         print("-" * 40)
         
         # Создаем тестовый результат
-        from services.financial_brain import FinancialQuery, AnalysisResult
+        from services.financial_brain_enhanced import EnhancedFinancialQuery, EnhancedAnalysisResult
         
-        test_query = FinancialQuery(
+        test_query = EnhancedFinancialQuery(
             intent='single_asset_info',
             assets=['AAPL.US'],
             asset_classes=['US'],
@@ -115,7 +115,7 @@ def demo_financial_brain():
             user_message='Проанализируй Apple'
         )
         
-        test_result = AnalysisResult(
+        test_result = EnhancedAnalysisResult(
             query=test_query,
             data_report={
                 'ticker': 'AAPL.US',
