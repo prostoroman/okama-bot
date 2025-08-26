@@ -473,17 +473,20 @@ class AssetService:
                     if adj_close_data is not None and hasattr(adj_close_data, '__len__') and len(adj_close_data) > 5:
                         self.logger.info(f"Creating adj_close chart for {symbol} with {len(adj_close_data)} data points")
                         
+                        # Filter data by period if specified
+                        filtered_adj_close = self._filter_data_by_period(adj_close_data, period)
+                        
                         # Create daily price chart
                         daily_chart = self._create_price_chart(
-                            adj_close_data, symbol, period, currency, "Дневные цены (скорректированные)"
+                            filtered_adj_close, symbol, period, currency, "Дневные цены (скорректированные)"
                         )
                         
                         if daily_chart:
                             charts['adj_close'] = daily_chart
                             # Handle dates properly for PeriodIndex
                             try:
-                                start_date = adj_close_data.index[0]
-                                end_date = adj_close_data.index[-1]
+                                start_date = filtered_adj_close.index[0]
+                                end_date = filtered_adj_close.index[-1]
                                 
                                 if hasattr(start_date, 'strftime'):
                                     start_date_str = start_date.strftime('%Y-%m-%d')
@@ -499,13 +502,13 @@ class AssetService:
                                 end_date_str = "N/A"
                             
                             price_data_info['adj_close'] = {
-                                'data_points': len(adj_close_data),
+                                'data_points': len(filtered_adj_close),
                                 'start_date': start_date_str,
                                 'end_date': end_date_str,
-                                'current_price': float(adj_close_data.iloc[-1]),
-                                'start_price': float(adj_close_data.iloc[0]),
-                                'min_price': float(adj_close_data.min()),
-                                'max_price': float(adj_close_data.max())
+                                'current_price': float(filtered_adj_close.iloc[-1]),
+                                'start_price': float(filtered_adj_close.iloc[0]),
+                                'min_price': float(filtered_adj_close.min()),
+                                'max_price': float(filtered_adj_close.max())
                             }
             except Exception as e:
                 self.logger.warning(f"Could not create adj_close chart: {e}")
@@ -517,17 +520,20 @@ class AssetService:
                     if monthly_data is not None and hasattr(monthly_data, '__len__') and len(monthly_data) > 5:
                         self.logger.info(f"Creating close_monthly chart for {symbol} with {len(monthly_data)} data points")
                         
+                        # Filter data by period if specified
+                        filtered_monthly = self._filter_data_by_period(monthly_data, period)
+                        
                         # Create monthly price chart
                         monthly_chart = self._create_price_chart(
-                            monthly_data, symbol, period, currency, "Месячные цены"
+                            filtered_monthly, symbol, period, currency, "Месячные цены"
                         )
                         
                         if monthly_chart:
                             charts['close_monthly'] = monthly_chart
                             # Handle dates properly for PeriodIndex
                             try:
-                                start_date = monthly_data.index[0]
-                                end_date = monthly_data.index[-1]
+                                start_date = filtered_monthly.index[0]
+                                end_date = filtered_monthly.index[-1]
                                 
                                 if hasattr(start_date, 'strftime'):
                                     start_date_str = start_date.strftime('%Y-%m-%d')
@@ -543,13 +549,13 @@ class AssetService:
                                 end_date_str = "N/A"
                             
                             price_data_info['close_monthly'] = {
-                                'data_points': len(monthly_data),
+                                'data_points': len(filtered_monthly),
                                 'start_date': start_date_str,
                                 'end_date': end_date_str,
-                                'current_price': float(monthly_data.iloc[-1]),
-                                'start_price': float(monthly_data.iloc[0]),
-                                'min_price': float(monthly_data.min()),
-                                'max_price': float(monthly_data.max())
+                                'current_price': float(filtered_monthly.iloc[-1]),
+                                'start_price': float(filtered_monthly.iloc[0]),
+                                'min_price': float(filtered_monthly.min()),
+                                'max_price': float(filtered_monthly.max())
                             }
             except Exception as e:
                 self.logger.warning(f"Could not create close_monthly chart: {e}")
@@ -1062,3 +1068,69 @@ class AssetService:
                 }
             else:
                 return {'error': f"Ошибка при получении дивидендов: {error_msg}"}
+
+    def _filter_data_by_period(self, data, period: str):
+        """
+        Filter data by specified period
+        
+        Args:
+            data: Pandas Series with price data
+            period: Time period (e.g., '1Y', '2Y', '5Y', 'MAX')
+            
+        Returns:
+            Filtered data series
+        """
+        try:
+            if period == 'MAX':
+                return data
+            
+            # Parse period
+            import re
+            match = re.match(r'(\d+)([YMD])', period.upper())
+            if not match:
+                # Default to 1 year if period format is invalid
+                return data.tail(12)  # Last 12 months for monthly data
+            
+            number, unit = match.groups()
+            number = int(number)
+            
+            # Calculate how many data points to take
+            if unit == 'Y':
+                # For monthly data, take last N*12 months
+                # For daily data, take last N*365 days
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data
+                    points_to_take = number * 12
+                else:
+                    # Daily data
+                    points_to_take = number * 365
+            elif unit == 'M':
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data
+                    points_to_take = number
+                else:
+                    # Daily data
+                    points_to_take = number * 30
+            elif unit == 'D':
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - take at least 1 month
+                    points_to_take = max(1, number // 30)
+                else:
+                    # Daily data
+                    points_to_take = number
+            else:
+                # Default to 1 year
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    points_to_take = 12
+                else:
+                    points_to_take = 365
+            
+            # Take last N points
+            if len(data) > points_to_take:
+                return data.tail(points_to_take)
+            else:
+                return data
+                
+        except Exception as e:
+            self.logger.warning(f"Error filtering data by period {period}: {e}")
+            return data

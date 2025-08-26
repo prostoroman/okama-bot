@@ -857,7 +857,15 @@ class OkamaFinanceBot:
                     parse_mode='Markdown'
                 )
             else:
-                await update.message.reply_text("⚠️ Не удалось получить AI анализ")
+                # Fallback: provide basic analysis based on available data
+                fallback_analysis = self._create_fallback_analysis(analysis_data)
+                await update.message.reply_text(
+                    f"🧠 **Анализ {symbol}** (базовый)\n\n{fallback_analysis}",
+                    parse_mode='Markdown'
+                )
+                await update.message.reply_text(
+                    "⚠️ AI анализ недоступен. Показан базовый анализ на основе данных."
+                )
                 
         except Exception as e:
             error_msg = str(e)
@@ -909,12 +917,63 @@ class OkamaFinanceBot:
     async def _get_yandexgpt_analysis(self, prompt: str) -> Optional[str]:
         """Get AI analysis from YandexGPT"""
         try:
+            self.logger.info(f"Requesting YandexGPT analysis for prompt length: {len(prompt)}")
+            
             # Use the existing YandexGPT service
             response = await self.yandexgpt_service.get_response(prompt)
-            return response
+            
+            if response:
+                self.logger.info(f"YandexGPT response received, length: {len(response)}")
+                return response
+            else:
+                self.logger.warning("YandexGPT returned empty response")
+                return None
+                
         except Exception as e:
-            logger.error(f"Error getting YandexGPT analysis: {e}")
+            self.logger.error(f"Error getting YandexGPT analysis: {e}")
+            self.logger.exception("Full traceback:")
             return None
+
+    def _create_fallback_analysis(self, analysis_data: Dict) -> str:
+        """Create a basic fallback analysis if YandexGPT is not available"""
+        symbol = analysis_data['symbol']
+        period = analysis_data['period']
+        charts_available = analysis_data['charts_available']
+        price_data = analysis_data['price_data']
+
+        fallback_text = f"🧠 **Анализ {symbol}** (базовый)\n\n"
+        fallback_text += f"**Период:** {period}\n"
+        fallback_text += f"**Доступные графики:** {', '.join(charts_available)}\n\n"
+
+        if 'adj_close' in price_data:
+            adj_info = price_data['adj_close']
+            fallback_text += f"📈 **Дневные цены (скорректированные):**\n"
+            fallback_text += f"Текущая цена: {adj_info.get('current_price', 'N/A')}\n"
+            fallback_text += f"Начальная цена: {adj_info.get('start_price', 'N/A')}\n"
+            fallback_text += f"Мин/Макс: {adj_info.get('min_price', 'N/A')} / {adj_info.get('max_price', 'N/A')}\n"
+            fallback_text += f"Период: {adj_info.get('start_date', 'N/A')} - {adj_info.get('end_date', 'N/A')}\n"
+            fallback_text += f"Точки данных: {adj_info.get('data_points', 'N/A')}\n"
+
+        if 'close_monthly' in price_data:
+            monthly_info = price_data['close_monthly']
+            fallback_text += f"\n📊 **Месячные цены:**\n"
+            fallback_text += f"Текущая цена: {monthly_info.get('current_price', 'N/A')}\n"
+            fallback_text += f"Начальная цена: {monthly_info.get('start_price', 'N/A')}\n"
+            fallback_text += f"Мин/Макс: {monthly_info.get('min_price', 'N/A')} / {monthly_info.get('max_price', 'N/A')}\n"
+            fallback_text += f"Период: {monthly_info.get('start_date', 'N/A')} - {monthly_info.get('end_date', 'N/A')}\n"
+            fallback_text += f"Точки данных: {monthly_info.get('data_points', 'N/A')}\n"
+
+        if 'fallback' in price_data:
+            fallback_info = price_data['fallback']
+            fallback_text += f"\n📊 **История цен:**\n"
+            fallback_text += f"Текущая цена: {fallback_info.get('current_price', 'N/A')}\n"
+            fallback_text += f"Начальная цена: {fallback_info.get('start_price', 'N/A')}\n"
+            fallback_text += f"Мин/Макс: {fallback_info.get('min_price', 'N/A')} / {fallback_info.get('max_price', 'N/A')}\n"
+            fallback_text += f"Период: {fallback_info.get('start_date', 'N/A')} - {fallback_info.get('end_date', 'N/A')}\n"
+            fallback_text += f"Точки данных: {fallback_info.get('data_points', 'N/A')}\n"
+
+        fallback_text += "\n⚠️ AI анализ недоступен. Показан базовый анализ на основе данных."
+        return fallback_text
 
     async def _get_asset_price_chart(self, update: Update, symbol: str, period: str = '1Y'):
         """Get only the price charts for an asset"""
