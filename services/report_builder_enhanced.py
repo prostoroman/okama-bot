@@ -217,6 +217,12 @@ class EnhancedReportBuilder:
         period = data.get('period', 'Unknown')
         currency = data.get('currency', 'Unknown')
         
+        # Диагностика данных
+        logger.info(f"Building comparison report for tickers: {tickers}")
+        logger.info(f"Metrics keys: {list(metrics.keys()) if metrics else 'No metrics'}")
+        logger.info(f"Metrics structure: {metrics}")
+        logger.info(f"Prices shape: {prices.shape if hasattr(prices, 'shape') else 'No prices'}")
+        
         # Текстовый отчет
         report_text = f"⚖️ **Сравнение активов**\n\n"
         report_text += f"**Активы:** {', '.join(tickers)}\n"
@@ -234,18 +240,41 @@ class EnhancedReportBuilder:
         
         # Таблица метрик
         if metrics:
-            report_text += "**Сравнительная таблица метрик:**\n"
+            report_text += "**📊 Сравнительная таблица метрик:**\n"
             metrics_table = self._create_metrics_table(metrics)
-            report_text += metrics_table + "\n"
+            report_text += metrics_table + "\n\n"
+        else:
+            report_text += "**⚠️ Метрики:** Не удалось получить метрики для сравнения\n\n"
+            # Попробуем создать простые метрики из prices
+            if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.DataFrame) and not prices.empty:
+                try:
+                    simple_metrics = {}
+                    for ticker in tickers:
+                        if ticker in prices:
+                            ticker_prices = prices[ticker].dropna()
+                            if len(ticker_prices) > 1:
+                                simple_metrics[ticker] = self._compute_simple_metrics(ticker_prices)
+                    
+                    if simple_metrics:
+                        report_text += "**📈 Простые метрики (из цен):**\n"
+                        for ticker, ticker_metrics in simple_metrics.items():
+                            report_text += f"**{ticker}:**\n"
+                            if ticker_metrics.get('total_return') is not None:
+                                report_text += f"• Общая доходность: {ticker_metrics['total_return']*100:.2f}%\n"
+                            if ticker_metrics.get('volatility') is not None:
+                                report_text += f"• Волатильность: {ticker_metrics['volatility']*100:.2f}%\n"
+                            report_text += "\n"
+                except Exception as e:
+                    logger.warning(f"Error computing simple metrics: {e}")
         
         # Корреляции
         if correlation is not None and hasattr(correlation, 'empty') and isinstance(correlation, pd.DataFrame) and not correlation.empty:
-            report_text += "**Корреляции между активами:**\n"
+            report_text += "**🔗 Корреляции между активами:**\n"
             try:
                 correlation_text = correlation.round(3).to_string()
-                report_text += correlation_text + "\n"
+                report_text += correlation_text + "\n\n"
             except Exception as e:
-                report_text += f"Ошибка отображения корреляций: {str(e)}\n"
+                report_text += f"Ошибка отображения корреляций: {str(e)}\n\n"
         
         # Добавим краткий вывод describe, если есть
         describe_df = data.get('describe')
@@ -256,8 +285,8 @@ class EnhancedReportBuilder:
                 key_rows = subset[subset['property'].isin(['CAGR', 'Max drawdowns'])]
                 if hasattr(key_rows, 'empty') and key_rows.empty:
                     key_rows = subset.head(5)
-                report_text += "\n**Краткое описание (describe):**\n"
-                report_text += key_rows.to_string(index=False) + "\n"
+                report_text += "**📋 Краткое описание (describe):**\n"
+                report_text += key_rows.to_string(index=False) + "\n\n"
             except Exception:
                 pass
         
@@ -522,22 +551,52 @@ class EnhancedReportBuilder:
     def _create_metrics_table(self, metrics: Dict[str, Dict[str, Any]]) -> str:
         """Создает таблицу метрик"""
         if not metrics:
-            return "Нет данных"
+            return "Нет данных о метриках"
+        
+        # Диагностика структуры метрик
+        logger.info(f"Metrics structure: {metrics}")
         
         # Создаем DataFrame
         rows = []
         for ticker, metric_data in metrics.items():
+            logger.info(f"Processing metrics for {ticker}: {metric_data}")
+            
+            # Безопасное извлечение значений с проверкой типов
+            cagr = metric_data.get('cagr')
+            volatility = metric_data.get('volatility')
+            sharpe = metric_data.get('sharpe')
+            max_drawdown = metric_data.get('max_drawdown')
+            total_return = metric_data.get('total_return')
+            
+            # Форматируем значения с проверкой на None
             row = {
                 'Тикер': ticker,
-                'CAGR (%)': f"{(metric_data.get('cagr') or 0)*100:.2f}",
-                'Волатильность (%)': f"{(metric_data.get('volatility') or 0)*100:.2f}",
-                'Sharpe': f"{(metric_data.get('sharpe') or 0):.2f}",
-                'Макс. просадка (%)': f"{(metric_data.get('max_drawdown') or 0)*100:.2f}"
+                'CAGR (%)': f"{cagr*100:.2f}" if cagr is not None else "N/A",
+                'Волатильность (%)': f"{volatility*100:.2f}" if volatility is not None else "N/A",
+                'Sharpe': f"{sharpe:.2f}" if sharpe is not None else "N/A",
+                'Макс. просадка (%)': f"{max_drawdown*100:.2f}" if max_drawdown is not None else "N/A",
+                'Общая доходность (%)': f"{total_return*100:.2f}" if total_return is not None else "N/A"
             }
             rows.append(row)
         
-        df = pd.DataFrame(rows)
-        return df.to_string(index=False)
+        if not rows:
+            return "Не удалось создать таблицу метрик"
+        
+        try:
+            df = pd.DataFrame(rows)
+            return df.to_string(index=False)
+        except Exception as e:
+            logger.error(f"Error creating metrics table: {e}")
+            # Fallback - простой текстовый формат
+            result = "**Метрики по активам:**\n\n"
+            for row in rows:
+                result += f"**{row['Тикер']}:**\n"
+                result += f"• CAGR: {row['CAGR (%)']}\n"
+                result += f"• Волатильность: {row['Волатильность (%)']}\n"
+                result += f"• Sharpe: {row['Sharpe']}\n"
+                result += f"• Макс. просадка: {row['Макс. просадка (%)']}\n"
+                result += f"• Общая доходность: {row['Общая доходность (%)']}\n\n"
+            return result
     
     def _fig_to_png(self, fig) -> bytes:
         """Конвертирует matplotlib figure в PNG bytes"""
@@ -594,3 +653,36 @@ class EnhancedReportBuilder:
     def _create_generic_csv(self, data: Dict[str, Any]) -> str:
         """Создает общий CSV"""
         return "No data available for CSV export"
+
+    def _compute_simple_metrics(self, prices: pd.Series) -> Dict[str, Any]:
+        """Вычисляет простые метрики из цен"""
+        try:
+            if len(prices) < 2:
+                return {}
+            
+            # Общая доходность
+            total_return = (prices.iloc[-1] / prices.iloc[0]) - 1.0
+            
+            # Волатильность (годовая)
+            returns = prices.pct_change().dropna()
+            if len(returns) > 1:
+                # Определяем частоту данных
+                if len(returns) > 200:  # Дневные данные
+                    periods_per_year = 252
+                elif len(returns) > 20:  # Месячные данные
+                    periods_per_year = 12
+                else:  # Квартальные или годовые
+                    periods_per_year = 4
+                
+                volatility = float(np.std(returns, ddof=1)) * np.sqrt(periods_per_year)
+            else:
+                volatility = None
+            
+            return {
+                'total_return': total_return,
+                'volatility': volatility
+            }
+            
+        except Exception as e:
+            logger.warning(f"Error computing simple metrics: {e}")
+            return {}
