@@ -296,14 +296,24 @@ class EnhancedIntentParser:
         okama_matches = re.findall(okama_pattern, text, re.IGNORECASE)
         assets.extend(okama_matches)
         
-        # Ищем обычные тикеры (без точки)
+        # Ищем обычные тикеры (без точки), исключая части уже найденных okama-тикеров
         ticker_pattern = r'\b([A-Z]{1,5})\b'
         ticker_matches = re.findall(ticker_pattern, text, re.IGNORECASE)
         
-        # Фильтруем тикеры, которые не являются словами
+        # Собираем множество всех частей, входящих в уже найденные okama-тикеры, чтобы не дублировать
+        okama_parts = set()
+        for m in okama_matches:
+            parts = m.upper().split('.')
+            okama_parts.update(parts)
+        
+        # Фильтруем тикеры, которые не являются словами валют и не являются частями уже найденных okama-тикеров
         for ticker in ticker_matches:
-            if ticker.lower() not in ['usd', 'eur', 'rub', 'cny', 'gbp', 'jpy']:
-                assets.append(ticker)
+            upper_ticker = ticker.upper()
+            if upper_ticker.lower() in ['usd', 'eur', 'rub', 'cny', 'gbp', 'jpy']:
+                continue
+            if upper_ticker in okama_parts:
+                continue
+            assets.append(ticker)
         
         # Ищем названия активов через алиасы
         text_lower = text.lower()
