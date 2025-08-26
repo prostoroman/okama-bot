@@ -119,6 +119,15 @@ class EnhancedReportBuilder:
         report_text += f"**Период:** {period}\n"
         report_text += f"**Валюта:** {currency}\n\n"
         
+        # Если доступны человекочитаемые имена
+        names = data.get('names') or {}
+        if isinstance(names, dict) and names:
+            try:
+                pretty_names = [f"{t} — {names.get(t, t)}" for t in tickers]
+                report_text += "**Названия активов:**\n" + "\n".join([f"• {s}" for s in pretty_names]) + "\n\n"
+            except Exception:
+                pass
+        
         # Таблица метрик
         if metrics:
             report_text += "**Сравнительная таблица метрик:**\n"
@@ -134,40 +143,110 @@ class EnhancedReportBuilder:
             except Exception as e:
                 report_text += f"Ошибка отображения корреляций: {str(e)}\n"
         
+        # Добавим краткий вывод describe, если есть
+        describe_df = data.get('describe')
+        if isinstance(describe_df, pd.DataFrame) and not describe_df.empty:
+            try:
+                # Покажем только ключевые строки (CAGR и Max drawdowns) если найдены
+                subset = describe_df.copy()
+                key_rows = subset[subset['property'].isin(['CAGR', 'Max drawdowns'])]
+                if key_rows.empty:
+                    key_rows = subset.head(5)
+                report_text += "\n**Краткое описание (describe):**\n"
+                report_text += key_rows.to_string(index=False) + "\n"
+            except Exception:
+                pass
+        
         # Графики
         charts = []
+        
+        # 1) Нормализованные цены и накопленная доходность (fallback по prices)
         if isinstance(prices, pd.DataFrame) and not prices.empty:
-            # Нормализованные цены
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
-            
-            # График цен
             for i, ticker in enumerate(tickers):
                 if ticker in prices:
                     normalized_prices = prices[ticker] / prices[ticker].iloc[0] * 100
                     ax1.plot(normalized_prices.index, normalized_prices.values, 
                             label=ticker, color=self.colors[i % len(self.colors)], linewidth=2)
-            
             ax1.set_title('Нормализованные цены (база = 100)', fontsize=14, fontweight='bold')
             ax1.set_ylabel('Цена (нормализованная)', fontsize=12)
             ax1.legend()
             ax1.grid(True, alpha=0.3)
             ax1.tick_params(axis='x', rotation=45)
-            
-            # График доходности
             returns = prices.pct_change().dropna()
             cumulative_returns = (1 + returns).cumprod()
-            
             for i, ticker in enumerate(tickers):
                 if ticker in cumulative_returns:
                     ax2.plot(cumulative_returns.index, cumulative_returns[ticker].values,
                             label=ticker, color=self.colors[i % len(self.colors)], linewidth=2)
-            
             ax2.set_title('Накопленная доходность', fontsize=14, fontweight='bold')
             ax2.set_ylabel('Доходность (разы)', fontsize=12)
             ax2.legend()
             ax2.grid(True, alpha=0.3)
             ax2.tick_params(axis='x', rotation=45)
-            
+            plt.tight_layout()
+            charts.append(self._fig_to_png(fig))
+        
+        # 2) Wealth indexes из AssetList
+        wealth_indexes = data.get('wealth_indexes')
+        if isinstance(wealth_indexes, pd.DataFrame) and not wealth_indexes.empty:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            for i, ticker in enumerate(tickers):
+                if ticker in wealth_indexes:
+                    ax.plot(wealth_indexes.index, wealth_indexes[ticker].values, 
+                            label=ticker, color=self.colors[i % len(self.colors)], linewidth=2)
+            ax.set_title('Wealth Indexes (накопленная стоимость, base=1)', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Индекс богатства (раз)')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+            ax.tick_params(axis='x', rotation=45)
+            plt.tight_layout()
+            charts.append(self._fig_to_png(fig))
+        
+        # 3) История просадок
+        drawdowns = data.get('drawdowns')
+        if isinstance(drawdowns, pd.DataFrame) and not drawdowns.empty:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            for i, ticker in enumerate(tickers):
+                if ticker in drawdowns:
+                    ax.plot(drawdowns.index, drawdowns[ticker].values, 
+                            label=ticker, color=self.colors[i % len(self.colors)], linewidth=1.5)
+            ax.set_title('Просадки (Drawdowns)', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Просадка')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+            ax.tick_params(axis='x', rotation=45)
+            plt.tight_layout()
+            charts.append(self._fig_to_png(fig))
+        
+        # 4) Дивидендная доходность
+        dividend_yield = data.get('dividend_yield')
+        if isinstance(dividend_yield, pd.DataFrame) and not dividend_yield.empty:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            for i, ticker in enumerate(tickers):
+                if ticker in dividend_yield:
+                    ax.plot(dividend_yield.index, dividend_yield[ticker].values, 
+                            label=ticker, color=self.colors[i % len(self.colors)], linewidth=1.5)
+            ax.set_title('Дивидендная доходность (история)', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Див. доходность')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+            ax.tick_params(axis='x', rotation=45)
+            plt.tight_layout()
+            charts.append(self._fig_to_png(fig))
+        
+        # 5) Скользящая корреляция с бенчмарком
+        index_corr = data.get('index_corr')
+        if isinstance(index_corr, pd.DataFrame) and not index_corr.empty:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            for i, col in enumerate(index_corr.columns):
+                ax.plot(index_corr.index, index_corr[col].values, 
+                        label=col, color=self.colors[i % len(self.colors)], linewidth=1.5)
+            ax.set_title('Скользящая корреляция с бенчмарком (первый актив)', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Корреляция')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+            ax.tick_params(axis='x', rotation=45)
             plt.tight_layout()
             charts.append(self._fig_to_png(fig))
         
