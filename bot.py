@@ -301,7 +301,7 @@ class OkamaFinanceBot:
             if asset_info.get('volatility') != 'N/A':
                 response += f"**Волатильность:** {asset_info.get('volatility')}\n"
             
-            await update.message.reply_text(response, parse_mode='Markdown')
+            await self._send_long_text(update, response, parse_mode='Markdown')
             # Send chart if provided
             chart_bytes = asset_info.get('chart')
             if chart_bytes:
@@ -590,16 +590,71 @@ class OkamaFinanceBot:
                 "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
             )
 
-    async def _send_long_text(self, update: Update, text: str):
-        if not text:
-            return
-        max_len = getattr(Config, 'MAX_MESSAGE_LENGTH', 4000)
-        start = 0
-        while start < len(text):
-            chunk = text[start:start + max_len]
-            await update.message.reply_text(chunk)
-            start += max_len
+    async def _send_long_text(self, update: Update, text: str, parse_mode: str = 'Markdown'):
+        """Send long text by splitting it into multiple messages if needed"""
+        max_length = 4000  # Leave some buffer for safety
+        
+        if len(text) <= max_length:
+            # Single message is fine
+            await update.message.reply_text(text, parse_mode=parse_mode)
+        else:
+            # Split into multiple messages
+            parts = self._split_text_into_parts(text, max_length)
+            
+            for i, part in enumerate(parts, 1):
+                if i == 1:
+                    # First part
+                    await update.message.reply_text(part, parse_mode=parse_mode)
+                else:
+                    # Subsequent parts
+                    await update.message.reply_text(f"📄 Продолжение ({i}/{len(parts)}):\n\n{part}", parse_mode=parse_mode)
     
+    def _split_text_into_parts(self, text: str, max_length: int) -> List[str]:
+        """Split text into parts that fit within max_length"""
+        parts = []
+        current_part = ""
+        
+        # Split by paragraphs first
+        paragraphs = text.split('\n\n')
+        
+        for paragraph in paragraphs:
+            # If adding this paragraph would exceed max_length
+            if len(current_part) + len(paragraph) + 2 > max_length:
+                if current_part:
+                    parts.append(current_part.strip())
+                    current_part = paragraph
+                else:
+                    # Single paragraph is too long, split by sentences
+                    sentences = paragraph.split('. ')
+                    for sentence in sentences:
+                        if len(current_part) + len(sentence) + 2 > max_length:
+                            if current_part:
+                                parts.append(current_part.strip())
+                                current_part = sentence
+                            else:
+                                # Single sentence is too long, split by words
+                                words = sentence.split(' ')
+                                for word in words:
+                                    if len(current_part) + len(word) + 1 > max_length:
+                                        if current_part:
+                                            parts.append(current_part.strip())
+                                            current_part = word
+                                        else:
+                                            # Single word is too long, truncate
+                                            parts.append(word[:max_length-3] + "...")
+                                    else:
+                                        current_part += " " + word if current_part else word
+                        else:
+                            current_part += ". " + sentence if current_part else sentence
+            else:
+                current_part += "\n\n" + paragraph if current_part else paragraph
+        
+        # Add the last part
+        if current_part.strip():
+            parts.append(current_part.strip())
+        
+        return parts
+
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks"""
         query = update.callback_query
@@ -696,9 +751,11 @@ class OkamaFinanceBot:
             # Get AI response
             response = self.yandexgpt_service.ask_question(question)
             
-            # Send response
-            await update.message.reply_text(
-                f"💬 AI Financial Advisor\n\n{response}"
+            # Send response with automatic splitting if needed
+            await self._send_long_text(
+                update,
+                f"💬 AI Financial Advisor\n\n{response}",
+                parse_mode='Markdown'
             )
             
         except Exception as e:
@@ -790,8 +847,8 @@ class OkamaFinanceBot:
                 response += f"**Период:** {fallback_info.get('start_date', 'N/A')} - {fallback_info.get('end_date', 'N/A')}\n"
                 response += f"**Точки данных:** {fallback_info.get('data_points', 'N/A')}\n"
             
-            # Send text response first
-            await update.message.reply_text(response, parse_mode='Markdown')
+            # Send text response first with automatic splitting if needed
+            await self._send_long_text(update, response, parse_mode='Markdown')
             
             # Send charts and get AI analysis
             await self._send_charts_with_ai_analysis(update, symbol, period, charts_info, price_data_info)
@@ -862,14 +919,17 @@ class OkamaFinanceBot:
             ai_response = await self._get_yandexgpt_analysis(prompt)
             
             if ai_response:
-                await update.message.reply_text(
+                # Send AI analysis with automatic splitting if needed
+                await self._send_long_text(
+                    update, 
                     f"🧠 **AI анализ {symbol}**\n\n{ai_response}",
                     parse_mode='Markdown'
                 )
             else:
                 # Fallback: provide basic analysis based on available data
                 fallback_analysis = self._create_fallback_analysis(analysis_data)
-                await update.message.reply_text(
+                await self._send_long_text(
+                    update,
                     f"🧠 **Анализ {symbol}** (базовый)\n\n{fallback_analysis}",
                     parse_mode='Markdown'
                 )
