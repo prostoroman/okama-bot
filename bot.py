@@ -927,7 +927,7 @@ class OkamaFinanceBot:
             self.logger.info(f"Requesting YandexGPT analysis for prompt length: {len(prompt)}")
             
             # Use the existing YandexGPT service
-            response = await self.yandexgpt_service.get_response(prompt)
+            response = self.yandexgpt_service.ask_question(prompt)
             
             if response:
                 self.logger.info(f"YandexGPT response received, length: {len(response)}")
