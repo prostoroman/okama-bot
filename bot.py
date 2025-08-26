@@ -89,7 +89,7 @@ class OkamaFinanceBot:
 📊 **Популярные активы:**
 • **ETF:** VOO.US, SPY.US, QQQ.US
 • **Индексы:** SPX.INDX, RTSI.INDX, DAX.INDX
-• **Товары:** GC.COMM, BRENT.COMM, SILVER.COMM
+• **Товары:** XAU.COMM, BRENT.COMM, SILVER.COMM
 • **Валюты:** EURUSD.FX, GBPUSD.FX
 • **Акции:** AAPL.US, TSLA.US, SBER.MOEX
 
@@ -99,6 +99,8 @@ class OkamaFinanceBot:
 /price [symbol] - Текущая цена
 /dividends [symbol] - История дивидендов
 /chat - Чат с AI-советником
+/test [symbol] - Тест Okama интеграции
+/testai - Тест YandexGPT
 
 Я автоматически:
 ✅ Распознаю ваши намерения
