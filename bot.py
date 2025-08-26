@@ -72,7 +72,7 @@ class OkamaFinanceBot:
 Привет, {user_name}! Я помогу с анализом рынков и портфелей.
 
 **Что умею:**
-- Анализ одного актива
+- Анализ одного актива с графиками цен
 - Сравнение нескольких активов
 - Анализ портфеля (веса, риск/доходность, efficient frontier)
 - Макро/товары/валюты
@@ -88,14 +88,17 @@ class OkamaFinanceBot:
 
 **Команды:**
 /help — список команд
-/asset [тикер] — информация об активе
+/asset [тикер] [период] — информация об активе с графиком цен
+/chart [тикер] [период] — график цен актива
 /price [тикер] — текущая цена
 /dividends [тикер] — дивиденды
 /chat [вопрос] — вопрос AI‑советнику
 /test [тикер] — тест Okama
 /testai — тест YandexGPT
 
-Также можно просто прислать тикер (например, AAPL.US) — я пойму.
+**Периоды для графиков:** 1Y (год), 2Y (2 года), 5Y (5 лет), MAX (весь период)
+
+Также можно просто прислать тикер (например, AAPL.US) — я пойму и покажу график.
 
 **Популярные тикеры:**
 - ETF: VOO.US, SPY.US, QQQ.US
@@ -125,8 +128,9 @@ class OkamaFinanceBot:
         help_text = """🧠 **Okama Financial Brain - Помощь**
 
 🚀 **Основные команды:**
-/asset [symbol] - Полная информация об активе
+/asset [symbol] [period] - Полная информация об активе с графиком цен
 /price [symbol] - Текущая цена актива
+/chart [symbol] [period] - График цен актива
 /dividends [symbol] - История дивидендов
 /test [symbol] - Тест подключения к Okama API
 /testai - Тест подключения к YandexGPT API
@@ -135,55 +139,17 @@ class OkamaFinanceBot:
 /chat [question] - Получить финансовый совет от AI
 
 📊 **Примеры команд:**
-• /asset VOO.US
-• /price SPY.US
-• /dividends AGG.US
+• /asset VOO.US 1Y
+• /chart SPY.US 2Y
+• /price AGG.US
+• /dividends VOO.US
 • /test VOO.US
 
-💡 **Естественный язык (рекомендуется!):**
-Просто напишите ваш запрос естественным языком:
-
-**Анализ активов:**
-• "Проанализируй Apple"
-• "Информация о Tesla"
-• "Покажи данные по SBER.MOEX"
-
-**Сравнение активов:**
-• "Сравни Apple и Microsoft"
-• "Что лучше: VOO.US или SPY.US?"
-• "Сопоставь золото и серебро"
-
-**Анализ портфеля:**
-• "Портфель из VOO.US и AGG.US"
-• "Оптимизируй портфель с весами 60% акции, 40% облигации"
-• "Анализ рисков портфеля"
-
-**Макроэкономический анализ:**
-• "Сравни S&P 500 и NASDAQ"
-• "Анализ валютных пар"
-• "Динамика цен на нефть и золото"
-
-**Анализ инфляции:**
-• "Инфляция в США за последние 5 лет"
-• "CPI данные по России"
-• "Тренды инфляции в Европе"
-
-**Специфические запросы:**
-• "Анализ в рублях"
-• "За период 2020-2024"
-• "Сравни доходность к риску"
-
-🎯 **Что происходит автоматически:**
-1. **Распознавание намерения** - понимаю, что вы хотите
-2. **Нормализация активов** - перевожу названия в тикеры Okama
-3. **Получение данных** - загружаю актуальную информацию
-4. **Построение отчетов** - создаю аналитические таблицы
-5. **Генерация графиков** - визуализирую данные
-6. **AI-анализ** - предоставляю интеллектуальные выводы
-7. **Рекомендации** - даю практические советы
-
-🔧 **Нужна помощь?**
-Просто напишите ваш вопрос естественным языком или используйте команды выше!"""
+📈 **Доступные периоды для графиков:**
+• 1Y - 1 год (по умолчанию)
+• 2Y - 2 года
+• 5Y - 5 лет
+• MAX - весь доступный период"""
         
         await update.message.reply_text(help_text)
     
@@ -191,15 +157,26 @@ class OkamaFinanceBot:
         """Handle /asset command"""
         if not context.args:
             await update.message.reply_text(
-                "Информация об активе\n\n"
+                "📊 Информация об активе и история цен\n\n"
                 "Пожалуйста, укажите символ:\n"
                 "/asset VOO.US\n\n"
+                "Доступные периоды для графика:\n"
+                "/asset VOO.US 1Y (1 год)\n"
+                "/asset VOO.US 2Y (2 года)\n"
+                "/asset VOO.US 5Y (5 лет)\n"
+                "/asset VOO.US MAX (весь период)\n\n"
                 "Или просто отправьте мне символ напрямую!"
             )
             return
         
         symbol = context.args[0].upper()
-        await self._get_asset_info(update, symbol)
+        
+        # Check if period is specified
+        period = '1Y'  # Default period
+        if len(context.args) > 1:
+            period = context.args[1].upper()
+        
+        await self._get_asset_info_with_chart(update, symbol, period)
     
     async def price_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /price command"""
@@ -228,6 +205,31 @@ class OkamaFinanceBot:
         
         symbol = context.args[0].upper()
         await self._get_asset_dividends(update, symbol)
+    
+    async def chart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /chart command"""
+        if not context.args:
+            await update.message.reply_text(
+                "📈 График цен актива\n\n"
+                "Пожалуйста, укажите символ и период:\n"
+                "/chart VOO.US 1Y\n\n"
+                "Доступные периоды:\n"
+                "/chart VOO.US 1Y (1 год)\n"
+                "/chart VOO.US 2Y (2 года)\n"
+                "/chart VOO.US 5Y (5 лет)\n"
+                "/chart VOO.US MAX (весь период)\n\n"
+                "Или просто отправьте мне символ напрямую!"
+            )
+            return
+        
+        symbol = context.args[0].upper()
+        
+        # Check if period is specified
+        period = '1Y'  # Default period
+        if len(context.args) > 1:
+            period = context.args[1].upper()
+        
+        await self._get_asset_price_chart(update, symbol, period)
     
     async def chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chat command"""
@@ -518,17 +520,16 @@ class OkamaFinanceBot:
                 if not valid_tickers:
                     await update.message.reply_text("Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
                     return
-                result = self.okama_handler.get_single_asset(valid_tickers[0], base_currency=parsed.options.get('base_currency'))
-                report_text, images = self.report_builder.build_single_asset_report(result)
-                ai_summary = self.analysis_engine.summarize('single_asset', {"metrics": result.get("metrics", {})}, user_message)
+                # Use new enhanced asset info with chart for single assets
+                await self._get_asset_info_with_chart(update, valid_tickers[0], '1Y')
+                return
 
             elif parsed.intent == 'asset_compare' or (parsed.intent == 'macro'):
                 if len(valid_tickers) < 2:
-                    # If only one valid, treat as single asset
+                    # If only one valid, treat as single asset with chart
                     if len(valid_tickers) == 1:
-                        result = self.okama_handler.get_single_asset(valid_tickers[0], base_currency=parsed.options.get('base_currency'))
-                        report_text, images = self.report_builder.build_single_asset_report(result)
-                        ai_summary = self.analysis_engine.summarize('single_asset', {"metrics": result.get("metrics", {})}, user_message)
+                        await self._get_asset_info_with_chart(update, valid_tickers[0], '1Y')
+                        return
                     else:
                         await update.message.reply_text("Для сравнения укажите как минимум два актива.")
                         return
@@ -693,6 +694,119 @@ class OkamaFinanceBot:
         except Exception as e:
             await update.message.reply_text(f"❌ Error getting AI response: {str(e)}")
     
+    async def _get_asset_info_with_chart(self, update: Update, symbol: str, period: str = '1Y'):
+        """Get comprehensive asset information with price history chart"""
+        try:
+            await update.message.reply_text(f"📊 Получаю информацию об активе {symbol} и историю цен...")
+            
+            # Get basic asset info
+            asset_info = self.asset_service.get_asset_info(symbol)
+            
+            if 'error' in asset_info:
+                # Check if we have suggestions
+                if 'suggestions' in asset_info:
+                    await update.message.reply_text(
+                        f"❌ {asset_info['error']}",
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await update.message.reply_text(f"❌ Ошибка: {asset_info['error']}")
+                return
+            
+            # Get price history and chart
+            price_history = self.asset_service.get_asset_price_history(symbol, period)
+            
+            if 'error' in price_history:
+                # If we can't get the chart, still show basic info
+                await update.message.reply_text(
+                    f"⚠️ Удалось получить информацию об активе, но не удалось построить график: {price_history['error']}"
+                )
+                await self._get_asset_info(update, symbol)
+                return
+            
+            # Build response message with enhanced information
+            response = f"📊 **Информация об активе {symbol}**\n\n"
+            response += f"**Название:** {asset_info.get('name', 'N/A')}\n"
+            response += f"**Страна:** {asset_info.get('country', 'N/A')}\n"
+            response += f"**Биржа:** {asset_info.get('exchange', 'N/A')}\n"
+            response += f"**Валюта:** {asset_info.get('currency', 'N/A')}\n"
+            response += f"**Тип:** {asset_info.get('type', 'N/A')}\n"
+            response += f"**ISIN:** {asset_info.get('isin', 'N/A')}\n"
+            response += f"**Первый день:** {asset_info.get('first_date', 'N/A')}\n"
+            response += f"**Последний день:** {asset_info.get('last_date', 'N/A')}\n"
+            response += f"**Длина периода:** {asset_info.get('period_length', 'N/A')}\n\n"
+            
+            # Add performance metrics
+            if asset_info.get('current_price'):
+                response += f"**Текущая цена:** {asset_info.get('current_price')} {asset_info.get('currency', '')}\n"
+            
+            if asset_info.get('annual_return') != 'N/A':
+                response += f"**Годовая доходность:** {asset_info.get('annual_return')}\n"
+            
+            if asset_info.get('total_return') != 'N/A':
+                response += f"**Общая доходность:** {asset_info.get('total_return')}\n"
+            
+            if asset_info.get('volatility') != 'N/A':
+                response += f"**Волатильность:** {asset_info.get('volatility')}\n"
+            
+            # Add price history statistics
+            response += f"\n📈 **Статистика за период {period}:**\n"
+            response += f"**Текущая цена:** {price_history.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+            response += f"**Начальная цена:** {price_history.get('start_price', 'N/A')} {price_history.get('currency', '')}\n"
+            response += f"**Изменение:** {price_history.get('price_change', 'N/A'):+.2f}%\n"
+            response += f"**Минимальная цена:** {price_history.get('min_price', 'N/A')} {price_history.get('currency', '')}\n"
+            response += f"**Максимальная цена:** {price_history.get('max_price', 'N/A')} {price_history.get('currency', '')}\n"
+            response += f"**Период:** {price_history.get('start_date', 'N/A')} - {price_history.get('end_date', 'N/A')}\n"
+            response += f"**Количество точек данных:** {price_history.get('data_points', 'N/A')}\n"
+            
+            # Send text response first
+            await update.message.reply_text(response, parse_mode='Markdown')
+            
+            # Send the price chart
+            if 'chart' in price_history:
+                await update.message.reply_photo(
+                    photo=price_history['chart'],
+                    caption=f"📈 График цен {symbol} за период {period}"
+                )
+            else:
+                await update.message.reply_text("⚠️ Не удалось создать график цен")
+                
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error in _get_asset_info_with_chart: {error_msg}")
+            await update.message.reply_text(f"❌ Ошибка при получении информации: {error_msg}")
+
+    async def _get_asset_price_chart(self, update: Update, symbol: str, period: str = '1Y'):
+        """Get only the price chart for an asset"""
+        try:
+            await update.message.reply_text(f"📈 Получаю график цен для {symbol} за период {period}...")
+            
+            # Get price history and chart
+            price_history = self.asset_service.get_asset_price_history(symbol, period)
+            
+            if 'error' in price_history:
+                await update.message.reply_text(f"❌ Ошибка: {price_history['error']}")
+                return
+            
+            # Send the price chart
+            if 'chart' in price_history:
+                caption = f"📈 График цен {symbol} за период {period}\n\n"
+                caption += f"Текущая цена: {price_history.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+                caption += f"Изменение: {price_history.get('price_change', 'N/A'):+.2f}%\n"
+                caption += f"Период: {price_history.get('start_date', 'N/A')} - {price_history.get('end_date', 'N/A')}"
+                
+                await update.message.reply_photo(
+                    photo=price_history['chart'],
+                    caption=caption
+                )
+            else:
+                await update.message.reply_text("⚠️ Не удалось создать график цен")
+                
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error in _get_asset_price_chart: {error_msg}")
+            await update.message.reply_text(f"❌ Ошибка при получении графика: {error_msg}")
+
     def run(self):
         """Run the bot"""
         # Create application
@@ -704,6 +818,7 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("asset", self.asset_command))
         application.add_handler(CommandHandler("price", self.price_command))
         application.add_handler(CommandHandler("dividends", self.dividends_command))
+        application.add_handler(CommandHandler("chart", self.chart_command))
         application.add_handler(CommandHandler("chat", self.chat_command))
         application.add_handler(CommandHandler("test", self.test_command))
         application.add_handler(CommandHandler("testai", self.test_ai_command))
