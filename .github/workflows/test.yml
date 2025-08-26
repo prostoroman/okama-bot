@@ -29,15 +29,25 @@ jobs:
 
     - name: 🔍 Test imports
       run: |
-        python -c "from bot import OkamaFinanceBotV2; print('✅ Bot import OK')"
+        python -c "from bot import OkamaFinanceBot; print('✅ Bot import OK')"
         python -c "from services.asset_service import AssetService; print('✅ AssetService import OK')"
         python -c "from yandexgpt_service import YandexGPTService; print('✅ YandexGPTService import OK')"
+        python -c "from services.intent_parser_enhanced import EnhancedIntentParser; print('✅ EnhancedIntentParser import OK')"
+        python -c "from services.asset_resolver_enhanced import EnhancedAssetResolver; print('✅ EnhancedAssetResolver import OK')"
+        python -c "from services.okama_handler_enhanced import EnhancedOkamaHandler; print('✅ EnhancedOkamaHandler import OK')"
+        python -c "from services.report_builder_enhanced import EnhancedReportBuilder; print('✅ EnhancedReportBuilder import OK')"
+        python -c "from services.analysis_engine_enhanced import EnhancedAnalysisEngine; print('✅ EnhancedAnalysisEngine import OK')"
+        python -c "from services.financial_brain_enhanced import EnhancedOkamaFinancialBrain; print('✅ EnhancedOkamaFinancialBrain import OK')"
+
+    - name: 🧪 Run tests
+      run: |
+        python -m unittest discover tests/ -v
 
     - name: 📊 Test completion
       run: |
         echo "🎯 All tests completed successfully!"
         echo "📈 Test coverage: Basic functionality verified"
-        echo "🚀 Okama Finance Bot v2.0.0 is ready!"
+        echo "🚀 Okama Finance Bot is ready!"
 
   lint:
     runs-on: ubuntu-latest
