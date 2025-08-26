@@ -869,7 +869,7 @@ class OkamaFinanceBot:
                 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error in _get_ai_analysis_for_charts: {error_msg}")
+            self.logger.error(f"Error in _get_ai_analysis_for_charts: {error_msg}")
             await update.message.reply_text(f"❌ Ошибка при получении AI анализа: {error_msg}")
     
     def _create_chart_analysis_prompt(self, analysis_data: Dict) -> str:
