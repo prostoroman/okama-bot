@@ -99,24 +99,25 @@ class AssetService:
             
             # Get current price
             try:
-                price_data = asset.price
-                if price_data is not None:
-                    if hasattr(price_data, 'iloc') and hasattr(price_data, 'index'):
-                        # It's a pandas Series/DataFrame
-                        if len(price_data) > 0:
-                            info['current_price'] = price_data.iloc[-1]
-                    elif isinstance(price_data, (int, float)):
-                        # It's a single price value
-                        info['current_price'] = price_data
+                price_info = self.get_asset_price(symbol)
+                price_val = price_info.get('price') if isinstance(price_info, dict) else None
+                if isinstance(price_val, (int, float)):
+                    try:
+                        import numpy as np
+                    except Exception:
+                        np = None
+                    price_val_float = float(price_val)
+                    is_finite = (np is not None and np.isfinite(price_val_float)) or (
+                        np is None and not (price_val_float != price_val_float or price_val_float in (float('inf'), float('-inf')))
+                    )
+                    if is_finite:
+                        info['current_price'] = price_val_float
                     else:
-                        # Try to get the last value
-                        try:
-                            if len(price_data) > 0:
-                                info['current_price'] = price_data[-1]
-                        except (TypeError, IndexError):
-                            info['current_price'] = 'N/A'
+                        info['current_price'] = None
+                else:
+                    info['current_price'] = None
             except:
-                info['current_price'] = 'N/A'
+                info['current_price'] = None
             
             # Get performance metrics
             try:
