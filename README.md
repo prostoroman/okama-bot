@@ -345,3 +345,9 @@ class NewService:
 ---
 
 **Okama Finance Bot v3.x** - Ваш интеллектуальный помощник в мире финансов! 🚀📊
+
+## Troubleshooting
+
+- If free-form queries return a generic error, ensure dependencies are installed (see `requirements.txt`).
+- Set `YANDEX_API_KEY` and `YANDEX_FOLDER_ID` in environment; otherwise AI features will degrade gracefully.
+- MOEX data may be temporarily unavailable; the bot now surfaces data errors in responses instead of failing silently.
