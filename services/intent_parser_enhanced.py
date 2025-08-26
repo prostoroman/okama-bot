@@ -130,6 +130,7 @@ class EnhancedIntentParser:
             'salesforce': 'CRM.US',
             
             # Акции MOEX
+            'сбер': 'SBER.MOEX',
             'сбербанк': 'SBER.MOEX',
             'газпром': 'GAZP.MOEX',
             'лукойл': 'LKOH.MOEX',
