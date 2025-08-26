@@ -279,7 +279,7 @@ class OkamaFinanceBot:
             response += f"**ISIN:** {asset_info.get('isin', 'N/A')}\n"
             response += f"**Первый день:** {asset_info.get('first_date', 'N/A')}\n"
             response += f"**Последний день:** {asset_info.get('last_date', 'N/A')}\n"
-            response += f"**Длина периода:** {asset_info.get('period_length', 'N/A')} лет\n\n"
+            response += f"**Длина периода:** {asset_info.get('period_length', 'N/A')}\n\n"
             
             # Add performance metrics
             if asset_info.get('current_price'):
