@@ -239,19 +239,22 @@ class EnhancedIntentParser:
         if not text:
             return ParsedIntent(intent='unknown', assets=[], raw_text=text)
         
+        # Предобработка: не разбиваем S&P на отдельные буквы
+        normalized_text = text.replace('S&P', 'S&P')
+        
         # Определяем намерение
-        intent = self._determine_intent(text)
+        intent = self._determine_intent(normalized_text)
         
         # Извлекаем активы
-        assets = self._extract_assets(text)
+        assets = self._extract_assets(normalized_text)
         
         # Извлекаем параметры
-        params = self._extract_parameters(text)
+        params = self._extract_parameters(normalized_text)
         
         # Извлекаем веса для портфеля
         weights = None
         if intent == 'portfolio_analysis':
-            weights = self._extract_weights(text, len(assets))
+            weights = self._extract_weights(normalized_text, len(assets))
         
         # Определяем страну для инфляции
         country = params.get('country')
@@ -280,16 +283,17 @@ class EnhancedIntentParser:
                     return intent
         
         # Если намерение не определено, пытаемся угадать по контексту
-        if len(self._extract_assets(text)) == 1:
+        extracted = self._extract_assets(text)
+        if len(extracted) == 1:
             return 'asset_single'
-        elif len(self._extract_assets(text)) > 1:
+        elif len(extracted) > 1:
             return 'asset_compare'
         else:
             return 'unknown'
     
     def _extract_assets(self, text: str) -> List[str]:
         """Извлекает активы из текста"""
-        assets = []
+        assets: List[str] = []
         
         # Ищем тикеры в формате okama
         okama_pattern = r'\b([A-Z]{1,6}\.[A-Z]{2,6})\b'
@@ -297,44 +301,55 @@ class EnhancedIntentParser:
         assets.extend(okama_matches)
         
         # Ищем обычные тикеры (без точки), исключая части уже найденных okama-тикеров
-        ticker_pattern = r'\b([A-Z]{1,5})\b'
+        ticker_pattern = r'\b([A-Z]{2,5})\b'  # минимум 2 символа
         ticker_matches = re.findall(ticker_pattern, text, re.IGNORECASE)
         
-        # Собираем множество всех частей, входящих в уже найденные okama-тикеры, чтобы не дублировать
+        # Собираем множество всех частей, входящих в уже найденные okama-тикеры
         okama_parts = set()
         for m in okama_matches:
             parts = m.upper().split('.')
             okama_parts.update(parts)
         
+        # Исключаем валютные обозначения и служебные токены
+        blacklist = {'USD', 'EUR', 'RUB', 'CNY', 'GBP', 'JPY', 'FX', 'INFL'}
+        
         # Фильтруем тикеры, которые не являются словами валют и не являются частями уже найденных okama-тикеров
         for ticker in ticker_matches:
             upper_ticker = ticker.upper()
-            if upper_ticker.lower() in ['usd', 'eur', 'rub', 'cny', 'gbp', 'jpy']:
+            if upper_ticker in blacklist:
                 continue
             if upper_ticker in okama_parts:
                 continue
-            assets.append(ticker)
+            assets.append(upper_ticker)
         
         # Ищем названия активов через алиасы
         text_lower = text.lower()
+        single_currency_symbols = {'USD.FX','EUR.FX','RUB.FX','CNY.FX','GBP.FX','JPY.FX'}
         for alias, symbol in self.asset_aliases.items():
             if alias in text_lower:
+                # Пропускаем одиночные валюты, они должны парситься как currency, а не актив
+                if symbol in single_currency_symbols:
+                    continue
                 if symbol not in assets:
                     assets.append(symbol)
         
+        # Убираем слишком длинные plain-токены без точки (например, APPLE)
+        assets = [a for a in assets if ('.' in a) or (a.isalpha() and 2 <= len(a) <= 4)]
+        
         # Убираем дубликаты, сохраняя порядок
         seen = set()
-        unique_assets = []
+        unique_assets: List[str] = []
         for asset in assets:
-            if asset.upper() not in seen:
-                seen.add(asset.upper())
-                unique_assets.append(asset.upper())
+            up = asset.upper()
+            if up not in seen:
+                seen.add(up)
+                unique_assets.append(up)
         
         return unique_assets
     
     def _extract_parameters(self, text: str) -> Dict[str, str]:
         """Извлекает все параметры из текста"""
-        params = {}
+        params: Dict[str, str] = {}
         text_lower = text.lower()
         
         # Извлечение валюты
@@ -403,24 +418,19 @@ class EnhancedIntentParser:
             r'(\d+(?:\.\d+)?)\s*%\s*,\s*(\d+(?:\.\d+)?)\s*%',
         ]
         
-        weights = []
+        weights: List[float] = []
         for pattern in weight_patterns:
             matches = re.findall(pattern, text_lower)
             if matches:
                 if isinstance(matches[0], tuple):
-                    # Для паттернов с несколькими группами
                     for match in matches:
                         weights.extend([float(w) / 100.0 for w in match])
                 else:
-                    # Для простых паттернов
                     weights.extend([float(w) / 100.0 for w in matches])
         
-        # Если веса найдены и их достаточно
         if len(weights) >= num_assets:
             return weights[:num_assets]
         
-        # Если веса не указаны или недостаточно, возвращаем None
-        # (будет распределено поровну в OkamaHandler)
         return None
     
     def _normalize_currency(self, currency: str) -> Optional[str]:
@@ -452,7 +462,6 @@ class EnhancedIntentParser:
     
     def get_default_currency(self, asset: str) -> Optional[str]:
         """Возвращает валюту по умолчанию для актива"""
-        # Определяем валюту по классу актива
         if asset.endswith('.US'):
             return 'USD'
         elif asset.endswith('.MOEX'):
