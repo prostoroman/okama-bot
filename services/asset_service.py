@@ -466,211 +466,81 @@ class AssetService:
             charts = {}
             price_data_info = {}
             
-            # Chart 1: Based on adj_close (daily data)
-            try:
-                if hasattr(asset, 'adj_close'):
-                    adj_close_data = asset.adj_close
-                    if adj_close_data is not None and hasattr(adj_close_data, '__len__') and len(adj_close_data) > 5:
-                        self.logger.info(f"Creating adj_close chart for {symbol} with {len(adj_close_data)} data points")
-                        
-                        # Filter data by period if specified
-                        filtered_adj_close = self._filter_data_by_period(adj_close_data, period)
-                        
-                        # Create daily price chart
-                        daily_chart = self._create_price_chart(
-                            filtered_adj_close, symbol, period, currency, "Дневные цены (скорректированные)"
-                        )
-                        
-                        if daily_chart:
-                            charts['adj_close'] = daily_chart
-                            # Handle dates properly for PeriodIndex
-                            try:
-                                start_date = filtered_adj_close.index[0]
-                                end_date = filtered_adj_close.index[-1]
-                                
-                                if hasattr(start_date, 'strftime'):
-                                    start_date_str = start_date.strftime('%Y-%m-%d')
-                                else:
-                                    start_date_str = str(start_date)
-                                
-                                if hasattr(end_date, 'strftime'):
-                                    end_date_str = end_date.strftime('%Y-%m-%d')
-                                else:
-                                    end_date_str = str(end_date)
-                            except Exception:
-                                start_date_str = "N/A"
-                                end_date_str = "N/A"
-                            
-                            price_data_info['adj_close'] = {
-                                'data_points': len(filtered_adj_close),
-                                'start_date': start_date_str,
-                                'end_date': end_date_str,
-                                'current_price': float(filtered_adj_close.iloc[-1]),
-                                'start_price': float(filtered_adj_close.iloc[0]),
-                                'min_price': float(filtered_adj_close.min()),
-                                'max_price': float(filtered_adj_close.max())
-                            }
-            except Exception as e:
-                self.logger.warning(f"Could not create adj_close chart: {e}")
+            # Filter data by period for each chart type
+            adj_close_data = None
+            monthly_data = None
+
+            if hasattr(asset, 'adj_close'):
+                adj_close_data = asset.adj_close
+            if hasattr(asset, 'close_monthly'):
+                monthly_data = asset.close_monthly
+
+            if adj_close_data is not None and len(adj_close_data) > 0:
+                # Daily data - always show 1 year for better detail
+                filtered_adj_close = self._filter_data_by_period(adj_close_data, '1Y')
+                adj_close_chart = self._create_price_chart(
+                    filtered_adj_close, symbol, '1Y', currency, 
+                    f"Дневные цены (adj_close): {symbol}"
+                )
+                if adj_close_chart:
+                    charts['adj_close'] = adj_close_chart
+                    price_data_info['adj_close'] = {
+                        'data_points': len(filtered_adj_close),
+                        'start_date': str(filtered_adj_close.index[0])[:10],
+                        'end_date': str(filtered_adj_close.index[-1])[:10],
+                        'period': '1Y',
+                        'currency': currency
+                    }
             
-            # Chart 2: Based on close_monthly (monthly data)
-            try:
-                if hasattr(asset, 'close_monthly'):
-                    monthly_data = asset.close_monthly
-                    if monthly_data is not None and hasattr(monthly_data, '__len__') and len(monthly_data) > 5:
-                        self.logger.info(f"Creating close_monthly chart for {symbol} with {len(monthly_data)} data points")
-                        
-                        # Filter data by period if specified
-                        filtered_monthly = self._filter_data_by_period(monthly_data, period)
-                        
-                        # Create monthly price chart
-                        monthly_chart = self._create_price_chart(
-                            filtered_monthly, symbol, period, currency, "Месячные цены"
-                        )
-                        
-                        if monthly_chart:
-                            charts['close_monthly'] = monthly_chart
-                            # Handle dates properly for PeriodIndex
-                            try:
-                                start_date = filtered_monthly.index[0]
-                                end_date = filtered_monthly.index[-1]
-                                
-                                if hasattr(start_date, 'strftime'):
-                                    start_date_str = start_date.strftime('%Y-%m-%d')
-                                else:
-                                    start_date_str = str(start_date)
-                                
-                                if hasattr(end_date, 'strftime'):
-                                    end_date_str = end_date.strftime('%Y-%m-%d')
-                                else:
-                                    end_date_str = str(end_date)
-                            except Exception:
-                                start_date_str = "N/A"
-                                end_date_str = "N/A"
-                            
-                            price_data_info['close_monthly'] = {
-                                'data_points': len(filtered_monthly),
-                                'start_date': start_date_str,
-                                'end_date': end_date_str,
-                                'current_price': float(filtered_monthly.iloc[-1]),
-                                'start_price': float(filtered_monthly.iloc[0]),
-                                'min_price': float(filtered_monthly.min()),
-                                'max_price': float(filtered_monthly.max())
-                            }
-            except Exception as e:
-                self.logger.warning(f"Could not create close_monthly chart: {e}")
+            if monthly_data is not None and len(monthly_data) > 0:
+                # Monthly data - always show 10 years for long-term trends
+                filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
+                monthly_chart = self._create_price_chart(
+                    filtered_monthly, symbol, '10Y', currency,
+                    f"Месячные цены (close_monthly): {symbol}"
+                )
+                if monthly_chart:
+                    charts['close_monthly'] = monthly_chart
+                    price_data_info['close_monthly'] = {
+                        'data_points': len(filtered_monthly),
+                        'start_date': str(filtered_monthly.index[0])[:10],
+                        'end_date': str(filtered_monthly.index[-1])[:10],
+                        'period': '10Y',
+                        'currency': currency
+                    }
             
             # If no charts were created, try fallback methods
             if not charts:
+                self.logger.warning(f"Could not get price data for period {period}, using fallback methods")
+                
                 # Try to get any available price data
-                price_data = None
+                fallback_data = None
+                fallback_period = '1Y'  # Default for fallback
                 
-                # Special handling for MOEX assets
-                if symbol.upper().endswith('.MOEX'):
-                    try:
-                        # For MOEX assets, try monthly data first
-                        if hasattr(asset, 'close_monthly'):
-                            monthly_data = asset.close_monthly
-                            if monthly_data is not None and hasattr(monthly_data, '__len__') and len(monthly_data) > 5:
-                                price_data = monthly_data
-                                self.logger.info(f"Using monthly data for MOEX asset {symbol}")
+                if hasattr(asset, 'price') and asset.price is not None:
+                    fallback_data = asset.price
+                    if hasattr(fallback_data, '__len__') and len(fallback_data) > 5:
+                        # If it's daily data, show 1 year
+                        if hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq):
+                            fallback_period = '1Y'
                         else:
-                            # Try daily adjusted close data
-                            if hasattr(asset, 'adj_close'):
-                                adj_close_data = asset.adj_close
-                                if adj_close_data is not None and hasattr(adj_close_data, '__len__') and len(adj_close_data) > 5:
-                                    price_data = adj_close_data
-                                    self.logger.info(f"Using daily adjusted close data for MOEX asset {symbol}")
-                    except Exception as e:
-                        self.logger.warning(f"Could not get MOEX-specific data: {e}")
-                
-                # Try other methods if still no data
-                if price_data is None:
-                    try:
-                        if period == 'MAX':
-                            price_data = asset.price
-                        else:
-                            # Parse period and try to get filtered data
-                            import re
-                            match = re.match(r'(\d+)([YMD])', period.upper())
-                            if match:
-                                number, unit = match.groups()
-                                number = int(number)
-                                if unit == 'Y':
-                                    years_ago = number
-                                elif unit == 'M':
-                                    years_ago = number / 12
-                                elif unit == 'D':
-                                    years_ago = number / 365
-                                else:
-                                    years_ago = 1
-                                
-                                from datetime import datetime, timedelta
-                                end_date = datetime.now()
-                                start_date = end_date - timedelta(days=int(years_ago * 365))
-                                
-                                try:
-                                    price_data = asset.price.loc[start_date:end_date]
-                                except Exception:
-                                    price_data = asset.price
-                            else:
-                                price_data = asset.price
-                    except Exception as e:
-                        self.logger.warning(f"Could not get price data for period {period}: {e}")
-                        price_data = asset.price
-                
-                # Try to get any available price attribute
-                if price_data is None or (hasattr(price_data, '__len__') and len(price_data) < 5):
-                    for attr in ['price', 'close', 'adj_close', 'open', 'high', 'low']:
-                        if hasattr(asset, attr):
-                            attr_data = getattr(asset, attr)
-                            if attr_data is not None and hasattr(attr_data, '__len__') and len(attr_data) > 5:
-                                price_data = attr_data
-                                self.logger.info(f"Using {attr} data for {symbol}")
-                                break
-                
-                # Try monthly prices as last resort
-                if price_data is None or (hasattr(price_data, '__len__') and len(price_data) < 5):
-                    try:
-                        price_data = asset.get_monthly_prices()
-                        self.logger.info(f"Using monthly prices for {symbol}")
-                    except Exception as e:
-                        self.logger.warning(f"Could not get monthly prices: {e}")
-                
-                # Create fallback chart if we have data
-                if price_data is not None and hasattr(price_data, '__len__') and len(price_data) >= 2:
-                    fallback_chart = self._create_price_chart(
-                        price_data, symbol, period, currency, "История цен"
-                    )
-                    if fallback_chart:
-                        charts['fallback'] = fallback_chart
-                        # Handle dates properly for PeriodIndex
-                        try:
-                            start_date = price_data.index[0]
-                            end_date = price_data.index[-1]
-                            
-                            if hasattr(start_date, 'strftime'):
-                                start_date_str = start_date.strftime('%Y-%m-%d')
-                            else:
-                                start_date_str = str(start_date)
-                            
-                            if hasattr(end_date, 'strftime'):
-                                end_date_str = end_date.strftime('%Y-%m-%d')
-                            else:
-                                end_date_str = str(end_date)
-                        except Exception:
-                            start_date_str = "N/A"
-                            end_date_str = "N/A"
+                            # If it's monthly data, show 10 years
+                            fallback_period = '10Y'
                         
-                        price_data_info['fallback'] = {
-                            'data_points': len(price_data),
-                            'start_date': start_date_str,
-                            'end_date': end_date_str,
-                            'current_price': float(price_data.iloc[-1]),
-                            'start_price': float(price_data.iloc[0]),
-                            'min_price': float(price_data.min()),
-                            'max_price': float(price_data.max())
-                        }
+                        filtered_fallback = self._filter_data_by_period(fallback_data, fallback_period)
+                        fallback_chart = self._create_price_chart(
+                            filtered_fallback, symbol, fallback_period, currency,
+                            f"Цены ({fallback_period}): {symbol}"
+                        )
+                        if fallback_chart:
+                            charts['fallback'] = fallback_chart
+                            price_data_info['fallback'] = {
+                                'data_points': len(filtered_fallback),
+                                'start_date': str(filtered_fallback.index[0])[:10],
+                                'end_date': str(filtered_fallback.index[-1])[:10],
+                                'period': fallback_period,
+                                'currency': currency
+                            }
             
             # Check if we have any charts
             if not charts:
