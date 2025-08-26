@@ -27,12 +27,12 @@ class Config:
     SUPPORTED_COMMANDS = {
         '/start': 'Start the bot and get help',
         '/help': 'Show available commands and features',
-        '/portfolio': 'Analyze portfolio performance',
-        '/risk': 'Calculate portfolio risk metrics',
-        '/correlation': 'Show asset correlation matrix',
-        '/efficient_frontier': 'Generate efficient frontier plot',
-        '/compare': 'Compare multiple assets',
-        '/chat': 'Chat with YandexGPT about finance'
+        '/asset': 'Show detailed information about an asset',
+        '/price': 'Show current price for an asset',
+        '/dividends': 'Show dividend history for an asset',
+        '/chat': 'Chat with YandexGPT about finance',
+        '/test': 'Test Okama integration',
+        '/testai': 'Test YandexGPT integration'
     }
     
     @classmethod
