@@ -93,12 +93,40 @@ class EnhancedReportBuilder:
         
         # Текстовый отчет
         report_text = f"📊 **Анализ актива: {name} ({ticker})**\n\n"
-        report_text += f"**Валюта:** {currency}\n"
-        report_text += f"**Период:** {period}\n\n"
         
-        # Метрики
+        # Основная информация об активе (как в команде /asset)
+        if data.get('country'):
+            report_text += f"**Страна:** {data.get('country')}\n"
+        if data.get('exchange'):
+            report_text += f"**Биржа:** {data.get('exchange')}\n"
+        report_text += f"**Валюта:** {currency}\n"
+        if data.get('type'):
+            report_text += f"**Тип:** {data.get('type')}\n"
+        if data.get('isin'):
+            report_text += f"**ISIN:** {data.get('isin')}\n"
+        if data.get('first_date'):
+            report_text += f"**Первый день:** {data.get('first_date')}\n"
+        if data.get('last_date'):
+            report_text += f"**Последний день:** {data.get('last_date')}\n"
+        if data.get('period_length'):
+            report_text += f"**Длина периода:** {data.get('period_length')}\n"
+        report_text += f"**Период анализа:** {period}\n\n"
+        
+        # Текущая цена
+        if data.get('current_price'):
+            report_text += f"**Текущая цена:** {data.get('current_price')} {currency}\n"
+        
+        # Метрики производительности (как в команде /asset)
+        if data.get('annual_return') and data.get('annual_return') != 'N/A':
+            report_text += f"**Годовая доходность:** {data.get('annual_return')}\n"
+        if data.get('total_return') and data.get('total_return') != 'N/A':
+            report_text += f"**Общая доходность:** {data.get('total_return')}\n"
+        if data.get('volatility') and data.get('volatility') != 'N/A':
+            report_text += f"**Волатильность:** {data.get('volatility')}\n"
+        
+        # Дополнительные метрики из enhanced анализа
         if metrics:
-            report_text += "**Ключевые метрики:**\n"
+            report_text += "\n**📈 Аналитические метрики:**\n"
             if metrics.get('cagr') is not None:
                 report_text += f"• CAGR: {metrics['cagr']*100:.2f}%\n"
             if metrics.get('volatility') is not None:
@@ -112,7 +140,7 @@ class EnhancedReportBuilder:
         
         # Диагностика данных
         if prices is not None:
-            report_text += f"\n**Диагностика данных:**\n"
+            report_text += f"\n**🔍 Диагностика данных:**\n"
             report_text += f"• Тип prices: {type(prices).__name__}\n"
             if hasattr(prices, 'shape'):
                 report_text += f"• Размер: {prices.shape}\n"
@@ -123,8 +151,9 @@ class EnhancedReportBuilder:
         
         # Графики
         charts = []
+        
+        # 1. График изменения цен (если есть данные)
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty:
-            # График цены
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
             
             # График цены
@@ -145,10 +174,37 @@ class EnhancedReportBuilder:
             
             plt.tight_layout()
             charts.append(self._fig_to_png(fig))
-        elif prices is not None:
-            # Если prices есть, но не pandas Series, добавляем информацию об этом
-            report_text += f"\n**Примечание:** Данные о ценах доступны, но не в стандартном формате для построения графиков.\n"
-            report_text += f"Тип данных: {type(prices).__name__}\n"
+        
+        # 2. График из asset_service (если есть)
+        if data.get('chart'):
+            charts.append(data['chart'])
+        
+        # 3. Дополнительные графики для анализа
+        if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty and len(prices) > 20:
+            # График волатильности (скользящее окно)
+            fig, ax = plt.subplots(figsize=(10, 4))
+            window_size = min(30, len(prices) // 4)
+            rolling_vol = prices.pct_change().rolling(window=window_size).std() * np.sqrt(252)
+            ax.plot(rolling_vol.index, rolling_vol.values, color=self.colors[2], linewidth=1.5)
+            ax.set_title(f'Скользящая волатильность ({window_size} дней)', fontsize=12)
+            ax.set_ylabel('Волатильность (годовая)', fontsize=10)
+            ax.grid(True, alpha=0.3)
+            ax.tick_params(axis='x', rotation=45)
+            plt.tight_layout()
+            charts.append(self._fig_to_png(fig))
+            
+            # График просадок
+            fig, ax = plt.subplots(figsize=(10, 4))
+            cummax = prices.cummax()
+            drawdowns = (prices - cummax) / cummax * 100
+            ax.fill_between(drawdowns.index, drawdowns.values, 0, color='red', alpha=0.3)
+            ax.plot(drawdowns.index, drawdowns.values, color='red', linewidth=1)
+            ax.set_title('История просадок', fontsize=12)
+            ax.set_ylabel('Просадка (%)', fontsize=10)
+            ax.grid(True, alpha=0.3)
+            ax.tick_params(axis='x', rotation=45)
+            plt.tight_layout()
+            charts.append(self._fig_to_png(fig))
         
         return report_text, charts
     
@@ -371,37 +427,78 @@ class EnhancedReportBuilder:
         """Строит отчет по инфляции"""
         ticker = data.get('ticker', 'Unknown')
         country = data.get('country', 'Unknown')
-        cpi_data = data.get('cpi')
+        name = data.get('name', 'CPI')
+        currency = data.get('currency', 'Unknown')
         period = data.get('period', 'Unknown')
+        cpi_data = data.get('cpi_data')  # Изменено с 'cpi' на 'cpi_data'
         metrics = data.get('metrics', {})
         
         # Текстовый отчет
         report_text = f"📈 **Анализ инфляции**\n\n"
         report_text += f"**Страна:** {country}\n"
+        report_text += f"**Индикатор:** {name}\n"
         report_text += f"**Тикер:** {ticker}\n"
-        report_text += f"**Период:** {period}\n\n"
+        report_text += f"**Валюта:** {currency}\n"
+        report_text += f"**Период анализа:** {period}\n"
+        
+        # Добавляем информацию о периоде данных
+        if data.get('first_date') and data.get('first_date') != 'N/A':
+            report_text += f"**Первый день:** {data.get('first_date')}\n"
+        if data.get('last_date') and data.get('last_date') != 'N/A':
+            report_text += f"**Последний день:** {data.get('last_date')}\n"
+        if data.get('period_length') and data.get('period_length') != 'N/A':
+            report_text += f"**Длина периода:** {data.get('period_length')}\n"
+        
+        report_text += "\n"
         
         # Метрики
         if metrics:
-            report_text += "**Ключевые показатели:**\n"
+            report_text += "**📊 Ключевые показатели:**\n"
             if metrics.get('cagr') is not None:
                 report_text += f"• Среднегодовой рост: {metrics['cagr']*100:.2f}%\n"
             if metrics.get('volatility') is not None:
                 report_text += f"• Волатильность: {metrics['volatility']*100:.2f}%\n"
+            if metrics.get('sharpe') is not None:
+                report_text += f"• Sharpe Ratio: {metrics['sharpe']:.2f}\n"
+            if metrics.get('max_drawdown') is not None:
+                report_text += f"• Макс. просадка: {metrics['max_drawdown']*100:.2f}%\n"
+            if metrics.get('total_return') is not None:
+                report_text += f"• Общая доходность: {metrics['total_return']*100:.2f}%\n"
         
         # Графики
         charts = []
+        
+        # 1. График из okama_handler (если есть)
+        if data.get('chart'):
+            charts.append(data['chart'])
+        
+        # 2. Дополнительный график CPI (если есть данные)
         if cpi_data is not None and hasattr(cpi_data, 'empty') and isinstance(cpi_data, pd.Series) and not cpi_data.empty:
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.plot(cpi_data.index, cpi_data.values, color=self.colors[0], linewidth=2)
-            ax.set_title(f'Индекс потребительских цен (CPI) - {country}', fontsize=14, fontweight='bold')
-            ax.set_ylabel('CPI', fontsize=12)
+            ax.set_title(f'{name} - Динамика CPI ({country})', fontsize=14, fontweight='bold')
+            ax.set_ylabel(f'CPI ({currency})', fontsize=12)
             ax.set_xlabel('Дата', fontsize=12)
             ax.grid(True, alpha=0.3)
             ax.tick_params(axis='x', rotation=45)
             
             plt.tight_layout()
             charts.append(self._fig_to_png(fig))
+            
+            # 3. График годового изменения CPI
+            if len(cpi_data) > 12:  # Если есть достаточно данных для годового изменения
+                fig, ax = plt.subplots(figsize=(10, 4))
+                yearly_change = cpi_data.pct_change(12).dropna() * 100  # Годовое изменение в %
+                ax.plot(yearly_change.index, yearly_change.values, color=self.colors[1], linewidth=2)
+                ax.set_title(f'{name} - Годовое изменение CPI ({country})', fontsize=12)
+                ax.set_ylabel('Изменение CPI (%)', fontsize=10)
+                ax.set_xlabel('Дата', fontsize=10)
+                ax.grid(True, alpha=0.3)
+                ax.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+                ax.tick_params(axis='x', rotation=45)
+                
+                plt.tight_layout()
+                charts.append(self._fig_to_png(fig))
         
         return report_text, charts
     

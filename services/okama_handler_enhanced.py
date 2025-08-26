@@ -13,6 +13,10 @@ from typing import List, Dict, Any, Optional, Tuple
 import logging
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("Agg")  # Для работы в headless режиме
+import io
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -141,6 +145,10 @@ class EnhancedOkamaHandler:
         try:
             import okama as ok
             
+            # Специальная обработка для инфляции
+            if asset.endswith('.INFL'):
+                return self._handle_inflation_data(asset.split('.')[0], period)
+            
             # Создаем актив
             ok_asset = ok.Asset(asset)
             
@@ -152,6 +160,80 @@ class EnhancedOkamaHandler:
                 'name': getattr(ok_asset, 'name', asset),
                 'period': period
             }
+            
+            # Добавляем дополнительную информацию об активе (как в asset_service)
+            try:
+                info['country'] = getattr(ok_asset, 'country', 'N/A')
+                info['exchange'] = getattr(ok_asset, 'exchange', 'N/A')
+                info['type'] = getattr(ok_asset, 'type', 'N/A')
+                info['isin'] = getattr(ok_asset, 'isin', 'N/A')
+                info['first_date'] = getattr(ok_asset, 'first_date', 'N/A')
+                info['last_date'] = getattr(ok_asset, 'last_date', 'N/A')
+                
+                # Вычисляем длину периода
+                if info['first_date'] != 'N/A' and info['last_date'] != 'N/A':
+                    try:
+                        first = ok_asset.first_date
+                        last = ok_asset.last_date
+                        if hasattr(first, 'year') and hasattr(last, 'year'):
+                            years = last.year - first.year
+                            info['period_length'] = f"{years} лет"
+                        else:
+                            info['period_length'] = 'N/A'
+                    except:
+                        info['period_length'] = 'N/A'
+                else:
+                    info['period_length'] = 'N/A'
+                
+                # Получаем текущую цену
+                try:
+                    if hasattr(prices, 'iloc') and len(prices) > 0:
+                        current_price = prices.iloc[-1]
+                        if current_price is not None and not (current_price != current_price):  # проверка на NaN
+                            info['current_price'] = float(current_price)
+                        else:
+                            info['current_price'] = None
+                    else:
+                        info['current_price'] = None
+                except:
+                    info['current_price'] = None
+                
+                # Получаем метрики производительности
+                try:
+                    annual_return = ok_asset.get_annual_return()
+                    if annual_return is not None:
+                        info['annual_return'] = f"{annual_return:.2%}"
+                    else:
+                        info['annual_return'] = 'N/A'
+                except:
+                    info['annual_return'] = 'N/A'
+                
+                try:
+                    total_return = ok_asset.get_total_return()
+                    if total_return is not None:
+                        info['total_return'] = f"{total_return:.2%}"
+                    else:
+                        info['total_return'] = 'N/A'
+                except:
+                    info['total_return'] = 'N/A'
+                
+                try:
+                    volatility = ok_asset.get_volatility()
+                    if volatility is not None:
+                        info['volatility'] = f"{volatility:.2%}"
+                    else:
+                        info['volatility'] = 'N/A'
+                except:
+                    info['volatility'] = 'N/A'
+                
+            except Exception as e:
+                logger.warning(f"Error getting additional asset info: {e}")
+                # Устанавливаем значения по умолчанию
+                info.update({
+                    'country': 'N/A', 'exchange': 'N/A', 'type': 'N/A', 'isin': 'N/A',
+                    'first_date': 'N/A', 'last_date': 'N/A', 'period_length': 'N/A',
+                    'current_price': None, 'annual_return': 'N/A', 'total_return': 'N/A', 'volatility': 'N/A'
+                })
             
             # Конвертируем валюту если нужно
             if convert_to and convert_to != currency:
@@ -165,6 +247,29 @@ class EnhancedOkamaHandler:
                 'metrics': metrics,
                 'converted_currency': convert_to
             })
+            
+            # Генерируем график (как в asset_service)
+            try:
+                if hasattr(prices, 'iloc') and len(prices) > 1:
+                    # Создаем график динамики цены
+                    
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    ax.plot(prices.index, prices.values, color='#1f77b4', linewidth=2)
+                    ax.set_title(f'Динамика цены: {asset}', fontsize=12)
+                    ax.set_xlabel('Дата')
+                    ax.set_ylabel(f'Цена ({info["currency"]})')
+                    ax.grid(True, linestyle='--', alpha=0.3)
+                    fig.tight_layout()
+                    
+                    # Сохраняем график в bytes
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                    plt.close(fig)
+                    info['chart'] = buf.getvalue()
+                    
+            except Exception as e:
+                logger.warning(f"Error generating chart: {e}")
+                info['chart'] = None
             
             return info
             
@@ -350,14 +455,17 @@ class EnhancedOkamaHandler:
         try:
             import okama as ok
             
-            # Определяем тикер инфляции
-            inflation_tickers = {
-                'US': 'US.INFL',
-                'RU': 'RUS.INFL',
-                'EU': 'EU.INFL'
+            # Определяем тикер инфляции и валюту
+            inflation_config = {
+                'US': {'ticker': 'US.INFL', 'currency': 'USD', 'name': 'US CPI'},
+                'RU': {'ticker': 'RUS.INFL', 'currency': 'RUB', 'name': 'Russian CPI'},
+                'EU': {'ticker': 'EU.INFL', 'currency': 'EUR', 'name': 'Eurozone CPI'}
             }
             
-            ticker = inflation_tickers.get(country.upper(), 'US.INFL')
+            config = inflation_config.get(country.upper(), inflation_config['US'])
+            ticker = config['ticker']
+            currency = config['currency']
+            name = config['name']
             
             # Получаем данные
             asset = ok.Asset(ticker)
@@ -366,13 +474,63 @@ class EnhancedOkamaHandler:
             # Вычисляем метрики
             metrics = self._compute_metrics(cpi_data, period)
             
-            return {
+            # Получаем дополнительную информацию об активе
+            info = {
                 'ticker': ticker,
                 'country': country,
-                'cpi': cpi_data,
-                'metrics': metrics,
-                'period': period
+                'name': name,
+                'currency': currency,
+                'period': period,
+                'cpi_data': cpi_data,
+                'metrics': metrics
             }
+            
+            # Добавляем информацию о периоде данных
+            try:
+                if hasattr(asset, 'first_date') and hasattr(asset, 'last_date'):
+                    info['first_date'] = asset.first_date
+                    info['last_date'] = asset.last_date
+                    
+                    # Вычисляем длину периода
+                    if hasattr(asset.first_date, 'year') and hasattr(asset.last_date, 'year'):
+                        years = asset.last_date.year - asset.first_date.year
+                        info['period_length'] = f"{years} лет"
+                    else:
+                        info['period_length'] = 'N/A'
+                else:
+                    info['first_date'] = 'N/A'
+                    info['last_date'] = 'N/A'
+                    info['period_length'] = 'N/A'
+            except Exception as e:
+                logger.warning(f"Error getting date info: {e}")
+                info.update({
+                    'first_date': 'N/A',
+                    'last_date': 'N/A',
+                    'period_length': 'N/A'
+                })
+            
+            # Генерируем график
+            try:
+                if hasattr(cpi_data, 'iloc') and len(cpi_data) > 1:
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    ax.plot(cpi_data.index, cpi_data.values, color='#1f77b4', linewidth=2)
+                    ax.set_title(f'{name} - Динамика CPI', fontsize=12)
+                    ax.set_xlabel('Дата')
+                    ax.set_ylabel(f'CPI ({currency})')
+                    ax.grid(True, linestyle='--', alpha=0.3)
+                    fig.tight_layout()
+                    
+                    # Сохраняем график в bytes
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                    plt.close(fig)
+                    info['chart'] = buf.getvalue()
+                    
+            except Exception as e:
+                logger.warning(f"Error generating inflation chart: {e}")
+                info['chart'] = None
+            
+            return info
             
         except Exception as e:
             logger.error(f"Error handling inflation data: {e}")
