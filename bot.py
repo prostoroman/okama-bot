@@ -47,6 +47,9 @@ class OkamaFinanceBot:
         """Initialize the bot with required services"""
         Config.validate()
         
+        # Initialize logger
+        self.logger = logging.getLogger(__name__)
+        
         self.asset_service = AssetService()
         self.yandexgpt_service = YandexGPTService()
         self.intent_parser = EnhancedIntentParser()

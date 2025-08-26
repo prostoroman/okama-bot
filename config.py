@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from config.env
+load_dotenv('config.env')
 
 class Config:
     """Configuration class for the Okama Finance Bot"""
