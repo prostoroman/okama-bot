@@ -52,19 +52,35 @@ class EnhancedReportBuilder:
     # Методы-обертки для совместимости с bot.py
     def build_single_asset_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
-        return self._build_single_asset_report(data, "")
+        try:
+            return self._build_single_asset_report(data, "")
+        except Exception as e:
+            logger.error(f"Error in build_single_asset_report: {e}")
+            return f"Ошибка построения отчета: {str(e)}", []
     
     def build_multi_asset_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
-        return self._build_comparison_report(data, "")
+        try:
+            return self._build_comparison_report(data, "")
+        except Exception as e:
+            logger.error(f"Error in build_multi_asset_report: {e}")
+            return f"Ошибка построения отчета: {str(e)}", []
     
     def build_portfolio_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
-        return self._build_portfolio_report(data, "")
+        try:
+            return self._build_portfolio_report(data, "")
+        except Exception as e:
+            logger.error(f"Error in build_portfolio_report: {e}")
+            return f"Ошибка построения отчета: {str(e)}", []
     
     def build_inflation_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
-        return self._build_inflation_report(data, "")
+        try:
+            return self._build_inflation_report(data, "")
+        except Exception as e:
+            logger.error(f"Error in build_inflation_report: {e}")
+            return f"Ошибка построения отчета: {str(e)}", []
     
     def _build_single_asset_report(self, data: Dict[str, Any], user_query: str) -> Tuple[str, List[bytes]]:
         """Строит отчет по одному активу"""
@@ -94,9 +110,20 @@ class EnhancedReportBuilder:
             if metrics.get('total_return') is not None:
                 report_text += f"• Общая доходность: {metrics['total_return']*100:.2f}%\n"
         
+        # Диагностика данных
+        if prices is not None:
+            report_text += f"\n**Диагностика данных:**\n"
+            report_text += f"• Тип prices: {type(prices).__name__}\n"
+            if hasattr(prices, 'shape'):
+                report_text += f"• Размер: {prices.shape}\n"
+            elif hasattr(prices, '__len__'):
+                report_text += f"• Длина: {len(prices)}\n"
+            else:
+                report_text += f"• Значение: {prices}\n"
+        
         # Графики
         charts = []
-        if isinstance(prices, pd.Series) and not prices.empty:
+        if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty:
             # График цены
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
             
@@ -118,6 +145,10 @@ class EnhancedReportBuilder:
             
             plt.tight_layout()
             charts.append(self._fig_to_png(fig))
+        elif prices is not None:
+            # Если prices есть, но не pandas Series, добавляем информацию об этом
+            report_text += f"\n**Примечание:** Данные о ценах доступны, но не в стандартном формате для построения графиков.\n"
+            report_text += f"Тип данных: {type(prices).__name__}\n"
         
         return report_text, charts
     
@@ -152,7 +183,7 @@ class EnhancedReportBuilder:
             report_text += metrics_table + "\n"
         
         # Корреляции
-        if isinstance(correlation, pd.DataFrame) and not correlation.empty:
+        if correlation is not None and hasattr(correlation, 'empty') and isinstance(correlation, pd.DataFrame) and not correlation.empty:
             report_text += "**Корреляции между активами:**\n"
             try:
                 correlation_text = correlation.round(3).to_string()
@@ -162,12 +193,12 @@ class EnhancedReportBuilder:
         
         # Добавим краткий вывод describe, если есть
         describe_df = data.get('describe')
-        if isinstance(describe_df, pd.DataFrame) and not describe_df.empty:
+        if describe_df is not None and hasattr(describe_df, 'empty') and isinstance(describe_df, pd.DataFrame) and not describe_df.empty:
             try:
                 # Покажем только ключевые строки (CAGR и Max drawdowns) если найдены
                 subset = describe_df.copy()
                 key_rows = subset[subset['property'].isin(['CAGR', 'Max drawdowns'])]
-                if key_rows.empty:
+                if hasattr(key_rows, 'empty') and key_rows.empty:
                     key_rows = subset.head(5)
                 report_text += "\n**Краткое описание (describe):**\n"
                 report_text += key_rows.to_string(index=False) + "\n"
@@ -178,7 +209,7 @@ class EnhancedReportBuilder:
         charts = []
         
         # 1) Нормализованные цены и накопленная доходность (fallback по prices)
-        if isinstance(prices, pd.DataFrame) and not prices.empty:
+        if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.DataFrame) and not prices.empty:
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
             for i, ticker in enumerate(tickers):
                 if ticker in prices:
@@ -206,7 +237,7 @@ class EnhancedReportBuilder:
         
         # 2) Wealth indexes из AssetList
         wealth_indexes = data.get('wealth_indexes')
-        if isinstance(wealth_indexes, pd.DataFrame) and not wealth_indexes.empty:
+        if wealth_indexes is not None and hasattr(wealth_indexes, 'empty') and isinstance(wealth_indexes, pd.DataFrame) and not wealth_indexes.empty:
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, ticker in enumerate(tickers):
                 if ticker in wealth_indexes:
@@ -222,7 +253,7 @@ class EnhancedReportBuilder:
         
         # 3) История просадок
         drawdowns = data.get('drawdowns')
-        if isinstance(drawdowns, pd.DataFrame) and not drawdowns.empty:
+        if drawdowns is not None and hasattr(drawdowns, 'empty') and isinstance(drawdowns, pd.DataFrame) and not drawdowns.empty:
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, ticker in enumerate(tickers):
                 if ticker in drawdowns:
@@ -238,7 +269,7 @@ class EnhancedReportBuilder:
         
         # 4) Дивидендная доходность
         dividend_yield = data.get('dividend_yield')
-        if isinstance(dividend_yield, pd.DataFrame) and not dividend_yield.empty:
+        if dividend_yield is not None and hasattr(dividend_yield, 'empty') and isinstance(dividend_yield, pd.DataFrame) and not dividend_yield.empty:
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, ticker in enumerate(tickers):
                 if ticker in dividend_yield:
@@ -254,7 +285,7 @@ class EnhancedReportBuilder:
         
         # 5) Скользящая корреляция с бенчмарком
         index_corr = data.get('index_corr')
-        if isinstance(index_corr, pd.DataFrame) and not index_corr.empty:
+        if index_corr is not None and hasattr(index_corr, 'empty') and isinstance(index_corr, pd.DataFrame) and not index_corr.empty:
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, col in enumerate(index_corr.columns):
                 ax.plot(index_corr.index, index_corr[col].values, 
@@ -302,7 +333,7 @@ class EnhancedReportBuilder:
         charts = []
         
         # График стоимости портфеля
-        if isinstance(portfolio_prices, pd.Series) and not portfolio_prices.empty:
+        if portfolio_prices is not None and hasattr(portfolio_prices, 'empty') and isinstance(portfolio_prices, pd.Series) and not portfolio_prices.empty:
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
             
             # Стоимость портфеля
@@ -323,7 +354,7 @@ class EnhancedReportBuilder:
             charts.append(self._fig_to_png(fig))
         
         # Efficient Frontier
-        if isinstance(frontier, pd.DataFrame) and not frontier.empty and 'vol' in frontier.columns and 'ret' in frontier.columns:
+        if frontier is not None and hasattr(frontier, 'empty') and isinstance(frontier, pd.DataFrame) and not frontier.empty and 'vol' in frontier.columns and 'ret' in frontier.columns:
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.scatter(frontier['vol'], frontier['ret'], s=20, alpha=0.6, color=self.colors[0])
             ax.set_xlabel('Риск (волатильность)', fontsize=12)
@@ -360,7 +391,7 @@ class EnhancedReportBuilder:
         
         # Графики
         charts = []
-        if isinstance(cpi_data, pd.Series) and not cpi_data.empty:
+        if cpi_data is not None and hasattr(cpi_data, 'empty') and isinstance(cpi_data, pd.Series) and not cpi_data.empty:
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.plot(cpi_data.index, cpi_data.values, color=self.colors[0], linewidth=2)
             ax.set_title(f'Индекс потребительских цен (CPI) - {country}', fontsize=14, fontweight='bold')
@@ -437,7 +468,7 @@ class EnhancedReportBuilder:
     def _create_single_asset_csv(self, data: Dict[str, Any]) -> str:
         """Создает CSV для одного актива"""
         prices = data.get('prices')
-        if not isinstance(prices, pd.Series) or prices.empty:
+        if prices is None or not hasattr(prices, 'empty') or not isinstance(prices, pd.Series) or prices.empty:
             return ""
         
         csv_data = prices.reset_index()
@@ -447,7 +478,7 @@ class EnhancedReportBuilder:
     def _create_comparison_csv(self, data: Dict[str, Any]) -> str:
         """Создает CSV для сравнения активов"""
         prices = data.get('prices')
-        if not isinstance(prices, pd.DataFrame) or prices.empty:
+        if prices is None or not hasattr(prices, 'empty') or not isinstance(prices, pd.DataFrame) or prices.empty:
             return ""
         
         csv_data = prices.reset_index()
@@ -456,7 +487,7 @@ class EnhancedReportBuilder:
     def _create_portfolio_csv(self, data: Dict[str, Any]) -> str:
         """Создает CSV для портфеля"""
         portfolio_prices = data.get('portfolio_prices')
-        if not isinstance(portfolio_prices, pd.Series) or portfolio_prices.empty:
+        if portfolio_prices is None or not hasattr(portfolio_prices, 'empty') or not isinstance(portfolio_prices, pd.Series) or portfolio_prices.empty:
             return ""
         
         csv_data = portfolio_prices.reset_index()

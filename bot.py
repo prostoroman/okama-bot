@@ -545,8 +545,11 @@ class OkamaFinanceBot:
                 report_text, images = self.report_builder.build_portfolio_report(result)
                 ai_summary = self.analysis_engine.summarize('portfolio', {"metrics": result.get("metrics", {})}, user_message)
 
-            elif parsed.intent == 'inflation':
-                result = self.okama_handler.get_inflation()
+            elif parsed.intent == 'inflation_data':
+                # Получаем параметры для инфляции
+                country = getattr(parsed, 'country', 'US')
+                period = getattr(parsed, 'period', '5Y')
+                result = self.okama_handler.get_inflation(country=country, period=period)
                 report_text, images = self.report_builder.build_inflation_report(result)
                 ai_summary = self.analysis_engine.summarize('inflation', {}, user_message)
 

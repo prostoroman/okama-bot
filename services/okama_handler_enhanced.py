@@ -98,8 +98,11 @@ class EnhancedOkamaHandler:
         if len(assets) > self.max_assets:
             raise ValueError(f"Превышен лимит активов: {len(assets)} > {self.max_assets}")
         
-        if period and self._parse_period(period) > self._parse_period(self.max_period):
-            raise ValueError(f"Превышен лимит периода: {period} > {self.max_period}")
+        if period:
+            # Проверяем период
+            period_years = self._parse_period(period)
+            if period_years > 20:
+                raise ValueError(f"Период слишком большой: {period_years} лет > 20 лет")
     
     def _determine_period(self, period: Optional[str], since_date: Optional[str], to_date: Optional[str]) -> str:
         """Определяет период для анализа"""
@@ -523,3 +526,14 @@ class EnhancedOkamaHandler:
             # Fallback - создаем простую временную серию
             dates = pd.date_range(start='2020-01-01', end='2024-12-31', freq='D')
             return pd.Series([100.0] * len(dates), index=dates)
+
+    def get_inflation(self, country: str = 'US', period: str = '5Y') -> Dict[str, Any]:
+        """Получает данные по инфляции (совместимость с bot.py)"""
+        try:
+            return self._handle_inflation_data(country, period)
+        except Exception as e:
+            logger.error(f"Error getting inflation data: {e}")
+            return {
+                'error': f"Ошибка получения данных по инфляции: {str(e)}",
+                'success': False
+            }
