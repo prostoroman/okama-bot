@@ -357,12 +357,31 @@ class EnhancedOkamaHandler:
                 aligned_data = pd.concat(asset_data.values(), axis=1, join='inner') if asset_data else pd.DataFrame()
                 if not aligned_data.empty:
                     aligned_data.columns = list(asset_data.keys())
+                
+                logger.info(f"Aligned data shape: {aligned_data.shape}")
+                logger.info(f"Aligned data columns: {list(aligned_data.columns)}")
+                
                 returns_data = aligned_data.pct_change().dropna() if not aligned_data.empty else pd.DataFrame()
+                logger.info(f"Returns data shape: {returns_data.shape}")
+                
                 metrics = {}
                 for asset in assets:
                     if asset in aligned_data:
-                        asset_prices = aligned_data[asset].dropna()
-                        metrics[asset] = self._compute_metrics(asset_prices, period)
+                        try:
+                            asset_prices = aligned_data[asset].dropna()
+                            logger.info(f"Computing metrics for {asset}, prices length: {len(asset_prices)}")
+                            if len(asset_prices) > 1:
+                                asset_metrics = self._compute_metrics(asset_prices, period)
+                                metrics[asset] = asset_metrics
+                                logger.info(f"Metrics for {asset}: {asset_metrics}")
+                            else:
+                                logger.warning(f"Not enough data for {asset}: {len(asset_prices)} points")
+                        except Exception as e:
+                            logger.error(f"Error computing metrics for {asset}: {e}")
+                            continue
+                
+                logger.info(f"Final metrics: {metrics}")
+                
                 # Корреляция из доходностей (или из AssetList если доступно)
                 correlation = (
                     returns_data.corr().fillna(0.0) if not returns_data.empty else (
