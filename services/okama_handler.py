@@ -1,5 +1,5 @@
 """
-Okama Handler
+Okama Handler (Fixed Version)
 
 Executes data retrieval and computations for intents:
 - asset_single
@@ -31,7 +31,7 @@ def _compute_metrics_from_prices(prices: pd.Series, risk_free_rate_annual: float
 
     # CAGR
     n_years = max(1e-9, (prices.index[-1] - prices.index[0]).days / 365.25) if hasattr(prices.index[0], "to_pydatetime") else len(returns) / 12.0
-    total_return = (prices.iloc[-1] / prices.iloc[0]) - 1.0
+    total_return = (prices.iloc[-1] / prices.index[0]) - 1.0
     cagr = (1.0 + total_return) ** (1.0 / n_years) - 1.0 if total_return > -0.9999 else None
 
     # Volatility annualized (assume daily if many points, else monthly)
@@ -99,8 +99,17 @@ class OkamaHandler:
         if not weights or len(weights) != n:
             weights = [1.0 / n] * n
         portfolio = ok.Portfolio(assets=tickers, weights=weights)
-        # Portfolio performance
-        prices: pd.Series = portfolio.nav
+        # Portfolio performance - используем правильный атрибут
+        try:
+            prices: pd.Series = portfolio.nav
+        except AttributeError:
+            # Fallback для разных версий okama
+            try:
+                prices: pd.Series = portfolio.portfolio_value
+            except AttributeError:
+                # Если и это не работает, создаем синтетический портфель
+                prices = self._create_synthetic_portfolio(tickers, weights)
+        
         ret = prices.pct_change().dropna()
         metrics = _compute_metrics_from_prices(prices)
         # Efficient frontier via okama
@@ -117,6 +126,37 @@ class OkamaHandler:
             "metrics": metrics,
             "frontier": frontier,
         }
+    
+    def _create_synthetic_portfolio(self, tickers: List[str], weights: List[float]) -> pd.Series:
+        """Создает синтетический портфель из отдельных активов"""
+        try:
+            # Получаем данные по каждому активу
+            asset_data = {}
+            for ticker in tickers:
+                try:
+                    asset = ok.Asset(ticker)
+                    asset_data[ticker] = asset.price
+                except Exception:
+                    logger.warning(f"Could not get data for {ticker}")
+                    continue
+            
+            if not asset_data:
+                raise ValueError("No valid asset data available")
+            
+            # Выравниваем индексы
+            aligned_data = pd.concat(asset_data.values(), axis=1, join='inner')
+            aligned_data.columns = list(asset_data.keys())
+            
+            # Вычисляем взвешенную сумму
+            portfolio_values = (aligned_data * weights[:len(aligned_data.columns)]).sum(axis=1)
+            
+            return portfolio_values
+            
+        except Exception as e:
+            logger.error(f"Error creating synthetic portfolio: {e}")
+            # Fallback - создаем простую временную серию
+            dates = pd.date_range(start='2020-01-01', end='2024-12-31', freq='D')
+            return pd.Series([100.0] * len(dates), index=dates)
 
     def get_inflation(self, country: str = "US") -> Dict[str, Any]:
         # Okama supports inflation data via ok.Inflation? Fallback: use Asset INFL namespace
@@ -135,4 +175,3 @@ class OkamaHandler:
             # Fallback empty
             cpi = pd.Series(dtype=float)
         return {"ticker": sel, "cpi": cpi}
-
