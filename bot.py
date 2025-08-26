@@ -368,17 +368,14 @@ class OkamaFinanceBot:
             
             response = f"💵 **История дивидендов {symbol}**\n\n"
             response += f"**Валюта:** {dividend_info.get('currency', 'N/A')}\n"
-            response += f"**Количество периодов:** {dividend_info.get('total_periods', 'N/A')}\n\n"
+            response += f"**Количество выплат:** {dividend_info.get('total_periods', 'N/A')}\n\n"
             
             # Add recent dividends
             dividends = dividend_info.get('dividends', {})
             if dividends:
                 response += "**Последние дивиденды:**\n"
                 for date, amount in list(dividends.items())[-5:]:  # Last 5
-                    if amount > 0:
-                        response += f"• {date}: {amount:.4f}\n"
-                    else:
-                        response += f"• {date}: Нет дивидендов\n"
+                    response += f"• {date}: {amount:.4f}\n"
             
             await update.message.reply_text(response, parse_mode='Markdown')
             # Send chart if provided
