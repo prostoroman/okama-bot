@@ -695,7 +695,7 @@ class OkamaFinanceBot:
             await update.message.reply_text(f"❌ Error getting AI response: {str(e)}")
     
     async def _get_asset_info_with_chart(self, update: Update, symbol: str, period: str = '1Y'):
-        """Get comprehensive asset information with price history chart"""
+        """Get comprehensive asset information with price history charts and AI analysis"""
         try:
             await update.message.reply_text(f"📊 Получаю информацию об активе {symbol} и историю цен...")
             
@@ -713,11 +713,11 @@ class OkamaFinanceBot:
                     await update.message.reply_text(f"❌ Ошибка: {asset_info['error']}")
                 return
             
-            # Get price history and chart
+            # Get price history and charts
             price_history = self.asset_service.get_asset_price_history(symbol, period)
             
             if 'error' in price_history:
-                # If we can't get the chart, still show basic info
+                # If we can't get the charts, still show basic info
                 await update.message.reply_text(
                     f"⚠️ Удалось получить информацию об активе, но не удалось построить график: {price_history['error']}"
                 )
@@ -749,63 +749,234 @@ class OkamaFinanceBot:
             if asset_info.get('volatility') != 'N/A':
                 response += f"**Волатильность:** {asset_info.get('volatility')}\n"
             
-            # Add price history statistics
-            response += f"\n📈 **Статистика за период {period}:**\n"
-            response += f"**Текущая цена:** {price_history.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
-            response += f"**Начальная цена:** {price_history.get('start_price', 'N/A')} {price_history.get('currency', '')}\n"
-            response += f"**Изменение:** {price_history.get('price_change', 'N/A'):+.2f}%\n"
-            response += f"**Минимальная цена:** {price_history.get('min_price', 'N/A')} {price_history.get('currency', '')}\n"
-            response += f"**Максимальная цена:** {price_history.get('max_price', 'N/A')} {price_history.get('currency', '')}\n"
-            response += f"**Период:** {price_history.get('start_date', 'N/A')} - {price_history.get('end_date', 'N/A')}\n"
-            response += f"**Количество точек данных:** {price_history.get('data_points', 'N/A')}\n"
+            # Add price history statistics for each chart type
+            charts_info = price_history.get('charts', {})
+            price_data_info = price_history.get('price_data_info', {})
+            
+            if 'adj_close' in charts_info:
+                adj_info = price_data_info.get('adj_close', {})
+                response += f"\n📈 **Дневные цены (скорректированные):**\n"
+                response += f"**Текущая цена:** {adj_info.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Начальная цена:** {adj_info.get('start_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Мин/Макс:** {adj_info.get('min_price', 'N/A')} / {adj_info.get('max_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Период:** {adj_info.get('start_date', 'N/A')} - {adj_info.get('end_date', 'N/A')}\n"
+                response += f"**Точки данных:** {adj_info.get('data_points', 'N/A')}\n"
+            
+            if 'close_monthly' in charts_info:
+                monthly_info = price_data_info.get('close_monthly', {})
+                response += f"\n📊 **Месячные цены:**\n"
+                response += f"**Текущая цена:** {monthly_info.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Начальная цена:** {monthly_info.get('start_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Мин/Макс:** {monthly_info.get('min_price', 'N/A')} / {monthly_info.get('max_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Период:** {monthly_info.get('start_date', 'N/A')} - {monthly_info.get('end_date', 'N/A')}\n"
+                response += f"**Точки данных:** {monthly_info.get('data_points', 'N/A')}\n"
+            
+            if 'fallback' in charts_info:
+                fallback_info = price_data_info.get('fallback', {})
+                response += f"\n📊 **История цен:**\n"
+                response += f"**Текущая цена:** {fallback_info.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Начальная цена:** {fallback_info.get('start_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Мин/Макс:** {fallback_info.get('min_price', 'N/A')} / {fallback_info.get('max_price', 'N/A')} {price_history.get('currency', '')}\n"
+                response += f"**Период:** {fallback_info.get('start_date', 'N/A')} - {fallback_info.get('end_date', 'N/A')}\n"
+                response += f"**Точки данных:** {fallback_info.get('data_points', 'N/A')}\n"
             
             # Send text response first
             await update.message.reply_text(response, parse_mode='Markdown')
             
-            # Send the price chart
-            if 'chart' in price_history:
-                await update.message.reply_photo(
-                    photo=price_history['chart'],
-                    caption=f"📈 График цен {symbol} за период {period}"
-                )
-            else:
-                await update.message.reply_text("⚠️ Не удалось создать график цен")
+            # Send charts and get AI analysis
+            await self._send_charts_with_ai_analysis(update, symbol, period, charts_info, price_data_info)
                 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Error in _get_asset_info_with_chart: {error_msg}")
             await update.message.reply_text(f"❌ Ошибка при получении информации: {error_msg}")
+    
+    async def _send_charts_with_ai_analysis(self, update: Update, symbol: str, period: str, charts: Dict, price_data_info: Dict):
+        """Send charts and get AI analysis from YandexGPT"""
+        try:
+            # Send charts first
+            charts_sent = []
+            
+            if 'adj_close' in charts:
+                caption = f"📈 Дневные цены (скорректированные): {symbol} за период {period}"
+                await update.message.reply_photo(
+                    photo=charts['adj_close'],
+                    caption=caption
+                )
+                charts_sent.append('adj_close')
+            
+            if 'close_monthly' in charts:
+                caption = f"📊 Месячные цены: {symbol} за период {period}"
+                await update.message.reply_photo(
+                    photo=charts['close_monthly'],
+                    caption=caption
+                )
+                charts_sent.append('close_monthly')
+            
+            if 'fallback' in charts:
+                caption = f"📊 История цен: {symbol} за период {period}"
+                await update.message.reply_photo(
+                    photo=charts['fallback'],
+                    caption=caption
+                )
+                charts_sent.append('fallback')
+            
+            # Get AI analysis if we have charts
+            if charts_sent:
+                await self._get_ai_analysis_for_charts(update, symbol, period, charts_sent, price_data_info)
+            else:
+                await update.message.reply_text("⚠️ Не удалось создать графики цен")
+                
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error in _send_charts_with_ai_analysis: {error_msg}")
+            await update.message.reply_text(f"❌ Ошибка при отправке графиков: {error_msg}")
+    
+    async def _get_ai_analysis_for_charts(self, update: Update, symbol: str, period: str, charts_sent: List[str], price_data_info: Dict):
+        """Get AI analysis for the charts from YandexGPT"""
+        try:
+            await update.message.reply_text("🧠 Получаю AI анализ графиков...")
+            
+            # Prepare data for AI analysis
+            analysis_data = {
+                'symbol': symbol,
+                'period': period,
+                'charts_available': charts_sent,
+                'price_data': price_data_info
+            }
+            
+            # Create analysis prompt
+            prompt = self._create_chart_analysis_prompt(analysis_data)
+            
+            # Get AI response
+            ai_response = await self._get_yandexgpt_analysis(prompt)
+            
+            if ai_response:
+                await update.message.reply_text(
+                    f"🧠 **AI анализ {symbol}**\n\n{ai_response}",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text("⚠️ Не удалось получить AI анализ")
+                
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error in _get_ai_analysis_for_charts: {error_msg}")
+            await update.message.reply_text(f"❌ Ошибка при получении AI анализа: {error_msg}")
+    
+    def _create_chart_analysis_prompt(self, analysis_data: Dict) -> str:
+        """Create a prompt for chart analysis"""
+        symbol = analysis_data['symbol']
+        period = analysis_data['period']
+        charts_available = analysis_data['charts_available']
+        price_data = analysis_data['price_data']
+        
+        prompt = f"""Проанализируй графики цен для актива {symbol} за период {period}.
+
+Доступные графики: {', '.join(charts_available)}
+
+Данные по ценам:"""
+
+        for chart_type, info in price_data.items():
+            if chart_type == 'adj_close':
+                prompt += f"\n\n📈 Дневные цены (скорректированные):"
+            elif chart_type == 'close_monthly':
+                prompt += f"\n\n📊 Месячные цены:"
+            else:
+                prompt += f"\n\n📊 История цен:"
+            
+            prompt += f"\n- Текущая цена: {info.get('current_price', 'N/A')}"
+            prompt += f"\n- Начальная цена: {info.get('start_price', 'N/A')}"
+            prompt += f"\n- Минимальная цена: {info.get('min_price', 'N/A')}"
+            prompt += f"\n- Максимальная цена: {info.get('max_price', 'N/A')}"
+            prompt += f"\n- Период: {info.get('start_date', 'N/A')} - {info.get('end_date', 'N/A')}"
+            prompt += f"\n- Количество точек данных: {info.get('data_points', 'N/A')}"
+        
+        prompt += f"""
+
+Пожалуйста, предоставь:
+1. Краткий анализ динамики цен
+2. Основные тренды и паттерны
+3. Ключевые уровни поддержки и сопротивления
+4. Оценку волатильности
+5. Краткосрочные и долгосрочные перспективы
+6. Рекомендации для инвесторов
+
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
+
+        return prompt
+    
+    async def _get_yandexgpt_analysis(self, prompt: str) -> Optional[str]:
+        """Get AI analysis from YandexGPT"""
+        try:
+            # Use the existing YandexGPT service
+            response = await self.yandexgpt_service.get_response(prompt)
+            return response
+        except Exception as e:
+            logger.error(f"Error getting YandexGPT analysis: {e}")
+            return None
 
     async def _get_asset_price_chart(self, update: Update, symbol: str, period: str = '1Y'):
-        """Get only the price chart for an asset"""
+        """Get only the price charts for an asset"""
         try:
-            await update.message.reply_text(f"📈 Получаю график цен для {symbol} за период {period}...")
+            await update.message.reply_text(f"📈 Получаю графики цен для {symbol} за период {period}...")
             
-            # Get price history and chart
+            # Get price history and charts
             price_history = self.asset_service.get_asset_price_history(symbol, period)
             
             if 'error' in price_history:
                 await update.message.reply_text(f"❌ Ошибка: {price_history['error']}")
                 return
             
-            # Send the price chart
-            if 'chart' in price_history:
-                caption = f"📈 График цен {symbol} за период {period}\n\n"
-                caption += f"Текущая цена: {price_history.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
-                caption += f"Изменение: {price_history.get('price_change', 'N/A'):+.2f}%\n"
-                caption += f"Период: {price_history.get('start_date', 'N/A')} - {price_history.get('end_date', 'N/A')}"
+            # Send charts
+            charts = price_history.get('charts', {})
+            price_data_info = price_history.get('price_data_info', {})
+            
+            charts_sent = []
+            
+            if 'adj_close' in charts:
+                caption = f"📈 Дневные цены (скорректированные): {symbol} за период {period}\n\n"
+                adj_info = price_data_info.get('adj_close', {})
+                caption += f"Текущая цена: {adj_info.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+                caption += f"Период: {adj_info.get('start_date', 'N/A')} - {adj_info.get('end_date', 'N/A')}"
                 
                 await update.message.reply_photo(
-                    photo=price_history['chart'],
+                    photo=charts['adj_close'],
                     caption=caption
                 )
-            else:
-                await update.message.reply_text("⚠️ Не удалось создать график цен")
+                charts_sent.append('adj_close')
+            
+            if 'close_monthly' in charts:
+                caption = f"📊 Месячные цены: {symbol} за период {period}\n\n"
+                monthly_info = price_data_info.get('close_monthly', {})
+                caption += f"Текущая цена: {monthly_info.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+                caption += f"Период: {monthly_info.get('start_date', 'N/A')} - {monthly_info.get('end_date', 'N/A')}"
+                
+                await update.message.reply_photo(
+                    photo=charts['close_monthly'],
+                    caption=caption
+                )
+                charts_sent.append('close_monthly')
+            
+            if 'fallback' in charts:
+                caption = f"📊 История цен: {symbol} за период {period}\n\n"
+                fallback_info = price_data_info.get('fallback', {})
+                caption += f"Текущая цена: {fallback_info.get('current_price', 'N/A')} {price_history.get('currency', '')}\n"
+                caption += f"Период: {fallback_info.get('start_date', 'N/A')} - {fallback_info.get('end_date', 'N/A')}"
+                
+                await update.message.reply_photo(
+                    photo=charts['fallback'],
+                    caption=caption
+                )
+                charts_sent.append('fallback')
+            
+            if not charts_sent:
+                await update.message.reply_text("⚠️ Не удалось создать графики цен")
                 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Error in _get_asset_price_chart: {error_msg}")
-            await update.message.reply_text(f"❌ Ошибка при получении графика: {error_msg}")
+            await update.message.reply_text(f"❌ Ошибка при получении графиков: {error_msg}")
 
     def run(self):
         """Run the bot"""
