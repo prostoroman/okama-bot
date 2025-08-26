@@ -579,30 +579,48 @@ class AssetService:
                 except (TypeError, AttributeError):
                     return {'error': 'Invalid dividend data format'}
             
-            # Convert to dictionary format
+            # Convert to dictionary format with only actual payout dates (> 0)
             dividends = {}
+            try:
+                import math
+            except Exception:
+                math = None
+            def _is_positive_number(value):
+                try:
+                    if hasattr(value, 'item'):
+                        value = value.item()
+                except Exception:
+                    pass
+                if isinstance(value, (int, float)):
+                    if math is not None:
+                        try:
+                            return float(value) > 0 and math.isfinite(float(value))
+                        except Exception:
+                            return False
+                    else:
+                        v = float(value)
+                        return v > 0 and not (v != v or v in (float('inf'), float('-inf')))
+                return False
+
             if hasattr(dividend_data, 'items'):
                 # It's a pandas Series or dict-like object
                 for date, amount in dividend_data.items():
-                    dividends[str(date)] = amount
+                    if _is_positive_number(amount):
+                        dividends[str(date)] = float(amount)
             elif hasattr(dividend_data, 'iloc') and hasattr(dividend_data, 'index'):
                 # It's a pandas Series
                 for i in range(len(dividend_data)):
                     date = dividend_data.index[i]
                     amount = dividend_data.iloc[i]
-                    dividends[str(date)] = amount
+                    if _is_positive_number(amount):
+                        dividends[str(date)] = float(amount)
             else:
                 # Fallback for other types
-                dividends['current'] = dividend_data
+                if _is_positive_number(dividend_data):
+                    dividends['current'] = float(dividend_data)
             
-            # Calculate total periods based on data type
-            if hasattr(dividend_data, '__len__'):
-                try:
-                    total_periods = len(dividend_data)
-                except (TypeError, AttributeError):
-                    total_periods = 1
-            else:
-                total_periods = 1
+            # Calculate payout count based on filtered dividends
+            total_periods = len(dividends)
             
             info = {
                 'currency': getattr(asset, 'currency', ''),
