@@ -148,6 +148,10 @@ class EnhancedOkamaFinancialBrain:
             if not resolved_assets:
                 raise ValueError("Не удалось разрешить ни один актив. Проверьте названия.")
         
+        # Если активы требуются по намерению, но не были указаны/распознаны
+        if intent in ['asset_single', 'asset_compare', 'portfolio_analysis', 'macro_data'] and not resolved_assets:
+            raise ValueError("Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
+        
         # Извлечение весов для портфеля
         weights = None
         if intent == 'portfolio_analysis' and len(resolved_assets) > 1:
