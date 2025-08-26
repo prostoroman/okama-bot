@@ -174,42 +174,93 @@ class EnhancedOkamaHandler:
         try:
             import okama as ok
             
-            # Получаем данные по каждому активу
+            # Попытка использовать высокоуровневый список активов okama.AssetList
+            assetlist_data: Dict[str, Any] = {}
+            base_ccy = convert_to or currency
+            try:
+                al = ok.AssetList(assets, ccy=base_ccy)
+                # Дополнительные возможности из okama.AssetList
+                try:
+                    assetlist_data['names'] = getattr(al, 'names', {})
+                except Exception:
+                    assetlist_data['names'] = {}
+                try:
+                    assetlist_data['wealth_indexes'] = getattr(al, 'wealth_indexes', None)
+                except Exception:
+                    assetlist_data['wealth_indexes'] = None
+                try:
+                    assetlist_data['drawdowns'] = getattr(al, 'drawdowns', None)
+                except Exception:
+                    assetlist_data['drawdowns'] = None
+                try:
+                    assetlist_data['dividend_yield'] = getattr(al, 'dividend_yield', None)
+                except Exception:
+                    assetlist_data['dividend_yield'] = None
+                try:
+                    assetlist_data['assets_ror'] = getattr(al, 'assets_ror', None)
+                except Exception:
+                    assetlist_data['assets_ror'] = None
+                try:
+                    # Табличный обзор ключевых метрик за стандартные периоды
+                    # Используем 1 и 10 лет по умолчанию, как в примере
+                    assetlist_data['describe'] = al.describe(years=[1, 10])
+                except Exception:
+                    assetlist_data['describe'] = None
+                try:
+                    ror_df = assetlist_data.get('assets_ror')
+                    if ror_df is not None and hasattr(ror_df, 'cov'):
+                        assetlist_data['covariance'] = ror_df.cov()
+                    else:
+                        assetlist_data['covariance'] = None
+                except Exception:
+                    assetlist_data['covariance'] = None
+                try:
+                    # Скользящая корреляция с бенчмарком (первый актив) за 5 лет по месяцам
+                    if hasattr(al, 'index_corr'):
+                        assetlist_data['index_corr'] = al.index_corr(rolling_window=12 * 5)
+                    else:
+                        assetlist_data['index_corr'] = None
+                except Exception:
+                    assetlist_data['index_corr'] = None
+            except Exception as e:
+                # Если не удалось построить AssetList, продолжим с ручной агрегацией ниже
+                assetlist_data = {'assetlist_error': str(e)}
+            
+            # Получаем данные по каждому активу (fallback и для совместимости с существующими графиками)
             asset_data = {}
             for asset in assets:
                 try:
                     ok_asset = ok.Asset(asset)
                     prices = ok_asset.price
-                    
-                    # Конвертируем валюту если нужно
+                    # Конвертируем валюту если нужно (используем исходную валюту оценивания, а не валюту актива)
                     if convert_to and convert_to != currency:
                         prices = self._convert_currency(prices, currency, convert_to)
-                    
                     asset_data[asset] = prices
                 except Exception as e:
                     logger.warning(f"Could not get data for {asset}: {e}")
                     continue
             
-            if not asset_data:
+            if not asset_data and not assetlist_data:
                 raise ValueError("Не удалось получить данные ни по одному активу")
             
-            # Выравниваем индексы
+            # Выравниваем индексы и считаем доходности (fallback)
             try:
-                aligned_data = pd.concat(asset_data.values(), axis=1, join='inner')
-                aligned_data.columns = list(asset_data.keys())
-                
-                # Вычисляем доходности
-                returns_data = aligned_data.pct_change().dropna()
-                
-                # Вычисляем метрики для каждого актива
+                import pandas as pd
+                aligned_data = pd.concat(asset_data.values(), axis=1, join='inner') if asset_data else pd.DataFrame()
+                if not aligned_data.empty:
+                    aligned_data.columns = list(asset_data.keys())
+                returns_data = aligned_data.pct_change().dropna() if not aligned_data.empty else pd.DataFrame()
                 metrics = {}
                 for asset in assets:
                     if asset in aligned_data:
                         asset_prices = aligned_data[asset].dropna()
                         metrics[asset] = self._compute_metrics(asset_prices, period)
-                
-                # Вычисляем корреляции
-                correlation = returns_data.corr().fillna(0.0) if not returns_data.empty else pd.DataFrame()
+                # Корреляция из доходностей (или из AssetList если доступно)
+                correlation = (
+                    returns_data.corr().fillna(0.0) if not returns_data.empty else (
+                        assetlist_data.get('assets_ror').corr().fillna(0.0) if isinstance(assetlist_data.get('assets_ror'), pd.DataFrame) and not assetlist_data.get('assets_ror').empty else pd.DataFrame()
+                    )
+                )
             except Exception as e:
                 logger.warning(f"Error processing asset data: {e}")
                 aligned_data = pd.DataFrame()
@@ -217,16 +268,20 @@ class EnhancedOkamaHandler:
                 metrics = {}
                 correlation = pd.DataFrame()
             
-            return {
+            # Собираем итог
+            result = {
                 'tickers': assets,
                 'prices': aligned_data,
                 'returns': returns_data,
                 'metrics': metrics,
                 'correlation': correlation,
                 'period': period,
-                'currency': convert_to or currency,
+                'currency': base_ccy,
                 'converted_currency': convert_to
             }
+            # Вкладываем дополнительные поля из AssetList, если есть
+            result.update(assetlist_data)
+            return result
             
         except Exception as e:
             logger.error(f"Error handling asset comparison: {e}")
