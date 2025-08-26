@@ -67,7 +67,11 @@ class IntentParser:
         if len(raw_assets) > 1:
             return ParsedIntent(intent="asset_compare", raw_assets=raw_assets, options=self._extract_options(lower))
         if len(raw_assets) == 1:
-            return ParsedIntent(intent="asset_single", raw_assets=raw_assets, options=self._extract_options(lower))
+            # Проверяем, есть ли ключевые слова для анализа одного актива
+            if any(k in lower for k in ["проанализируй", "анализ", "информация", "покажи", "данные"]):
+                return ParsedIntent(intent="asset_single", raw_assets=raw_assets, options=self._extract_options(lower))
+            else:
+                return ParsedIntent(intent="asset_single", raw_assets=raw_assets, options=self._extract_options(lower))
 
         # Default to chat
         return ParsedIntent(intent="chat", raw_assets=[], options={})

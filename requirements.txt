@@ -1,16 +1,14 @@
-# Core dependencies
+# Core dependencies for Enhanced Okama Financial Brain
 python-telegram-bot[all]>=22.0.0
 okama>=1.2.0
 matplotlib>=3.7.0
-seaborn>=0.12.0
 pandas>=2.0.0
 numpy>=1.24.0
 python-dotenv>=1.0.0
 requests>=2.31.0
 Pillow>=10.0.0
-plotly>=5.15.0
-kaleido>=0.2.1
-yfinance>=0.2.38
 
-# Optional: Web service dependencies (only if needed)
-# Flask>=2.3.0
+# Development dependencies (optional)
+# pytest>=7.0.0
+# black>=23.0.0
+# flake8>=6.0.0
