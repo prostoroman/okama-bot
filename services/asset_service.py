@@ -154,6 +154,55 @@ class AssetService:
             except:
                 info['volatility'] = 'N/A'
             
+            # Try to generate a monthly price dynamics chart for the full available period
+            try:
+                series_for_plot = None
+                try:
+                    import pandas as pd  # type: ignore
+                except Exception:
+                    pd = None  # type: ignore
+                raw = getattr(asset, 'price', None)
+                if pd is not None and hasattr(raw, 'iloc') and hasattr(raw, 'index') and len(raw) > 1:
+                    if getattr(raw, 'ndim', 1) == 1:
+                        series_for_plot = raw.dropna()
+                    else:
+                        df_non_nan = raw.dropna(how='all') if hasattr(raw, 'dropna') else raw
+                        if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
+                            try:
+                                first_col = df_non_nan.columns[0]
+                                series_for_plot = df_non_nan[first_col].dropna()
+                            except Exception:
+                                series_for_plot = None
+                if series_for_plot is not None and len(series_for_plot) > 1:
+                    # Convert PeriodIndex (monthly) to Timestamp if needed
+                    try:
+                        if hasattr(series_for_plot.index, 'to_timestamp'):
+                            series_for_plot = series_for_plot.copy()
+                            series_for_plot.index = series_for_plot.index.to_timestamp()
+                    except Exception:
+                        pass
+                    # Ensure monthly frequency if index is datetime-like
+                    try:
+                        inferred = getattr(series_for_plot.index, 'inferred_type', None)
+                        if inferred and 'datetime' in str(inferred).lower():
+                            series_for_plot = series_for_plot.resample('M').last().dropna()
+                    except Exception:
+                        pass
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
+                    ax.set_title(f'Динамика цены по месяцам: {symbol}', fontsize=12)
+                    ax.set_xlabel('Дата')
+                    ax.set_ylabel(f'Цена ({getattr(asset, "currency", "")})')
+                    ax.grid(True, linestyle='--', alpha=0.3)
+                    fig.tight_layout()
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                    plt.close(fig)
+                    info['chart'] = buf.getvalue()
+            except Exception:
+                # Silently ignore plotting errors
+                pass
+            
             return info
             
         except Exception as e:

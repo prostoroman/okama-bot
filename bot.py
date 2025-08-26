@@ -295,6 +295,16 @@ class OkamaFinanceBot:
                 response += f"**Волатильность:** {asset_info.get('volatility')}\n"
             
             await update.message.reply_text(response, parse_mode='Markdown')
+            # Send chart if provided
+            chart_bytes = asset_info.get('chart')
+            if chart_bytes:
+                try:
+                    await update.message.reply_photo(
+                        photo=io.BytesIO(chart_bytes),
+                        caption="📈 Месячная динамика цены"
+                    )
+                except Exception:
+                    pass
             
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка при получении информации об активе: {str(e)}")
