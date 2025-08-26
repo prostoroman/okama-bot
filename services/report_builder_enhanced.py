@@ -49,6 +49,23 @@ class EnhancedReportBuilder:
             logger.error(f"Error building report: {e}")
             return f"Ошибка построения отчета: {str(e)}", []
     
+    # Методы-обертки для совместимости с bot.py
+    def build_single_asset_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
+        """Совместимость с bot.py"""
+        return self._build_single_asset_report(data, "")
+    
+    def build_multi_asset_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
+        """Совместимость с bot.py"""
+        return self._build_comparison_report(data, "")
+    
+    def build_portfolio_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
+        """Совместимость с bot.py"""
+        return self._build_portfolio_report(data, "")
+    
+    def build_inflation_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
+        """Совместимость с bot.py"""
+        return self._build_inflation_report(data, "")
+    
     def _build_single_asset_report(self, data: Dict[str, Any], user_query: str) -> Tuple[str, List[bytes]]:
         """Строит отчет по одному активу"""
         ticker = data.get('ticker', 'Unknown')
