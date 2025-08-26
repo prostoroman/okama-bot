@@ -1088,8 +1088,13 @@ class AssetService:
             import re
             match = re.match(r'(\d+)([YMD])', period.upper())
             if not match:
-                # Default to 1 year if period format is invalid
-                return data.tail(12)  # Last 12 months for monthly data
+                # Default period depends on data type
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - default to 10 years
+                    return data.tail(120)  # Last 120 months (10 years)
+                else:
+                    # Daily data - default to 1 year
+                    return data.tail(365)  # Last 365 days (1 year)
             
             number, unit = match.groups()
             number = int(number)
@@ -1119,10 +1124,12 @@ class AssetService:
                     # Daily data
                     points_to_take = number
             else:
-                # Default to 1 year
+                # Default depends on data type
                 if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
-                    points_to_take = 12
+                    # Monthly data - default to 10 years
+                    points_to_take = 120
                 else:
+                    # Daily data - default to 1 year
                     points_to_take = 365
             
             # Take last N points

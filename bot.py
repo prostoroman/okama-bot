@@ -96,9 +96,9 @@ class OkamaFinanceBot:
 /test [тикер] — тест Okama
 /testai — тест YandexGPT
 
-**Периоды для графиков:** 1Y (год), 2Y (2 года), 5Y (5 лет), MAX (весь период)
+**Периоды для графиков:** 1Y (год), 2Y (2 года), 5Y (5 лет), 10Y (10 лет - по умолчанию), MAX (весь период)
 
-Также можно просто прислать тикер (например, AAPL.US) — я пойму и покажу график.
+Также можно просто прислать тикер (например, AAPL.US) — я пойму и покажу график за 10 лет.
 
 **Популярные тикеры:**
 - ETF: VOO.US, SPY.US, QQQ.US
@@ -128,9 +128,9 @@ class OkamaFinanceBot:
         help_text = """🧠 **Okama Financial Brain - Помощь**
 
 🚀 **Основные команды:**
-/asset [symbol] [period] - Полная информация об активе с графиком цен
+/asset [symbol] [период] - Полная информация об активе с двумя графиками и AI анализом
+/chart [symbol] [период] - Два графика цен актива (дневные + месячные)
 /price [symbol] - Текущая цена актива
-/chart [symbol] [period] - График цен актива
 /dividends [symbol] - История дивидендов
 /test [symbol] - Тест подключения к Okama API
 /testai - Тест подключения к YandexGPT API
@@ -139,17 +139,22 @@ class OkamaFinanceBot:
 /chat [question] - Получить финансовый совет от AI
 
 📊 **Примеры команд:**
-• /asset VOO.US 1Y
-• /chart SPY.US 2Y
+• /asset VOO.US 10Y
+• /chart SPY.US 5Y
 • /price AGG.US
 • /dividends VOO.US
 • /test VOO.US
 
 📈 **Доступные периоды для графиков:**
-• 1Y - 1 год (по умолчанию)
-• 2Y - 2 года
+• 1Y - 1 год
+• 2Y - 2 года  
 • 5Y - 5 лет
-• MAX - весь доступный период"""
+• 10Y - 10 лет (по умолчанию для месячных графиков)
+• MAX - весь доступный период
+
+**Типы графиков:**
+- 📈 **Дневные цены (adj_close)** - скорректированные дневные цены для детального анализа
+- 📊 **Месячные цены (close_monthly)** - месячные цены для анализа долгосрочных трендов (по умолчанию 10 лет)"""
         
         await update.message.reply_text(help_text)
     
@@ -164,6 +169,7 @@ class OkamaFinanceBot:
                 "/asset VOO.US 1Y (1 год)\n"
                 "/asset VOO.US 2Y (2 года)\n"
                 "/asset VOO.US 5Y (5 лет)\n"
+                "/asset VOO.US 10Y (10 лет - по умолчанию для месячных)\n"
                 "/asset VOO.US MAX (весь период)\n\n"
                 "Или просто отправьте мне символ напрямую!"
             )
@@ -172,7 +178,7 @@ class OkamaFinanceBot:
         symbol = context.args[0].upper()
         
         # Check if period is specified
-        period = '1Y'  # Default period
+        period = '10Y'  # Default period - 10 years for better monthly chart visibility
         if len(context.args) > 1:
             period = context.args[1].upper()
         
@@ -212,11 +218,12 @@ class OkamaFinanceBot:
             await update.message.reply_text(
                 "📈 График цен актива\n\n"
                 "Пожалуйста, укажите символ и период:\n"
-                "/chart VOO.US 1Y\n\n"
+                "/chart VOO.US 10Y\n\n"
                 "Доступные периоды:\n"
                 "/chart VOO.US 1Y (1 год)\n"
                 "/chart VOO.US 2Y (2 года)\n"
                 "/chart VOO.US 5Y (5 лет)\n"
+                "/chart VOO.US 10Y (10 лет - по умолчанию для месячных)\n"
                 "/chart VOO.US MAX (весь период)\n\n"
                 "Или просто отправьте мне символ напрямую!"
             )
@@ -225,7 +232,7 @@ class OkamaFinanceBot:
         symbol = context.args[0].upper()
         
         # Check if period is specified
-        period = '1Y'  # Default period
+        period = '10Y'  # Default period - 10 years for better monthly chart visibility
         if len(context.args) > 1:
             period = context.args[1].upper()
         
@@ -521,14 +528,14 @@ class OkamaFinanceBot:
                     await update.message.reply_text("Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
                     return
                 # Use new enhanced asset info with chart for single assets
-                await self._get_asset_info_with_chart(update, valid_tickers[0], '1Y')
+                await self._get_asset_info_with_chart(update, valid_tickers[0], '10Y')
                 return
 
             elif parsed.intent == 'asset_compare' or (parsed.intent == 'macro'):
                 if len(valid_tickers) < 2:
                     # If only one valid, treat as single asset with chart
                     if len(valid_tickers) == 1:
-                        await self._get_asset_info_with_chart(update, valid_tickers[0], '1Y')
+                        await self._get_asset_info_with_chart(update, valid_tickers[0], '10Y')
                         return
                     else:
                         await update.message.reply_text("Для сравнения укажите как минимум два актива.")
@@ -788,7 +795,7 @@ class OkamaFinanceBot:
                 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error in _get_asset_info_with_chart: {error_msg}")
+            self.logger.error(f"Error in _get_asset_info_with_chart: {error_msg}")
             await update.message.reply_text(f"❌ Ошибка при получении информации: {error_msg}")
     
     async def _send_charts_with_ai_analysis(self, update: Update, symbol: str, period: str, charts: Dict, price_data_info: Dict):
@@ -829,7 +836,7 @@ class OkamaFinanceBot:
                 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error in _send_charts_with_ai_analysis: {error_msg}")
+            self.logger.error(f"Error in _send_charts_with_ai_analysis: {error_msg}")
             await update.message.reply_text(f"❌ Ошибка при отправке графиков: {error_msg}")
     
     async def _get_ai_analysis_for_charts(self, update: Update, symbol: str, period: str, charts_sent: List[str], price_data_info: Dict):
@@ -1034,7 +1041,7 @@ class OkamaFinanceBot:
                 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error in _get_asset_price_chart: {error_msg}")
+            self.logger.error(f"Error in _get_asset_price_chart: {error_msg}")
             await update.message.reply_text(f"❌ Ошибка при получении графиков: {error_msg}")
 
     def run(self):
