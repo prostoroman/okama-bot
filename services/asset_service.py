@@ -444,14 +444,14 @@ class AssetService:
     
     def get_asset_price_history(self, symbol: str, period: str = '1Y') -> Dict[str, Any]:
         """
-        Get asset price history and create a price chart
+        Get asset price history and create two price charts
         
         Args:
             symbol: Asset symbol (e.g., 'VOO.US', 'SPY.US')
             period: Time period for history (e.g., '1Y', '2Y', '5Y', 'MAX')
             
         Returns:
-            Dictionary containing price history and chart or error
+            Dictionary containing price history and two charts or error
         """
         try:
             self.logger.info(f"Getting asset price history for {symbol} for period {period}")
@@ -459,60 +459,162 @@ class AssetService:
             # Create asset object
             asset = ok.Asset(symbol)
             
-            # Try different methods to get price data
-            price_data = None
+            # Get currency from asset
+            currency = getattr(asset, 'currency', '')
             
-            # Method 1: Try to get historical data
+            # Initialize charts dictionary
+            charts = {}
+            price_data_info = {}
+            
+            # Chart 1: Based on adj_close (daily data)
             try:
-                if period == 'MAX':
-                    price_data = asset.price
-                else:
-                    # Parse period (e.g., '1Y' -> 1 year ago)
-                    import re
-                    match = re.match(r'(\d+)([YMD])', period.upper())
-                    if match:
-                        number, unit = match.groups()
-                        number = int(number)
-                        if unit == 'Y':
-                            years_ago = number
-                        elif unit == 'M':
-                            years_ago = number / 12
-                        elif unit == 'D':
-                            years_ago = number / 365
-                        else:
-                            years_ago = 1
+                if hasattr(asset, 'adj_close'):
+                    adj_close_data = asset.adj_close
+                    if adj_close_data is not None and hasattr(adj_close_data, '__len__') and len(adj_close_data) > 5:
+                        self.logger.info(f"Creating adj_close chart for {symbol} with {len(adj_close_data)} data points")
                         
-                        # Get data from specific date
-                        from datetime import datetime, timedelta
-                        end_date = datetime.now()
-                        start_date = end_date - timedelta(days=int(years_ago * 365))
+                        # Create daily price chart
+                        daily_chart = self._create_price_chart(
+                            adj_close_data, symbol, period, currency, "Дневные цены (скорректированные)"
+                        )
                         
-                        # Try to get price data for specific period
-                        try:
-                            price_data = asset.price.loc[start_date:end_date]
-                        except Exception:
-                            # If period filtering fails, use full history
-                            price_data = asset.price
-                    else:
-                        # Default to 1 year if period format is invalid
-                        price_data = asset.price
+                        if daily_chart:
+                            charts['adj_close'] = daily_chart
+                            # Handle dates properly for PeriodIndex
+                            try:
+                                start_date = adj_close_data.index[0]
+                                end_date = adj_close_data.index[-1]
+                                
+                                if hasattr(start_date, 'strftime'):
+                                    start_date_str = start_date.strftime('%Y-%m-%d')
+                                else:
+                                    start_date_str = str(start_date)
+                                
+                                if hasattr(end_date, 'strftime'):
+                                    end_date_str = end_date.strftime('%Y-%m-%d')
+                                else:
+                                    end_date_str = str(end_date)
+                            except Exception:
+                                start_date_str = "N/A"
+                                end_date_str = "N/A"
+                            
+                            price_data_info['adj_close'] = {
+                                'data_points': len(adj_close_data),
+                                'start_date': start_date_str,
+                                'end_date': end_date_str,
+                                'current_price': float(adj_close_data.iloc[-1]),
+                                'start_price': float(adj_close_data.iloc[0]),
+                                'min_price': float(adj_close_data.min()),
+                                'max_price': float(adj_close_data.max())
+                            }
             except Exception as e:
-                self.logger.warning(f"Could not get price data for period {period}, using full history: {e}")
-                price_data = asset.price
+                self.logger.warning(f"Could not create adj_close chart: {e}")
             
-            # Method 2: If we still don't have good data, try to get monthly data
-            if price_data is None or (hasattr(price_data, '__len__') and len(price_data) < 10):
-                try:
-                    # Try to get monthly data
-                    price_data = asset.get_monthly_prices()
-                    self.logger.info(f"Using monthly prices for {symbol}")
-                except Exception as e:
-                    self.logger.warning(f"Could not get monthly prices: {e}")
+            # Chart 2: Based on close_monthly (monthly data)
+            try:
+                if hasattr(asset, 'close_monthly'):
+                    monthly_data = asset.close_monthly
+                    if monthly_data is not None and hasattr(monthly_data, '__len__') and len(monthly_data) > 5:
+                        self.logger.info(f"Creating close_monthly chart for {symbol} with {len(monthly_data)} data points")
+                        
+                        # Create monthly price chart
+                        monthly_chart = self._create_price_chart(
+                            monthly_data, symbol, period, currency, "Месячные цены"
+                        )
+                        
+                        if monthly_chart:
+                            charts['close_monthly'] = monthly_chart
+                            # Handle dates properly for PeriodIndex
+                            try:
+                                start_date = monthly_data.index[0]
+                                end_date = monthly_data.index[-1]
+                                
+                                if hasattr(start_date, 'strftime'):
+                                    start_date_str = start_date.strftime('%Y-%m-%d')
+                                else:
+                                    start_date_str = str(start_date)
+                                
+                                if hasattr(end_date, 'strftime'):
+                                    end_date_str = end_date.strftime('%Y-%m-%d')
+                                else:
+                                    end_date_str = str(end_date)
+                            except Exception:
+                                start_date_str = "N/A"
+                                end_date_str = "N/A"
+                            
+                            price_data_info['close_monthly'] = {
+                                'data_points': len(monthly_data),
+                                'start_date': start_date_str,
+                                'end_date': end_date_str,
+                                'current_price': float(monthly_data.iloc[-1]),
+                                'start_price': float(monthly_data.iloc[0]),
+                                'min_price': float(monthly_data.min()),
+                                'max_price': float(monthly_data.max())
+                            }
+            except Exception as e:
+                self.logger.warning(f"Could not create close_monthly chart: {e}")
             
-            # Method 3: If still no good data, try to get any available price data
-            if price_data is None or (hasattr(price_data, '__len__') and len(price_data) < 5):
-                try:
-                    # Try to get any available price attribute
+            # If no charts were created, try fallback methods
+            if not charts:
+                # Try to get any available price data
+                price_data = None
+                
+                # Special handling for MOEX assets
+                if symbol.upper().endswith('.MOEX'):
+                    try:
+                        # For MOEX assets, try monthly data first
+                        if hasattr(asset, 'close_monthly'):
+                            monthly_data = asset.close_monthly
+                            if monthly_data is not None and hasattr(monthly_data, '__len__') and len(monthly_data) > 5:
+                                price_data = monthly_data
+                                self.logger.info(f"Using monthly data for MOEX asset {symbol}")
+                        else:
+                            # Try daily adjusted close data
+                            if hasattr(asset, 'adj_close'):
+                                adj_close_data = asset.adj_close
+                                if adj_close_data is not None and hasattr(adj_close_data, '__len__') and len(adj_close_data) > 5:
+                                    price_data = adj_close_data
+                                    self.logger.info(f"Using daily adjusted close data for MOEX asset {symbol}")
+                    except Exception as e:
+                        self.logger.warning(f"Could not get MOEX-specific data: {e}")
+                
+                # Try other methods if still no data
+                if price_data is None:
+                    try:
+                        if period == 'MAX':
+                            price_data = asset.price
+                        else:
+                            # Parse period and try to get filtered data
+                            import re
+                            match = re.match(r'(\d+)([YMD])', period.upper())
+                            if match:
+                                number, unit = match.groups()
+                                number = int(number)
+                                if unit == 'Y':
+                                    years_ago = number
+                                elif unit == 'M':
+                                    years_ago = number / 12
+                                elif unit == 'D':
+                                    years_ago = number / 365
+                                else:
+                                    years_ago = 1
+                                
+                                from datetime import datetime, timedelta
+                                end_date = datetime.now()
+                                start_date = end_date - timedelta(days=int(years_ago * 365))
+                                
+                                try:
+                                    price_data = asset.price.loc[start_date:end_date]
+                                except Exception:
+                                    price_data = asset.price
+                            else:
+                                price_data = asset.price
+                    except Exception as e:
+                        self.logger.warning(f"Could not get price data for period {period}: {e}")
+                        price_data = asset.price
+                
+                # Try to get any available price attribute
+                if price_data is None or (hasattr(price_data, '__len__') and len(price_data) < 5):
                     for attr in ['price', 'close', 'adj_close', 'open', 'high', 'low']:
                         if hasattr(asset, attr):
                             attr_data = getattr(asset, attr)
@@ -520,131 +622,64 @@ class AssetService:
                                 price_data = attr_data
                                 self.logger.info(f"Using {attr} data for {symbol}")
                                 break
-                except Exception as e:
-                    self.logger.warning(f"Could not get alternative price data: {e}")
+                
+                # Try monthly prices as last resort
+                if price_data is None or (hasattr(price_data, '__len__') and len(price_data) < 5):
+                    try:
+                        price_data = asset.get_monthly_prices()
+                        self.logger.info(f"Using monthly prices for {symbol}")
+                    except Exception as e:
+                        self.logger.warning(f"Could not get monthly prices: {e}")
+                
+                # Create fallback chart if we have data
+                if price_data is not None and hasattr(price_data, '__len__') and len(price_data) >= 2:
+                    fallback_chart = self._create_price_chart(
+                        price_data, symbol, period, currency, "История цен"
+                    )
+                    if fallback_chart:
+                        charts['fallback'] = fallback_chart
+                        # Handle dates properly for PeriodIndex
+                        try:
+                            start_date = price_data.index[0]
+                            end_date = price_data.index[-1]
+                            
+                            if hasattr(start_date, 'strftime'):
+                                start_date_str = start_date.strftime('%Y-%m-%d')
+                            else:
+                                start_date_str = str(start_date)
+                            
+                            if hasattr(end_date, 'strftime'):
+                                end_date_str = end_date.strftime('%Y-%m-%d')
+                            else:
+                                end_date_str = str(end_date)
+                        except Exception:
+                            start_date_str = "N/A"
+                            end_date_str = "N/A"
+                        
+                        price_data_info['fallback'] = {
+                            'data_points': len(price_data),
+                            'start_date': start_date_str,
+                            'end_date': end_date_str,
+                            'current_price': float(price_data.iloc[-1]),
+                            'start_price': float(price_data.iloc[0]),
+                            'min_price': float(price_data.min()),
+                            'max_price': float(price_data.max())
+                        }
             
-            # Handle different types of price data
-            if price_data is None:
-                return {'error': 'Нет данных о ценах для указанного периода'}
+            # Check if we have any charts
+            if not charts:
+                return {'error': 'Не удалось создать ни одного графика'}
             
-            # Convert to pandas Series if it's a single value
-            if isinstance(price_data, (int, float)):
-                # Single price value - create a simple series
-                from datetime import datetime, timedelta
-                import pandas as pd
-                
-                # Create a simple series with current date and price
-                current_date = datetime.now()
-                dates = pd.date_range(start=current_date - timedelta(days=30), end=current_date, freq='D')
-                values = [price_data] * len(dates)
-                price_data = pd.Series(values, index=dates)
-                self.logger.info(f"Created synthetic price series for {symbol} with single price value")
+            # Prepare response data
+            response_data = {
+                'symbol': symbol,
+                'currency': currency,
+                'period': period,
+                'charts': charts,
+                'price_data_info': price_data_info
+            }
             
-            # Ensure we have a pandas Series or DataFrame
-            if not hasattr(price_data, 'iloc') or not hasattr(price_data, 'index'):
-                return {'error': 'Неверный формат данных о ценах'}
-            
-            if len(price_data) < 2:
-                return {'error': 'Недостаточно данных для построения графика (нужно минимум 2 точки)'}
-            
-            # Get currency from asset
-            currency = getattr(asset, 'currency', '')
-            
-            # Prepare data for plotting
-            try:
-                import pandas as pd
-                
-                # Ensure we have a pandas Series
-                if getattr(price_data, 'ndim', 1) == 1:
-                    series_for_plot = price_data.dropna()
-                else:
-                    # If DataFrame, take first column
-                    df_non_nan = price_data.dropna(how='all')
-                    if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
-                        first_col = df_non_nan.columns[0]
-                        series_for_plot = df_non_nan[first_col].dropna()
-                    else:
-                        return {'error': 'Не удалось получить данные о ценах'}
-                
-                if len(series_for_plot) < 2:
-                    return {'error': 'Недостаточно данных для построения графика'}
-                
-                # Convert PeriodIndex to Timestamp if needed
-                try:
-                    if hasattr(series_for_plot.index, 'to_timestamp'):
-                        series_for_plot = series_for_plot.copy()
-                        series_for_plot.index = series_for_plot.index.to_timestamp()
-                except Exception:
-                    pass
-                
-                # Create the price chart
-                fig, ax = plt.subplots(figsize=(12, 6))
-                
-                # Plot price line
-                ax.plot(series_for_plot.index, series_for_plot.values, 
-                       color='#1f77b4', linewidth=2, alpha=0.8)
-                
-                # Add current price annotation
-                current_price = series_for_plot.iloc[-1]
-                current_date = series_for_plot.index[-1]
-                ax.annotate(f'{current_price:.2f}', 
-                           xy=(current_date, current_price),
-                           xytext=(10, 10), textcoords='offset points',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
-                           fontsize=10, fontweight='bold')
-                
-                # Customize chart
-                ax.set_title(f'История цен: {symbol} ({period})', fontsize=14, fontweight='bold')
-                ax.set_xlabel('Дата', fontsize=12)
-                ax.set_ylabel(f'Цена ({currency})', fontsize=12)
-                ax.grid(True, linestyle='--', alpha=0.3)
-                
-                # Format x-axis dates
-                fig.autofmt_xdate()
-                
-                # Add some statistics
-                start_price = series_for_plot.iloc[0]
-                if start_price != 0:
-                    price_change = ((current_price - start_price) / start_price) * 100
-                else:
-                    price_change = 0.0
-                    
-                stats_text = f'Изменение: {price_change:+.2f}%\n'
-                stats_text += f'Мин: {series_for_plot.min():.2f}\n'
-                stats_text += f'Макс: {series_for_plot.max():.2f}'
-                
-                ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
-                       verticalalignment='top', fontsize=10,
-                       bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
-                
-                fig.tight_layout()
-                
-                # Save chart to bytes
-                buf = io.BytesIO()
-                fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-                plt.close(fig)
-                
-                # Prepare response data
-                response_data = {
-                    'symbol': symbol,
-                    'currency': currency,
-                    'period': period,
-                    'current_price': float(current_price),
-                    'start_price': float(start_price),
-                    'price_change': float(price_change),
-                    'min_price': float(series_for_plot.min()),
-                    'max_price': float(series_for_plot.max()),
-                    'data_points': len(series_for_plot),
-                    'start_date': str(series_for_plot.index[0].date()),
-                    'end_date': str(series_for_plot.index[-1].date()),
-                    'chart': buf.getvalue()
-                }
-                
-                return response_data
-                
-            except Exception as e:
-                self.logger.error(f"Error creating price chart: {e}")
-                return {'error': f'Ошибка при создании графика: {str(e)}'}
+            return response_data
                 
         except Exception as e:
             error_msg = str(e)
@@ -659,6 +694,120 @@ class AssetService:
                 }
             else:
                 return {'error': f"Ошибка при получении истории цен: {error_msg}"}
+    
+    def _create_price_chart(self, price_data, symbol: str, period: str, currency: str, chart_title: str) -> Optional[bytes]:
+        """
+        Create a price chart from price data
+        
+        Args:
+            price_data: Pandas Series with price data
+            symbol: Asset symbol
+            period: Time period
+            currency: Currency
+            chart_title: Title for the chart
+            
+        Returns:
+            Chart image as bytes or None if failed
+        """
+        try:
+            import pandas as pd
+            
+            # Ensure we have a pandas Series
+            if getattr(price_data, 'ndim', 1) == 1:
+                series_for_plot = price_data.dropna()
+            else:
+                # If DataFrame, take first column
+                df_non_nan = price_data.dropna(how='all')
+                if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
+                    first_col = df_non_nan.columns[0]
+                    series_for_plot = df_non_nan[first_col].dropna()
+                else:
+                    return None
+            
+            if len(series_for_plot) < 2:
+                return None
+            
+            # Convert PeriodIndex to Timestamp if needed
+            try:
+                if hasattr(series_for_plot.index, 'to_timestamp'):
+                    series_for_plot = series_for_plot.copy()
+                    series_for_plot.index = series_for_plot.index.to_timestamp()
+            except Exception:
+                pass
+            
+            # Handle PeriodIndex dates for statistics
+            try:
+                start_date = series_for_plot.index[0]
+                end_date = series_for_plot.index[-1]
+                
+                # Convert Period to string representation if needed
+                if hasattr(start_date, 'strftime'):
+                    start_date_str = start_date.strftime('%Y-%m-%d')
+                else:
+                    start_date_str = str(start_date)
+                
+                if hasattr(end_date, 'strftime'):
+                    end_date_str = end_date.strftime('%Y-%m-%d')
+                else:
+                    end_date_str = str(end_date)
+                    
+            except Exception as e:
+                self.logger.warning(f"Could not process dates: {e}")
+                start_date_str = "N/A"
+                end_date_str = "N/A"
+            
+            # Create the price chart
+            fig, ax = plt.subplots(figsize=(12, 6))
+            
+            # Plot price line
+            ax.plot(series_for_plot.index, series_for_plot.values, 
+                   color='#1f77b4', linewidth=2, alpha=0.8)
+            
+            # Add current price annotation
+            current_price = series_for_plot.iloc[-1]
+            current_date = series_for_plot.index[-1]
+            ax.annotate(f'{current_price:.2f}', 
+                       xy=(current_date, current_price),
+                       xytext=(10, 10), textcoords='offset points',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                       fontsize=10, fontweight='bold')
+            
+            # Customize chart
+            ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Дата', fontsize=12)
+            ax.set_ylabel(f'Цена ({currency})', fontsize=12)
+            ax.grid(True, linestyle='--', alpha=0.3)
+            
+            # Format x-axis dates
+            fig.autofmt_xdate()
+            
+            # Add some statistics
+            start_price = series_for_plot.iloc[0]
+            if start_price != 0:
+                price_change = ((current_price - start_price) / start_price) * 100
+            else:
+                price_change = 0.0
+                
+            stats_text = f'Изменение: {price_change:+.2f}%\n'
+            stats_text += f'Мин: {series_for_plot.min():.2f}\n'
+            stats_text += f'Макс: {series_for_plot.max():.2f}'
+            
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                   verticalalignment='top', fontsize=10,
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+            
+            fig.tight_layout()
+            
+            # Save chart to bytes
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            
+            return buf.getvalue()
+            
+        except Exception as e:
+            self.logger.error(f"Error creating price chart: {e}")
+            return None
     
     def _fetch_moex_price(self, symbol: str) -> Optional[tuple[float, str]]:
         """
