@@ -484,7 +484,7 @@ class OkamaFinanceBot:
                     logger.error(f"Error sending chart: {e}")
                     
         except Exception as e:
-            logger.error(f"Error in Enhanced Financial Brain processing: {e}")
+            logger.exception(f"Error in Enhanced Financial Brain processing: {e}")
             
             # Fallback к старому методу для совместимости
             try:
@@ -572,7 +572,7 @@ class OkamaFinanceBot:
                     pass
                     
         except Exception as e:
-            logger.error(f"Error in fallback message handling: {e}")
+            logger.exception(f"Error in fallback message handling: {e}")
             await update.message.reply_text(
                 "Извините, произошла ошибка при обработке вашего запроса. "
                 "Попробуйте переформулировать вопрос или используйте /help для доступных команд. "

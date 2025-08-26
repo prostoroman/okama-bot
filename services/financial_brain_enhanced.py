@@ -149,8 +149,10 @@ class EnhancedOkamaFinancialBrain:
                 raise ValueError("Не удалось разрешить ни один актив. Проверьте названия.")
         
         # Если активы требуются по намерению, но не были указаны/распознаны
-        if intent in ['asset_single', 'asset_compare', 'portfolio_analysis', 'macro_data'] and not resolved_assets:
-            raise ValueError("Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
+        # Ранее здесь выбрасывалась ошибка. Теперь не прерываем обработку —
+        # нижестоящий обработчик вернет человекочитаемую ошибку.
+        # if intent in ['asset_single', 'asset_compare', 'portfolio_analysis', 'macro_data'] and not resolved_assets:
+        #     raise ValueError("Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
         
         # Извлечение весов для портфеля
         weights = None
@@ -220,9 +222,10 @@ class EnhancedOkamaFinancialBrain:
                 **kwargs
             )
             
-            # Проверяем на ошибки
+            # Проверяем на ошибки — не выбрасываем исключение, а прокидываем в отчет
             if 'error' in result:
-                raise ValueError(result['error'])
+                logger.warning(f"Data retrieval returned error: {result['error']}")
+                return result
             
             return result
             
@@ -308,6 +311,13 @@ class EnhancedOkamaFinancialBrain:
                 response_parts.append(f"**Конвертация в:** {result.query.convert_to}")
             
             response_parts.append("")
+            
+            # Если в отчете есть ошибка данных — явно показываем пользователю
+            if isinstance(result.data_report, dict) and 'error' in result.data_report:
+                error_text = str(result.data_report.get('error') or 'Неизвестная ошибка данных')
+                response_parts.append(f"❌ Ошибка данных: {error_text}")
+                response_parts.append("Попробуйте переформулировать запрос или используйте /help. Для MOEX данные могут быть временно недоступны.")
+                response_parts.append("")
             
             # Основные метрики из отчета
             if 'metrics' in result.data_report:
