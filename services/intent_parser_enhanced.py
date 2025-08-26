@@ -385,6 +385,10 @@ class EnhancedIntentParser:
                     params['country'] = country
                 break
         
+        # Если намерение - инфляция, но страна не указана, устанавливаем США по умолчанию
+        if not params.get('country') and self._determine_intent(text) == 'inflation_data':
+            params['country'] = 'US'
+        
         return params
     
     def _extract_weights(self, text: str, num_assets: int) -> Optional[List[float]]:

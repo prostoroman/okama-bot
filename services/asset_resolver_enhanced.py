@@ -31,7 +31,7 @@ class EnhancedAssetResolver:
             'microsoft': 'MSFT.US', 'amazon': 'AMZN.US', 'netflix': 'NFLX.US',
             'facebook': 'META.US', 'meta': 'META.US', 'nvidia': 'NVDA.US',
             'amd': 'AMD.US', 'intel': 'INTC.US', 'coca-cola': 'KO.US',
-            'disney': 'DIS.US', 'mcdonalds': 'MCD.US', 'starbucks': 'SBUX.US',
+            'disney': 'DIS.US', 'mcdonalds': 'MCD.MOEX', 'starbucks': 'SBUX.US',
             'nike': 'NKE.US', 'adobe': 'ADBE.US', 'salesforce': 'CRM.US',
             
             # Акции MOEX
@@ -60,13 +60,14 @@ class EnhancedAssetResolver:
             'usdrub': 'USDRUB.FX', 'usd/rub': 'USDRUB.FX',
             
             # Инфляция
-            'cpi': 'US.INFL', 'ипц': 'RUS.INFL'
+            'cpi': 'US.INFL', 'ипц': 'RUS.INFL', 'инфляция': 'US.INFL', 'inflation': 'US.INFL',
+            'инфляция сша': 'US.INFL', 'инфляция россии': 'RUS.INFL', 'инфляция ес': 'EU.INFL'
         }
         
         # Классы активов
         self.asset_classes = {
             'US': 'US', 'MOEX': 'MOEX', 'COMM': 'COMM',
-            'INDX': 'INDX', 'FX': 'FX', 'INFL': 'INFL'
+            'INDX': 'INDX', 'FX': 'FX', 'INFL': 'INFL', 'CBR': 'CBR', 'PF': 'PF'
         }
     
     def resolve(self, raw_assets: List[str]) -> List[ResolvedAsset]:
@@ -82,6 +83,16 @@ class EnhancedAssetResolver:
     def _resolve_single_asset(self, raw_asset: str) -> ResolvedAsset:
         """Разрешает один актив"""
         original = raw_asset.strip()
+        
+        # Специальная обработка для инфляции
+        if original.lower() in ['инфляция', 'inflation', 'cpi', 'ипц']:
+            ticker = 'US.INFL'
+            return ResolvedAsset(
+                original=original,
+                ticker=ticker,
+                asset_class='INFL',
+                valid=True
+            )
         
         # Проверяем алиасы
         if original.lower() in self.asset_aliases:
