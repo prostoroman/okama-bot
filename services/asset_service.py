@@ -184,34 +184,148 @@ class AssetService:
             # Get price data
             price_data = asset.price
             
+            # Helper: try MOEX ISS fallback before returning an error
+            def _maybe_moex_fallback(error_message: str) -> Dict[str, Any]:
+                if symbol.upper().endswith('.MOEX'):
+                    fallback = self._fetch_moex_price(symbol)
+                    if fallback is not None:
+                        price_value, ts = fallback
+                        return {
+                            'price': price_value,
+                            'currency': 'RUB',
+                            'timestamp': ts
+                        }
+                return {'error': error_message}
+            
             # Check if price_data is valid and has data
             if price_data is None:
-                return {'error': 'No price data available'}
+                return _maybe_moex_fallback('No price data available')
             
             # Handle different types of price data
             if hasattr(price_data, 'iloc') and hasattr(price_data, 'index'):
-                # It's a pandas Series/DataFrame
-                if len(price_data) == 0:
-                    return {'error': 'No price data available'}
+                try:
+                    import pandas as pd  # Local import to avoid hard dependency at module import time
+                except Exception:
+                    pd = None
                 
-                latest_price = price_data.iloc[-1]
-                latest_date = price_data.index[-1]
+                # Guard empty
+                if len(price_data) == 0:
+                    return _maybe_moex_fallback('No price data available')
+                
+                # If Series: take last valid non-NaN
+                if getattr(price_data, 'ndim', 1) == 1:
+                    series = price_data
+                    try:
+                        series_non_nan = series.dropna()
+                    except Exception:
+                        # Fallback if dropna is not available or fails
+                        series_non_nan = series[~series.isna()] if hasattr(series, 'isna') else series
+                    if len(series_non_nan) == 0:
+                        return _maybe_moex_fallback('No price data available')
+                    latest_price = series_non_nan.iloc[-1]
+                    latest_date = series_non_nan.index[-1]
+                else:
+                    # DataFrame: take last row with any valid value, then pick the last non-NaN cell
+                    df = price_data
+                    try:
+                        df_non_nan = df.dropna(how='all')
+                    except Exception:
+                        df_non_nan = df
+                    if len(df_non_nan) == 0:
+                        return _maybe_moex_fallback('No price data available')
+                    last_date = df_non_nan.index[-1]
+                    last_row = df_non_nan.iloc[-1]
+                    # Prefer the last non-NaN value in the row
+                    try:
+                        non_nan_values = last_row.dropna()
+                    except Exception:
+                        non_nan_values = last_row[last_row.notna()] if hasattr(last_row, 'notna') else last_row
+                    if hasattr(non_nan_values, 'empty') and non_nan_values.empty:
+                        # As a fallback, stack and take the very last valid value across the frame
+                        try:
+                            stacked = df_non_nan.stack().dropna()
+                            if len(stacked) == 0:
+                                return _maybe_moex_fallback('No price data available')
+                            latest_price = stacked.iloc[-1]
+                            latest_date = stacked.index[-1][0]
+                        except Exception:
+                            return _maybe_moex_fallback('Invalid price data format')
+                    else:
+                        latest_price = non_nan_values.iloc[-1] if hasattr(non_nan_values, 'iloc') else non_nan_values
+                        latest_date = last_date
             elif isinstance(price_data, (int, float)):
                 # It's a single price value
                 latest_price = price_data
                 latest_date = datetime.now()
             else:
-                # Try to convert to list/array
+                # Try to convert to list/array and find last finite numeric value
                 try:
-                    if len(price_data) == 0:
-                        return {'error': 'No price data available'}
-                    latest_price = price_data[-1]
-                    latest_date = datetime.now()
+                    # Support numpy arrays, lists, tuples, etc.
+                    sequence_like = price_data
+                    # Determine length
+                    length = len(sequence_like)
+                    if length == 0:
+                        return _maybe_moex_fallback('No price data available')
+                    
+                    # Local import for numpy if available
+                    try:
+                        import numpy as np
+                    except Exception:
+                        np = None
+                    
+                    latest_price = None
+                    # Iterate backwards to find last finite numeric
+                    for idx in range(length - 1, -1, -1):
+                        candidate = sequence_like[idx]
+                        # Unwrap numpy/pandas scalar
+                        try:
+                            if hasattr(candidate, 'item'):
+                                candidate = candidate.item()
+                        except Exception:
+                            pass
+                        # Check numeric and finiteness
+                        if isinstance(candidate, (int, float)):
+                            if np is not None:
+                                if np.isfinite(float(candidate)):
+                                    latest_price = float(candidate)
+                                    break
+                            else:
+                                # Fallback finiteness check
+                                val = float(candidate)
+                                if not (val != val or val in (float('inf'), float('-inf'))):
+                                    latest_price = val
+                                    break
+                    if latest_price is None:
+                        return _maybe_moex_fallback('No valid price value available')
+                    latest_date = getattr(asset, 'last_date', datetime.now())
                 except (TypeError, IndexError):
-                    return {'error': 'Invalid price data format'}
+                    return _maybe_moex_fallback('Invalid price data format')
+            
+            # Normalize scalar to float and guard NaN/inf
+            try:
+                import numpy as np
+            except Exception:
+                np = None
+            
+            try:
+                # Extract python scalar if it's a numpy/pandas scalar
+                if hasattr(latest_price, 'item'):
+                    latest_price = latest_price.item()
+            except Exception:
+                pass
+            
+            # Convert to float if possible
+            try:
+                latest_price_float = float(latest_price)
+            except (TypeError, ValueError):
+                return _maybe_moex_fallback('Invalid price value')
+            
+            # Check for NaN or infinite
+            if (np is not None and not np.isfinite(latest_price_float)) or (np is None and (latest_price_float != latest_price_float or latest_price_float in (float('inf'), float('-inf')))):
+                return _maybe_moex_fallback('No valid price value available')
             
             info = {
-                'price': latest_price,
+                'price': latest_price_float,
                 'currency': getattr(asset, 'currency', ''),
                 'timestamp': str(latest_date)
             }
@@ -231,6 +345,103 @@ class AssetService:
                 }
             else:
                 return {'error': f"Ошибка при получении цены: {error_msg}"}
+    
+    def _fetch_moex_price(self, symbol: str) -> Optional[tuple[float, str]]:
+        """
+        Fetch current price from Moscow Exchange ISS API as a fallback.
+        Returns (price, timestamp_str) or None if not available.
+        """
+        try:
+            import requests
+            base = symbol.split('.')[0].upper()
+            # First, try marketdata LAST
+            md_urls = [
+                f"https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities/{base}.json?iss.only=marketdata&iss.meta=off&iss.json=extended&marketdata.columns=SECID,LAST,UPDATETIME",
+                f"https://iss.moex.com/iss/engines/stock/markets/shares/securities/{base}.json?iss.only=marketdata&iss.meta=off&iss.json=extended&marketdata.columns=SECID,LAST,UPDATETIME"
+            ]
+            for url in md_urls:
+                resp = requests.get(url, timeout=5)
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+                rows = None
+                if isinstance(data, list):
+                    for table in data:
+                        if isinstance(table, dict) and 'marketdata' in table:
+                            rows = table['marketdata']
+                            break
+                elif isinstance(data, dict):
+                    if 'marketdata' in data and 'data' in data['marketdata']:
+                        rows = data['marketdata']['data']
+                if rows and isinstance(rows, list) and len(rows) > 0:
+                    first = rows[0]
+                    if isinstance(first, dict):
+                        last = first.get('LAST')
+                        ts = first.get('UPDATETIME') or ''
+                    else:
+                        try:
+                            last = first[1]
+                            ts = first[2]
+                        except Exception:
+                            last = None
+                            ts = ''
+                    if last is not None:
+                        try:
+                            price = float(last)
+                            return price, str(ts)
+                        except Exception:
+                            pass
+            
+            # If no marketdata, try daily candles (interval=24)
+            candles_url = f"https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities/{base}/candles.json?interval=24&iss.meta=off"
+            resp = requests.get(candles_url, timeout=10)
+            if resp.status_code == 200:
+                d = resp.json()
+                if isinstance(d, dict) and 'candles' in d:
+                    cols = d['candles'].get('columns') or []
+                    data = d['candles'].get('data') or []
+                    if data and cols:
+                        try:
+                            close_idx = cols.index('close') if 'close' in cols else 1
+                            end_idx = cols.index('end') if 'end' in cols else 7
+                        except Exception:
+                            close_idx, end_idx = 1, 7
+                        last_row = data[-1]
+                        try:
+                            price = float(last_row[close_idx])
+                            ts = str(last_row[end_idx])
+                            return price, ts
+                        except Exception:
+                            pass
+            
+            # If candles not available, try history CLOSE
+            hist_url = f"https://iss.moex.com/iss/history/engines/stock/markets/shares/boards/TQBR/securities/{base}.json?iss.meta=off"
+            resp = requests.get(hist_url, timeout=10)
+            if resp.status_code == 200:
+                d = resp.json()
+                if isinstance(d, dict) and 'history' in d:
+                    cols = d['history'].get('columns') or []
+                    data = d['history'].get('data') or []
+                    if data and cols:
+                        try:
+                            close_idx = cols.index('CLOSE') if 'CLOSE' in cols else cols.index('LEGALCLOSEPRICE')
+                        except Exception:
+                            close_idx = None
+                        try:
+                            date_idx = cols.index('TRADEDATE')
+                        except Exception:
+                            date_idx = None
+                        if close_idx is not None and date_idx is not None:
+                            last_row = data[-1]
+                            try:
+                                price = float(last_row[close_idx])
+                                ts = str(last_row[date_idx])
+                                return price, ts
+                            except Exception:
+                                pass
+            return None
+        except Exception:
+            return None
     
     def get_asset_dividends(self, symbol: str) -> Dict[str, Any]:
         """

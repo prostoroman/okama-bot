@@ -316,7 +316,14 @@ class OkamaFinanceBot:
                 return
             
             response = f"💰 **Цена актива {symbol}**\n\n"
-            response += f"**Текущая цена:** {price_info.get('price', 'N/A')} {price_info.get('currency', '')}\n"
+            price_value = price_info.get('price', 'N/A')
+            currency = price_info.get('currency', '')
+            # Format numeric price with up to 6 significant digits
+            if isinstance(price_value, (int, float)):
+                price_str = f"{price_value:.6g}"
+            else:
+                price_str = str(price_value)
+            response += f"**Текущая цена:** {price_str} {currency}\n"
             response += f"**Время:** {price_info.get('timestamp', 'N/A')}\n"
             
             await update.message.reply_text(response, parse_mode='Markdown')
