@@ -459,7 +459,8 @@ class OkamaFinanceBot:
                 logger.error(f"Fallback also failed: {fallback_error}")
                 await update.message.reply_text(
                     "Извините, произошла ошибка при обработке вашего запроса. "
-                    "Попробуйте переформулировать вопрос или используйте /help для доступных команд."
+                    "Попробуйте переформулировать вопрос или используйте /help для доступных команд. "
+                    "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
                 )
 
     async def _handle_message_fallback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_message: str):
@@ -540,7 +541,8 @@ class OkamaFinanceBot:
             logger.error(f"Error in fallback message handling: {e}")
             await update.message.reply_text(
                 "Извините, произошла ошибка при обработке вашего запроса. "
-                "Попробуйте переформулировать вопрос или используйте /help для доступных команд."
+                "Попробуйте переформулировать вопрос или используйте /help для доступных команд. "
+                "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
             )
 
     async def _send_long_text(self, update: Update, text: str):

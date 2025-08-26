@@ -37,6 +37,36 @@ class EnhancedOkamaHandler:
             # Определяем валюту
             currency = kwargs.get('currency') or self._get_default_currency(assets)
             convert_to = kwargs.get('convert_to')
+
+            # Валидация количества активов в зависимости от намерения
+            if intent == 'asset_single' and len(assets) < 1:
+                return {
+                    'error': 'Не указан актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM',
+                    'intent': intent,
+                    'assets': assets,
+                    'success': False
+                }
+            if intent == 'asset_compare' and len(assets) < 2:
+                return {
+                    'error': 'Для сравнения укажите минимум два актива.',
+                    'intent': intent,
+                    'assets': assets,
+                    'success': False
+                }
+            if intent == 'portfolio_analysis' and len(assets) < 2:
+                return {
+                    'error': 'Для анализа портфеля укажите минимум два актива.',
+                    'intent': intent,
+                    'assets': assets,
+                    'success': False
+                }
+            if intent == 'macro_data' and len(assets) < 1:
+                return {
+                    'error': 'Укажите актив(ы) для макроанализа, например BRENT.COMM или EURUSD.FX.',
+                    'intent': intent,
+                    'assets': assets,
+                    'success': False
+                }
             
             # Обрабатываем запрос в зависимости от намерения
             if intent == 'asset_single':

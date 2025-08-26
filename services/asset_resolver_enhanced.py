@@ -35,7 +35,7 @@ class EnhancedAssetResolver:
             'nike': 'NKE.US', 'adobe': 'ADBE.US', 'salesforce': 'CRM.US',
             
             # Акции MOEX
-            'сбербанк': 'SBER.MOEX', 'газпром': 'GAZP.MOEX', 'лукойл': 'LKOH.MOEX',
+            'сбер': 'SBER.MOEX', 'сбербанк': 'SBER.MOEX', 'газпром': 'GAZP.MOEX', 'лукойл': 'LKOH.MOEX',
             'норильский никель': 'GMKN.MOEX', 'яндекс': 'YNDX.MOEX', 'магнит': 'MGNT.MOEX',
             
             # ETF
