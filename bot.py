@@ -232,7 +232,7 @@ class OkamaFinanceBot:
                                 last_analysis_type='asset',
                                 last_period=period)
         
-        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...", parse_mode='MarkdownV2')
+        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
         
         try:
             asset_info = self.asset_service.get_asset_info(symbol)
@@ -268,7 +268,7 @@ class OkamaFinanceBot:
             # Check if asset type suggests dividends and add dividend information
             asset_type = asset_info.get('type', '').lower()
             if any(keyword in asset_type for keyword in ['stock', 'акция', 'share', 'equity']):
-                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...", parse_mode='MarkdownV2')
+                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...")
                 
                 try:
                     dividend_info = self.asset_service.get_asset_dividends(symbol)
@@ -309,7 +309,7 @@ class OkamaFinanceBot:
                     await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}")
             
             # Get and send charts
-            await self._send_message_safe(update, "📈 Получаю графики цен...", parse_mode='MarkdownV2')
+            await self._send_message_safe(update, "📈 Получаю графики цен...")
             
             try:
                 self.logger.info(f"Getting price history for {symbol} with period {period}")
@@ -400,7 +400,7 @@ class OkamaFinanceBot:
                     await self._send_message_safe(update, f"⚠️ Ошибка при получении AI-анализа графиков: {str(chart_ai_error)}")
             
             # Get analysis
-            await self._send_message_safe(update, "🧠 Получаю анализ актива...", parse_mode='MarkdownV2')
+            await self._send_message_safe(update, "🧠 Получаю анализ актива...")
             
             try:
                 self.logger.info(f"Starting AI analysis for {symbol}")
@@ -611,9 +611,13 @@ class OkamaFinanceBot:
                 await update.message.reply_text(text)
         else:
             # Split into multiple messages
-            self.logger.info(f"Text too long, splitting into parts")
+            self.logger.info(f"Text too long ({len(text)} chars), splitting into parts")
             parts = self._split_text_into_parts(text, max_length)
             self.logger.info(f"Split into {len(parts)} parts")
+            
+            # Log each part for debugging
+            for i, part in enumerate(parts):
+                self.logger.info(f"Part {i+1}: {len(part)} chars, starts with: {part[:50]}...")
             
             for i, part in enumerate(parts, 1):
                 self.logger.info(f"Sending part {i}/{len(parts)}, length: {len(part)}")
@@ -628,6 +632,12 @@ class OkamaFinanceBot:
                         continuation_text = f"{continuation_prefix}{part}"
                         self.logger.info(f"Sending continuation part {i}")
                         await update.message.reply_text(continuation_text, parse_mode=parse_mode)
+                        
+                        # Add small delay between messages to avoid rate limiting
+                        if i < len(parts):
+                            import asyncio
+                            await asyncio.sleep(0.5)
+                            
                 except Exception as e:
                     self.logger.warning(f"Failed to send part {i} with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
                     try:
@@ -637,6 +647,12 @@ class OkamaFinanceBot:
                             continuation_prefix = f"📄 Продолжение ({i}/{len(parts)}):\n\n"
                             continuation_text = f"{continuation_prefix}{part}"
                             await update.message.reply_text(continuation_text)
+                            
+                            # Add small delay between messages to avoid rate limiting
+                            if i < len(parts):
+                                import asyncio
+                                await asyncio.sleep(0.5)
+                                
                     except Exception as fallback_error:
                         self.logger.error(f"Failed to send part {i} even without parse mode: {fallback_error}")
                         # Send as plain text as last resort
@@ -646,41 +662,56 @@ class OkamaFinanceBot:
         """Split text into parts that fit within max_length"""
         parts = []
         
-        # Simple approach: split by sentences and combine them
-        sentences = text.split('. ')
+        # Simple approach: split by paragraphs first, then by sentences
+        paragraphs = text.split('\n\n')
         
         current_part = ""
-        for sentence in sentences:
-            # Add period back to sentence
-            full_sentence = sentence + ('. ' if sentence != sentences[-1] else '.')
-            
-            # Check if adding this sentence would exceed max_length
-            if len(current_part) + len(full_sentence) > max_length:
+        for paragraph in paragraphs:
+            # If adding this paragraph would exceed max_length
+            if len(current_part) + len(paragraph) + 2 > max_length:
                 if current_part:
                     parts.append(current_part.strip())
-                    current_part = full_sentence
+                    current_part = paragraph
                 else:
-                    # Single sentence is too long, split by words
-                    words = full_sentence.split(' ')
-                    temp_part = ""
-                    for word in words:
-                        if len(temp_part) + len(word) + 1 > max_length:
-                            if temp_part:
-                                parts.append(temp_part.strip())
-                                temp_part = word
+                    # Single paragraph is too long, split by sentences
+                    sentences = paragraph.split('. ')
+                    for sentence in sentences:
+                        # Add period back to sentence
+                        full_sentence = sentence + ('. ' if sentence != sentences[-1] else '.')
+                        
+                        # Check if adding this sentence would exceed max_length
+                        if len(current_part) + len(full_sentence) > max_length:
+                            if current_part:
+                                parts.append(current_part.strip())
+                                current_part = full_sentence
                             else:
-                                # Single word is too long, truncate
-                                parts.append(word[:max_length-3] + "...")
+                                # Single sentence is too long, split by words
+                                words = full_sentence.split(' ')
+                                temp_part = ""
+                                for word in words:
+                                    if len(temp_part) + len(word) + 1 > max_length:
+                                        if temp_part:
+                                            parts.append(temp_part.strip())
+                                            temp_part = word
+                                        else:
+                                            # Single word is too long, truncate
+                                            parts.append(word[:max_length-3] + "...")
+                                    else:
+                                        temp_part += " " + word if temp_part else word
+                                if temp_part.strip():
+                                    current_part = temp_part.strip()
                         else:
-                            temp_part += " " + word if temp_part else word
-                    if temp_part.strip():
-                        current_part = temp_part.strip()
+                            current_part += full_sentence
             else:
-                current_part += full_sentence
+                current_part += "\n\n" + paragraph if current_part else paragraph
         
         # Add the last part
         if current_part.strip():
             parts.append(current_part.strip())
+        
+        # Ensure we have at least one part
+        if not parts:
+            parts.append(text[:max_length-3] + "...")
         
         return parts
 
