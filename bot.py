@@ -136,8 +136,8 @@ class OkamaFinanceBot:
     
     def _escape_markdown_v2(self, text: str) -> str:
         """Экранирование специальных символов для MarkdownV2"""
-        # Символы, которые нужно экранировать в MarkdownV2
-        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        # Экранируем только самые важные символы
+        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '!']
         
         for char in escape_chars:
             text = text.replace(char, f'\\{char}')
@@ -152,47 +152,45 @@ class OkamaFinanceBot:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""🧠 Okama Financial Brain \\- Полная справка
+        welcome_message = f"""🧠 Okama Financial Brain - Полная справка
 
-Привет, {user_name}\\! Я помогу с анализом рынков и портфелей\\.
+Привет, {user_name}! Я помогу с анализом рынков и портфелей.
 
 Что умею:
 • Анализ одного актива с графиками цен
 • Сравнение нескольких активов
-• Анализ портфеля \\(веса, риск/доходность, efficient frontier\\)
+• Анализ портфеля (веса, риск/доходность, efficient frontier)
 • Макро/товары/валюты
 • Анализ инфляции
 • Объяснения и рекомендации
 
 Основные команды:
 /start — эта справка
-/asset \\[тикер\\] \\[период\\] — базовая информация об активе с графиком и анализом
-/chart \\[тикер\\] \\[период\\] — график цен актива
-/price \\[тикер\\] — текущая цена
+/asset [тикер] [период] — базовая информация об активе с графиком и анализом
 
 Поддерживаемые форматы тикеров:
-• US акции: AAPL\\.US, VOO\\.US, SPY\\.US, QQQ\\.US
-• MOEX: SBER\\.MOEX, GAZP\\.MOEX, LKOH\\.MOEX
-• Индексы: SPX\\.INDX, IXIC\\.INDX, RGBITR\\.INDX
-• Товары: GC\\.COMM \\(золото\\), CL\\.COMM \\(нефть\\), SI\\.COMM \\(серебро\\)
-• Валюты: EURUSD\\.FX, GBPUSD\\.FX, USDJPY\\.FX
-• LSE: VOD\\.LSE, HSBA\\.LSE, BP\\.LSE
+• US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
+• MOEX: SBER.MOEX, GAZP.MOEX, LKOH.MOEX
+• Индексы: SPX.INDX, IXIC.INDX, RGBITR.INDX
+• Товары: GC.COMM (золото), CL.COMM (нефть), SI.COMM (серебро)
+• Валюты: EURUSD.FX, GBPUSD.FX, USDJPY.FX
+• LSE: VOD.LSE, HSBA.LSE, BP.LSE
 
 Периоды анализа:
 • 1Y, 2Y, 5Y, 10Y, MAX
 • По умолчанию: 10Y для акций, 5Y для макро
 
-Как обращаться \\(просто текстом\\):
+Как обращаться (просто текстом):
 • "Проанализируй Apple"
 • "Сравни золото и нефть"
-• "Портфель VOO\\.US 60\\% и AGG\\.US 40\\%"
+• "Портфель VOO.US 60% и AGG.US 40%"
 • "Инфляция в США за 5 лет"
 • "Сравни S&P 500 и NASDAQ в рублях"
 
 Примеры запросов:
-• "Проанализируй SBER\\.MOEX за 2 года"
-• "Сравни VOO\\.US и QQQ\\.US"
-• "Портфель: 70\\% VOO\\.US, 20\\% AGG\\.US, 10\\% GC\\.COMM"
+• "Проанализируй SBER.MOEX за 2 года"
+• "Сравни VOO.US и QQQ.US"
+• "Портфель: 70% VOO.US, 20% AGG.US, 10% GC.COMM"
 • "Инфляция в России за 10 лет"
 • "Динамика нефти и золота в рублях"
 
@@ -208,20 +206,20 @@ class OkamaFinanceBot:
 
 Поддержка:
 Если у вас возникли вопросы или проблемы, попробуйте:
-1\\. Переформулировать запрос
-2\\. Использовать более простые названия активов
-3\\. Проверить доступность данных \\(MOEX может быть временно недоступен\\)
+1. Переформулировать запрос
+2. Использовать более простые названия активов
+3. Проверить доступность данных (MOEX может быть временно недоступен)
 
-Начните с простого запроса или используйте команды выше\\!"""
+Начните с простого запроса или используйте команды выше!"""
 
-        await self._send_message_safe(update, welcome_message)
+        await self._send_message_safe(update, welcome_message, parse_mode='MarkdownV2')
     
 
     async def asset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /asset command"""
         if not context.args:
             await self._send_message_safe(update, 
-                "Укажите тикер актива\\. Пример: /asset AAPL\\.US или /asset SBER\\.MOEX", parse_mode='MarkdownV2')
+                "Укажите тикер актива. Пример: /asset AAPL.US или /asset SBER.MOEX", parse_mode='MarkdownV2')
             return
         
         symbol = context.args[0].upper()
@@ -234,7 +232,7 @@ class OkamaFinanceBot:
                                 last_analysis_type='asset',
                                 last_period=period)
         
-        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}\\.\\.\\.", parse_mode='MarkdownV2')
+        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...", parse_mode='MarkdownV2')
         
         try:
             asset_info = self.asset_service.get_asset_info(symbol)
@@ -270,7 +268,7 @@ class OkamaFinanceBot:
             # Check if asset type suggests dividends and add dividend information
             asset_type = asset_info.get('type', '').lower()
             if any(keyword in asset_type for keyword in ['stock', 'акция', 'share', 'equity']):
-                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах\\.\\.\\.", parse_mode='MarkdownV2')
+                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...", parse_mode='MarkdownV2')
                 
                 try:
                     dividend_info = self.asset_service.get_asset_dividends(symbol)
@@ -310,24 +308,41 @@ class OkamaFinanceBot:
                     self.logger.error(f"Error getting dividends for {symbol}: {div_error}")
                     await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}", parse_mode='MarkdownV2')
             
-            # Send chart if available
-            if 'chart' in asset_info and asset_info['chart']:
-                try:
-                    await context.bot.send_photo(
-                        chat_id=update.effective_chat.id,
-                        photo=io.BytesIO(asset_info['chart']),
-                        caption=f"📊 График цен {symbol}"
-                    )
-                except Exception as chart_error:
-                    self.logger.error(f"Error sending chart for {symbol}: {chart_error}")
-                    await self._send_message_safe(update, f"⚠️ Не удалось отправить график: {str(chart_error)}", parse_mode='MarkdownV2')
+            # Get and send charts
+            await self._send_message_safe(update, "📈 Получаю графики цен...", parse_mode='MarkdownV2')
+            
+            try:
+                price_history = self.asset_service.get_asset_price_history(symbol, period)
+                
+                if 'error' in price_history:
+                    await self._send_message_safe(update, f"⚠️ {price_history['error']}", parse_mode='MarkdownV2')
+                else:
+                    # Send charts
+                    charts = price_history.get('charts', [])
+                    if charts:
+                        for i, img_bytes in enumerate(charts):
+                            try:
+                                await context.bot.send_photo(
+                                    chat_id=update.effective_chat.id, 
+                                    photo=io.BytesIO(img_bytes),
+                                    caption=f"📈 График {i+1}: {symbol} ({period})"
+                                )
+                            except Exception as chart_error:
+                                self.logger.error(f"Error sending chart {i+1}: {chart_error}")
+                                await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(chart_error)}", parse_mode='MarkdownV2')
+                    else:
+                        await self._send_message_safe(update, "⚠️ Не удалось создать графики цен", parse_mode='MarkdownV2')
+                        
+            except Exception as chart_error:
+                self.logger.error(f"Error getting charts for {symbol}: {chart_error}")
+                await self._send_message_safe(update, f"⚠️ Ошибка при получении графиков: {str(chart_error)}", parse_mode='MarkdownV2')
             
             # Get analysis
-            await self._send_message_safe(update, "🧠 Получаю анализ актива\\.\\.\\.", parse_mode='MarkdownV2')
+            await self._send_message_safe(update, "🧠 Получаю анализ актива...", parse_mode='MarkdownV2')
             
             try:
                 # Create prompt for analysis
-                ai_prompt = f"""Проанализируй актив {symbol} \\({asset_info.get('name', 'N/A')}\\) на основе следующей информации:
+                ai_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе следующей информации:
 
 Основные характеристики:
 • Страна: {asset_info.get('country', 'N/A')}
@@ -340,29 +355,33 @@ class OkamaFinanceBot:
 • Волатильность: {asset_info.get('volatility', 'N/A')}
 
 Задача: Предоставь краткий, но информативный анализ актива, включая:
-1\\. Краткую справку о бизнесе компании и отрасли \\(2\\-3 предложения\\)
-2\\. Основные факторы, влияющие на его стоимость
-3\\. Краткосрочные и долгосрочные перспективы
-4\\. Основные риски
-5\\. Рекомендации для инвесторов
+1. Краткую справку о бизнесе компании и отрасли (2-3 предложения)
+2. Основные факторы, влияющие на его стоимость
+3. Краткосрочные и долгосрочные перспективы
+4. Основные риски
+5. Рекомендации для инвесторов
 
-Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов\\."""
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
 
                 ai_response = self.yandexgpt_service.ask_question(ai_prompt)
                 
                 if ai_response:
+                    self.logger.info(f"AI response received, length: {len(ai_response)}")
                     # Split response if it's too long
                     if len(ai_response) > 4000:
+                        self.logger.info(f"AI response is long ({len(ai_response)} chars), using _send_long_text")
                         await self._send_message_safe(update, "🧠 Анализ актива:")
                         await self._send_long_text(update, ai_response, 'MarkdownV2')
                     else:
+                        self.logger.info(f"AI response is short ({len(ai_response)} chars), sending directly")
                         await self._send_message_safe(update, f"🧠 Анализ актива:\n\n{ai_response}", parse_mode='MarkdownV2')
                 else:
-                    await self._send_message_safe(update, "⚠️ Анализ недоступен\\. Попробуйте позже\\.")
+                    self.logger.warning("AI response is empty")
+                    await self._send_message_safe(update, "⚠️ Анализ недоступен. Попробуйте позже.")
                     
             except Exception as ai_error:
                 self.logger.error(f"Error getting analysis for {symbol}: {ai_error}")
-                await self._send_message_safe(update, f"⚠️ Ошибка при получении анализа: {str(ai_error)}")
+                await self._send_message_safe(update, f"⚠️ Ошибка при получении анализа: {str(ai_error)}", parse_mode='MarkdownV2')
             
             # Update conversation history
             self._add_to_conversation_history(user_id, f"/asset {symbol} {period}", 
@@ -372,33 +391,7 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка при получении информации об активе: {str(e)}", parse_mode='MarkdownV2')
     
 
-    async def price_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /price command"""
-        if not context.args:
-            await self._send_message_safe(update, 
-                "Укажите тикер актива\\. Пример: /price AAPL\\.US или /price SBER\\.MOEX", parse_mode='MarkdownV2')
-            return
-        
-        symbol = context.args[0].upper()
-        
-        await self._send_message_safe(update, f"💰 Получаю текущую цену {symbol}\\.\\.\\.", parse_mode='MarkdownV2')
-        
-        try:
-            price_info = self.asset_service.get_asset_price(symbol)
-            
-            if 'error' in price_info:
-                await self._send_message_safe(update, f"❌ Ошибка: {price_info['error']}", parse_mode='MarkdownV2')
-                return
-            
-            response = f"💰 *Текущая цена {symbol}*\n\n"
-            response += f"*Цена:* {price_info.get('price', 'N/A')}\n"
-            response += f"*Валюта:* {price_info.get('currency', 'N/A')}\n"
-            response += f"*Дата:* {price_info.get('date', 'N/A')}\n"
-            
-            await self._send_message_safe(update, response, parse_mode='MarkdownV2')
-            
-        except Exception as e:
-            await self._send_message_safe(update, f"❌ Ошибка при получении цены: {str(e)}", parse_mode='MarkdownV2')
+
     
 
             
@@ -475,163 +468,13 @@ class OkamaFinanceBot:
             self.logger.error(f"Error in _get_ai_analysis_for_charts: {error_msg}")
             await update.message.reply_text(f"❌ Ошибка при получении AI анализа: {error_msg}")
     
-    def _create_chart_analysis_prompt(self, analysis_data: Dict) -> str:
-        """Create a prompt for chart analysis"""
-        symbol = analysis_data['symbol']
-        period = analysis_data['period']
-        charts_available = analysis_data['charts_available']
-        price_data = analysis_data['price_data']
-        
-        prompt = f"""Проанализируй графики цен для актива {symbol} за период {period}.
 
-Доступные графики: {', '.join(charts_available)}
-
-Данные по ценам:"""
-
-        for chart_type, info in price_data.items():
-            if chart_type == 'adj_close':
-                prompt += f"\n\n📈 Дневные цены (скорректированные):"
-            elif chart_type == 'close_monthly':
-                prompt += f"\n\n📊 Месячные цены:"
-            else:
-                prompt += f"\n\n📊 История цен:"
-            
-            prompt += f"\n- Текущая цена: {info.get('current_price', 'N/A')}"
-            prompt += f"\n- Начальная цена: {info.get('start_price', 'N/A')}"
-            prompt += f"\n- Минимальная цена: {info.get('min_price', 'N/A')}"
-            prompt += f"\n- Максимальная цена: {info.get('max_price', 'N/A')}"
-            prompt += f"\n- Период: {info.get('start_date', 'N/A')} - {info.get('end_date', 'N/A')}"
-            prompt += f"\n- Количество точек данных: {info.get('data_points', 'N/A')}"
-        
-        prompt += f"""
-
-Пожалуйста, предоставь МАКСИМАЛЬНО ДЕТАЛЬНЫЙ и ПОДРОБНЫЙ анализ:
-
-1. **Краткий анализ динамики цен** (минимум 5-6 абзацев с детальным разбором каждого периода)
-2. **Основные тренды и паттерны** (подробный анализ с конкретными примерами, датами и цифрами)
-3. **Ключевые уровни поддержки и сопротивления** (с детальным обоснованием и техническим анализом)
-4. **Оценка волатильности** (текущая, историческая, ожидаемая с конкретными метриками)
-5. **Краткосрочные и долгосрочные перспективы** (ОБЯЗАТЕЛЬНО максимально подробно):
-   - Текущие макроэкономические условия (инфляция, ВВП, безработица с конкретными цифрами)
-   - Монетарная политика центральных банков (ключевые ставки, QE/QT, влияние на рынки)
-   - Основные прогнозы ЦБ РФ, ФРС США, ЕЦБ (с датами и ожидаемыми изменениями)
-   - Консенсус прогнозов аналитиков по сектору и экономике (с конкретными оценками)
-   - Геополитические факторы и торговые отношения (детальный анализ рисков)
-   - Влияние на конкретный актив (с обоснованием и примерами)
-6. **Рекомендации для инвесторов** (с учетом рисков, стратегий и временных горизонтов)
-
-**КРИТИЧЕСКИ ВАЖНО:** 
-- Каждый раздел должен содержать минимум 4-5 абзацев детального анализа
-- Включи конкретные цифры, даты, проценты и обоснования
-- Добавь исторические примеры и сравнения
-- Предоставь детальный анализ рисков и возможностей
-- Сделай анализ максимально информативным и полезным для принятия инвестиционных решений
-
-Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов. При анализе перспектив обязательно учитывай текущую макроэкономическую ситуацию и политику центральных банков."""
-
-        return prompt
     
-    def _get_yandexgpt_analysis(self, prompt: str) -> Optional[str]:
-        """Get AI analysis from YandexGPT"""
-        try:
-            self.logger.info(f"Requesting YandexGPT analysis for prompt length: {len(prompt)}")
-            
-            # Use the existing YandexGPT service
-            response = self.yandexgpt_service.ask_question(prompt)
-            
-            if response:
-                self.logger.info(f"YandexGPT response received, length: {len(response)}")
-                return response
-            else:
-                self.logger.warning("YandexGPT returned empty response")
-                return None
-                
-        except Exception as e:
-            self.logger.error(f"Error getting YandexGPT analysis: {e}")
-            self.logger.exception("Full traceback:")
-            return None
 
-    def _create_fallback_analysis(self, analysis_data: Dict) -> str:
-        """Create a basic fallback analysis if YandexGPT is not available"""
-        symbol = analysis_data['symbol']
-        period = analysis_data['period']
-        charts_available = analysis_data['charts_available']
-        price_data = analysis_data['price_data']
 
-        fallback_text = f"🧠 **Анализ {symbol}** (базовый)\n\n"
-        fallback_text += f"**Период:** {period}\n"
-        fallback_text += f"**Доступные графики:** {', '.join(charts_available)}\n\n"
 
-        if 'adj_close' in price_data:
-            adj_info = price_data['adj_close']
-            fallback_text += f"📈 **Дневные цены (скорректированные):**\n"
-            fallback_text += f"Текущая цена: {adj_info.get('current_price', 'N/A')}\n"
-            fallback_text += f"Начальная цена: {adj_info.get('start_price', 'N/A')}\n"
-            fallback_text += f"Мин/Макс: {adj_info.get('min_price', 'N/A')} / {adj_info.get('max_price', 'N/A')}\n"
-            fallback_text += f"Период: {adj_info.get('start_date', 'N/A')} - {adj_info.get('end_date', 'N/A')}\n"
-            fallback_text += f"Точки данных: {adj_info.get('data_points', 'N/A')}\n"
-
-        if 'close_monthly' in price_data:
-            monthly_info = price_data['close_monthly']
-            fallback_text += f"\n📊 **Месячные цены:**\n"
-            fallback_text += f"Текущая цена: {monthly_info.get('current_price', 'N/A')}\n"
-            fallback_text += f"Начальная цена: {monthly_info.get('start_price', 'N/A')}\n"
-            fallback_text += f"Мин/Макс: {monthly_info.get('min_price', 'N/A')} / {monthly_info.get('max_price', 'N/A')}\n"
-            fallback_text += f"Период: {monthly_info.get('start_date', 'N/A')} - {monthly_info.get('end_date', 'N/A')}\n"
-            fallback_text += f"Точки данных: {monthly_info.get('data_points', 'N/A')}\n"
-
-        if 'fallback' in price_data:
-            fallback_info = price_data['fallback']
-            fallback_text += f"\n📊 **История цен:**\n"
-            fallback_text += f"Текущая цена: {fallback_info.get('current_price', 'N/A')}\n"
-            fallback_text += f"Начальная цена: {fallback_info.get('start_price', 'N/A')}\n"
-            fallback_text += f"Мин/Макс: {fallback_info.get('min_price', 'N/A')} / {fallback_info.get('max_price', 'N/A')}\n"
-            fallback_text += f"Период: {fallback_info.get('start_date', 'N/A')} - {fallback_info.get('end_date', 'N/A')}\n"
-            fallback_text += f"Точки данных: {fallback_info.get('data_points', 'N/A')}\n"
-
-        fallback_text += "\n⚠️ AI анализ недоступен. Показан базовый анализ на основе данных."
-        return fallback_text
     
-    async def chart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /chart command"""
-        if not context.args:
-            await self._send_message_safe(update, 
-                "Укажите тикер и период. Пример: /chart AAPL.US 5Y или /chart SBER.MOEX 2Y")
-            return
-        
-        symbol = context.args[0].upper()
-        period = context.args[1] if len(context.args) > 1 else '10Y'
-        
-        await self._send_message_safe(update, f"📈 Получаю графики цен для {symbol} за период {period}...")
-        
-        try:
-            price_history = self.asset_service.get_asset_price_history(symbol, period)
-            
-            if 'error' in price_history:
-                await self._send_message_safe(update, f"❌ Ошибка: {price_history['error']}")
-                return
-            
-            # Send charts
-            charts = price_history.get('charts', [])
-            if charts:
-                for i, img_bytes in enumerate(charts):
-                    try:
-                        await context.bot.send_photo(
-                            chat_id=update.effective_chat.id, 
-                            photo=io.BytesIO(img_bytes),
-                            caption=f"📈 График {i+1}: {symbol} ({period})"
-                        )
-                    except Exception as e:
-                        error_msg = str(e)
-                        logger.error(f"Error sending chart {i+1}: {error_msg}")
-                        await self._send_message_safe(update, f"❌ Ошибка при отправке графика {i+1}: {error_msg}")
-            else:
-                await self._send_message_safe(update, "⚠️ Не удалось создать графики цен")
-                
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error getting charts: {error_msg}")
-            await self._send_message_safe(update, f"❌ Ошибка при получении графиков: {error_msg}")
+
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages using Okama Financial Brain"""
@@ -789,14 +632,17 @@ class OkamaFinanceBot:
             self.logger.info(f"Split into {len(parts)} parts")
             
             for i, part in enumerate(parts, 1):
+                self.logger.info(f"Sending part {i}/{len(parts)}, length: {len(part)}")
                 try:
                     if i == 1:
                         # First part
+                        self.logger.info(f"Sending first part")
                         await update.message.reply_text(part, parse_mode=parse_mode)
                     else:
                         # Subsequent parts
-                        continuation_prefix = f"📄 Продолжение \\({i}/{len(parts)}\\):\n\n"
+                        continuation_prefix = f"📄 Продолжение ({i}/{len(parts)}):\n\n"
                         continuation_text = f"{continuation_prefix}{part}"
+                        self.logger.info(f"Sending continuation part {i}")
                         await update.message.reply_text(continuation_text, parse_mode=parse_mode)
                 except Exception as e:
                     self.logger.warning(f"Failed to send part {i} with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
@@ -815,42 +661,38 @@ class OkamaFinanceBot:
     def _split_text_into_parts(self, text: str, max_length: int) -> List[str]:
         """Split text into parts that fit within max_length"""
         parts = []
+        
+        # Simple approach: split by sentences and combine them
+        sentences = text.split('. ')
+        
         current_part = ""
-        
-        # Split by paragraphs first
-        paragraphs = text.split('\n\n')
-        
-        for paragraph in paragraphs:
-            # If adding this paragraph would exceed max_length
-            if len(current_part) + len(paragraph) + 2 > max_length:
+        for sentence in sentences:
+            # Add period back to sentence
+            full_sentence = sentence + ('. ' if sentence != sentences[-1] else '.')
+            
+            # Check if adding this sentence would exceed max_length
+            if len(current_part) + len(full_sentence) > max_length:
                 if current_part:
                     parts.append(current_part.strip())
-                    current_part = paragraph
+                    current_part = full_sentence
                 else:
-                    # Single paragraph is too long, split by sentences
-                    sentences = paragraph.split('. ')
-                    for sentence in sentences:
-                        if len(current_part) + len(sentence) + 2 > max_length:
-                            if current_part:
-                                parts.append(current_part.strip())
-                                current_part = sentence
+                    # Single sentence is too long, split by words
+                    words = full_sentence.split(' ')
+                    temp_part = ""
+                    for word in words:
+                        if len(temp_part) + len(word) + 1 > max_length:
+                            if temp_part:
+                                parts.append(temp_part.strip())
+                                temp_part = word
                             else:
-                                # Single sentence is too long, split by words
-                                words = sentence.split(' ')
-                                for word in words:
-                                    if len(current_part) + len(word) + 1 > max_length:
-                                        if current_part:
-                                            parts.append(current_part.strip())
-                                            current_part = word
-                                        else:
-                                            # Single word is too long, truncate
-                                            parts.append(word[:max_length-3] + "...")
-                                    else:
-                                        current_part += " " + word if current_part else word
+                                # Single word is too long, truncate
+                                parts.append(word[:max_length-3] + "...")
                         else:
-                            current_part += ". " + sentence if current_part else sentence
+                            temp_part += " " + word if temp_part else word
+                    if temp_part.strip():
+                        current_part = temp_part.strip()
             else:
-                current_part += "\n\n" + paragraph if current_part else paragraph
+                current_part += full_sentence
         
         # Add the last part
         if current_part.strip():
@@ -965,8 +807,6 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("start", self.start_command))
         
         application.add_handler(CommandHandler("asset", self.asset_command))
-        application.add_handler(CommandHandler("price", self.price_command))
-        application.add_handler(CommandHandler("chart", self.chart_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
