@@ -414,7 +414,7 @@ class OkamaFinanceBot:
 • Страна: {asset_info.get('country', 'N/A')}
 • Биржа: {asset_info.get('exchange', 'N/A')}
 • Валюта: {asset_info.get('currency', 'N/A')}
-• Текущая цена: {asset_info.get('current_price', 'N/A')}
+• Цена: {asset_info.get('current_price', 'N/A')}
 
 Доступные графики:
 • Ежедневный график за 1 год (детальный анализ)
@@ -449,10 +449,40 @@ class OkamaFinanceBot:
                                 chart_desc
                             )
                             
-                            if chart_ai_response and not chart_ai_response.startswith("Ошибка"):
+                            if chart_ai_response and not chart_ai_response.startswith("Ошибка") and not chart_ai_response.startswith("Не удалось"):
                                 all_analyses.append(f"📊 {chart_desc}:\n{chart_ai_response}")
                             else:
-                                all_analyses.append(f"📊 {chart_desc}:\n⚠️ Не удалось проанализировать график")
+                                # Fallback: try regular analysis with chart description
+                                self.logger.info(f"Vision API failed for chart {i+1}, trying fallback analysis")
+                                try:
+                                    fallback_prompt = f"""Проанализируй {chart_desc} для актива {symbol} на основе следующих данных:
+
+Основная информация:
+• Актив: {symbol} ({asset_info.get('name', 'N/A')})
+• Страна: {asset_info.get('country', 'N/A')}
+• Биржа: {asset_info.get('exchange', 'N/A')}
+• Валюта: {asset_info.get('currency', 'N/A')}
+• Цена: {asset_info.get('current_price', 'N/A')}
+
+Тип графика: {chart_desc}
+
+Задача: Предоставь анализ на основе доступной информации о компании и типе графика:
+1. Краткая справка о бизнесе компании и отрасли
+2. Ожидаемые тренды для данного временного периода
+3. Ключевые факторы, влияющие на цену
+4. Оценка рисков и возможностей
+5. Рекомендации для инвесторов
+
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
+
+                                    fallback_response = self.yandexgpt_service.ask_question(fallback_prompt)
+                                    if fallback_response:
+                                        all_analyses.append(f"📊 {chart_desc}:\n{fallback_response}")
+                                    else:
+                                        all_analyses.append(f"📊 {chart_desc}:\n⚠️ Не удалось проанализировать график")
+                                except Exception as fallback_error:
+                                    self.logger.error(f"Fallback analysis also failed for chart {i+1}: {fallback_error}")
+                                    all_analyses.append(f"📊 {chart_desc}:\n⚠️ Не удалось проанализировать график")
                                 
                         except Exception as chart_error:
                             self.logger.error(f"Error analyzing chart {i+1}: {chart_error}")
@@ -565,11 +595,33 @@ class OkamaFinanceBot:
                 "Финансовый график, отправленный пользователем"
             )
             
-            if ai_response and not ai_response.startswith("Ошибка"):
-                await self._send_message_safe(update, "🧠 AI-анализ графика:")
+            if ai_response and not ai_response.startswith("Ошибка") and not ai_response.startswith("Не удалось"):
+                await self._send_message_safe(update, "🧠 Анализ графиков:")
                 await self.send_long_message(update, ai_response)
             else:
-                await self._send_message_safe(update, "⚠️ Не удалось проанализировать график. Попробуйте отправить более четкое изображение.")
+                # Fallback: try regular analysis with photo description
+                self.logger.info("Vision API failed, trying fallback analysis")
+                try:
+                    fallback_prompt = """Проанализируй финансовый график, отправленный пользователем, на основе общих знаний о финансовых рынках.
+
+Предоставь анализ, включающий:
+1. Общие принципы технического анализа
+2. Типичные паттерны и тренды на финансовых графиках
+3. Ключевые факторы, влияющие на цены активов
+4. Рекомендации по анализу графиков
+5. Основы управления рисками
+
+Анализ должен быть на русском языке, полезным для понимания принципов анализа графиков."""
+                    
+                    fallback_response = self.yandexgpt_service.ask_question(fallback_prompt)
+                    if fallback_response:
+                        await self._send_message_safe(update, "🧠 Общий анализ принципов работы с графиками:")
+                        await self.send_long_message(update, fallback_response)
+                    else:
+                        await self._send_message_safe(update, "⚠️ Не удалось проанализировать график. Попробуйте отправить более четкое изображение.")
+                except Exception as fallback_error:
+                    self.logger.error(f"Fallback analysis also failed: {fallback_error}")
+                    await self._send_message_safe(update, "⚠️ Не удалось проанализировать график. Попробуйте отправить более четкое изображение.")
                 
         except Exception as e:
             self.logger.error(f"Error handling photo: {e}")
