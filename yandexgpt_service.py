@@ -273,6 +273,55 @@ Format responses professionally with clear sections, bullet points, and relevant
             print(f"❌ Error in ask_question: {e}")
             return f"Ошибка при получении AI ответа: {str(e)}"
     
+    def ask_question_with_vision(self, question: str, image_bytes: bytes, image_description: str = "") -> str:
+        """Ask a question to YandexGPT with image analysis capability"""
+        print(f"🔍 YandexGPTService.ask_question_with_vision called with question: {question[:100]}...")
+        print(f"🖼️ Image provided: {len(image_bytes)} bytes")
+        print(f"🔑 API Key configured: {'Yes' if self.api_key else 'No'}")
+        print(f"📁 Folder ID configured: {'Yes' if self.folder_id else 'No'}")
+        
+        try:
+            # Try vision-capable models first
+            vision_models = ["yandexgpt-vision", "yandexgpt-pro"]
+            regular_models = ["yandexgpt", "yandexgpt-lite", "yandexgpt-2"]
+            
+            # First try vision models
+            for model_name in vision_models:
+                try:
+                    result = self._call_yandex_api_with_vision(
+                        model_name, question, image_bytes, image_description
+                    )
+                    if result and not result.startswith("Ошибка"):
+                        print(f"✅ Vision model {model_name} response received, length: {len(result)}")
+                        return result
+                except Exception as e:
+                    print(f"⚠️ Vision model {model_name} failed: {e}")
+                    continue
+            
+            # Fallback to regular models with image description
+            print("🔄 Falling back to regular models with image description")
+            enhanced_question = f"{question}\n\nОписание изображения: {image_description}"
+            for model_name in regular_models:
+                try:
+                    result = self._call_yandex_api(
+                        system_prompt="Ты - финансовый аналитик. Анализируй предоставленную информацию и изображения.",
+                        user_prompt=enhanced_question,
+                        temperature=0.7,
+                        max_tokens=1000
+                    )
+                    if result and not result.startswith("Ошибка"):
+                        print(f"✅ Regular model {model_name} response received, length: {len(result)}")
+                        return result
+                except Exception as e:
+                    print(f"⚠️ Regular model {model_name} failed: {e}")
+                    continue
+            
+            return "Не удалось получить анализ изображения. Попробуйте позже."
+            
+        except Exception as e:
+            print(f"❌ Error in ask_question_with_vision: {e}")
+            return f"Ошибка при получении AI анализа изображения: {str(e)}"
+
     def process_freeform_command(self, user_message: str) -> Dict:
         """Process free-form commands and convert instrument names to Okama format"""
         try:
@@ -504,6 +553,100 @@ Format responses professionally with clear sections, bullet points, and relevant
                 
         except Exception as parse_error:
             return f"AI response received but could not parse: {response.text[:200]}"
+    
+    def _call_yandex_api_with_vision(self, model_name: str, question: str, image_bytes: bytes, image_description: str = "") -> str:
+        """Make a call to YandexGPT API with vision support"""
+        try:
+            if not self.api_key or not self.folder_id:
+                return "AI service is not properly configured. Please check your API settings."
+            
+            headers = {
+                "Authorization": f"Api-Key {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Create vision request
+            request_data = {
+                "modelUri": f"gpt://{self.folder_id}/{model_name}",
+                "completionOptions": {
+                    "temperature": "0.7",
+                    "maxTokens": "1000",
+                    "stream": False
+                },
+                "messages": [
+                    {
+                        "role": "system",
+                        "text": "Ты - опытный финансовый аналитик. Анализируй графики и изображения, предоставляя профессиональные выводы на русском языке."
+                    },
+                    {
+                        "role": "user",
+                        "text": question,
+                        "image": {
+                            "data": image_bytes.hex(),
+                            "mimeType": "image/png"
+                        }
+                    }
+                ]
+            }
+            
+            # Try vision endpoint
+            vision_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+            
+            response = requests.post(
+                vision_url,
+                headers=headers,
+                json=request_data,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                return self._parse_successful_response(response)
+            else:
+                print(f"⚠️ Vision API returned status {response.status_code}: {response.text}")
+                # Try alternative vision format
+                return self._try_alternative_vision_format(model_name, question, image_bytes, image_description)
+                
+        except Exception as e:
+            print(f"❌ Error in vision API call: {e}")
+            return f"Ошибка при анализе изображения: {str(e)}"
+
+    def _try_alternative_vision_format(self, model_name: str, question: str, image_bytes: bytes, image_description: str = "") -> str:
+        """Try alternative vision request format"""
+        try:
+            headers = {
+                "Authorization": f"Api-Key {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Alternative vision format
+            request_data = {
+                "modelUri": f"gpt://{self.folder_id}/{model_name}",
+                "completionOptions": {
+                    "temperature": "0.7",
+                    "maxTokens": "1000",
+                    "stream": False
+                },
+                "text": f"{question}\n\nАнализируй это изображение: {image_description}",
+                "image": {
+                    "data": image_bytes.hex(),
+                    "mimeType": "image/png"
+                }
+            }
+            
+            response = requests.post(
+                "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
+                headers=headers,
+                json=request_data,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                return self._parse_successful_response(response)
+            else:
+                return f"Не удалось проанализировать изображение (статус: {response.status_code})"
+                
+        except Exception as e:
+            return f"Ошибка при альтернативном анализе изображения: {str(e)}"
     
     def test_api_connection(self) -> Dict:
         """Test method to debug YandexGPT API connection"""
