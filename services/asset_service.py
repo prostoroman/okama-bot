@@ -34,6 +34,111 @@ class AssetService:
             'LSE': ['VOD.LSE', 'HSBA.LSE', 'BP.LSE']
         }
     
+    def resolve_symbol_or_isin(self, identifier: str) -> Dict[str, Any]:
+        """
+        Resolve user-provided identifier to an okama-compatible ticker.
+
+        Supports:
+        - Ticker in okama format (e.g., 'AAPL.US', 'SBER.MOEX')
+        - Plain ticker (e.g., 'AAPL') – returned uppercased as-is
+        - ISIN (e.g., 'US0378331005') – tries to resolve via MOEX ISS for Russian listings
+
+        Returns dict: { 'symbol': str, 'type': 'ticker'|'isin', 'source': str }
+        or { 'error': str } on failure.
+        """
+        try:
+            raw = (identifier or '').strip()
+            if not raw:
+                return { 'error': 'Пустой идентификатор актива' }
+
+            upper = raw.upper()
+
+            # If already okama-style ticker like XXX.SUFFIX
+            if '.' in upper and len(upper.split('.')) == 2 and all(part for part in upper.split('.')):
+                return { 'symbol': upper, 'type': 'ticker', 'source': 'input' }
+
+            # Detect ISIN: 2 letters + 9 alnum + 1 digit (simplified)
+            def _looks_like_isin(val: str) -> bool:
+                if len(val) != 12:
+                    return False
+                if not (val[0:2].isalpha() and val[0:2].isupper()):
+                    return False
+                if not val[-1].isdigit():
+                    return False
+                mid = val[2:11]
+                return mid.isalnum()
+
+            if _looks_like_isin(upper):
+                # Try resolve via MOEX ISS (works for instruments listed on MOEX)
+                moex_symbol = self._try_resolve_isin_via_moex(upper)
+                if moex_symbol:
+                    return { 'symbol': moex_symbol, 'type': 'isin', 'source': 'moex' }
+                else:
+                    return {
+                        'error': (
+                            f"Не удалось определить тикер по ISIN {upper}. "
+                            "Поддерживается разрешение ISIN только для бумаг, торгующихся на MOEX. "
+                            "Попробуйте указать тикер в формате AAPL.US или SBER.MOEX."
+                        )
+                    }
+
+            # Plain ticker without suffix – return upper-case; upstream may guess suffix
+            return { 'symbol': upper, 'type': 'ticker', 'source': 'plain' }
+
+        except Exception as e:
+            return { 'error': f"Ошибка при разборе идентификатора: {str(e)}" }
+
+    def _try_resolve_isin_via_moex(self, isin: str) -> Optional[str]:
+        """
+        Attempt to resolve ISIN to MOEX SECID using MOEX ISS API and return okama ticker SECID.MOEX
+        Returns None if not found.
+        """
+        try:
+            import requests  # Local import to avoid mandatory dependency at module import
+        except Exception:
+            return None
+
+        try:
+            url = f"https://iss.moex.com/iss/securities.json?isin={isin}&iss.meta=off"
+            resp = requests.get(url, timeout=8)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            # The payload contains 'securities': { 'columns': [...], 'data': [[...], ...] }
+            sec = data.get('securities') if isinstance(data, dict) else None
+            if not sec:
+                return None
+            columns = sec.get('columns') or []
+            rows = sec.get('data') or []
+            if not columns or not rows:
+                return None
+            try:
+                secid_idx = columns.index('SECID') if 'SECID' in columns else None
+                isin_idx = columns.index('ISIN') if 'ISIN' in columns else None
+            except Exception:
+                secid_idx = None
+                isin_idx = None
+            if secid_idx is None:
+                return None
+            # Prefer exact ISIN match if column present
+            for row in rows:
+                try:
+                    if isin_idx is not None and isinstance(row, list) and len(row) > max(secid_idx, isin_idx):
+                        if str(row[isin_idx]).upper() != isin:
+                            continue
+                    secid = row[secid_idx]
+                    if isinstance(secid, str) and secid:
+                        return f"{secid.upper()}.MOEX"
+                except Exception:
+                    continue
+            # Fallback: take first row
+            first = rows[0]
+            if isinstance(first, list) and len(first) > secid_idx and isinstance(first[secid_idx], str):
+                return f"{first[secid_idx].upper()}.MOEX"
+            return None
+        except Exception:
+            return None
+
     def _get_asset_suggestions(self, symbol: str) -> str:
         """Get suggestions for alternative assets when the requested one is not found"""
         # Extract the namespace from the symbol (e.g., 'CC' from 'BTC.CC')
@@ -71,6 +176,11 @@ class AssetService:
             Dictionary containing asset information or error
         """
         try:
+            # Resolve identifier (ticker or ISIN) to okama symbol
+            resolved = self.resolve_symbol_or_isin(symbol)
+            if 'error' in resolved:
+                return {'error': resolved['error']}
+            symbol = resolved['symbol']
             self.logger.info(f"Getting asset info for {symbol}")
             
             # Create asset object
@@ -230,6 +340,11 @@ class AssetService:
             Dictionary containing price information or error
         """
         try:
+            # Resolve identifier (ticker or ISIN) to okama symbol
+            resolved = self.resolve_symbol_or_isin(symbol)
+            if 'error' in resolved:
+                return {'error': resolved['error']}
+            symbol = resolved['symbol']
             self.logger.info(f"Getting asset price for {symbol}")
             
             # Create asset object
@@ -454,6 +569,11 @@ class AssetService:
             Dictionary containing price history and two charts or error
         """
         try:
+            # Resolve identifier (ticker or ISIN) to okama symbol
+            resolved = self.resolve_symbol_or_isin(symbol)
+            if 'error' in resolved:
+                return {'error': resolved['error']}
+            symbol = resolved['symbol']
             self.logger.info(f"Getting asset price history for {symbol} for period {period}")
             
             # Create asset object
@@ -805,6 +925,11 @@ class AssetService:
             Dictionary containing dividend information or error
         """
         try:
+            # Resolve identifier (ticker or ISIN) to okama symbol
+            resolved = self.resolve_symbol_or_isin(symbol)
+            if 'error' in resolved:
+                return {'error': resolved['error']}
+            symbol = resolved['symbol']
             self.logger.info(f"Getting asset dividends for {symbol}")
             
             # Create asset object
