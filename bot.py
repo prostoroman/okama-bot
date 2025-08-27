@@ -181,6 +181,7 @@ class OkamaFinanceBot:
 • Макро/товары/валюты
 • Анализ инфляции
 • Объяснения и рекомендации
+• **🆕 AI-анализ изображений графиков** - отправьте фото для анализа!
 
 Основные команды:
 /start — эта справка
@@ -221,6 +222,7 @@ class OkamaFinanceBot:
 ✅ Поддержка конвертации валют
 ✅ Автоматическое разбиение длинных сообщений
 ✅ Контекстная память для лучшего понимания
+✅ **🆕 AI-анализ изображений графиков** - отправьте фото для анализа!
 
 Поддержка:
 Если у вас возникли вопросы или проблемы, попробуйте:
@@ -232,6 +234,48 @@ class OkamaFinanceBot:
 
         await self._send_message_safe(update, welcome_message)
     
+
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /help command with detailed help"""
+        await self._send_message_safe(update, 
+            """📚 **Подробная справка по командам**
+
+**📊 Анализ активов:**
+• `/asset <тикер>` - Полная информация об активе + AI-анализ графиков
+• `/price <тикер>` - Текущая цена и изменение
+• `/dividends <тикер>` - История дивидендов и доходность
+
+**🤖 AI-помощник:**
+• `/chat <вопрос>` - AI-консультация по финансам
+• **🆕 Отправьте фото графика** - AI-анализ изображения!
+
+**🔧 Тестирование:**
+• `/test` - Проверка подключения к Okama
+• `/testai` - Проверка YandexGPT
+
+**📈 Поддерживаемые биржи:**
+• MOEX (Московская биржа)
+• US (NYSE, NASDAQ)
+• LSE (Лондонская биржа)
+• FX (Валютный рынок)
+• COMM (Товарные рынки)
+
+**💡 Примеры тикеров:**
+• `SBER.MOEX` - Сбербанк
+• `AAPL.US` - Apple
+• `TSLA.US` - Tesla
+• `XAU.COMM` - Золото
+• `EURUSD.FX` - EUR/USD
+
+**🆕 Новые возможности:**
+• **Vision AI** - анализ графиков с помощью YandexGPT
+• Автоматический анализ трендов и паттернов
+• Определение уровней поддержки/сопротивления
+• Оценка волатильности и рисков
+
+Отправьте фото любого финансового графика для получения профессионального AI-анализа!"""
+        )
+
 
     async def asset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /asset command"""
@@ -269,7 +313,7 @@ class OkamaFinanceBot:
             response += f"Период данных: {asset_info.get('period_length', 'N/A')}\n"
             
             if asset_info.get('current_price') is not None:
-                response += f"Текущая цена: {asset_info['current_price']:.2f}\n"
+                response += f"Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
             
             if asset_info.get('annual_return') != 'N/A':
                 response += f"Годовая доходность: {asset_info['annual_return']}\n"
@@ -299,21 +343,14 @@ class OkamaFinanceBot:
                             current_price = asset_info.get('current_price')
                             
                             dividend_response = f"💵 Дивиденды {symbol}\n\n"
-                            dividend_response += f"Валюта: {currency}\n"
                             dividend_response += f"Количество выплат: {len(dividends)}\n\n"
                             
                             # Show last 5 dividends with yield calculation
-                            sorted_dividends = sorted(dividends.items(), key=lambda x: x[0], reverse=True)[:5]
+                            sorted_dividends = sorted(dividends.items(), key=lambda x: x[0], reverse=True)[:10]
                             
                             for date, amount in sorted_dividends:
-                                dividend_response += f"{date}: {amount:.2f} {currency}"
+                                dividend_response += f"{date}: {amount:.2f} {currency}\n"
                                 
-                                # Calculate yield if we have current price
-                                if current_price and current_price > 0:
-                                    yield_pct = (amount / current_price) * 100
-                                    dividend_response += f" (доходность: {yield_pct:.2f}%)"
-                                
-                                dividend_response += "\n"
                             
                             await self._send_message_safe(update, dividend_response)
                         else:
@@ -368,7 +405,7 @@ class OkamaFinanceBot:
             
             # Get AI analysis of charts
             if 'charts' in locals() and charts and len(charts) > 0:
-                await self._send_message_safe(update, "🧠 Получаю AI-анализ графиков цен...")
+                await self._send_message_safe(update, "🧠 Анализ графиков цен...")
                 
                 try:
                     # Create prompt for chart analysis
@@ -385,30 +422,59 @@ class OkamaFinanceBot:
 • Ежедневный график за 1 год (детальный анализ)
 • Месячный график за 10 лет (долгосрочные тренды)
 
-Задача: Предоставь краткий, но информативный анализ графиков, включая:
+Задача: Проанализируй ВИЗУАЛЬНО каждый график и предоставь краткий, но информативный анализ, включая:
 1. Краткую справку о бизнесе компании и отрасли (2-3 предложения)
-1. Основные тренды и паттерны
-2. Ключевые уровни поддержки и сопротивления
-3. Оценка волатильности
-4. Краткосрочные и долгосрочные перспективы
-5. Основные риски и возможности
+2. Основные тренды и паттерны, которые ты видишь на графиках
+3. Ключевые уровни поддержки и сопротивления
+4. Оценка волатильности на основе визуального анализа
+5. Краткосрочные и долгосрочные перспективы
+6. Основные риски и возможности
 
-Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов. Опиши то, что ты видишь на графиках."""
 
-                    chart_ai_response = self.yandexgpt_service.ask_question(chart_analysis_prompt)
+                    # Analyze each chart individually with vision
+                    all_analyses = []
+                    for i, img_bytes in enumerate(charts):
+                        try:
+                            # Determine chart type for description
+                            if i == 0:
+                                chart_desc = f"Ежедневный график цен за 1 год для {symbol}"
+                            elif i == 1:
+                                chart_desc = f"Месячный график цен за 10 лет для {symbol}"
+                            else:
+                                chart_desc = f"График {i+1} для {symbol}"
+                            
+                            # Analyze chart with vision
+                            chart_ai_response = self.yandexgpt_service.ask_question_with_vision(
+                                chart_analysis_prompt, 
+                                img_bytes, 
+                                chart_desc
+                            )
+                            
+                            if chart_ai_response and not chart_ai_response.startswith("Ошибка"):
+                                all_analyses.append(f"📊 {chart_desc}:\n{chart_ai_response}")
+                            else:
+                                all_analyses.append(f"📊 {chart_desc}:\n⚠️ Не удалось проанализировать график")
+                                
+                        except Exception as chart_error:
+                            self.logger.error(f"Error analyzing chart {i+1}: {chart_error}")
+                            all_analyses.append(f"📊 График {i+1}:\n⚠️ Ошибка анализа: {str(chart_error)}")
                     
-                    if chart_ai_response:
-                        self.logger.info(f"Chart AI response received, length: {len(chart_ai_response)}")
+                    # Combine all analyses
+                    if all_analyses:
+                        combined_analysis = "\n\n".join(all_analyses)
+                        self.logger.info(f"Combined chart analysis length: {len(combined_analysis)}")
+                        
                         # Split response if it's too long
-                        if len(chart_ai_response) > 4000:
-                            self.logger.info(f"Chart AI response is long ({len(chart_ai_response)} chars), using send_long_message")
+                        if len(combined_analysis) > 4000:
+                            self.logger.info(f"Combined analysis is long ({len(combined_analysis)} chars), using send_long_message")
                             await self._send_message_safe(update, "🧠 AI-анализ графиков:")
-                            await self.send_long_message(update, chart_ai_response)
+                            await self.send_long_message(update, combined_analysis)
                         else:
-                            self.logger.info(f"Chart AI response is short ({len(chart_ai_response)} chars), sending directly")
-                            await self._send_message_safe(update, f"🧠 AI-анализ графиков:\n\n{chart_ai_response}")
+                            self.logger.info(f"Combined analysis is short ({len(combined_analysis)} chars), sending directly")
+                            await self._send_message_safe(update, f"🧠 AI-анализ графиков:\n\n{combined_analysis}")
                     else:
-                        self.logger.warning("Chart AI response is empty")
+                        self.logger.warning("No chart analyses received")
                         await self._send_message_safe(update, "⚠️ AI-анализ графиков недоступен. Попробуйте позже.")
                         
                 except Exception as chart_ai_error:
@@ -464,6 +530,52 @@ class OkamaFinanceBot:
                     "Попробуйте переформулировать вопрос или используйте /help для доступных команд. "
                     "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
                 )
+
+    async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle incoming photo messages for chart analysis"""
+        try:
+            # Get the largest photo size
+            photo = update.message.photo[-1]
+            
+            # Show typing indicator
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+            
+            # Download the photo
+            file = await context.bot.get_file(photo.file_id)
+            photo_bytes = await file.download_as_bytearray()
+            
+            # Create analysis prompt
+            analysis_prompt = """Проанализируй этот финансовый график и предоставь профессиональный анализ на русском языке.
+
+Включи в анализ:
+1. Тип графика (временной масштаб, актив)
+2. Основные тренды и паттерны
+3. Ключевые уровни поддержки и сопротивления
+4. Оценка волатильности
+5. Технические индикаторы (если видны)
+6. Краткосрочные и долгосрочные перспективы
+7. Основные риски и возможности
+
+Будь конкретным и опиши то, что ты видишь на графике."""
+            
+            # Analyze the photo with vision
+            await self._send_message_safe(update, "🧠 Анализирую график...")
+            
+            ai_response = self.yandexgpt_service.ask_question_with_vision(
+                analysis_prompt,
+                bytes(photo_bytes),
+                "Финансовый график, отправленный пользователем"
+            )
+            
+            if ai_response and not ai_response.startswith("Ошибка"):
+                await self._send_message_safe(update, "🧠 AI-анализ графика:")
+                await self.send_long_message(update, ai_response)
+            else:
+                await self._send_message_safe(update, "⚠️ Не удалось проанализировать график. Попробуйте отправить более четкое изображение.")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling photo: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при анализе изображения: {str(e)}")
 
     async def _handle_message_fallback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_message: str):
         """Fallback метод для обработки сообщений (старая логика)"""
@@ -673,11 +785,17 @@ class OkamaFinanceBot:
         
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
-        
+        application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("asset", self.asset_command))
+        application.add_handler(CommandHandler("price", self.price_command))
+        application.add_handler(CommandHandler("dividends", self.dividends_command))
+        application.add_handler(CommandHandler("chat", self.chat_command))
+        application.add_handler(CommandHandler("test", self.test_command))
+        application.add_handler(CommandHandler("testai", self.test_ai_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
         
         # Start the bot
