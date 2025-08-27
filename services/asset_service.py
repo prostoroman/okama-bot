@@ -752,13 +752,22 @@ class AssetService:
             if not charts:
                 return {'error': 'Не удалось создать ни одного графика'}
             
+            # Convert charts dictionary to list for consistent return format
+            charts_list = []
+            if 'adj_close' in charts:
+                charts_list.append(charts['adj_close'])
+            if 'close_monthly' in charts:
+                charts_list.append(charts['close_monthly'])
+            if 'fallback' in charts:
+                charts_list.append(charts['fallback'])
+            
             # Prepare response data
             response_data = {
                 'symbol': symbol,
                 'currency': currency,
                 'period': period,
-                'charts': charts,
-                'price_data_info': price_data_info
+                'charts': charts_list,  # List of chart bytes
+                'price_data': price_data_info
             }
             
             return response_data

@@ -7,7 +7,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+from datetime import datetime
 
 # Check Python version compatibility
 if sys.version_info < (3, 7):
@@ -62,22 +63,82 @@ class OkamaFinanceBot:
         # User session storage
         self.user_sessions = {}
         
+    def _get_user_context(self, user_id: int) -> Dict[str, Any]:
+        """Получить контекст пользователя"""
+        if user_id not in self.user_sessions:
+            self.user_sessions[user_id] = {
+                'last_assets': [],  # Последние анализируемые активы
+                'last_analysis_type': None,  # Тип последнего анализа
+                'last_period': None,  # Последний период анализа
+                'conversation_history': [],  # История разговора
+                'preferences': {}  # Предпочтения пользователя
+            }
+        return self.user_sessions[user_id]
+    
+    def _update_user_context(self, user_id: int, **kwargs):
+        """Обновить контекст пользователя"""
+        context = self._get_user_context(user_id)
+        context.update(kwargs)
+        
+        # Ограничиваем историю разговора
+        if 'conversation_history' in context and len(context['conversation_history']) > 10:
+            context['conversation_history'] = context['conversation_history'][-10:]
+    
+    def _add_to_conversation_history(self, user_id: int, message: str, response: str):
+        """Добавить сообщение в историю разговора"""
+        context = self._get_user_context(user_id)
+        context['conversation_history'].append({
+            'timestamp': datetime.now().isoformat(),
+            'message': message,
+            'response': response[:200]  # Ограничиваем длину ответа
+        })
+    
+    def _get_context_summary(self, user_id: int) -> str:
+        """Получить краткое резюме контекста пользователя"""
+        context = self._get_user_context(user_id)
+        summary = []
+        
+        if context['last_assets']:
+            summary.append(f"Последние активы: {', '.join(context['last_assets'][-3:])}")
+        
+        if context['last_analysis_type']:
+            summary.append(f"Последний анализ: {context['last_analysis_type']}")
+        
+        if context['last_period']:
+            summary.append(f"Период: {context['last_period']}")
+        
+        return "; ".join(summary) if summary else "Новый пользователь"
+    
     async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown'):
         """Безопасная отправка сообщения с автоматическим разбиением на части"""
-        if len(text) <= 4000:
-            await update.message.reply_text(text, parse_mode=parse_mode)
-        else:
-            await self._send_long_text(update, text, parse_mode)
+        try:
+            # Проверяем, что text действительно является строкой
+            if not isinstance(text, str):
+                self.logger.warning(f"_send_message_safe received non-string data: {type(text)}")
+                text = str(text)
+            
+            # Проверяем длину строки
+            if len(text) <= 4000:
+                await update.message.reply_text(text, parse_mode=parse_mode)
+            else:
+                await self._send_long_text(update, text, parse_mode)
+        except Exception as e:
+            self.logger.error(f"Error in _send_message_safe: {e}")
+            # Fallback: попробуем отправить как обычный текст
+            try:
+                await update.message.reply_text(f"Ошибка форматирования: {str(text)[:1000]}...")
+            except:
+                await update.message.reply_text("Произошла ошибка при отправке сообщения")
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /start command"""
+        """Handle /start command with full help"""
         user = update.effective_user
         # Escape user input to prevent Markdown parsing issues
         user_name = user.first_name or "User"
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""🧠 Okama Financial Brain
+        welcome_message = f"""🧠 **Okama Financial Brain - Полная справка**
 
 Привет, {user_name}! Я помогу с анализом рынков и портфелей.
 
@@ -89,43 +150,8 @@ class OkamaFinanceBot:
 - Анализ инфляции
 - AI‑объяснения и рекомендации
 
-**Как обращаться (просто текстом):**
-- "Проанализируй Apple"
-- "Сравни золото и нефть"
-- "Портфель VOO.US 60% и AGG.US 40%"
-- "Инфляция в США за 5 лет"
-- "Сравни S&P 500 и NASDAQ в рублях"
-
-**Команды:**
-/help — список команд
-/asset [тикер] [период] — базовая информация об активе с графиком и AI справкой
-/analyze [тикер] [период] — полный анализ актива с детальными графиками и AI анализом
-/chart [тикер] [период] — график цен актива
-/price [тикер] — текущая цена
-/dividends [тикер] — дивиденды
-/chat [вопрос] — вопрос AI‑советнику
-/test [тикер] — тест Okama
-/testai — тест YandexGPT
-/test_split — тест разбивки длинных сообщений
-
-**Примеры запросов:**
-• "Проанализируй SBER.MOEX за 2 года"
-• "Сравни VOO.US и QQQ.US"
-• "Портфель: 70% VOO.US, 20% AGG.US, 10% GC.COMM"
-• "Инфляция в России за 10 лет"
-• "Динамика нефти и золота в рублях"
-
-Начните с простого запроса или используйте /help для подробностей!"""
-
-        await self._send_message_safe(update, welcome_message)
-    
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /help command"""
-        help_text = """🧠 **Okama Financial Brain - Справка**
-
 **Основные команды:**
-/start — приветствие и краткая справка
-/help — эта справка
+/start — эта справка
 /asset [тикер] [период] — базовая информация об активе с графиком и AI справкой
 /analyze [тикер] [период] — полный анализ актива с детальными графиками и AI анализом
 /chart [тикер] [период] — график цен актива
@@ -148,12 +174,19 @@ class OkamaFinanceBot:
 • 1Y, 2Y, 5Y, 10Y, MAX
 • По умолчанию: 10Y для акций, 5Y для макро
 
+**Как обращаться (просто текстом):**
+- "Проанализируй Apple"
+- "Сравни золото и нефть"
+- "Портфель VOO.US 60% и AGG.US 40%"
+- "Инфляция в США за 5 лет"
+- "Сравни S&P 500 и NASDAQ в рублях"
+
 **Примеры запросов:**
-• "Проанализируй Apple за 5 лет"
-• "Сравни золото и нефть"
-• "Портфель: 60% VOO.US, 30% AGG.US, 10% GC.COMM"
-• "Инфляция в США за 10 лет"
-• "Динамика SBER.MOEX в рублях"
+• "Проанализируй SBER.MOEX за 2 года"
+• "Сравни VOO.US и QQQ.US"
+• "Портфель: 70% VOO.US, 20% AGG.US, 10% GC.COMM"
+• "Инфляция в России за 10 лет"
+• "Динамика нефти и золота в рублях"
 
 **Особенности:**
 ✅ Автоматическое распознавание намерений
@@ -163,15 +196,19 @@ class OkamaFinanceBot:
 ✅ AI-выводы и рекомендации
 ✅ Поддержка конвертации валют
 ✅ Автоматическое разбиение длинных сообщений
+✅ Контекстная память для лучшего понимания
 
 **Поддержка:**
 Если у вас возникли вопросы или проблемы, попробуйте:
 1. Переформулировать запрос
 2. Использовать более простые названия активов
-3. Проверить доступность данных (MOEX может быть временно недоступен)"""
+3. Проверить доступность данных (MOEX может быть временно недоступен)
 
-        await self._send_message_safe(update, help_text)
+Начните с простого запроса или используйте команды выше!"""
+
+        await self._send_message_safe(update, welcome_message)
     
+
     async def asset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /asset command"""
         if not context.args:
@@ -181,6 +218,13 @@ class OkamaFinanceBot:
         
         symbol = context.args[0].upper()
         period = context.args[1] if len(context.args) > 1 else '10Y'
+        
+        # Update user context
+        user_id = update.effective_user.id
+        self._update_user_context(user_id, 
+                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []),
+                                last_analysis_type='asset',
+                                last_period=period)
         
         await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
         
@@ -214,6 +258,49 @@ class OkamaFinanceBot:
                 response += f"**Волатильность:** {asset_info['volatility']}\n"
             
             await self._send_message_safe(update, response, parse_mode='Markdown')
+            
+            # Check if asset type suggests dividends and add dividend information
+            asset_type = asset_info.get('type', '').lower()
+            if any(keyword in asset_type for keyword in ['stock', 'акция', 'share', 'equity']):
+                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...")
+                
+                try:
+                    dividend_info = self.asset_service.get_asset_dividends(symbol)
+                    
+                    if 'error' not in dividend_info and dividend_info.get('dividends'):
+                        dividends = dividend_info['dividends']
+                        currency = dividend_info.get('currency', '')
+                        
+                        if dividends:
+                            # Get current price for yield calculation
+                            current_price = asset_info.get('current_price')
+                            
+                            dividend_response = f"💵 **Дивиденды {symbol}**\n\n"
+                            dividend_response += f"**Валюта:** {currency}\n"
+                            dividend_response += f"**Количество выплат:** {len(dividends)}\n\n"
+                            
+                            # Show last 5 dividends with yield calculation
+                            sorted_dividends = sorted(dividends.items(), key=lambda x: x[0], reverse=True)[:5]
+                            
+                            for date, amount in sorted_dividends:
+                                dividend_response += f"**{date}:** {amount:.2f} {currency}"
+                                
+                                # Calculate yield if we have current price
+                                if current_price and current_price > 0:
+                                    yield_pct = (amount / current_price) * 100
+                                    dividend_response += f" (доходность: {yield_pct:.2f}%)"
+                                
+                                dividend_response += "\n"
+                            
+                            await self._send_message_safe(update, dividend_response, parse_mode='Markdown')
+                        else:
+                            await self._send_message_safe(update, "💵 Дивиденды не выплачивались в указанный период")
+                    else:
+                        await self._send_message_safe(update, "💵 Информация о дивидендах недоступна")
+                        
+                except Exception as div_error:
+                    self.logger.error(f"Error getting dividends for {symbol}: {div_error}")
+                    await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}")
             
             # Send chart if available
             if 'chart' in asset_info and asset_info['chart']:
@@ -268,6 +355,10 @@ class OkamaFinanceBot:
             except Exception as ai_error:
                 self.logger.error(f"Error getting AI analysis for {symbol}: {ai_error}")
                 await self._send_message_safe(update, f"⚠️ Ошибка при получении AI анализа: {str(ai_error)}")
+            
+            # Update conversation history
+            self._add_to_conversation_history(user_id, f"/asset {symbol} {period}", 
+                                           f"Asset analysis completed for {symbol}")
                 
         except Exception as e:
             await self._send_message_safe(update, f"❌ Ошибка при получении информации об активе: {str(e)}")
@@ -1258,7 +1349,7 @@ class OkamaFinanceBot:
         
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
-        application.add_handler(CommandHandler("help", self.help_command))
+
         application.add_handler(CommandHandler("asset", self.asset_command))
         application.add_handler(CommandHandler("price", self.price_command))
         application.add_handler(CommandHandler("dividends", self.dividends_command))
