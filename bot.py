@@ -458,46 +458,222 @@ class OkamaFinanceBot:
             
             await self._send_message_safe(update, response, parse_mode='Markdown')
             
-            # Send charts
-            charts = price_history.get('charts', [])
+            # Send charts and get AI analysis
+            charts = price_history.get('charts', {})
+            price_data_info = price_history.get('price_data_info', {})
+            
             if charts:
-                for i, img_bytes in enumerate(charts):
-                    try:
-                        await context.bot.send_photo(
-                            chat_id=update.effective_chat.id, 
-                            photo=io.BytesIO(img_bytes),
-                            caption=f"📊 График {i+1}: {symbol}"
-                        )
-                    except Exception as e:
-                        error_msg = str(e)
-                        logger.error(f"Error sending chart {i+1}: {error_msg}")
-                        await self._send_message_safe(update, f"❌ Ошибка при отправке графика {i+1}: {error_msg}")
+                await self._send_charts_with_ai_analysis(update, symbol, period, charts, price_data_info)
             else:
                 await self._send_message_safe(update, "⚠️ Не удалось создать графики цен")
-            
-            # Get AI analysis if available
-            try:
-                await self._send_message_safe(update, "🧠 Получаю AI анализ графиков...")
-                ai_response = self.yandexgpt_service.get_response(
-                    f"Проанализируй график цен актива {symbol} за период {period}. "
-                    f"Опиши основные тренды, волатильность и дай краткие рекомендации."
-                )
-                
-                if ai_response and ai_response.strip():
-                    await self._send_message_safe(update, 
-                        f"🤖 **AI Анализ графика {symbol}:**\n\n{ai_response}")
-                else:
-                    await self._send_message_safe(update, "❌ Не удалось получить AI анализ графика")
-                    
-            except Exception as e:
-                error_msg = str(e)
-                logger.error(f"Error getting AI analysis: {error_msg}")
-                await self._send_message_safe(update, f"❌ Ошибка при получении AI анализа: {error_msg}")
                 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Error in _get_asset_info_with_chart: {error_msg}")
             await self._send_message_safe(update, f"❌ Ошибка при получении информации: {error_msg}")
+    
+    async def _send_charts_with_ai_analysis(self, update: Update, symbol: str, period: str, charts: Dict, price_data_info: Dict):
+        """Send charts and get AI analysis from YandexGPT"""
+        try:
+            # Send charts first
+            charts_sent = []
+            
+            if 'adj_close' in charts:
+                caption = f"📈 Дневные цены (скорректированные): {symbol} за период {period}"
+                await update.message.reply_photo(
+                    photo=charts['adj_close'],
+                    caption=caption
+                )
+                charts_sent.append('adj_close')
+            
+            if 'close_monthly' in charts:
+                caption = f"📊 Месячные цены: {symbol} за период {period}"
+                await update.message.reply_photo(
+                    photo=charts['close_monthly'],
+                    caption=caption
+                )
+                charts_sent.append('close_monthly')
+            
+            if 'fallback' in charts:
+                caption = f"📊 История цен: {symbol} за период {period}"
+                await update.message.reply_photo(
+                    photo=charts['fallback'],
+                    caption=caption
+                )
+                charts_sent.append('fallback')
+            
+            # Get AI analysis if we have charts
+            if charts_sent:
+                await self._get_ai_analysis_for_charts(update, symbol, period, charts_sent, price_data_info)
+            else:
+                await update.message.reply_text("⚠️ Не удалось создать графики цен")
+                
+        except Exception as e:
+            error_msg = str(e)
+            self.logger.error(f"Error in _send_charts_with_ai_analysis: {error_msg}")
+            await update.message.reply_text(f"❌ Ошибка при отправке графиков: {error_msg}")
+    
+    async def _get_ai_analysis_for_charts(self, update: Update, symbol: str, period: str, charts_sent: List[str], price_data_info: Dict):
+        """Get AI analysis for the charts from YandexGPT"""
+        try:
+            await update.message.reply_text("🧠 Получаю AI анализ графиков...")
+            
+            # Prepare data for AI analysis
+            analysis_data = {
+                'symbol': symbol,
+                'period': period,
+                'charts_available': charts_sent,
+                'price_data': price_data_info
+            }
+            
+            # Create analysis prompt
+            prompt = self._create_chart_analysis_prompt(analysis_data)
+            self.logger.info(f"Created AI analysis prompt, length: {len(prompt)}")
+            
+            # Get AI response
+            ai_response = self._get_yandexgpt_analysis(prompt)
+            
+            if ai_response:
+                self.logger.info(f"AI response received, length: {len(ai_response)}")
+                # Send AI analysis
+                await update.message.reply_text(
+                    f"🧠 **AI анализ {symbol}**\n\n{ai_response}",
+                    parse_mode='Markdown'
+                )
+            else:
+                self.logger.warning("AI response is empty, using fallback analysis")
+                # Fallback: provide basic analysis based on available data
+                fallback_analysis = self._create_fallback_analysis(analysis_data)
+                self.logger.info(f"Fallback analysis created, length: {len(fallback_analysis)}")
+                await update.message.reply_text(
+                    f"🧠 **Анализ {symbol}** (базовый)\n\n{fallback_analysis}",
+                    parse_mode='Markdown'
+                )
+                await update.message.reply_text(
+                    "⚠️ AI анализ недоступен. Показан базовый анализ на основе данных."
+                )
+                
+        except Exception as e:
+            error_msg = str(e)
+            self.logger.error(f"Error in _get_ai_analysis_for_charts: {error_msg}")
+            await update.message.reply_text(f"❌ Ошибка при получении AI анализа: {error_msg}")
+    
+    def _create_chart_analysis_prompt(self, analysis_data: Dict) -> str:
+        """Create a prompt for chart analysis"""
+        symbol = analysis_data['symbol']
+        period = analysis_data['period']
+        charts_available = analysis_data['charts_available']
+        price_data = analysis_data['price_data']
+        
+        prompt = f"""Проанализируй графики цен для актива {symbol} за период {period}.
+
+Доступные графики: {', '.join(charts_available)}
+
+Данные по ценам:"""
+
+        for chart_type, info in price_data.items():
+            if chart_type == 'adj_close':
+                prompt += f"\n\n📈 Дневные цены (скорректированные):"
+            elif chart_type == 'close_monthly':
+                prompt += f"\n\n📊 Месячные цены:"
+            else:
+                prompt += f"\n\n📊 История цен:"
+            
+            prompt += f"\n- Текущая цена: {info.get('current_price', 'N/A')}"
+            prompt += f"\n- Начальная цена: {info.get('start_price', 'N/A')}"
+            prompt += f"\n- Минимальная цена: {info.get('min_price', 'N/A')}"
+            prompt += f"\n- Максимальная цена: {info.get('max_price', 'N/A')}"
+            prompt += f"\n- Период: {info.get('start_date', 'N/A')} - {info.get('end_date', 'N/A')}"
+            prompt += f"\n- Количество точек данных: {info.get('data_points', 'N/A')}"
+        
+        prompt += f"""
+
+Пожалуйста, предоставь МАКСИМАЛЬНО ДЕТАЛЬНЫЙ и ПОДРОБНЫЙ анализ:
+
+1. **Краткий анализ динамики цен** (минимум 5-6 абзацев с детальным разбором каждого периода)
+2. **Основные тренды и паттерны** (подробный анализ с конкретными примерами, датами и цифрами)
+3. **Ключевые уровни поддержки и сопротивления** (с детальным обоснованием и техническим анализом)
+4. **Оценка волатильности** (текущая, историческая, ожидаемая с конкретными метриками)
+5. **Краткосрочные и долгосрочные перспективы** (ОБЯЗАТЕЛЬНО максимально подробно):
+   - Текущие макроэкономические условия (инфляция, ВВП, безработица с конкретными цифрами)
+   - Монетарная политика центральных банков (ключевые ставки, QE/QT, влияние на рынки)
+   - Основные прогнозы ЦБ РФ, ФРС США, ЕЦБ (с датами и ожидаемыми изменениями)
+   - Консенсус прогнозов аналитиков по сектору и экономике (с конкретными оценками)
+   - Геополитические факторы и торговые отношения (детальный анализ рисков)
+   - Влияние на конкретный актив (с обоснованием и примерами)
+6. **Рекомендации для инвесторов** (с учетом рисков, стратегий и временных горизонтов)
+
+**КРИТИЧЕСКИ ВАЖНО:** 
+- Каждый раздел должен содержать минимум 4-5 абзацев детального анализа
+- Включи конкретные цифры, даты, проценты и обоснования
+- Добавь исторические примеры и сравнения
+- Предоставь детальный анализ рисков и возможностей
+- Сделай анализ максимально информативным и полезным для принятия инвестиционных решений
+
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов. При анализе перспектив обязательно учитывай текущую макроэкономическую ситуацию и политику центральных банков."""
+
+        return prompt
+    
+    def _get_yandexgpt_analysis(self, prompt: str) -> Optional[str]:
+        """Get AI analysis from YandexGPT"""
+        try:
+            self.logger.info(f"Requesting YandexGPT analysis for prompt length: {len(prompt)}")
+            
+            # Use the existing YandexGPT service
+            response = self.yandexgpt_service.ask_question(prompt)
+            
+            if response:
+                self.logger.info(f"YandexGPT response received, length: {len(response)}")
+                return response
+            else:
+                self.logger.warning("YandexGPT returned empty response")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error getting YandexGPT analysis: {e}")
+            self.logger.exception("Full traceback:")
+            return None
+
+    def _create_fallback_analysis(self, analysis_data: Dict) -> str:
+        """Create a basic fallback analysis if YandexGPT is not available"""
+        symbol = analysis_data['symbol']
+        period = analysis_data['period']
+        charts_available = analysis_data['charts_available']
+        price_data = analysis_data['price_data']
+
+        fallback_text = f"🧠 **Анализ {symbol}** (базовый)\n\n"
+        fallback_text += f"**Период:** {period}\n"
+        fallback_text += f"**Доступные графики:** {', '.join(charts_available)}\n\n"
+
+        if 'adj_close' in price_data:
+            adj_info = price_data['adj_close']
+            fallback_text += f"📈 **Дневные цены (скорректированные):**\n"
+            fallback_text += f"Текущая цена: {adj_info.get('current_price', 'N/A')}\n"
+            fallback_text += f"Начальная цена: {adj_info.get('start_price', 'N/A')}\n"
+            fallback_text += f"Мин/Макс: {adj_info.get('min_price', 'N/A')} / {adj_info.get('max_price', 'N/A')}\n"
+            fallback_text += f"Период: {adj_info.get('start_date', 'N/A')} - {adj_info.get('end_date', 'N/A')}\n"
+            fallback_text += f"Точки данных: {adj_info.get('data_points', 'N/A')}\n"
+
+        if 'close_monthly' in price_data:
+            monthly_info = price_data['close_monthly']
+            fallback_text += f"\n📊 **Месячные цены:**\n"
+            fallback_text += f"Текущая цена: {monthly_info.get('current_price', 'N/A')}\n"
+            fallback_text += f"Начальная цена: {monthly_info.get('start_price', 'N/A')}\n"
+            fallback_text += f"Мин/Макс: {monthly_info.get('min_price', 'N/A')} / {monthly_info.get('max_price', 'N/A')}\n"
+            fallback_text += f"Период: {monthly_info.get('start_date', 'N/A')} - {monthly_info.get('end_date', 'N/A')}\n"
+            fallback_text += f"Точки данных: {monthly_info.get('data_points', 'N/A')}\n"
+
+        if 'fallback' in price_data:
+            fallback_info = price_data['fallback']
+            fallback_text += f"\n📊 **История цен:**\n"
+            fallback_text += f"Текущая цена: {fallback_info.get('current_price', 'N/A')}\n"
+            fallback_text += f"Начальная цена: {fallback_info.get('start_price', 'N/A')}\n"
+            fallback_text += f"Мин/Макс: {fallback_info.get('min_price', 'N/A')} / {fallback_info.get('max_price', 'N/A')}\n"
+            fallback_text += f"Период: {fallback_info.get('start_date', 'N/A')} - {fallback_info.get('end_date', 'N/A')}\n"
+            fallback_text += f"Точки данных: {fallback_info.get('data_points', 'N/A')}\n"
+
+        fallback_text += "\n⚠️ AI анализ недоступен. Показан базовый анализ на основе данных."
+        return fallback_text
     
     async def chart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chart command"""
