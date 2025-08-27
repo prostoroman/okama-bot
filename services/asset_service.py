@@ -266,52 +266,89 @@ class AssetService:
             
             # Try to generate a monthly price dynamics chart for the full available period
             try:
+                self.logger.info(f"Attempting to generate chart for {symbol}")
                 series_for_plot = None
                 try:
                     import pandas as pd  # type: ignore
-                except Exception:
+                except Exception as pd_error:
+                    self.logger.warning(f"Pandas import failed for {symbol}: {pd_error}")
                     pd = None  # type: ignore
+                
                 raw = getattr(asset, 'price', None)
+                self.logger.info(f"Raw price data type for {symbol}: {type(raw)}")
+                
                 if pd is not None and hasattr(raw, 'iloc') and hasattr(raw, 'index') and len(raw) > 1:
+                    self.logger.info(f"Price data has {len(raw)} points for {symbol}")
                     if getattr(raw, 'ndim', 1) == 1:
                         series_for_plot = raw.dropna()
+                        self.logger.info(f"1D series created for {symbol}, length: {len(series_for_plot)}")
                     else:
                         df_non_nan = raw.dropna(how='all') if hasattr(raw, 'dropna') else raw
                         if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
                             try:
                                 first_col = df_non_nan.columns[0]
                                 series_for_plot = df_non_nan[first_col].dropna()
-                            except Exception:
+                                self.logger.info(f"Column series created for {symbol}, length: {len(series_for_plot)}")
+                            except Exception as col_error:
+                                self.logger.warning(f"Failed to get first column for {symbol}: {col_error}")
                                 series_for_plot = None
+                else:
+                    self.logger.warning(f"Price data not suitable for plotting for {symbol}: type={type(raw)}, has_iloc={hasattr(raw, 'iloc') if raw is not None else False}, has_index={hasattr(raw, 'index') if raw is not None else False}, length={len(raw) if raw is not None else 0}")
+                
                 if series_for_plot is not None and len(series_for_plot) > 1:
+                    self.logger.info(f"Creating chart for {symbol} with {len(series_for_plot)} data points")
+                    
                     # Convert PeriodIndex (monthly) to Timestamp if needed
                     try:
                         if hasattr(series_for_plot.index, 'to_timestamp'):
                             series_for_plot = series_for_plot.copy()
                             series_for_plot.index = series_for_plot.index.to_timestamp()
-                    except Exception:
-                        pass
+                            self.logger.info(f"Converted PeriodIndex to Timestamp for {symbol}")
+                    except Exception as ts_error:
+                        self.logger.warning(f"Failed to convert PeriodIndex for {symbol}: {ts_error}")
+                    
                     # Ensure monthly frequency if index is datetime-like
                     try:
                         inferred = getattr(series_for_plot.index, 'inferred_type', None)
                         if inferred and 'datetime' in str(inferred).lower():
                             series_for_plot = series_for_plot.resample('M').last().dropna()
-                    except Exception:
-                        pass
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
-                    ax.set_title(f'Динамика цены по месяцам: {symbol}', fontsize=12)
-                    ax.set_xlabel('Дата')
-                    ax.set_ylabel(f'Цена ({getattr(asset, "currency", "")})')
-                    ax.grid(True, linestyle='--', alpha=0.3)
-                    fig.tight_layout()
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-                    plt.close(fig)
-                    info['chart'] = buf.getvalue()
-            except Exception:
-                # Silently ignore plotting errors
-                pass
+                            self.logger.info(f"Resampled to monthly frequency for {symbol}, new length: {len(series_for_plot)}")
+                    except Exception as resample_error:
+                        self.logger.warning(f"Failed to resample for {symbol}: {resample_error}")
+                    
+                    # Create the plot
+                    try:
+                        fig, ax = plt.subplots(figsize=(10, 4))
+                        ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
+                        ax.set_title(f'Динамика цены по месяцам: {symbol}', fontsize=12)
+                        ax.set_xlabel('Дата')
+                        ax.set_ylabel(f'Цена ({getattr(asset, "currency", "")})')
+                        ax.grid(True, linestyle='--', alpha=0.3)
+                        fig.tight_layout()
+                        
+                        # Save to buffer
+                        buf = io.BytesIO()
+                        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                        plt.close(fig)
+                        
+                        chart_bytes = buf.getvalue()
+                        if chart_bytes and len(chart_bytes) > 1000:  # Ensure chart is not empty
+                            info['chart'] = chart_bytes
+                            self.logger.info(f"Chart generated successfully for {symbol}, size: {len(chart_bytes)} bytes")
+                        else:
+                            self.logger.warning(f"Generated chart is too small for {symbol}, size: {len(chart_bytes)} bytes")
+                            info['chart'] = None
+                            
+                    except Exception as plot_error:
+                        self.logger.error(f"Failed to create plot for {symbol}: {plot_error}")
+                        info['chart'] = None
+                else:
+                    self.logger.warning(f"Not enough data for chart for {symbol}: series_for_plot={series_for_plot is not None}, length={len(series_for_plot) if series_for_plot is not None else 0}")
+                    info['chart'] = None
+                    
+            except Exception as chart_error:
+                self.logger.error(f"Chart generation failed for {symbol}: {chart_error}")
+                info['chart'] = None
             
             return info
             

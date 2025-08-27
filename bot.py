@@ -98,7 +98,8 @@ class OkamaFinanceBot:
 
 **Команды:**
 /help — список команд
-/asset [тикер] [период] — информация об активе с графиком цен
+/asset [тикер] [период] — базовая информация об активе с графиком и AI справкой
+/analyze [тикер] [период] — полный анализ актива с детальными графиками и AI анализом
 /chart [тикер] [период] — график цен актива
 /price [тикер] — текущая цена
 /dividends [тикер] — дивиденды
@@ -125,7 +126,8 @@ class OkamaFinanceBot:
 **Основные команды:**
 /start — приветствие и краткая справка
 /help — эта справка
-/asset [тикер] [период] — информация об активе с графиком цен
+/asset [тикер] [период] — базовая информация об активе с графиком и AI справкой
+/analyze [тикер] [период] — полный анализ актива с детальными графиками и AI анализом
 /chart [тикер] [период] — график цен актива
 /price [тикер] — текущая цена
 /dividends [тикер] — дивиденды
@@ -214,15 +216,210 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, response, parse_mode='Markdown')
             
             # Send chart if available
-            if 'chart' in asset_info:
-                await context.bot.send_photo(
-                    chat_id=update.effective_chat.id,
-                    photo=io.BytesIO(asset_info['chart']),
-                    caption=f"📊 График цен {symbol}"
-                )
+            if 'chart' in asset_info and asset_info['chart']:
+                try:
+                    await context.bot.send_photo(
+                        chat_id=update.effective_chat.id,
+                        photo=io.BytesIO(asset_info['chart']),
+                        caption=f"📊 График цен {symbol}"
+                    )
+                except Exception as chart_error:
+                    self.logger.error(f"Error sending chart for {symbol}: {chart_error}")
+                    await self._send_message_safe(update, f"⚠️ Не удалось отправить график: {str(chart_error)}")
+            
+            # Get AI analysis
+            await self._send_message_safe(update, "🧠 Получаю AI анализ актива...")
+            
+            try:
+                # Create prompt for AI analysis
+                ai_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе следующей информации:
+
+**Основные характеристики:**
+- Страна: {asset_info.get('country', 'N/A')}
+- Биржа: {asset_info.get('exchange', 'N/A')}
+- Валюта: {asset_info.get('currency', 'N/A')}
+- Тип: {asset_info.get('type', 'N/A')}
+- Текущая цена: {asset_info.get('current_price', 'N/A')}
+- Годовая доходность: {asset_info.get('annual_return', 'N/A')}
+- Общая доходность: {asset_info.get('total_return', 'N/A')}
+- Волатильность: {asset_info.get('volatility', 'N/A')}
+
+**Задача:** Предоставь краткий, но информативный анализ актива, включая:
+1. Общую оценку актива
+2. Основные факторы, влияющие на его стоимость
+3. Краткосрочные и долгосрочные перспективы
+4. Основные риски
+5. Рекомендации для инвесторов
+
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
+
+                ai_response = self.yandexgpt_service.ask_question(ai_prompt)
+                
+                if ai_response:
+                    # Split AI response if it's too long
+                    if len(ai_response) > 4000:
+                        await self._send_message_safe(update, "🧠 **AI анализ актива:**")
+                        await self._send_long_text(update, ai_response, 'Markdown')
+                    else:
+                        await self._send_message_safe(update, f"🧠 **AI анализ актива:**\n\n{ai_response}", parse_mode='Markdown')
+                else:
+                    await self._send_message_safe(update, "⚠️ AI анализ недоступен. Попробуйте позже.")
+                    
+            except Exception as ai_error:
+                self.logger.error(f"Error getting AI analysis for {symbol}: {ai_error}")
+                await self._send_message_safe(update, f"⚠️ Ошибка при получении AI анализа: {str(ai_error)}")
                 
         except Exception as e:
             await self._send_message_safe(update, f"❌ Ошибка при получении информации об активе: {str(e)}")
+    
+    async def analyze_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /analyze command - full analysis with AI insights"""
+        if not context.args:
+            await self._send_message_safe(update, 
+                "Укажите тикер актива. Пример: /analyze AAPL.US или /analyze SBER.MOEX")
+            return
+        
+        symbol = context.args[0].upper()
+        period = context.args[1] if len(context.args) > 1 else '10Y'
+        
+        await self._send_message_safe(update, f"🧠 Запускаю полный анализ актива {symbol}...")
+        
+        try:
+            # Get basic asset info
+            asset_info = self.asset_service.get_asset_info(symbol)
+            
+            if 'error' in asset_info:
+                await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
+                return
+            
+            # Get price history for charts
+            price_history = self.asset_service.get_asset_price_history(symbol, period)
+            
+            # Send basic info
+            response = f"📊 **Анализ актива: {symbol}**\n\n"
+            response += f"**Название:** {asset_info.get('name', 'N/A')}\n"
+            response += f"**Страна:** {asset_info.get('country', 'N/A')}\n"
+            response += f"**Биржа:** {asset_info.get('exchange', 'N/A')}\n"
+            response += f"**Валюта:** {asset_info.get('currency', 'N/A')}\n"
+            response += f"**Тип:** {asset_info.get('type', 'N/A')}\n"
+            
+            if asset_info.get('current_price') is not None:
+                response += f"**Текущая цена:** {asset_info['current_price']:.2f}\n"
+            
+            if asset_info.get('annual_return') != 'N/A':
+                response += f"**Годовая доходность:** {asset_info['annual_return']}\n"
+            
+            if asset_info.get('total_return') != 'N/A':
+                response += f"**Общая доходность:** {asset_info['total_return']}\n"
+            
+            if asset_info.get('volatility') != 'N/A':
+                response += f"**Волатильность:** {asset_info['volatility']}\n"
+            
+            await self._send_message_safe(update, response, parse_mode='Markdown')
+            
+            # Send charts from price history
+            if 'charts' in price_history and price_history['charts']:
+                await self._send_message_safe(update, "📈 Отправляю графики...")
+                for i, img_bytes in enumerate(price_history['charts']):
+                    try:
+                        caption = f"📊 График {i+1}: {symbol}"
+                        if i == 0:
+                            caption += " - Динамика цен"
+                        elif i == 1:
+                            caption += " - Доходность"
+                        elif i == 2:
+                            caption += " - Волатильность"
+                        
+                        await context.bot.send_photo(
+                            chat_id=update.effective_chat.id,
+                            photo=io.BytesIO(img_bytes),
+                            caption=caption
+                        )
+                    except Exception as chart_error:
+                        self.logger.error(f"Error sending chart {i+1} for {symbol}: {chart_error}")
+                        await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(chart_error)}")
+            
+            # Send chart from asset info if available
+            elif 'chart' in asset_info and asset_info['chart']:
+                try:
+                    await context.bot.send_photo(
+                        chat_id=update.effective_chat.id,
+                        photo=io.BytesIO(asset_info['chart']),
+                        caption=f"📊 График цен {symbol}"
+                    )
+                except Exception as chart_error:
+                    self.logger.error(f"Error sending chart for {symbol}: {chart_error}")
+                    await self._send_message_safe(update, f"⚠️ Не удалось отправить график: {str(chart_error)}")
+            
+            # Get comprehensive AI analysis
+            await self._send_message_safe(update, "🧠 Получаю детальный AI анализ...")
+            
+            try:
+                # Create comprehensive prompt for AI analysis
+                ai_prompt = f"""Проведи комплексный анализ актива {symbol} ({asset_info.get('name', 'N/A')}) на основе следующей информации:
+
+**Основные характеристики:**
+- Страна: {asset_info.get('country', 'N/A')}
+- Биржа: {asset_info.get('exchange', 'N/A')}
+- Валюта: {asset_info.get('currency', 'N/A')}
+- Тип: {asset_info.get('type', 'N/A')}
+- Текущая цена: {asset_info.get('current_price', 'N/A')}
+- Годовая доходность: {asset_info.get('annual_return', 'N/A')}
+- Общая доходность: {asset_info.get('total_return', 'N/A')}
+- Волатильность: {asset_info.get('volatility', 'N/A')}
+
+**Задача:** Предоставь детальный инвестиционный анализ актива, включая:
+
+1. **Общая оценка актива** (2-3 абзаца)
+   - Краткое описание компании/актива
+   - Основные бизнес-модели и источники дохода
+   - Позиция на рынке
+
+2. **Анализ фундаментальных показателей** (2-3 абзаца)
+   - Ключевые финансовые метрики
+   - Сравнение с отраслевыми показателями
+   - Оценка качества активов
+
+3. **Технический анализ** (2-3 абзаца)
+   - Анализ ценовых трендов
+   - Ключевые уровни поддержки и сопротивления
+   - Технические индикаторы
+
+4. **Макроэкономические факторы** (2-3 абзаца)
+   - Влияние экономических циклов
+   - Влияние процентных ставок
+   - Геополитические риски
+
+5. **Риски и возможности** (2-3 абзаца)
+   - Основные риски для инвестора
+   - Потенциальные возможности роста
+   - Сценарии развития
+
+6. **Инвестиционные рекомендации** (2-3 абзаца)
+   - Подходящие инвестиционные стратегии
+   - Временные горизонты
+   - Портфельные рекомендации
+
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов. Включи конкретные цифры, проценты и обоснования."""
+
+                ai_response = self.yandexgpt_service.ask_question(ai_prompt)
+                
+                if ai_response:
+                    # Split AI response if it's too long
+                    if len(ai_response) > 4000:
+                        await self._send_message_safe(update, "🧠 **Детальный AI анализ актива:**")
+                        await self._send_long_text(update, ai_response, 'Markdown')
+                    else:
+                        await self._send_message_safe(update, f"🧠 **Детальный AI анализ актива:**\n\n{ai_response}", parse_mode='Markdown')
+                else:
+                    await self._send_message_safe(update, "⚠️ AI анализ недоступен. Попробуйте позже.")
+                    
+            except Exception as ai_error:
+                self.logger.error(f"Error getting AI analysis for {symbol}: {ai_error}")
+                await self._send_message_safe(update, f"⚠️ Ошибка при получении AI анализа: {str(ai_error)}")
+                
+        except Exception as e:
+            await self._send_message_safe(update, f"❌ Ошибка при анализе актива: {str(e)}")
     
     async def price_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /price command"""
@@ -1070,6 +1267,7 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("test", self.test_command))
         application.add_handler(CommandHandler("testai", self.testai_command))
         application.add_handler(CommandHandler("test_split", self.test_split_command))
+        application.add_handler(CommandHandler("analyze", self.analyze_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
