@@ -312,14 +312,18 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, "📈 Получаю графики цен...")
             
             try:
+                self.logger.info(f"Getting price history for {symbol} with period {period}")
                 price_history = self.asset_service.get_asset_price_history(symbol, period)
                 
                 if 'error' in price_history:
+                    self.logger.error(f"Error in price_history: {price_history['error']}")
                     await self._send_message_safe(update, f"⚠️ {price_history['error']}")
                 else:
+                    self.logger.info(f"Price history received successfully, charts count: {len(price_history.get('charts', []))}")
                     # Send charts
                     charts = price_history.get('charts', [])
                     if charts:
+                        self.logger.info(f"Found {len(charts)} charts, sending them...")
                         for i, img_bytes in enumerate(charts):
                             try:
                                 await context.bot.send_photo(
@@ -341,6 +345,8 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, "🧠 Получаю анализ актива...")
             
             try:
+                self.logger.info(f"Starting AI analysis for {symbol}")
+                
                 # Create prompt for analysis
                 ai_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе следующей информации:
 
@@ -363,6 +369,9 @@ class OkamaFinanceBot:
 
 Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
 
+                self.logger.info(f"AI prompt created, length: {len(ai_prompt)}")
+                self.logger.info(f"Calling yandexgpt_service.ask_question...")
+                
                 ai_response = self.yandexgpt_service.ask_question(ai_prompt)
                 
                 if ai_response:
