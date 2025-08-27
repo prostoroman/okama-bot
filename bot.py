@@ -650,30 +650,68 @@ class OkamaFinanceBot:
 
     async def _send_long_text(self, update: Update, text: str, parse_mode: str = 'Markdown'):
         """Send long text by splitting it into multiple messages if needed"""
-        max_length = 4000  # Leave some buffer for safety
+        # Base Telegram hard limit is 4096 chars for text messages.
+        # We use configured limit if available and keep a safety margin
+        # to account for continuation prefixes and potential formatting.
+        try:
+            max_length = getattr(Config, 'MAX_MESSAGE_LENGTH', 4096)
+        except Exception:
+            max_length = 4096
+        safety_margin = 64
+        per_part_limit = max_length - safety_margin
+        if per_part_limit < 100:
+            per_part_limit = max(100, max_length - 10)
         
         self.logger.info(f"_send_long_text called with text length: {len(text)}")
         
         if len(text) <= max_length:
             # Single message is fine
             self.logger.info(f"Text fits in single message, sending directly")
-            await update.message.reply_text(text, parse_mode=parse_mode)
+            try:
+                await update.message.reply_text(text, parse_mode=parse_mode)
+            except Exception as e:
+                # Fallback if Markdown parsing fails
+                self.logger.warning(f"Failed to send single message with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
+                await update.message.reply_text(text)
         else:
             # Split into multiple messages
             self.logger.info(f"Text too long, splitting into parts")
-            parts = self._split_text_into_parts(text, max_length)
+            parts = self._split_text_into_parts(text, per_part_limit)
             self.logger.info(f"Split into {len(parts)} parts with lengths: {[len(part) for part in parts]}")
             
             for i, part in enumerate(parts, 1):
                 if i == 1:
                     # First part
                     self.logger.info(f"Sending part {i}/{len(parts)} (length: {len(part)})")
-                    await update.message.reply_text(part, parse_mode=parse_mode)
+                    try:
+                        await update.message.reply_text(part, parse_mode=parse_mode)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to send part {i} with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
+                        await update.message.reply_text(part)
                 else:
                     # Subsequent parts
-                    continuation_text = f"📄 Продолжение ({i}/{len(parts)}):\n\n{part}"
+                    continuation_prefix = f"📄 Продолжение ({i}/{len(parts)}):\n\n"
+                    continuation_text = f"{continuation_prefix}{part}"
                     self.logger.info(f"Sending continuation part {i}/{len(parts)} (total length: {len(continuation_text)})")
-                    await update.message.reply_text(continuation_text, parse_mode=parse_mode)
+                    # Ensure we never exceed the hard max length
+                    if len(continuation_text) > max_length:
+                        # Further split this part conservatively
+                        sub_parts = self._split_text_into_parts(part, per_part_limit - len(continuation_prefix))
+                        self.logger.info(f"Continuation part {i} too long after prefix, further split into {len(sub_parts)} sub-parts")
+                        for j, sub in enumerate(sub_parts, 1):
+                            sub_prefix = f"📄 Продолжение ({i}.{j}/{len(parts)}):\n\n"
+                            sub_text = f"{sub_prefix}{sub}"
+                            try:
+                                await update.message.reply_text(sub_text, parse_mode=parse_mode)
+                            except Exception as e:
+                                self.logger.warning(f"Failed to send sub-part {i}.{j} with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
+                                await update.message.reply_text(sub_text)
+                    else:
+                        try:
+                            await update.message.reply_text(continuation_text, parse_mode=parse_mode)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to send continuation part {i} with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
+                            await update.message.reply_text(continuation_text)
     
     def _split_text_into_parts(self, text: str, max_length: int) -> List[str]:
         """Split text into parts that fit within max_length"""
