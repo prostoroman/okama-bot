@@ -232,7 +232,7 @@ class OkamaFinanceBot:
                                 last_analysis_type='asset',
                                 last_period=period)
         
-        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
+        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...", parse_mode='MarkdownV2')
         
         try:
             asset_info = self.asset_service.get_asset_info(symbol)
@@ -268,7 +268,7 @@ class OkamaFinanceBot:
             # Check if asset type suggests dividends and add dividend information
             asset_type = asset_info.get('type', '').lower()
             if any(keyword in asset_type for keyword in ['stock', 'акция', 'share', 'equity']):
-                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...")
+                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...", parse_mode='MarkdownV2')
                 
                 try:
                     dividend_info = self.asset_service.get_asset_dividends(symbol)
@@ -309,7 +309,7 @@ class OkamaFinanceBot:
                     await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}")
             
             # Get and send charts
-            await self._send_message_safe(update, "📈 Получаю графики цен...")
+            await self._send_message_safe(update, "📈 Получаю графики цен...", parse_mode='MarkdownV2')
             
             try:
                 self.logger.info(f"Getting price history for {symbol} with period {period}")
@@ -326,10 +326,18 @@ class OkamaFinanceBot:
                         self.logger.info(f"Found {len(charts)} charts, sending them...")
                         for i, img_bytes in enumerate(charts):
                             try:
+                                # Determine chart type based on index
+                                if i == 0:
+                                    chart_caption = f"📈 Ежедневный график 1Y: {symbol}"
+                                elif i == 1:
+                                    chart_caption = f"📊 Месячный график 10Y: {symbol}"
+                                else:
+                                    chart_caption = f"📈 График {i+1}: {symbol}"
+                                
                                 await context.bot.send_photo(
                                     chat_id=update.effective_chat.id, 
                                     photo=io.BytesIO(img_bytes),
-                                    caption=f"📈 График {i+1}: {symbol} за {period}"
+                                    caption=chart_caption
                                 )
                             except Exception as chart_error:
                                 self.logger.error(f"Error sending chart {i+1}: {chart_error}")
@@ -341,8 +349,58 @@ class OkamaFinanceBot:
                 self.logger.error(f"Error getting charts for {symbol}: {chart_error}")
                 await self._send_message_safe(update, f"⚠️ Ошибка при получении графиков: {str(chart_error)}")
             
+            # Get AI analysis of charts
+            if 'charts' in locals() and charts and len(charts) > 0:
+                await self._send_message_safe(update, "🧠 Получаю AI-анализ графиков цен...", parse_mode='MarkdownV2')
+                
+                try:
+                    # Create prompt for chart analysis
+                    chart_analysis_prompt = f"""Проанализируй графики цен для актива {symbol} на основе следующих данных:
+
+Основная информация:
+• Актив: {symbol} ({asset_info.get('name', 'N/A')})
+• Страна: {asset_info.get('country', 'N/A')}
+• Биржа: {asset_info.get('exchange', 'N/A')}
+• Валюта: {asset_info.get('currency', 'N/A')}
+• Текущая цена: {asset_info.get('current_price', 'N/A')}
+
+Доступные графики:
+• Ежедневный график за 1 год (детальный анализ)
+• Месячный график за 10 лет (долгосрочные тренды)
+
+Задача: Предоставь краткий, но информативный анализ графиков, включая:
+1. Основные тренды и паттерны
+2. Ключевые уровни поддержки и сопротивления
+3. Оценка волатильности
+4. Краткосрочные и долгосрочные перспективы
+5. Основные риски и возможности
+
+Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
+
+                    chart_ai_response = self.yandexgpt_service.ask_question(chart_analysis_prompt)
+                    
+                    if chart_ai_response:
+                        self.logger.info(f"Chart AI response received, length: {len(chart_ai_response)}")
+                        # Split response if it's too long
+                        if len(chart_ai_response) > 4000:
+                            self.logger.info(f"Chart AI response is long ({len(chart_ai_response)} chars), using _send_long_text")
+                            await self._send_message_safe(update, "🧠 AI-анализ графиков:")
+                            await self._send_long_text(update, chart_ai_response, 'MarkdownV2')
+                        else:
+                            self.logger.info(f"Chart AI response is short ({len(chart_ai_response)} chars), sending directly")
+                            # Escape special characters for MarkdownV2
+                            escaped_chart_response = self._escape_markdown_v2(chart_ai_response)
+                            await self._send_message_safe(update, f"🧠 AI-анализ графиков:\n\n{escaped_chart_response}", parse_mode='MarkdownV2')
+                    else:
+                        self.logger.warning("Chart AI response is empty")
+                        await self._send_message_safe(update, "⚠️ AI-анализ графиков недоступен. Попробуйте позже.")
+                        
+                except Exception as chart_ai_error:
+                    self.logger.error(f"Error getting chart analysis for {symbol}: {chart_ai_error}")
+                    await self._send_message_safe(update, f"⚠️ Ошибка при получении AI-анализа графиков: {str(chart_ai_error)}")
+            
             # Get analysis
-            await self._send_message_safe(update, "🧠 Получаю анализ актива...")
+            await self._send_message_safe(update, "🧠 Получаю анализ актива...", parse_mode='MarkdownV2')
             
             try:
                 self.logger.info(f"Starting AI analysis for {symbol}")
