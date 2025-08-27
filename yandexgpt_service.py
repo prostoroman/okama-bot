@@ -316,7 +316,7 @@ Format responses professionally with clear sections, bullet points, and relevant
                     print(f"⚠️ Regular model {model_name} failed: {e}")
                     continue
             
-            return "Не удалось получить анализ изображения. Попробуйте позже."
+            return "Не удалось получить анализ изображения. Попробуйте позже или используйте текстовый запрос."
             
         except Exception as e:
             print(f"❌ Error in ask_question_with_vision: {e}")
@@ -601,6 +601,12 @@ Format responses professionally with clear sections, bullet points, and relevant
             
             if response.status_code == 200:
                 return self._parse_successful_response(response)
+            elif response.status_code == 500:
+                print(f"⚠️ Vision API internal error (status 500): {response.text}")
+                return f"Не удалось проанализировать изображение (внутренняя ошибка сервера). Попробуйте позже или используйте текстовый запрос."
+            elif response.status_code == 400:
+                print(f"⚠️ Vision API bad request (status 400): {response.text}")
+                return f"Не удалось проанализировать изображение (неверный запрос). Попробуйте отправить другое изображение."
             else:
                 print(f"⚠️ Vision API returned status {response.status_code}: {response.text}")
                 # Try alternative vision format
