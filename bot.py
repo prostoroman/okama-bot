@@ -367,6 +367,27 @@ class OkamaFinanceBot:
         except Exception as e:
             await self._send_message_safe(update, f"❌ Тест разбивки не прошел: {str(e)}")
     
+    async def chat_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /chat command"""
+        if not context.args:
+            await self._send_message_safe(update, 
+                "💬 **AI-советник по финансам**\n\n"
+                "Задайте мне любой вопрос по финансам:\n\n"
+                "**Примеры вопросов:**\n"
+                "• Что такое диверсификация?\n"
+                "• Как рассчитать коэффициент Шарпа?\n"
+                "• Объясни efficient frontier\n"
+                "• Лучшие практики ребалансировки\n"
+                "• Как управлять рисками?\n\n"
+                "**Использование:**\n"
+                "/chat [ваш вопрос]\n\n"
+                "Или просто напишите вопрос в чат!")
+            return
+        
+        # Get the question from command arguments
+        question = " ".join(context.args)
+        await self._handle_chat(update, question)
+    
     async def _handle_chat(self, update: Update, user_message: str):
         """Handle AI chat requests"""
         try:
