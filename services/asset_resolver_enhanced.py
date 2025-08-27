@@ -137,17 +137,16 @@ class EnhancedAssetResolver:
         )
     
     def _guess_ticker(self, raw_asset: str) -> Optional[str]:
-        """Угадывает тикер на основе названия"""
+        """Угадывает тикер на основе названия.
+        Возвращает только очевидные варианты .US для коротких тикеров длиной 1-4 символа.
+        """
         asset_upper = raw_asset.upper()
         
         # Если тикер из 1-4 букв — предполагаем .US
-        if len(asset_upper) <= 4 and asset_upper.isalpha():
+        if asset_upper.isalpha() and 1 <= len(asset_upper) <= 4:
             return f"{asset_upper}.US"
         
-        # Если тикер из 5+ букв — ищем как есть
-        if len(asset_upper) > 4 and asset_upper.isalpha():
-            return asset_upper
-        
+        # Для более длинных строк не пытаемся угадывать, чтобы не ловить корпоративные имена вроде 'APPLE'
         return None
     
     def _get_asset_class(self, ticker: str) -> str:
