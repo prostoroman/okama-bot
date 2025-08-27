@@ -261,7 +261,17 @@ Format responses professionally with clear sections, bullet points, and relevant
     
     def ask_question(self, question: str) -> str:
         """Simple method to ask a question to YandexGPT (alias for get_financial_advice)"""
-        return self.get_financial_advice(question)
+        print(f"🔍 YandexGPTService.ask_question called with question: {question[:100]}...")
+        print(f"🔑 API Key configured: {'Yes' if self.api_key else 'No'}")
+        print(f"📁 Folder ID configured: {'Yes' if self.folder_id else 'No'}")
+        
+        try:
+            result = self.get_financial_advice(question)
+            print(f"✅ YandexGPT response received, length: {len(result) if result else 0}")
+            return result
+        except Exception as e:
+            print(f"❌ Error in ask_question: {e}")
+            return f"Ошибка при получении AI ответа: {str(e)}"
     
     def process_freeform_command(self, user_message: str) -> Dict:
         """Process free-form commands and convert instrument names to Okama format"""
@@ -390,9 +400,14 @@ Format responses professionally with clear sections, bullet points, and relevant
     
     def _call_yandex_api(self, system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> str:
         """Make a call to YandexGPT API with robust fallback to different models"""
+        print(f"🌐 YandexGPT API call initiated")
+        print(f"🔑 API Key: {'Yes' if self.api_key else 'No'}")
+        print(f"📁 Folder ID: {'Yes' if self.folder_id else 'No'}")
+        
         try:
             # Check if API key and folder ID are configured
             if not self.api_key or not self.folder_id:
+                print("❌ Missing API configuration")
                 return "AI service is not properly configured. Please check your API settings."
             
             headers = {
