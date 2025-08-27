@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import sys
 import logging
 import os
@@ -1035,8 +1038,8 @@ class OkamaFinanceBot:
                 response += f"**Период:** {fallback_info.get('start_date', 'N/A')} - {fallback_info.get('end_date', 'N/A')}\n"
                 response += f"**Точки данных:** {fallback_info.get('data_points', 'N/A')}\n"
             
-            # Send text response first with automatic splitting if needed
-            await self._send_long_text(update, response, parse_mode='Markdown')
+            # Send text response
+            await update.message.reply_text(response, parse_mode='Markdown')
             
             # Send charts and get AI analysis
             await self._send_charts_with_ai_analysis(update, symbol, period, charts_info, price_data_info)
@@ -1109,9 +1112,8 @@ class OkamaFinanceBot:
             
             if ai_response:
                 self.logger.info(f"AI response received, length: {len(ai_response)}")
-                # Send AI analysis with automatic splitting if needed
-                await self._send_long_text(
-                    update, 
+                # Send AI analysis
+                await update.message.reply_text(
                     f"🧠 **AI анализ {symbol}**\n\n{ai_response}",
                     parse_mode='Markdown'
                 )
@@ -1120,8 +1122,7 @@ class OkamaFinanceBot:
                 # Fallback: provide basic analysis based on available data
                 fallback_analysis = self._create_fallback_analysis(analysis_data)
                 self.logger.info(f"Fallback analysis created, length: {len(fallback_analysis)}")
-                await self._send_long_text(
-                    update,
+                await update.message.reply_text(
                     f"🧠 **Анализ {symbol}** (базовый)\n\n{fallback_analysis}",
                     parse_mode='Markdown'
                 )
