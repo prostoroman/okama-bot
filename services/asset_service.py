@@ -36,12 +36,12 @@ class AssetService:
     
     def resolve_symbol_or_isin(self, identifier: str) -> Dict[str, Any]:
         """
-        Resolve user-provided identifier to an okama-compatible ticker.
+        Resolve user-provided identifier to a value acceptable by okama.
 
         Supports:
         - Ticker in okama format (e.g., 'AAPL.US', 'SBER.MOEX')
         - Plain ticker (e.g., 'AAPL') – returned uppercased as-is
-        - ISIN (e.g., 'US0378331005') – tries to resolve via MOEX ISS for Russian listings
+        - ISIN (e.g., 'US0378331005') – only format-validated and passed through as-is
 
         Returns dict: { 'symbol': str, 'type': 'ticker'|'isin', 'source': str }
         or { 'error': str } on failure.
@@ -69,18 +69,8 @@ class AssetService:
                 return mid.isalnum()
 
             if _looks_like_isin(upper):
-                # Try resolve via MOEX ISS (works for instruments listed on MOEX)
-                moex_symbol = self._try_resolve_isin_via_moex(upper)
-                if moex_symbol:
-                    return { 'symbol': moex_symbol, 'type': 'isin', 'source': 'moex' }
-                else:
-                    return {
-                        'error': (
-                            f"Не удалось определить тикер по ISIN {upper}. "
-                            "Поддерживается разрешение ISIN только для бумаг, торгующихся на MOEX. "
-                            "Попробуйте указать тикер в формате AAPL.US или SBER.MOEX."
-                        )
-                    }
+                # Pass ISIN directly to okama without external lookups
+                return { 'symbol': upper, 'type': 'isin', 'source': 'input' }
 
             # Plain ticker without suffix – return upper-case; upstream may guess suffix
             return { 'symbol': upper, 'type': 'ticker', 'source': 'plain' }
