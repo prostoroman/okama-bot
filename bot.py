@@ -136,12 +136,7 @@ class OkamaFinanceBot:
     
     def _escape_markdown_v2(self, text: str) -> str:
         """Экранирование специальных символов для MarkdownV2"""
-        # Экранируем только самые важные символы
-        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '!']
-        
-        for char in escape_chars:
-            text = text.replace(char, f'\\{char}')
-        
+        # Убираем экранирование, возвращаем текст как есть
         return text
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,7 +207,7 @@ class OkamaFinanceBot:
 
 Начните с простого запроса или используйте команды выше!"""
 
-        await self._send_message_safe(update, welcome_message, parse_mode='MarkdownV2')
+        await self._send_message_safe(update, welcome_message)
     
 
     async def asset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -385,12 +380,10 @@ class OkamaFinanceBot:
                         if len(chart_ai_response) > 4000:
                             self.logger.info(f"Chart AI response is long ({len(chart_ai_response)} chars), using _send_long_text")
                             await self._send_message_safe(update, "🧠 AI-анализ графиков:")
-                            await self._send_long_text(update, chart_ai_response, 'MarkdownV2')
+                            await self._send_long_text(update, chart_ai_response)
                         else:
                             self.logger.info(f"Chart AI response is short ({len(chart_ai_response)} chars), sending directly")
-                            # Escape special characters for MarkdownV2
-                            escaped_chart_response = self._escape_markdown_v2(chart_ai_response)
-                            await self._send_message_safe(update, f"🧠 AI-анализ графиков:\n\n{escaped_chart_response}", parse_mode='MarkdownV2')
+                            await self._send_message_safe(update, f"🧠 AI-анализ графиков:\n\n{chart_ai_response}")
                     else:
                         self.logger.warning("Chart AI response is empty")
                         await self._send_message_safe(update, "⚠️ AI-анализ графиков недоступен. Попробуйте позже.")
@@ -438,12 +431,10 @@ class OkamaFinanceBot:
                     if len(ai_response) > 4000:
                         self.logger.info(f"AI response is long ({len(ai_response)} chars), using _send_long_text")
                         await self._send_message_safe(update, "🧠 Анализ актива:")
-                        await self._send_long_text(update, ai_response, 'MarkdownV2')
+                        await self._send_long_text(update, ai_response)
                     else:
                         self.logger.info(f"AI response is short ({len(ai_response)} chars), sending directly")
-                        # Escape special characters for MarkdownV2
-                        escaped_response = self._escape_markdown_v2(ai_response)
-                        await self._send_message_safe(update, f"🧠 Анализ актива:\n\n{escaped_response}", parse_mode='MarkdownV2')
+                        await self._send_message_safe(update, f"🧠 Анализ актива:\n\n{ai_response}")
                 else:
                     self.logger.warning("AI response is empty")
                     await self._send_message_safe(update, "⚠️ Анализ недоступен. Попробуйте позже.")
@@ -589,7 +580,7 @@ class OkamaFinanceBot:
                 "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
             )
 
-    async def _send_long_text(self, update: Update, text: str, parse_mode: str = 'MarkdownV2'):
+    async def _send_long_text(self, update: Update, text: str, parse_mode: str = None):
         """Send long text by splitting it into multiple messages if needed"""
         # Base Telegram hard limit is 4096 chars for text messages.
         # We use configured limit if available and keep a safety margin
@@ -603,12 +594,7 @@ class OkamaFinanceBot:
         if len(text) <= max_length:
             # Single message is fine
             self.logger.info(f"Text fits in single message, sending directly")
-            try:
-                await update.message.reply_text(text, parse_mode=parse_mode)
-            except Exception as e:
-                # Fallback if MarkdownV2 parsing fails
-                self.logger.warning(f"Failed to send single message with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
-                await update.message.reply_text(text)
+            await update.message.reply_text(text)
         else:
             # Split into multiple messages
             self.logger.info(f"Text too long ({len(text)} chars), splitting into parts")
@@ -625,13 +611,13 @@ class OkamaFinanceBot:
                     if i == 1:
                         # First part
                         self.logger.info(f"Sending first part")
-                        await update.message.reply_text(part, parse_mode=parse_mode)
+                        await update.message.reply_text(part)
                     else:
                         # Subsequent parts
                         continuation_prefix = f"📄 Продолжение ({i}/{len(parts)}):\n\n"
                         continuation_text = f"{continuation_prefix}{part}"
                         self.logger.info(f"Sending continuation part {i}")
-                        await update.message.reply_text(continuation_text, parse_mode=parse_mode)
+                        await update.message.reply_text(continuation_text)
                         
                         # Add small delay between messages to avoid rate limiting
                         if i < len(parts):
@@ -639,24 +625,9 @@ class OkamaFinanceBot:
                             await asyncio.sleep(0.5)
                             
                 except Exception as e:
-                    self.logger.warning(f"Failed to send part {i} with parse_mode={parse_mode}: {e}. Retrying without parse mode.")
-                    try:
-                        if i == 1:
-                            await update.message.reply_text(part)
-                        else:
-                            continuation_prefix = f"📄 Продолжение ({i}/{len(parts)}):\n\n"
-                            continuation_text = f"{continuation_prefix}{part}"
-                            await update.message.reply_text(continuation_text)
-                            
-                            # Add small delay between messages to avoid rate limiting
-                            if i < len(parts):
-                                import asyncio
-                                await asyncio.sleep(0.5)
-                                
-                    except Exception as fallback_error:
-                        self.logger.error(f"Failed to send part {i} even without parse mode: {fallback_error}")
-                        # Send as plain text as last resort
-                        await update.message.reply_text(f"Часть {i} из {len(parts)}: {part[:1000]}...")
+                    self.logger.error(f"Failed to send part {i}: {e}")
+                    # Send as plain text as last resort
+                    await update.message.reply_text(f"Часть {i} из {len(parts)}: {part[:1000]}...")
     
     def _split_text_into_parts(self, text: str, max_length: int) -> List[str]:
         """Split text into parts that fit within max_length"""
