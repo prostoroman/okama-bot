@@ -232,7 +232,7 @@ class OkamaFinanceBot:
                                 last_analysis_type='asset',
                                 last_period=period)
         
-        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...", parse_mode='MarkdownV2')
+        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
         
         try:
             asset_info = self.asset_service.get_asset_info(symbol)
@@ -268,7 +268,7 @@ class OkamaFinanceBot:
             # Check if asset type suggests dividends and add dividend information
             asset_type = asset_info.get('type', '').lower()
             if any(keyword in asset_type for keyword in ['stock', 'акция', 'share', 'equity']):
-                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...", parse_mode='MarkdownV2')
+                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...")
                 
                 try:
                     dividend_info = self.asset_service.get_asset_dividends(symbol)
@@ -309,7 +309,7 @@ class OkamaFinanceBot:
                     await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}", parse_mode='MarkdownV2')
             
             # Get and send charts
-            await self._send_message_safe(update, "📈 Получаю графики цен...", parse_mode='MarkdownV2')
+            await self._send_message_safe(update, "📈 Получаю графики цен...")
             
             try:
                 price_history = self.asset_service.get_asset_price_history(symbol, period)
@@ -325,7 +325,7 @@ class OkamaFinanceBot:
                                 await context.bot.send_photo(
                                     chat_id=update.effective_chat.id, 
                                     photo=io.BytesIO(img_bytes),
-                                    caption=f"📈 График {i+1}: {symbol} ({period})"
+                                    caption=f"📈 График {i+1}: {symbol} за {period}"
                                 )
                             except Exception as chart_error:
                                 self.logger.error(f"Error sending chart {i+1}: {chart_error}")
@@ -338,7 +338,7 @@ class OkamaFinanceBot:
                 await self._send_message_safe(update, f"⚠️ Ошибка при получении графиков: {str(chart_error)}", parse_mode='MarkdownV2')
             
             # Get analysis
-            await self._send_message_safe(update, "🧠 Получаю анализ актива...", parse_mode='MarkdownV2')
+            await self._send_message_safe(update, "🧠 Получаю анализ актива...")
             
             try:
                 # Create prompt for analysis
@@ -374,7 +374,9 @@ class OkamaFinanceBot:
                         await self._send_long_text(update, ai_response, 'MarkdownV2')
                     else:
                         self.logger.info(f"AI response is short ({len(ai_response)} chars), sending directly")
-                        await self._send_message_safe(update, f"🧠 Анализ актива:\n\n{ai_response}", parse_mode='MarkdownV2')
+                        # Escape special characters for MarkdownV2
+                        escaped_response = self._escape_markdown_v2(ai_response)
+                        await self._send_message_safe(update, f"🧠 Анализ актива:\n\n{escaped_response}", parse_mode='MarkdownV2')
                 else:
                     self.logger.warning("AI response is empty")
                     await self._send_message_safe(update, "⚠️ Анализ недоступен. Попробуйте позже.")
@@ -391,91 +393,6 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка при получении информации об активе: {str(e)}", parse_mode='MarkdownV2')
     
 
-
-    
-
-            
-            # Add many paragraphs to make it long
-            for i in range(1, 101):
-                long_message += f"**Параграф {i}:**\n"
-                long_message += f"Это тестовый параграф номер {i} для проверки работы механизма разбиения сообщений. "
-                long_message += f"Каждый параграф содержит достаточно текста, чтобы в совокупности превысить лимит Telegram в 4000 символов. "
-                long_message += f"Механизм должен автоматически разбить это сообщение на несколько частей и отправить их последовательно.\n\n"
-            
-            long_message += "**Конец тестового сообщения**\n\n"
-            long_message += "Если вы видите это сообщение разбитым на несколько частей, значит механизм работает корректно! 🎉"
-            
-            await self._send_message_safe(update, long_message)
-            
-        except Exception as e:
-            await self._send_message_safe(update, f"❌ Тест разбивки не прошел: {str(e)}")
-    
-
-            if charts:
-                await self._send_charts_with_ai_analysis(update, symbol, period, charts, price_data_info)
-            else:
-                await self._send_message_safe(update, "⚠️ Не удалось создать графики цен")
-                
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error in _get_asset_info_with_chart: {error_msg}")
-            await self._send_message_safe(update, f"❌ Ошибка при получении информации: {error_msg}")
-    
-
-    
-
-        """Get AI analysis for the charts from YandexGPT"""
-        try:
-            await update.message.reply_text("🧠 Получаю AI анализ графиков...")
-            
-            # Prepare data for AI analysis
-            analysis_data = {
-                'symbol': symbol,
-                'period': period,
-                'charts_available': charts_sent,
-                'price_data': price_data_info
-            }
-            
-            # Create analysis prompt
-            prompt = self._create_chart_analysis_prompt(analysis_data)
-            self.logger.info(f"Created AI analysis prompt, length: {len(prompt)}")
-            
-            # Get AI response
-            ai_response = self._get_yandexgpt_analysis(prompt)
-            
-            if ai_response:
-                self.logger.info(f"AI response received, length: {len(ai_response)}")
-                # Send AI analysis
-                await update.message.reply_text(
-                    f"🧠 **AI анализ {symbol}**\n\n{ai_response}",
-                    parse_mode='Markdown'
-                )
-            else:
-                self.logger.warning("AI response is empty, using fallback analysis")
-                # Fallback: provide basic analysis based on available data
-                fallback_analysis = self._create_fallback_analysis(analysis_data)
-                self.logger.info(f"Fallback analysis created, length: {len(fallback_analysis)}")
-                await update.message.reply_text(
-                    f"🧠 **Анализ {symbol}** (базовый)\n\n{fallback_analysis}",
-                    parse_mode='Markdown'
-                )
-                await update.message.reply_text(
-                    "⚠️ AI анализ недоступен. Показан базовый анализ на основе данных."
-                )
-                
-        except Exception as e:
-            error_msg = str(e)
-            self.logger.error(f"Error in _get_ai_analysis_for_charts: {error_msg}")
-            await update.message.reply_text(f"❌ Ошибка при получении AI анализа: {error_msg}")
-    
-
-    
-
-
-
-    
-
-    
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages using Okama Financial Brain"""
         user_message = update.message.text.strip()
