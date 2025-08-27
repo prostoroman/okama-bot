@@ -6,7 +6,7 @@ using the Okama library.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 from datetime import datetime
 import okama as ok
 import io
@@ -34,7 +34,7 @@ class AssetService:
             'LSE': ['VOD.LSE', 'HSBA.LSE', 'BP.LSE']
         }
     
-    def resolve_symbol_or_isin(self, identifier: str) -> Dict[str, Any]:
+    def resolve_symbol_or_isin(self, identifier: str) -> Dict[str, Union[str, Any]]:
         """
         Resolve user-provided identifier to an okama-compatible ticker.
 
@@ -165,7 +165,7 @@ class AssetService:
         else:
             return "Попробуйте популярные активы: VOO.US, SPY.US, RGBITR.INDX, GC.COMM"
     
-    def get_asset_info(self, symbol: str) -> Dict[str, Any]:
+    def get_asset_info(self, symbol: str) -> Dict[str, Union[str, Any]]:
         """
         Get comprehensive asset information
         
@@ -329,7 +329,7 @@ class AssetService:
             else:
                 return {'error': f"Ошибка при получении информации об активе: {error_msg}"}
     
-    def get_asset_price(self, symbol: str) -> Dict[str, Any]:
+    def get_asset_price(self, symbol: str) -> Dict[str, Union[str, Any]]:
         """
         Get current asset price
         
@@ -354,7 +354,7 @@ class AssetService:
             price_data = asset.price
             
             # Helper: try MOEX ISS fallback before returning an error
-            def _maybe_moex_fallback(error_message: str) -> Dict[str, Any]:
+            def _maybe_moex_fallback(error_message: str) -> Dict[str, Union[str, Any]]:
                 if symbol.upper().endswith('.MOEX'):
                     fallback = self._fetch_moex_price(symbol)
                     if fallback is not None:
@@ -369,6 +369,43 @@ class AssetService:
             # Check if price_data is valid and has data
             if price_data is None:
                 return _maybe_moex_fallback('No price data available')
+            
+            # Handle NaN values - try to get price from adj_close or close_monthly
+            if isinstance(price_data, float) and (price_data != price_data or price_data in (float('inf'), float('-inf'))):
+                # price_data is NaN or infinite, try fallback to adj_close
+                if hasattr(asset, 'adj_close') and asset.adj_close is not None and len(asset.adj_close) > 0:
+                    try:
+                        # Get last valid price from adj_close
+                        adj_close_clean = asset.adj_close.dropna()
+                        if len(adj_close_clean) > 0:
+                            latest_price = adj_close_clean.iloc[-1]
+                            latest_date = adj_close_clean.index[-1]
+                            return {
+                                'price': float(latest_price),
+                                'currency': getattr(asset, 'currency', ''),
+                                'timestamp': str(latest_date)
+                            }
+                    except Exception as e:
+                        self.logger.warning(f"Failed to get price from adj_close for {symbol}: {e}")
+                
+                # If adj_close failed, try close_monthly
+                if hasattr(asset, 'close_monthly') and asset.close_monthly is not None and len(asset.close_monthly) > 0:
+                    try:
+                        # Get last valid price from close_monthly
+                        monthly_clean = asset.close_monthly.dropna()
+                        if len(monthly_clean) > 0:
+                            latest_price = monthly_clean.iloc[-1]
+                            latest_date = monthly_clean.index[-1]
+                            return {
+                                'price': float(latest_price),
+                                'currency': getattr(asset, 'currency', ''),
+                                'timestamp': str(latest_date)
+                            }
+                    except Exception as e:
+                        self.logger.warning(f"Failed to get price from close_monthly for {symbol}: {e}")
+                
+                # If all fallbacks failed, try MOEX ISS
+                return _maybe_moex_fallback('Price data is NaN, fallbacks failed')
             
             # Handle different types of price data
             if hasattr(price_data, 'iloc') and hasattr(price_data, 'index'):
@@ -557,7 +594,7 @@ class AssetService:
             else:
                 return {'error': f"Ошибка при получении цены: {error_msg}"}
     
-    def get_asset_price_history(self, symbol: str, period: str = '1Y') -> Dict[str, Any]:
+    def get_asset_price_history(self, symbol: str, period: str = '1Y') -> Dict[str, Union[str, Any]]:
         """
         Get asset price history and create two price charts
         
@@ -817,7 +854,7 @@ class AssetService:
             self.logger.error(f"Error creating price chart: {e}")
             return None
     
-    def _fetch_moex_price(self, symbol: str) -> Optional[tuple[float, str]]:
+    def _fetch_moex_price(self, symbol: str) -> Optional[tuple]:
         """
         Fetch current price from Moscow Exchange ISS API as a fallback.
         Returns (price, timestamp_str) or None if not available.
@@ -914,7 +951,7 @@ class AssetService:
         except Exception:
             return None
     
-    def get_asset_dividends(self, symbol: str) -> Dict[str, Any]:
+    def get_asset_dividends(self, symbol: str) -> Dict[str, Union[str, Any]]:
         """
         Get asset dividend history
         
