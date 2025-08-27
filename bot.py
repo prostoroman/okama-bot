@@ -238,7 +238,7 @@ class OkamaFinanceBot:
             asset_info = self.asset_service.get_asset_info(symbol)
             
             if 'error' in asset_info:
-                await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}", parse_mode='MarkdownV2')
+                await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
                 return
             
             # Format asset info
@@ -263,7 +263,7 @@ class OkamaFinanceBot:
             if asset_info.get('volatility') != 'N/A':
                 response += f"Волатильность: {asset_info['volatility']}\n"
             
-            await self._send_message_safe(update, response, parse_mode='MarkdownV2')
+            await self._send_message_safe(update, response)
             
             # Check if asset type suggests dividends and add dividend information
             asset_type = asset_info.get('type', '').lower()
@@ -294,19 +294,19 @@ class OkamaFinanceBot:
                                 # Calculate yield if we have current price
                                 if current_price and current_price > 0:
                                     yield_pct = (amount / current_price) * 100
-                                    dividend_response += f" \\(доходность: {yield_pct:.2f}%\\)"
+                                    dividend_response += f" (доходность: {yield_pct:.2f}%)"
                                 
                                 dividend_response += "\n"
                             
-                            await self._send_message_safe(update, dividend_response, parse_mode='MarkdownV2')
+                            await self._send_message_safe(update, dividend_response)
                         else:
-                            await self._send_message_safe(update, "💵 Дивиденды не выплачивались в указанный период", parse_mode='MarkdownV2')
+                            await self._send_message_safe(update, "💵 Дивиденды не выплачивались в указанный период")
                     else:
-                        await self._send_message_safe(update, "💵 Информация о дивидендах недоступна", parse_mode='MarkdownV2')
+                        await self._send_message_safe(update, "💵 Информация о дивидендах недоступна")
                         
                 except Exception as div_error:
                     self.logger.error(f"Error getting dividends for {symbol}: {div_error}")
-                    await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}", parse_mode='MarkdownV2')
+                    await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}")
             
             # Get and send charts
             await self._send_message_safe(update, "📈 Получаю графики цен...")
@@ -315,7 +315,7 @@ class OkamaFinanceBot:
                 price_history = self.asset_service.get_asset_price_history(symbol, period)
                 
                 if 'error' in price_history:
-                    await self._send_message_safe(update, f"⚠️ {price_history['error']}", parse_mode='MarkdownV2')
+                    await self._send_message_safe(update, f"⚠️ {price_history['error']}")
                 else:
                     # Send charts
                     charts = price_history.get('charts', [])
@@ -329,13 +329,13 @@ class OkamaFinanceBot:
                                 )
                             except Exception as chart_error:
                                 self.logger.error(f"Error sending chart {i+1}: {chart_error}")
-                                await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(chart_error)}", parse_mode='MarkdownV2')
+                                await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(chart_error)}")
                     else:
-                        await self._send_message_safe(update, "⚠️ Не удалось создать графики цен", parse_mode='MarkdownV2')
+                        await self._send_message_safe(update, "⚠️ Не удалось создать графики цен")
                         
             except Exception as chart_error:
                 self.logger.error(f"Error getting charts for {symbol}: {chart_error}")
-                await self._send_message_safe(update, f"⚠️ Ошибка при получении графиков: {str(chart_error)}", parse_mode='MarkdownV2')
+                await self._send_message_safe(update, f"⚠️ Ошибка при получении графиков: {str(chart_error)}")
             
             # Get analysis
             await self._send_message_safe(update, "🧠 Получаю анализ актива...")
@@ -383,14 +383,14 @@ class OkamaFinanceBot:
                     
             except Exception as ai_error:
                 self.logger.error(f"Error getting analysis for {symbol}: {ai_error}")
-                await self._send_message_safe(update, f"⚠️ Ошибка при получении анализа: {str(ai_error)}", parse_mode='MarkdownV2')
+                await self._send_message_safe(update, f"⚠️ Ошибка при получении анализа: {str(ai_error)}")
             
             # Update conversation history
             self._add_to_conversation_history(user_id, f"/asset {symbol} {period}", 
                                            f"Asset analysis completed for {symbol}")
                 
         except Exception as e:
-            await self._send_message_safe(update, f"❌ Ошибка при получении информации об активе: {str(e)}", parse_mode='MarkdownV2')
+            await self._send_message_safe(update, f"❌ Ошибка при получении информации об активе: {str(e)}")
     
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
