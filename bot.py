@@ -63,6 +63,12 @@ class OkamaFinanceBot:
         # User session storage
         self.user_sessions = {}
         
+        # User history management
+        self.user_history: Dict[int, List[dict]] = {}       # chat_id -> list[{"role": "...", "parts": [str]}]
+        self.context_enabled: Dict[int, bool] = {}          # chat_id -> bool
+        self.MAX_HISTORY_MESSAGES = 20
+        self.MAX_TELEGRAM_CHUNK = 4000
+        
     def _get_user_context(self, user_id: int) -> Dict[str, Any]:
         """Получить контекст пользователя"""
         if user_id not in self.user_sessions:
@@ -101,15 +107,41 @@ class OkamaFinanceBot:
         if context['last_assets']:
             summary.append(f"Последние активы: {', '.join(context['last_assets'][-3:])}")
         
-        if context['last_analysis_type']:
-            summary.append(f"Последний анализ: {context['last_analysis_type']}")
-        
         if context['last_period']:
             summary.append(f"Период: {context['last_period']}")
         
         return "; ".join(summary) if summary else "Новый пользователь"
     
-    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'MarkdownV2'):
+    # =======================
+    # Вспомогательные функции для истории
+    # =======================
+    def _init_chat(self, chat_id: int):
+        if chat_id not in self.user_history:
+            self.user_history[chat_id] = []
+        if chat_id not in self.context_enabled:
+            self.context_enabled[chat_id] = True
+
+    def _history_trim(self, chat_id: int):
+        if len(self.user_history[chat_id]) > self.MAX_HISTORY_MESSAGES:
+            self.user_history[chat_id] = self.user_history[chat_id][-self.MAX_HISTORY_MESSAGES:]
+
+    def history_append(self, chat_id: int, role: str, text: str):
+        if not self.context_enabled.get(chat_id, True):
+            return
+        self.user_history[chat_id].append({"role": role, "parts": [text]})
+        self._history_trim(chat_id)
+
+    def _split_text(self, text: str):
+        for i in range(0, len(text), self.MAX_TELEGRAM_CHUNK):
+            yield text[i:i + self.MAX_TELEGRAM_CHUNK]
+
+    async def send_long_message(self, update: Update, text: str):
+        if not text:
+            text = "Пустой ответ."
+        for chunk in self._split_text(text):
+            await update.message.reply_text(chunk)
+    
+    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None):
         """Безопасная отправка сообщения с автоматическим разбиением на части"""
         try:
             # Проверяем, что text действительно является строкой
@@ -117,15 +149,11 @@ class OkamaFinanceBot:
                 self.logger.warning(f"_send_message_safe received non-string data: {type(text)}")
                 text = str(text)
             
-            # Экранируем специальные символы для MarkdownV2
-            if parse_mode == 'MarkdownV2':
-                text = self._escape_markdown_v2(text)
-            
             # Проверяем длину строки
             if len(text) <= 4000:
                 await update.message.reply_text(text, parse_mode=parse_mode)
             else:
-                await self._send_long_text(update, text, parse_mode)
+                await self.send_long_message(update, text)
         except Exception as e:
             self.logger.error(f"Error in _send_message_safe: {e}")
             # Fallback: попробуем отправить как обычный текст
@@ -133,11 +161,6 @@ class OkamaFinanceBot:
                 await update.message.reply_text(f"Ошибка форматирования: {str(text)[:1000]}...")
             except:
                 await update.message.reply_text("Произошла ошибка при отправке сообщения")
-    
-    def _escape_markdown_v2(self, text: str) -> str:
-        """Экранирование специальных символов для MarkdownV2"""
-        # Убираем экранирование, возвращаем текст как есть
-        return text
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with full help"""
@@ -214,7 +237,7 @@ class OkamaFinanceBot:
         """Handle /asset command"""
         if not context.args:
             await self._send_message_safe(update, 
-                "Укажите тикер актива. Пример: /asset AAPL.US или /asset SBER.MOEX", parse_mode='MarkdownV2')
+                "Укажите тикер актива. Пример: /asset AAPL.US или /asset SBER.MOEX")
             return
         
         symbol = context.args[0].upper()
@@ -224,7 +247,6 @@ class OkamaFinanceBot:
         user_id = update.effective_user.id
         self._update_user_context(user_id, 
                                 last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []),
-                                last_analysis_type='asset',
                                 last_period=period)
         
         await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
@@ -346,7 +368,7 @@ class OkamaFinanceBot:
             
             # Get AI analysis of charts
             if 'charts' in locals() and charts and len(charts) > 0:
-                await self._send_message_safe(update, "🧠 Получаю AI-анализ графиков цен...", parse_mode='MarkdownV2')
+                await self._send_message_safe(update, "🧠 Получаю AI-анализ графиков цен...")
                 
                 try:
                     # Create prompt for chart analysis
@@ -364,6 +386,7 @@ class OkamaFinanceBot:
 • Месячный график за 10 лет (долгосрочные тренды)
 
 Задача: Предоставь краткий, но информативный анализ графиков, включая:
+1. Краткую справку о бизнесе компании и отрасли (2-3 предложения)
 1. Основные тренды и паттерны
 2. Ключевые уровни поддержки и сопротивления
 3. Оценка волатильности
@@ -378,9 +401,9 @@ class OkamaFinanceBot:
                         self.logger.info(f"Chart AI response received, length: {len(chart_ai_response)}")
                         # Split response if it's too long
                         if len(chart_ai_response) > 4000:
-                            self.logger.info(f"Chart AI response is long ({len(chart_ai_response)} chars), using _send_long_text")
+                            self.logger.info(f"Chart AI response is long ({len(chart_ai_response)} chars), using send_long_message")
                             await self._send_message_safe(update, "🧠 AI-анализ графиков:")
-                            await self._send_long_text(update, chart_ai_response)
+                            await self.send_long_message(update, chart_ai_response)
                         else:
                             self.logger.info(f"Chart AI response is short ({len(chart_ai_response)} chars), sending directly")
                             await self._send_message_safe(update, f"🧠 AI-анализ графиков:\n\n{chart_ai_response}")
@@ -391,65 +414,11 @@ class OkamaFinanceBot:
                 except Exception as chart_ai_error:
                     self.logger.error(f"Error getting chart analysis for {symbol}: {chart_ai_error}")
                     await self._send_message_safe(update, f"⚠️ Ошибка при получении AI-анализа графиков: {str(chart_ai_error)}")
-            
-            # Get analysis
-            await self._send_message_safe(update, "🧠 Получаю анализ актива...")
-            
-            try:
-                self.logger.info(f"Starting AI analysis for {symbol}")
-                
-                # Create prompt for analysis
-                ai_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе следующей информации:
-
-Основные характеристики:
-• Страна: {asset_info.get('country', 'N/A')}
-• Биржа: {asset_info.get('exchange', 'N/A')}
-• Валюта: {asset_info.get('currency', 'N/A')}
-• Тип: {asset_info.get('type', 'N/A')}
-• Текущая цена: {asset_info.get('current_price', 'N/A')}
-• Годовая доходность: {asset_info.get('annual_return', 'N/A')}
-• Общая доходность: {asset_info.get('total_return', 'N/A')}
-• Волатильность: {asset_info.get('volatility', 'N/A')}
-
-Задача: Предоставь краткий, но информативный анализ актива, включая:
-1. Краткую справку о бизнесе компании и отрасли (2-3 предложения)
-2. Основные факторы, влияющие на его стоимость
-3. Краткосрочные и долгосрочные перспективы
-4. Основные риски
-5. Рекомендации для инвесторов
-
-Анализ должен быть на русском языке, профессиональным, но понятным для обычных инвесторов."""
-
-                self.logger.info(f"AI prompt created, length: {len(ai_prompt)}")
-                self.logger.info(f"Calling yandexgpt_service.ask_question...")
-                
-                ai_response = self.yandexgpt_service.ask_question(ai_prompt)
-                
-                if ai_response:
-                    self.logger.info(f"AI response received, length: {len(ai_response)}")
-                    # Split response if it's too long
-                    if len(ai_response) > 4000:
-                        self.logger.info(f"AI response is long ({len(ai_response)} chars), using _send_long_text")
-                        await self._send_message_safe(update, "🧠 Анализ актива:")
-                        await self._send_long_text(update, ai_response)
-                    else:
-                        self.logger.info(f"AI response is short ({len(ai_response)} chars), sending directly")
-                        await self._send_message_safe(update, f"🧠 Анализ актива:\n\n{ai_response}")
-                else:
-                    self.logger.warning("AI response is empty")
-                    await self._send_message_safe(update, "⚠️ Анализ недоступен. Попробуйте позже.")
-                    
-            except Exception as ai_error:
-                self.logger.error(f"Error getting analysis for {symbol}: {ai_error}")
-                await self._send_message_safe(update, f"⚠️ Ошибка при получении анализа: {str(ai_error)}")
-            
-            # Update conversation history
-            self._add_to_conversation_history(user_id, f"/asset {symbol} {period}", 
-                                           f"Asset analysis completed for {symbol}")
                 
         except Exception as e:
-            await self._send_message_safe(update, f"❌ Ошибка при получении информации об активе: {str(e)}")
-    
+            self.logger.error(f"Error in asset_command for {symbol}: {e}")
+            await self._send_message_safe(update, f"❌ Произошла ошибка при анализе актива {symbol}: {str(e)}")
+                
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages using Okama Financial Brain"""
@@ -469,7 +438,7 @@ class OkamaFinanceBot:
             final_response = self.financial_brain.format_final_response(result)
             
             # Отправляем текстовый ответ
-            await self._send_long_text(update, final_response)
+            await self.send_long_message(update, final_response)
             
             # Отправляем графики
             for img_bytes in result.charts:
@@ -504,7 +473,16 @@ class OkamaFinanceBot:
 
             # Chat fallback
             if parsed.intent == 'chat':
-                await self._handle_chat(update, user_message)
+                # Simple AI response using YandexGPT
+                try:
+                    ai_response = self.yandexgpt_service.ask_question(user_message)
+                    if ai_response:
+                        await self.send_long_message(update, f"🤖 AI-ответ:\n\n{ai_response}")
+                    else:
+                        await self._send_message_safe(update, "Извините, не удалось получить AI-ответ. Попробуйте переформулировать вопрос.")
+                except Exception as e:
+                    self.logger.error(f"Error in AI chat: {e}")
+                    await self._send_message_safe(update, "Извините, произошла ошибка при обработке AI-запроса.")
                 return
 
             # Resolve assets as needed
@@ -520,15 +498,15 @@ class OkamaFinanceBot:
                 if not valid_tickers:
                     await self._send_message_safe(update, "Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
                     return
-                # Use new enhanced asset info with chart for single assets
-                await self._get_asset_info_with_chart(update, valid_tickers[0], '10Y')
+                # Use existing asset command logic for single assets
+                await self.asset_command(update, context)
                 return
 
             elif parsed.intent == 'asset_compare' or (parsed.intent == 'macro'):
                 if len(valid_tickers) < 2:
                     # If only one valid, treat as single asset with chart
                     if len(valid_tickers) == 1:
-                        await self._get_asset_info_with_chart(update, valid_tickers[0], '10Y')
+                        await self.asset_command(update, context)
                         return
                     else:
                         await self._send_message_safe(update, "Для сравнения укажите как минимум два актива.")
@@ -556,14 +534,22 @@ class OkamaFinanceBot:
 
             else:
                 # Fallback to AI chat if intent not recognized
-                await self._handle_chat(update, user_message)
+                try:
+                    ai_response = self.yandexgpt_service.ask_question(user_message)
+                    if ai_response:
+                        await self.send_long_message(update, f"🤖 AI-ответ:\n\n{ai_response}")
+                    else:
+                        await self._send_message_safe(update, "Извините, не удалось получить AI-ответ. Попробуйте переформулировать вопрос.")
+                except Exception as e:
+                    self.logger.error(f"Error in AI chat: {e}")
+                    await self._send_message_safe(update, "Извините, произошла ошибка при обработке AI-запроса.")
                 return
 
             # Send text and AI summary
             final_text = report_text or ""
             if ai_summary:
                 final_text = f"{final_text}\n\nВыводы AI:\n{ai_summary}"
-            await self._send_long_text(update, final_text)
+            await self.send_long_message(update, final_text)
 
             # Send images
             for img_bytes in images:
@@ -580,111 +566,7 @@ class OkamaFinanceBot:
                 "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
             )
 
-    async def _send_long_text(self, update: Update, text: str, parse_mode: str = None):
-        """Send long text by splitting it into multiple messages if needed"""
-        # Base Telegram hard limit is 4096 chars for text messages.
-        # We use configured limit if available and keep a safety margin
-        try:
-            max_length = getattr(Config, 'MAX_MESSAGE_LENGTH', 4000)
-        except Exception:
-            max_length = 4000
-        
-        self.logger.info(f"_send_long_text called with text length: {len(text)}")
-        
-        if len(text) <= max_length:
-            # Single message is fine
-            self.logger.info(f"Text fits in single message, sending directly")
-            await update.message.reply_text(text)
-        else:
-            # Split into multiple messages
-            self.logger.info(f"Text too long ({len(text)} chars), splitting into parts")
-            parts = self._split_text_into_parts(text, max_length)
-            self.logger.info(f"Split into {len(parts)} parts")
-            
-            # Log each part for debugging
-            for i, part in enumerate(parts):
-                self.logger.info(f"Part {i+1}: {len(part)} chars, starts with: {part[:50]}...")
-            
-            for i, part in enumerate(parts, 1):
-                self.logger.info(f"Sending part {i}/{len(parts)}, length: {len(part)}")
-                try:
-                    if i == 1:
-                        # First part
-                        self.logger.info(f"Sending first part")
-                        await update.message.reply_text(part)
-                    else:
-                        # Subsequent parts
-                        continuation_prefix = f"📄 Продолжение ({i}/{len(parts)}):\n\n"
-                        continuation_text = f"{continuation_prefix}{part}"
-                        self.logger.info(f"Sending continuation part {i}")
-                        await update.message.reply_text(continuation_text)
-                        
-                        # Add small delay between messages to avoid rate limiting
-                        if i < len(parts):
-                            import asyncio
-                            await asyncio.sleep(0.5)
-                            
-                except Exception as e:
-                    self.logger.error(f"Failed to send part {i}: {e}")
-                    # Send as plain text as last resort
-                    await update.message.reply_text(f"Часть {i} из {len(parts)}: {part[:1000]}...")
-    
-    def _split_text_into_parts(self, text: str, max_length: int) -> List[str]:
-        """Split text into parts that fit within max_length"""
-        parts = []
-        
-        # Simple approach: split by paragraphs first, then by sentences
-        paragraphs = text.split('\n\n')
-        
-        current_part = ""
-        for paragraph in paragraphs:
-            # If adding this paragraph would exceed max_length
-            if len(current_part) + len(paragraph) + 2 > max_length:
-                if current_part:
-                    parts.append(current_part.strip())
-                    current_part = paragraph
-                else:
-                    # Single paragraph is too long, split by sentences
-                    sentences = paragraph.split('. ')
-                    for sentence in sentences:
-                        # Add period back to sentence
-                        full_sentence = sentence + ('. ' if sentence != sentences[-1] else '.')
-                        
-                        # Check if adding this sentence would exceed max_length
-                        if len(current_part) + len(full_sentence) > max_length:
-                            if current_part:
-                                parts.append(current_part.strip())
-                                current_part = full_sentence
-                            else:
-                                # Single sentence is too long, split by words
-                                words = full_sentence.split(' ')
-                                temp_part = ""
-                                for word in words:
-                                    if len(temp_part) + len(word) + 1 > max_length:
-                                        if temp_part:
-                                            parts.append(temp_part.strip())
-                                            temp_part = word
-                                        else:
-                                            # Single word is too long, truncate
-                                            parts.append(word[:max_length-3] + "...")
-                                    else:
-                                        temp_part += " " + word if temp_part else word
-                                if temp_part.strip():
-                                    current_part = temp_part.strip()
-                        else:
-                            current_part += full_sentence
-            else:
-                current_part += "\n\n" + paragraph if current_part else paragraph
-        
-        # Add the last part
-        if current_part.strip():
-            parts.append(current_part.strip())
-        
-        # Ensure we have at least one part
-        if not parts:
-            parts.append(text[:max_length-3] + "...")
-        
-        return parts
+
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks"""
