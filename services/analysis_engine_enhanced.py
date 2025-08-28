@@ -61,6 +61,42 @@ class EnhancedAnalysisEngine:
             logger.error(f"Error in analysis engine: {e}")
             return self._get_fallback_analysis(intent, data)
     
+    def analyze_asset(self, symbol: str, price_history: Any, period: str) -> Dict[str, Any]:
+        """
+        Анализ одного актива
+        
+        Args:
+            symbol: Символ актива
+            price_history: История цен
+            period: Период анализа
+            
+        Returns:
+            Dict[str, Any]: Результат анализа или ошибка
+        """
+        try:
+            # Формируем данные для анализа
+            data = {
+                'symbol': symbol,
+                'price_history': price_history,
+                'period': period,
+                'type': 'asset_single'
+            }
+            
+            # Выполняем анализ
+            analysis_result = self.analyze('asset_single', data, f"Анализ актива {symbol} за период {period}")
+            
+            return {
+                'analysis': analysis_result,
+                'symbol': symbol,
+                'period': period
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in analyze_asset for {symbol}: {e}")
+            return {
+                'error': f"Ошибка анализа: {str(e)}"
+            }
+    
     def _get_single_asset_prompt(self) -> str:
         """Промпт для анализа одного актива"""
         return """Ты - опытный финансовый аналитик. Проанализируй данные по активу и предоставь краткий, но содержательный анализ.
