@@ -8,7 +8,12 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
 import pandas as pd
-import tabulate
+try:
+    import tabulate
+    TABULATE_AVAILABLE = True
+except ImportError:
+    TABULATE_AVAILABLE = False
+    print("Warning: tabulate library not available. Using simple text formatting.")
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
@@ -466,9 +471,17 @@ class OkamaFinanceBot:
                 # Sort by category and then by namespace
                 namespace_data.sort(key=lambda x: (x[2], x[0]))
                 
-                # Create table using tabulate
-                table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="grid")
-                response += f"```\n{table}\n```\n\n"
+                # Create table using tabulate or fallback to simple format
+                if TABULATE_AVAILABLE:
+                    table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="grid")
+                    response += f"```\n{table}\n```\n\n"
+                else:
+                    # Fallback to simple text format
+                    response += "**Код | Описание | Категория**\n"
+                    response += "--- | --- | ---\n"
+                    for row in namespace_data:
+                        response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
+                    response += "\n"
                 
                 response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
                 
@@ -549,16 +562,32 @@ class OkamaFinanceBot:
                         
                         last_10.append([symbol, name, country, currency])
                     
-                    # Create tables using tabulate
+                    # Create tables using tabulate or fallback to simple format
                     if first_10:
                         response += "**Первые 10 символов:**\n"
-                        first_table = tabulate.tabulate(first_10, headers=headers, tablefmt="grid")
-                        response += f"```\n{first_table}\n```\n\n"
+                        if TABULATE_AVAILABLE:
+                            first_table = tabulate.tabulate(first_10, headers=headers, tablefmt="grid")
+                            response += f"```\n{first_table}\n```\n\n"
+                        else:
+                            # Fallback to simple text format
+                            response += "**Символ | Название | Страна | Валюта**\n"
+                            response += "--- | --- | --- | ---\n"
+                            for row in first_10:
+                                response += f"`{row[0]}` | {row[1]} | {row[2]} | {row[3]}\n"
+                            response += "\n"
                     
                     if last_10 and total_symbols > 10:
                         response += "**Последние 10 символов:**\n"
-                        last_table = tabulate.tabulate(last_10, headers=headers, tablefmt="grid")
-                        response += f"```\n{last_table}\n```\n\n"
+                        if TABULATE_AVAILABLE:
+                            last_table = tabulate.tabulate(last_10, headers=headers, tablefmt="grid")
+                            response += f"```\n{last_table}\n```\n\n"
+                        else:
+                            # Fallback to simple text format
+                            response += "**Символ | Название | Страна | Валюта**\n"
+                            response += "--- | --- | --- | ---\n"
+                            for row in last_10:
+                                response += f"`{row[0]}` | {row[1]} | {row[2]} | {row[3]}\n"
+                            response += "\n"
                     
                     response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
                     
