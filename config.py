@@ -27,7 +27,7 @@ class Config:
     SUPPORTED_COMMANDS = {
         '/start': 'Start the bot and get help',
         '/help': 'Show available commands and features',
-        '/asset': 'Show detailed information about an asset',
+        '/info': 'Show detailed information about an asset',
         '/price': 'Show current price for an asset',
         '/dividends': 'Show dividend history for an asset',
         '/chat': 'Chat with YandexGPT about finance',

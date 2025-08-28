@@ -426,7 +426,7 @@ class OkamaFinanceBot:
                 await self._send_message_safe(update, f"❌ Ошибка при создании графика: {str(chart_error)}")
                 
         except Exception as e:
-            self.logger.error(f"Error in asset command for {symbol}: {e}")
+            self.logger.error(f"Error in info command for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -776,15 +776,15 @@ class OkamaFinanceBot:
                 if not valid_tickers:
                     await self._send_message_safe(update, "Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
                     return
-                # Use existing asset command logic for single assets
-                await self.asset_command(update, context)
+                # Use existing info command logic for single assets
+                await self.info_command(update, context)
                 return
 
             elif parsed.intent == 'asset_compare' or (parsed.intent == 'macro'):
                 if len(valid_tickers) < 2:
                     # If only one valid, treat as single asset with chart
                     if len(valid_tickers) == 1:
-                        await self.asset_command(update, context)
+                        await self.info_command(update, context)
                         return
                     else:
                         await self._send_message_safe(update, "Для сравнения укажите как минимум два актива.")
