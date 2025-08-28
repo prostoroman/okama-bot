@@ -186,6 +186,7 @@ class OkamaFinanceBot:
 Основные команды:
 /start — эта справка
 /asset [тикер] [период] — базовая информация об активе с графиком и анализом
+/namespace [название] — список пространств имен или символы в пространстве
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -243,6 +244,10 @@ class OkamaFinanceBot:
 
 **📊 Анализ активов:**
 • `/asset <тикер>` - Полная информация об активе + AI-анализ графиков
+
+**📚 Пространства имен:**
+• `/namespace` - Список доступных пространств имен
+• `/namespace <название>` - Символы в конкретном пространстве
 
 **🤖 AI-помощник:**
 • **🆕 Отправьте фото графика** - AI-анализ изображения!
@@ -377,151 +382,110 @@ class OkamaFinanceBot:
                 
                 if 'error' in price_history:
                     self.logger.error(f"Error in price_history: {price_history['error']}")
-                    await self._send_message_safe(update, f"⚠️ {price_history['error']}")
+                    await self._send_message_safe(update, f"❌ Ошибка при получении истории цен: {price_history['error']}")
                     return
+                
+                # Create price chart
+                chart_buffer = self.asset_service.create_price_chart(price_history, symbol, period)
+                
+                if chart_buffer:
+                    await update.message.reply_photo(
+                        photo=chart_buffer,
+                        caption=f"📈 График цен {symbol} за период {period}"
+                    )
+                    chart_buffer.close()
                 else:
-                    self.logger.info(f"Price history received successfully, charts count: {len(price_history.get('charts', []))}")
-                    # Store charts for analysis
-                    charts = price_history.get('charts', [])
-                    if not charts:
-                        await self._send_message_safe(update, "⚠️ Не удалось создать графики цен")
-                        return
-                        
-            except Exception as chart_error:
-                self.logger.error(f"Error getting charts for {symbol}: {chart_error}")
-                await self._send_message_safe(update, f"⚠️ Ошибка при получении графиков: {str(chart_error)}")
-                return
-            
-            # Get AI analysis of charts and send with enhanced captions
-            if 'charts' in locals() and charts and len(charts) > 0:
-                await self._send_message_safe(update, "🧠 Анализирую графики цен...")
+                    await self._send_message_safe(update, "❌ Не удалось создать график")
+                
+                # Get AI analysis
+                await self._send_message_safe(update, "🧠 Получаю AI-анализ...")
                 
                 try:
-                    # Create prompt for chart analysis
-                    chart_analysis_prompt = f"""Проанализируй график цен для {symbol} ({asset_info.get('name', 'N/A')}).
-Задача: Опиши конкретно то, что видишь на графике:
-1. Тренд (восходящий/нисходящий/боковой)
-2. Ключевые уровни поддержки и сопротивления
-3. Волатильность (высокая/средняя/низкая)
-Анализ должен быть кратким и конкретным (2-3 предложения)."""
-
-                    # Analyze each chart individually with vision and send with enhanced caption
-                    for i, img_bytes in enumerate(charts):
-                        try:
-                            # Determine chart type for description
-                            if i == 0:
-                                chart_desc = f"Ежедневный график цен за 1 год для {symbol}"
-                            elif i == 1:
-                                chart_desc = f"Месячный график цен за 10 лет для {symbol}"
-                            else:
-                                chart_desc = f"График {i+1} для {symbol}"
-                            
-                            # Analyze chart with vision
-                            chart_ai_response = self.yandexgpt_service.ask_question_with_vision(
-                                chart_analysis_prompt, 
-                                img_bytes, 
-                                chart_desc
-                            )
-                            
-                            # Create enhanced caption with analysis
-                            if chart_ai_response and not chart_ai_response.startswith("Ошибка") and not chart_ai_response.startswith("Не удалось"):
-                                enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n{chart_ai_response}"
-                            else:
-                                enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Не удалось проанализировать график"
-                            
-                            # Send chart with enhanced caption
-                            await context.bot.send_photo(
-                                chat_id=update.effective_chat.id, 
-                                photo=io.BytesIO(img_bytes),
-                                caption=enhanced_caption
-                            )
-                                
-                        except Exception as chart_error:
-                            self.logger.error(f"Error analyzing chart {i+1}: {chart_error}")
-                            # Send chart with basic caption if analysis fails
-                            basic_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Ошибка анализа: {str(chart_error)}"
-                            await context.bot.send_photo(
-                                chat_id=update.effective_chat.id, 
-                                photo=io.BytesIO(img_bytes),
-                                caption=basic_caption
-                            )
+                    analysis = self.analysis_engine.analyze_asset(symbol, price_history, period)
                     
-                    # Отправляем общий анализ актива
-                    await self._send_message_safe(update, "🧠 Общий анализ актива...")
-                    
-                    try:
-                        general_analysis_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе доступной информации.
-
-Задача: Предоставь краткий общий анализ актива:
-1. Основная деятельность компании/актива
-2. Текущее состояние на рынке
-3. Ключевые факторы, влияющие на цену
-4. Краткие рекомендации для инвестора
-
-Ответ должен быть структурированным и конкретным на русском языке (4-6 предложений)."""
-
-                        general_analysis = self.yandexgpt_service.ask_question(general_analysis_prompt)
+                    if 'error' in analysis:
+                        await self._send_message_safe(update, f"⚠️ AI-анализ недоступен: {analysis['error']}")
+                    else:
+                        await self._send_message_safe(update, f"🧠 **AI-анализ {symbol}**\n\n{analysis['analysis']}")
                         
-                        if general_analysis and not general_analysis.startswith("Ошибка") and not general_analysis.startswith("Не удалось"):
-                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n{general_analysis}")
-                        else:
-                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Не удалось получить общий анализ актива")
-                            
-                    except Exception as analysis_error:
-                        self.logger.error(f"Error getting general analysis for {symbol}: {analysis_error}")
-                        await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Ошибка при получении общего анализа: {str(analysis_error)}")
-                        
-                except Exception as chart_ai_error:
-                    self.logger.error(f"Error getting chart analysis for {symbol}: {chart_ai_error}")
-                    # Send charts with basic captions if analysis completely fails
-                    for i, img_bytes in enumerate(charts):
-                        try:
-                            if i == 0:
-                                chart_desc = f"Ежедневный график цен за 1 год для {symbol}"
-                            elif i == 1:
-                                chart_desc = f"Месячный график цен за 10 лет для {symbol}"
-                            else:
-                                chart_desc = f"График {i+1} для {symbol}"
-                            
-                            basic_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Ошибка анализа: {str(chart_ai_error)}"
-                            await context.bot.send_photo(
-                                chat_id=update.effective_chat.id, 
-                                photo=io.BytesIO(img_bytes),
-                                caption=basic_caption
-                            )
-                        except Exception as send_error:
-                            self.logger.error(f"Error sending chart {i+1}: {send_error}")
-                            await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(send_error)}")
-                    
-                    # Отправляем общий анализ даже при ошибках анализа графиков
-                    await self._send_message_safe(update, "🧠 Общий анализ актива...")
-                    
-                    try:
-                        general_analysis_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе доступной информации.
-
-Задача: Предоставь краткий общий анализ актива:
-1. Основная деятельность компании/актива
-2. Текущее состояние на рынке
-3. Ключевые факторы, влияющие на цену
-4. Краткие рекомендации для инвестора
-
-Ответ должен быть структурированным и конкретным на русском языке (4-6 предложений)."""
-
-                        general_analysis = self.yandexgpt_service.ask_question(general_analysis_prompt)
-                        
-                        if general_analysis and not general_analysis.startswith("Ошибка") and not general_analysis.startswith("Не удалось"):
-                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n{general_analysis}")
-                        else:
-                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Не удалось получить общий анализ актива")
-                            
-                    except Exception as analysis_error:
-                        self.logger.error(f"Error getting general analysis for {symbol}: {analysis_error}")
-                        await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Ошибка при получении общего анализа: {str(analysis_error)}")
+                except Exception as analysis_error:
+                    self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
+                    await self._send_message_safe(update, "⚠️ AI-анализ временно недоступен")
+                
+            except Exception as chart_error:
+                self.logger.error(f"Error creating chart for {symbol}: {chart_error}")
+                await self._send_message_safe(update, f"❌ Ошибка при создании графика: {str(chart_error)}")
                 
         except Exception as e:
-            self.logger.error(f"Error in asset_command for {symbol}: {e}")
-            await self._send_message_safe(update, f"❌ Произошла ошибка при анализе актива {symbol}: {str(e)}")
+            self.logger.error(f"Error in asset command for {symbol}: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
+    async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /namespace command"""
+        try:
+            import okama as ok
+            
+            if not context.args:
+                # Show available namespaces
+                namespaces = ok.namespaces
                 
+                response = "📚 **Доступные пространства имен (namespaces):**\n\n"
+                
+                for namespace, description in namespaces.items():
+                    response += f"**{namespace}** - {description}\n"
+                
+                response += "\n💡 Используйте `/namespace <название>` для просмотра символов в конкретном пространстве"
+                
+                await self._send_message_safe(update, response)
+                
+            else:
+                # Show symbols in specific namespace
+                namespace = context.args[0].upper()
+                
+                try:
+                    symbols = ok.symbols_in_namespace(namespace)
+                    
+                    if not symbols:
+                        await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не найдено или пусто")
+                        return
+                    
+                    # Format as table
+                    response = f"📊 **Символы в пространстве {namespace}:**\n\n"
+                    
+                    # Group symbols by first letter for better readability
+                    symbols_by_letter = {}
+                    for symbol in sorted(symbols):
+                        first_letter = symbol[0]
+                        if first_letter not in symbols_by_letter:
+                            symbols_by_letter[first_letter] = []
+                        symbols_by_letter[first_letter].append(symbol)
+                    
+                    # Create table-like format
+                    for letter in sorted(symbols_by_letter.keys()):
+                        response += f"**{letter}:**\n"
+                        symbols_in_group = symbols_by_letter[letter]
+                        
+                        # Split into columns for better readability
+                        col_width = 20
+                        for i in range(0, len(symbols_in_group), 3):
+                            row_symbols = symbols_in_group[i:i+3]
+                            row = " | ".join(f"`{s}`" for s in row_symbols)
+                            response += f"{row}\n"
+                        response += "\n"
+                    
+                    response += f"📈 Всего символов: **{len(symbols)}**"
+                    
+                    await self._send_message_safe(update, response)
+                    
+                except Exception as e:
+                    await self._send_message_safe(update, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
+                    
+        except ImportError:
+            await self._send_message_safe(update, "❌ Библиотека okama не установлена")
+        except Exception as e:
+            self.logger.error(f"Error in namespace command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming text messages using Okama Financial Brain"""
@@ -846,6 +810,7 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("asset", self.asset_command))
+        application.add_handler(CommandHandler("namespace", self.namespace_command))
         
         # Add message and callback handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
