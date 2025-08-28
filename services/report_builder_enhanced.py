@@ -652,13 +652,34 @@ class EnhancedReportBuilder:
         # Сначала конвертируем в PNG
         png_bytes = self._fig_to_png(fig)
         
-        # Создаем промпт для анализа
+        # Создаем детальное описание графика для анализа
         if asset_info:
             ticker = asset_info.get('ticker', 'Unknown')
             name = asset_info.get('name', ticker)
-            chart_desc = f"{chart_type} для {ticker} ({name})"
+            
+            # Улучшенное описание графика с техническими деталями
+            if "Ежедневный график цен" in chart_type:
+                chart_desc = f"""Ежедневный график цен акции {ticker} ({name}) за последний год. 
+График показывает динамику изменения цены акции по дням, включая открытие, максимум, минимум и закрытие.
+Масштаб: дневные свечи, временной период: 1 год."""
+            elif "Месячный график цен" in chart_type:
+                chart_desc = f"""Месячный график цен акции {ticker} ({name}) за 10 лет. 
+График отображает месячные изменения цены, показывая долгосрочные тренды и циклы.
+Масштаб: месячные свечи, временной период: 10 лет."""
+            elif "Волатильность" in chart_type:
+                chart_desc = f"""График волатильности акции {ticker} ({name}). 
+Показывает изменение волатильности цены во времени, рассчитанной как скользящее стандартное отклонение доходности.
+Высокая волатильность указывает на нестабильность, низкая - на стабильность."""
+            elif "Просадки" in chart_type:
+                chart_desc = f"""График просадок акции {ticker} ({name}). 
+Отображает максимальные потери от пиковых значений цены.
+Показывает риск-метрики и периоды восстановления после падений."""
+            else:
+                chart_desc = f"""{chart_type} для {ticker} ({name}). 
+Финансовый график, показывающий различные аспекты поведения цены акции."""
         else:
-            chart_desc = chart_type
+            chart_desc = f"""{chart_type}. 
+Финансовый график для анализа цен и технических индикаторов."""
         
         analysis_prompt = f"""Проанализируй финансовый график: {chart_desc}
 
@@ -680,21 +701,7 @@ class EnhancedReportBuilder:
             if ai_response and not ai_response.startswith("Ошибка") and not ai_response.startswith("Не удалось"):
                 return png_bytes, ai_response
             else:
-                # Fallback: обычный анализ без vision
-                fallback_prompt = f"""Проанализируй {chart_desc}.
-
-Задача: Предоставь краткий анализ:
-1. Основные характеристики графика
-2. Текущий тренд
-3. Ключевые факторы
-
-Ответ должен быть кратким и конкретным на русском языке (2-3 предложения)."""
-                
-                fallback_response = self.yandexgpt.ask_question(fallback_prompt)
-                if fallback_response:
-                    return png_bytes, fallback_response
-                else:
-                    return png_bytes, "⚠️ Не удалось проанализировать график"
+                return png_bytes, "⚠️ Не удалось проанализировать график"
                     
         except Exception as e:
             logger.error(f"Error analyzing chart: {e}")
