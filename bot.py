@@ -392,17 +392,19 @@ class OkamaFinanceBot:
                     await self._send_message_safe(update, f"❌ Ошибка при получении истории цен: {price_history['error']}")
                     return
                 
-                # Create price chart
-                chart_buffer = self.asset_service.create_price_chart(price_history, symbol, period)
-                
-                if chart_buffer:
-                    await update.message.reply_photo(
-                        photo=chart_buffer,
-                        caption=f"📈 График цен {symbol} за период {period}"
-                    )
-                    chart_buffer.close()
+                # Display charts from price history
+                if 'charts' in price_history and price_history['charts']:
+                    charts = price_history['charts']
+                    for i, chart_data in enumerate(charts):
+                        if chart_data:  # Check if chart data exists
+                            await update.message.reply_photo(
+                                photo=chart_data,
+                                caption=f"📈 График цен {symbol} за период {period}"
+                            )
+                        else:
+                            await self._send_message_safe(update, f"⚠️ График {i+1} не удалось отобразить")
                 else:
-                    await self._send_message_safe(update, "❌ Не удалось создать график")
+                    await self._send_message_safe(update, "❌ Не удалось получить графики цен")
                 
                 # Get AI analysis
                 await self._send_message_safe(update, "🧠 Получаю AI-анализ...")
