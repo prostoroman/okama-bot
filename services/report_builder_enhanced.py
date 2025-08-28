@@ -19,6 +19,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
+from yandexgpt_service import YandexGPTService
+
 logger = logging.getLogger(__name__)
 
 class EnhancedReportBuilder:
@@ -29,8 +31,11 @@ class EnhancedReportBuilder:
         plt.style.use('default')
         self.colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
         
-    def build_report(self, intent: str, data: Dict[str, Any], user_query: str) -> Tuple[str, List[bytes]]:
-        """Основной метод построения отчета"""
+        # Инициализация AI сервиса для анализа графиков
+        self.yandexgpt = YandexGPTService()
+        
+    def build_report(self, intent: str, data: Dict[str, Any], user_query: str) -> Tuple[str, List[bytes], List[str]]:
+        """Основной метод построения отчета с возвратом анализов графиков"""
         try:
             if intent == 'asset_single':
                 return self._build_single_asset_report(data, user_query)
@@ -47,13 +52,14 @@ class EnhancedReportBuilder:
                 
         except Exception as e:
             logger.error(f"Error building report: {e}")
-            return f"Ошибка построения отчета: {str(e)}", []
+            return f"Ошибка построения отчета: {str(e)}", [], []
     
     # Методы-обертки для совместимости с bot.py
     def build_single_asset_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
         try:
-            return self._build_single_asset_report(data, "")
+            report_text, charts, _ = self._build_single_asset_report(data, "")
+            return report_text, charts
         except Exception as e:
             logger.error(f"Error in build_single_asset_report: {e}")
             return f"Ошибка построения отчета: {str(e)}", []
@@ -61,7 +67,8 @@ class EnhancedReportBuilder:
     def build_multi_asset_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
         try:
-            return self._build_comparison_report(data, "")
+            report_text, charts, _ = self._build_comparison_report(data, "")
+            return report_text, charts
         except Exception as e:
             logger.error(f"Error in build_multi_asset_report: {e}")
             return f"Ошибка построения отчета: {str(e)}", []
@@ -69,7 +76,8 @@ class EnhancedReportBuilder:
     def build_portfolio_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
         try:
-            return self._build_portfolio_report(data, "")
+            report_text, charts, _ = self._build_portfolio_report(data, "")
+            return report_text, charts
         except Exception as e:
             logger.error(f"Error in build_portfolio_report: {e}")
             return f"Ошибка построения отчета: {str(e)}", []
@@ -77,12 +85,13 @@ class EnhancedReportBuilder:
     def build_inflation_report(self, data: Dict[str, Any]) -> Tuple[str, List[bytes]]:
         """Совместимость с bot.py"""
         try:
-            return self._build_inflation_report(data, "")
+            report_text, charts, _ = self._build_inflation_report(data, "")
+            return report_text, charts
         except Exception as e:
             logger.error(f"Error in build_inflation_report: {e}")
             return f"Ошибка построения отчета: {str(e)}", []
     
-    def _build_single_asset_report(self, data: Dict[str, Any], user_query: str) -> Tuple[str, List[bytes]]:
+    def _build_single_asset_report(self, data: Dict[str, Any], user_query: str) -> Tuple[str, List[bytes], List[str]]:
         """Строит отчет по одному активу"""
         ticker = data.get('ticker', 'Unknown')
         name = data.get('name', ticker)
@@ -149,8 +158,9 @@ class EnhancedReportBuilder:
             else:
                 report_text += f"• Значение: {prices}\n"
         
-        # Графики
+        # Графики с AI-анализом
         charts = []
+        chart_analyses = []
         
         # 1. График изменения цен (если есть данные)
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty:
@@ -173,11 +183,17 @@ class EnhancedReportBuilder:
             ax2.tick_params(axis='x', rotation=45)
             
             plt.tight_layout()
-            charts.append(self._fig_to_png(fig))
+            
+            # Создаем график с анализом
+            asset_info = {'ticker': ticker, 'name': name}
+            chart_bytes, analysis = self._fig_to_png_with_analysis(fig, "График динамики цен и доходности", asset_info)
+            charts.append(chart_bytes)
+            chart_analyses.append(analysis)
         
         # 2. График из asset_service (если есть)
         if data.get('chart'):
             charts.append(data['chart'])
+            chart_analyses.append("График из asset_service")
         
         # 3. Дополнительные графики для анализа
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty and len(prices) > 20:
@@ -191,7 +207,11 @@ class EnhancedReportBuilder:
             ax.grid(True, alpha=0.3)
             ax.tick_params(axis='x', rotation=45)
             plt.tight_layout()
-            charts.append(self._fig_to_png(fig))
+            
+            # Создаем график с анализом
+            chart_bytes, analysis = self._fig_to_png_with_analysis(fig, f"График скользящей волатильности ({window_size} дней)", asset_info)
+            charts.append(chart_bytes)
+            chart_analyses.append(analysis)
             
             # График просадок
             fig, ax = plt.subplots(figsize=(10, 4))
@@ -204,7 +224,18 @@ class EnhancedReportBuilder:
             ax.grid(True, alpha=0.3)
             ax.tick_params(axis='x', rotation=45)
             plt.tight_layout()
-            charts.append(self._fig_to_png(fig))
+            
+            # Создаем график с анализом
+            chart_bytes, analysis = self._fig_to_png_with_analysis(fig, "График истории просадок", asset_info)
+            charts.append(chart_bytes)
+            chart_analyses.append(analysis)
+        
+        # Добавляем анализы графиков в текстовый отчет
+        if chart_analyses:
+            report_text += "\n**🧠 AI-анализ графиков:**\n"
+            for i, analysis in enumerate(chart_analyses):
+                if analysis != "График из asset_service":  # Пропускаем системные графики
+                    report_text += f"• График {i+1}: {analysis}\n"
         
         return report_text, charts
     
@@ -605,6 +636,69 @@ class EnhancedReportBuilder:
         plt.close(fig)
         buf.seek(0)
         return buf.read()
+    
+    def _fig_to_png_with_analysis(self, fig, chart_type: str, asset_info: Dict[str, Any] = None) -> Tuple[bytes, str]:
+        """
+        Конвертирует matplotlib figure в PNG bytes и добавляет AI-анализ
+        
+        Args:
+            fig: matplotlib figure
+            chart_type: тип графика для анализа
+            asset_info: информация об активе для контекста
+            
+        Returns:
+            Tuple[bytes, str]: (PNG bytes, AI анализ)
+        """
+        # Сначала конвертируем в PNG
+        png_bytes = self._fig_to_png(fig)
+        
+        # Создаем промпт для анализа
+        if asset_info:
+            ticker = asset_info.get('ticker', 'Unknown')
+            name = asset_info.get('name', ticker)
+            chart_desc = f"{chart_type} для {ticker} ({name})"
+        else:
+            chart_desc = chart_type
+        
+        analysis_prompt = f"""Проанализируй финансовый график: {chart_desc}
+
+Задача: Опиши конкретно то, что видишь на графике:
+1. Тренд (восходящий/нисходящий/боковой)
+2. Ключевые уровни поддержки и сопротивления
+3. Волатильность (высокая/средняя/низкая)
+
+Анализ должен быть кратким и конкретным на русском языке (2-3 предложения)."""
+        
+        try:
+            # Анализируем график с помощью Vision AI
+            ai_response = self.yandexgpt.ask_question_with_vision(
+                analysis_prompt,
+                png_bytes,
+                chart_desc
+            )
+            
+            if ai_response and not ai_response.startswith("Ошибка") and not ai_response.startswith("Не удалось"):
+                return png_bytes, ai_response
+            else:
+                # Fallback: обычный анализ без vision
+                fallback_prompt = f"""Проанализируй {chart_desc}.
+
+Задача: Предоставь краткий анализ:
+1. Основные характеристики графика
+2. Текущий тренд
+3. Ключевые факторы
+
+Ответ должен быть кратким и конкретным на русском языке (2-3 предложения)."""
+                
+                fallback_response = self.yandexgpt.ask_question(fallback_prompt)
+                if fallback_response:
+                    return png_bytes, fallback_response
+                else:
+                    return png_bytes, "⚠️ Не удалось проанализировать график"
+                    
+        except Exception as e:
+            logger.error(f"Error analyzing chart: {e}")
+            return png_bytes, f"⚠️ Ошибка анализа: {str(e)}"
     
     def create_csv_report(self, data: Dict[str, Any], intent: str) -> str:
         """Создает CSV отчет"""
