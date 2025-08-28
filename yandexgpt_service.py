@@ -623,6 +623,8 @@ Format responses professionally with clear sections, bullet points, and relevant
         except Exception as e:
             print(f"❌ Error in vision API call: {e}")
             return f"Ошибка при анализе изображения: {str(e)}"
+    
+
 
     def _try_alternative_vision_format(self, model_name: str, question: str, image_bytes: bytes, image_description: str = "") -> str:
         """Try alternative vision request format"""
