@@ -472,7 +472,11 @@ Format responses professionally with clear sections, bullet points, and relevant
                     ("Alternative format", self._create_alternative_request(model_name, system_prompt, user_prompt, temperature, max_tokens))
                 ]:
                     try:
-                        response = requests.post(
+                        # Создаем сессию без прокси
+                        session = requests.Session()
+                        session.trust_env = False  # Игнорируем переменные окружения прокси
+                        
+                        response = session.post(
                             self.base_url,
                             headers=headers,
                             json=request_data,
@@ -592,7 +596,11 @@ Format responses professionally with clear sections, bullet points, and relevant
             # Try vision endpoint
             vision_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
             
-            response = requests.post(
+            # Создаем сессию без прокси
+            session = requests.Session()
+            session.trust_env = False  # Игнорируем переменные окружения прокси
+            
+            response = session.post(
                 vision_url,
                 headers=headers,
                 json=request_data,
@@ -639,7 +647,11 @@ Format responses professionally with clear sections, bullet points, and relevant
                 }
             }
             
-            response = requests.post(
+            # Создаем сессию без прокси
+            session = requests.Session()
+            session.trust_env = False  # Игнорируем переменные окружения прокси
+            
+            response = session.post(
                 "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
                 headers=headers,
                 json=request_data,

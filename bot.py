@@ -399,13 +399,11 @@ class OkamaFinanceBot:
                 try:
                     # Create prompt for chart analysis
                     chart_analysis_prompt = f"""Проанализируй график цен для {symbol} ({asset_info.get('name', 'N/A')}).
-
 Задача: Опиши конкретно то, что видишь на графике:
 1. Тренд (восходящий/нисходящий/боковой)
 2. Ключевые уровни поддержки и сопротивления
 3. Волатильность (высокая/средняя/низкая)
-
-Анализ должен быть кратким и конкретным на русском языке (2-3 предложения)."""
+Анализ должен быть кратким и конкретным (2-3 предложения)."""
 
                     # Analyze each chart individually with vision and send with enhanced caption
                     for i, img_bytes in enumerate(charts):
@@ -429,26 +427,7 @@ class OkamaFinanceBot:
                             if chart_ai_response and not chart_ai_response.startswith("Ошибка") and not chart_ai_response.startswith("Не удалось"):
                                 enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n{chart_ai_response}"
                             else:
-                                # Fallback: try regular analysis with chart description
-                                self.logger.info(f"Vision API failed for chart {i+1}, trying fallback analysis")
-                                try:
-                                    fallback_prompt = f"""Проанализируй {chart_desc} для {symbol} ({asset_info.get('name', 'N/A')}).
-
-Задача: Предоставь краткий анализ:
-1. Основная деятельность компании
-2. Текущий тренд на рынке
-3. Ключевые факторы цены
-
-Ответ должен быть кратким и конкретным на русском языке (2-3 предложения)."""
-
-                                    fallback_response = self.yandexgpt_service.ask_question(fallback_prompt)
-                                    if fallback_response:
-                                        enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n{fallback_response}"
-                                    else:
-                                        enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Не удалось проанализировать график"
-                                except Exception as fallback_error:
-                                    self.logger.error(f"Fallback analysis also failed for chart {i+1}: {fallback_error}")
-                                    enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Не удалось проанализировать график"
+                                enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Не удалось проанализировать график"
                             
                             # Send chart with enhanced caption
                             await context.bot.send_photo(
@@ -466,6 +445,31 @@ class OkamaFinanceBot:
                                 photo=io.BytesIO(img_bytes),
                                 caption=basic_caption
                             )
+                    
+                    # Отправляем общий анализ актива
+                    await self._send_message_safe(update, "🧠 Общий анализ актива...")
+                    
+                    try:
+                        general_analysis_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе доступной информации.
+
+Задача: Предоставь краткий общий анализ актива:
+1. Основная деятельность компании/актива
+2. Текущее состояние на рынке
+3. Ключевые факторы, влияющие на цену
+4. Краткие рекомендации для инвестора
+
+Ответ должен быть структурированным и конкретным на русском языке (4-6 предложений)."""
+
+                        general_analysis = self.yandexgpt_service.ask_question(general_analysis_prompt)
+                        
+                        if general_analysis and not general_analysis.startswith("Ошибка") and not general_analysis.startswith("Не удалось"):
+                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n{general_analysis}")
+                        else:
+                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Не удалось получить общий анализ актива")
+                            
+                    except Exception as analysis_error:
+                        self.logger.error(f"Error getting general analysis for {symbol}: {analysis_error}")
+                        await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Ошибка при получении общего анализа: {str(analysis_error)}")
                         
                 except Exception as chart_ai_error:
                     self.logger.error(f"Error getting chart analysis for {symbol}: {chart_ai_error}")
@@ -488,6 +492,31 @@ class OkamaFinanceBot:
                         except Exception as send_error:
                             self.logger.error(f"Error sending chart {i+1}: {send_error}")
                             await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(send_error)}")
+                    
+                    # Отправляем общий анализ даже при ошибках анализа графиков
+                    await self._send_message_safe(update, "🧠 Общий анализ актива...")
+                    
+                    try:
+                        general_analysis_prompt = f"""Проанализируй актив {symbol} ({asset_info.get('name', 'N/A')}) на основе доступной информации.
+
+Задача: Предоставь краткий общий анализ актива:
+1. Основная деятельность компании/актива
+2. Текущее состояние на рынке
+3. Ключевые факторы, влияющие на цену
+4. Краткие рекомендации для инвестора
+
+Ответ должен быть структурированным и конкретным на русском языке (4-6 предложений)."""
+
+                        general_analysis = self.yandexgpt_service.ask_question(general_analysis_prompt)
+                        
+                        if general_analysis and not general_analysis.startswith("Ошибка") and not general_analysis.startswith("Не удалось"):
+                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n{general_analysis}")
+                        else:
+                            await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Не удалось получить общий анализ актива")
+                            
+                    except Exception as analysis_error:
+                        self.logger.error(f"Error getting general analysis for {symbol}: {analysis_error}")
+                        await self._send_message_safe(update, f"🧠 **Общий анализ актива {symbol}:**\n\n⚠️ Ошибка при получении общего анализа: {str(analysis_error)}")
                 
         except Exception as e:
             self.logger.error(f"Error in asset_command for {symbol}: {e}")
