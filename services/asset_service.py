@@ -672,7 +672,7 @@ class AssetService:
             if adj_close_data is not None and len(adj_close_data) > 0:
                 # Daily data - always show 1 year for better detail
                 filtered_adj_close = self._filter_data_by_period(adj_close_data, '1Y')
-                adj_close_chart = self._create_price_chart(
+                adj_close_chart = self.create_price_chart(
                     filtered_adj_close, symbol, '1Y', currency, 
                     f"Дневные цены (adj_close): {symbol}"
                 )
@@ -693,7 +693,7 @@ class AssetService:
             if monthly_data is not None and len(monthly_data) > 0:
                 # Monthly data - always show 10 years for long-term trends
                 filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
-                monthly_chart = self._create_price_chart(
+                monthly_chart = self.create_price_chart(
                     filtered_monthly, symbol, '10Y', currency,
                     f"Месячные цены (close_monthly): {symbol}"
                 )
@@ -730,7 +730,7 @@ class AssetService:
                             fallback_period = '10Y'
                         
                         filtered_fallback = self._filter_data_by_period(fallback_data, fallback_period)
-                        fallback_chart = self._create_price_chart(
+                        fallback_chart = self.create_price_chart(
                             filtered_fallback, symbol, fallback_period, currency,
                             f"Цены ({fallback_period}): {symbol}"
                         )
@@ -786,7 +786,7 @@ class AssetService:
             else:
                 return {'error': f"Ошибка при получении истории цен: {error_msg}"}
     
-    def _create_price_chart(self, price_data, symbol: str, period: str, currency: str, chart_title: str) -> Optional[bytes]:
+    def create_price_chart(self, price_data, symbol: str, period: str, currency: str, chart_title: str) -> Optional[bytes]:
         """
         Create a price chart from price data
         
