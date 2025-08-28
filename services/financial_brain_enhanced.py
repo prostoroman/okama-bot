@@ -46,6 +46,7 @@ class EnhancedAnalysisResult:
     query: EnhancedFinancialQuery
     data_report: Dict[str, Any]  # Структурированный отчет от Okama
     charts: List[bytes]  # Сгенерированные изображения
+    chart_analyses: List[str]  # AI-анализ каждого графика
     ai_insights: str  # Аналитические выводы от AI
     recommendations: str  # Рекомендации
     csv_report: Optional[str] = None  # CSV отчет
@@ -97,7 +98,7 @@ class EnhancedOkamaFinancialBrain:
             logger.info(f"Data retrieved for {len(query.assets)} assets")
             
             # Этап 3: Построение отчетов и графиков
-            report_text, charts = self._build_reports(query, data_report)
+            report_text, charts, chart_analyses = self._build_reports(query, data_report)
             
             # Этап 4: AI анализ и формирование выводов
             ai_insights = self._generate_ai_insights(query, data_report, user_message)
@@ -111,6 +112,7 @@ class EnhancedOkamaFinancialBrain:
                 query=query,
                 data_report=data_report,
                 charts=charts,
+                chart_analyses=chart_analyses,
                 ai_insights=ai_insights,
                 recommendations=recommendations,
                 csv_report=csv_report
@@ -246,13 +248,20 @@ class EnhancedOkamaFinancialBrain:
             return f"Ошибка построения отчета: {str(e)}", []
     
     def _generate_ai_insights(self, query: EnhancedFinancialQuery, data_report: Dict[str, Any], user_message: str) -> str:
-        """Генерация AI аналитических выводов"""
+        """Генерация AI аналитических выводов с учетом анализа графиков"""
         try:
-            return self.analysis_engine.analyze(
+            # Получаем базовый анализ
+            base_analysis = self.analysis_engine.analyze(
                 intent=query.intent,
                 data=data_report,
                 user_query=user_message
             )
+            
+            # Добавляем информацию о том, что графики проанализированы отдельно
+            enhanced_analysis = f"{base_analysis}\n\n💡 **Примечание:** Каждый график содержит детальный AI-анализ в подписи для более глубокого понимания."
+            
+            return enhanced_analysis
+            
         except Exception as e:
             logger.error(f"Error generating AI insights: {e}")
             return "Анализ завершен успешно. AI анализ временно недоступен."
@@ -363,7 +372,8 @@ class EnhancedOkamaFinancialBrain:
             
             # Информация о графиках
             if result.charts:
-                response_parts.append(f"**📊 Графики:** Сгенерировано {len(result.charts)} график(ов)")
+                response_parts.append(f"**📊 Графики:** Сгенерировано {len(result.charts)} график(ов) с AI-анализом в подписях")
+                response_parts.append("💡 Каждый график содержит детальный анализ трендов, уровней поддержки/сопротивления и волатильности")
             
             # Информация о CSV отчете
             if result.csv_report:

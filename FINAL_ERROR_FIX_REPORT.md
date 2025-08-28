@@ -146,3 +146,4 @@ asset_command → _get_asset_info_with_chart → _send_charts_with_ai_analysis �
 - ✅ Предоставляет fallback механизмы
 
 **Бот готов к полноценной работе!** 🚀
+

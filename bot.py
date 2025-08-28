@@ -175,7 +175,7 @@ class OkamaFinanceBot:
 Привет, {user_name}! Я помогу с анализом рынков и портфелей.
 
 Что умею:
-• Анализ одного актива с графиками цен
+• Анализ одного актива с графиками цен + AI-анализ каждого графика
 • Сравнение нескольких активов
 • Анализ портфеля (веса, риск/доходность, efficient frontier)
 • Макро/товары/валюты
@@ -223,6 +223,7 @@ class OkamaFinanceBot:
 ✅ Автоматическое разбиение длинных сообщений
 ✅ Контекстная память для лучшего понимания
 ✅ **🆕 AI-анализ изображений графиков** - отправьте фото для анализа!
+✅ **🆕 Автоматический анализ каждого графика в подписях**
 
 Поддержка:
 Если у вас возникли вопросы или проблемы, попробуйте:
@@ -249,7 +250,7 @@ class OkamaFinanceBot:
 **💡 Дополнительные возможности:**
 • Анализ активов через текстовые запросы
 • AI-консультации по финансам
-• Автоматический анализ графиков
+• **🆕 Автоматический анализ графиков в подписях**
 
 **📈 Поддерживаемые биржи:**
 • MOEX (Московская биржа)
@@ -267,9 +268,16 @@ class OkamaFinanceBot:
 
 **🆕 Новые возможности:**
 • **Vision AI** - анализ графиков с помощью YandexGPT
+• **🆕 Автоматический анализ каждого графика в подписи**
 • Автоматический анализ трендов и паттернов
 • Определение уровней поддержки/сопротивления
 • Оценка волатильности и рисков
+
+**💡 Как работает анализ графиков:**
+• Каждый график автоматически анализируется AI
+• Анализ включается в подпись к графику
+• Общий анализ учитывает выводы по графикам
+• Анализ трендов, уровней поддержки/сопротивления, волатильности
 
 Отправьте фото любого финансового графика для получения профессионального AI-анализа!"""
         )
@@ -360,7 +368,7 @@ class OkamaFinanceBot:
                     self.logger.error(f"Error getting dividends for {symbol}: {div_error}")
                     await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}")
             
-            # Get and send charts
+            # Get charts for analysis
             await self._send_message_safe(update, "📈 Получаю графики цен...")
             
             try:
@@ -370,40 +378,23 @@ class OkamaFinanceBot:
                 if 'error' in price_history:
                     self.logger.error(f"Error in price_history: {price_history['error']}")
                     await self._send_message_safe(update, f"⚠️ {price_history['error']}")
+                    return
                 else:
                     self.logger.info(f"Price history received successfully, charts count: {len(price_history.get('charts', []))}")
-                    # Send charts
+                    # Store charts for analysis
                     charts = price_history.get('charts', [])
-                    if charts:
-                        self.logger.info(f"Found {len(charts)} charts, sending them...")
-                        for i, img_bytes in enumerate(charts):
-                            try:
-                                # Determine chart type based on index
-                                if i == 0:
-                                    chart_caption = f"📈 Ежедневный график 1Y: {symbol}"
-                                elif i == 1:
-                                    chart_caption = f"📊 Месячный график 10Y: {symbol}"
-                                else:
-                                    chart_caption = f"📈 График {i+1}: {symbol}"
-                                
-                                await context.bot.send_photo(
-                                    chat_id=update.effective_chat.id, 
-                                    photo=io.BytesIO(img_bytes),
-                                    caption=chart_caption
-                                )
-                            except Exception as chart_error:
-                                self.logger.error(f"Error sending chart {i+1}: {chart_error}")
-                                await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(chart_error)}")
-                    else:
+                    if not charts:
                         await self._send_message_safe(update, "⚠️ Не удалось создать графики цен")
+                        return
                         
             except Exception as chart_error:
                 self.logger.error(f"Error getting charts for {symbol}: {chart_error}")
                 await self._send_message_safe(update, f"⚠️ Ошибка при получении графиков: {str(chart_error)}")
+                return
             
-            # Get AI analysis of charts
+            # Get AI analysis of charts and send with enhanced captions
             if 'charts' in locals() and charts and len(charts) > 0:
-                await self._send_message_safe(update, "🧠 Анализ графиков цен...")
+                await self._send_message_safe(update, "🧠 Анализирую графики цен...")
                 
                 try:
                     # Create prompt for chart analysis
@@ -414,10 +405,9 @@ class OkamaFinanceBot:
 2. Ключевые уровни поддержки и сопротивления
 3. Волатильность (высокая/средняя/низкая)
 
-Анализ должен быть кратким и конкретным на русском языке."""
+Анализ должен быть кратким и конкретным на русском языке (2-3 предложения)."""
 
-                    # Analyze each chart individually with vision
-                    all_analyses = []
+                    # Analyze each chart individually with vision and send with enhanced caption
                     for i, img_bytes in enumerate(charts):
                         try:
                             # Determine chart type for description
@@ -435,8 +425,9 @@ class OkamaFinanceBot:
                                 chart_desc
                             )
                             
+                            # Create enhanced caption with analysis
                             if chart_ai_response and not chart_ai_response.startswith("Ошибка") and not chart_ai_response.startswith("Не удалось"):
-                                all_analyses.append(f"📊 {chart_desc}:\n{chart_ai_response}")
+                                enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n{chart_ai_response}"
                             else:
                                 # Fallback: try regular analysis with chart description
                                 self.logger.info(f"Vision API failed for chart {i+1}, trying fallback analysis")
@@ -448,41 +439,55 @@ class OkamaFinanceBot:
 2. Текущий тренд на рынке
 3. Ключевые факторы цены
 
-Ответ должен быть кратким и конкретным на русском языке."""
+Ответ должен быть кратким и конкретным на русском языке (2-3 предложения)."""
 
                                     fallback_response = self.yandexgpt_service.ask_question(fallback_prompt)
                                     if fallback_response:
-                                        all_analyses.append(f"📊 {chart_desc}:\n{fallback_response}")
+                                        enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n{fallback_response}"
                                     else:
-                                        all_analyses.append(f"📊 {chart_desc}:\n⚠️ Не удалось проанализировать график")
+                                        enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Не удалось проанализировать график"
                                 except Exception as fallback_error:
                                     self.logger.error(f"Fallback analysis also failed for chart {i+1}: {fallback_error}")
-                                    all_analyses.append(f"📊 {chart_desc}:\n⚠️ Не удалось проанализировать график")
+                                    enhanced_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Не удалось проанализировать график"
+                            
+                            # Send chart with enhanced caption
+                            await context.bot.send_photo(
+                                chat_id=update.effective_chat.id, 
+                                photo=io.BytesIO(img_bytes),
+                                caption=enhanced_caption
+                            )
                                 
                         except Exception as chart_error:
                             self.logger.error(f"Error analyzing chart {i+1}: {chart_error}")
-                            all_analyses.append(f"📊 График {i+1}:\n⚠️ Ошибка анализа: {str(chart_error)}")
-                    
-                    # Combine all analyses
-                    if all_analyses:
-                        combined_analysis = "\n\n".join(all_analyses)
-                        self.logger.info(f"Combined chart analysis length: {len(combined_analysis)}")
-                        
-                        # Split response if it's too long
-                        if len(combined_analysis) > 4000:
-                            self.logger.info(f"Combined analysis is long ({len(combined_analysis)} chars), using send_long_message")
-                            await self._send_message_safe(update, "🧠 AI-анализ графиков:")
-                            await self.send_long_message(update, combined_analysis)
-                        else:
-                            self.logger.info(f"Combined analysis is short ({len(combined_analysis)} chars), sending directly")
-                            await self._send_message_safe(update, f"🧠 AI-анализ графиков:\n\n{combined_analysis}")
-                    else:
-                        self.logger.warning("No chart analyses received")
-                        await self._send_message_safe(update, "⚠️ AI-анализ графиков недоступен. Попробуйте позже.")
+                            # Send chart with basic caption if analysis fails
+                            basic_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Ошибка анализа: {str(chart_error)}"
+                            await context.bot.send_photo(
+                                chat_id=update.effective_chat.id, 
+                                photo=io.BytesIO(img_bytes),
+                                caption=basic_caption
+                            )
                         
                 except Exception as chart_ai_error:
                     self.logger.error(f"Error getting chart analysis for {symbol}: {chart_ai_error}")
-                    await self._send_message_safe(update, f"⚠️ Ошибка при получении AI-анализа графиков: {str(chart_ai_error)}")
+                    # Send charts with basic captions if analysis completely fails
+                    for i, img_bytes in enumerate(charts):
+                        try:
+                            if i == 0:
+                                chart_desc = f"Ежедневный график цен за 1 год для {symbol}"
+                            elif i == 1:
+                                chart_desc = f"Месячный график цен за 10 лет для {symbol}"
+                            else:
+                                chart_desc = f"График {i+1} для {symbol}"
+                            
+                            basic_caption = f"📊 {chart_desc}\n\n🧠 AI-анализ:\n⚠️ Ошибка анализа: {str(chart_ai_error)}"
+                            await context.bot.send_photo(
+                                chat_id=update.effective_chat.id, 
+                                photo=io.BytesIO(img_bytes),
+                                caption=basic_caption
+                            )
+                        except Exception as send_error:
+                            self.logger.error(f"Error sending chart {i+1}: {send_error}")
+                            await self._send_message_safe(update, f"⚠️ Не удалось отправить график {i+1}: {str(send_error)}")
                 
         except Exception as e:
             self.logger.error(f"Error in asset_command for {symbol}: {e}")
@@ -509,13 +514,19 @@ class OkamaFinanceBot:
             # Отправляем текстовый ответ
             await self.send_long_message(update, final_response)
             
-            # Отправляем графики
-            for img_bytes in result.charts:
+            # Отправляем графики с AI-анализом в подписях
+            for i, img_bytes in enumerate(result.charts):
                 try:
+                    # Создаем подпись с анализом, если доступен
+                    if hasattr(result, 'chart_analyses') and result.chart_analyses and i < len(result.chart_analyses):
+                        caption = f"📊 График анализа\n\n🧠 AI-анализ:\n{result.chart_analyses[i]}"
+                    else:
+                        caption = f"📊 График анализа {i+1}"
+                    
                     await context.bot.send_photo(
                         chat_id=update.effective_chat.id, 
                         photo=io.BytesIO(img_bytes),
-                        caption="📊 График анализа"
+                        caption=caption
                     )
                 except Exception as e:
                     logger.error(f"Error sending chart: {e}")
