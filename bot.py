@@ -8,6 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
 import pandas as pd
+import tabulate
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
@@ -431,11 +432,45 @@ class OkamaFinanceBot:
                 namespaces = ok.namespaces
                 
                 response = "📚 **Доступные пространства имен (namespaces):**\n\n"
+                response += f"📈 **Статистика:**\n"
+                response += f"• Всего пространств имен: **{len(namespaces)}**\n\n"
                 
+                # Prepare data for tabulate
+                headers = ["Код", "Описание", "Категория"]
+                namespace_data = []
+                
+                # Categorize namespaces for better organization
+                categories = {
+                    'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE'],
+                    'Индексы': ['INDX'],
+                    'Валюты': ['FX', 'CBR'],
+                    'Товары': ['COMM'],
+                    'Криптовалюты': ['CC'],
+                    'Инфляция': ['INFL'],
+                    'Недвижимость': ['RE'],
+                    'Портфели': ['PF', 'PIF'],
+                    'Депозиты': ['RATE'],
+                    'Коэффициенты': ['RATIO']
+                }
+                
+                # Create categorized data
                 for namespace, description in namespaces.items():
-                    response += f"**{namespace}** - {description}\n"
+                    category = "Другое"
+                    for cat_name, cat_namespaces in categories.items():
+                        if namespace in cat_namespaces:
+                            category = cat_name
+                            break
+                    
+                    namespace_data.append([namespace, description, category])
                 
-                response += "\n💡 Используйте `/namespace <название>` для просмотра символов в конкретном пространстве"
+                # Sort by category and then by namespace
+                namespace_data.sort(key=lambda x: (x[2], x[0]))
+                
+                # Create table using tabulate
+                table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="grid")
+                response += f"```\n{table}\n```\n\n"
+                
+                response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
                 
                 await self._send_message_safe(update, response)
                 
@@ -476,15 +511,19 @@ class OkamaFinanceBot:
                         await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не содержит символов")
                         return
                     
-                    # Format as detailed table with symbol, name, country, currency
-                    response = f"📊 **Символы в пространстве {namespace}:**\n\n"
+                    # Show statistics first
+                    total_symbols = len(symbols_df)
+                    response = f"📊 **Пространство имен: {namespace}**\n\n"
+                    response += f"📈 **Статистика:**\n"
+                    response += f"• Всего символов: **{total_symbols}**\n"
+                    response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
                     
-                    # Create detailed table format
-                    response += "**Символ | Название | Страна | Валюта**\n"
-                    response += "--- | --- | --- | ---\n"
+                    # Prepare data for tabulate
+                    headers = ["Символ", "Название", "Страна", "Валюта"]
                     
-                    # Get additional info from DataFrame
-                    for _, row in symbols_df.iterrows():
+                    # Get first 10 rows
+                    first_10 = []
+                    for _, row in symbols_df.head(10).iterrows():
                         symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                         name = row['name'] if pd.notna(row['name']) else 'N/A'
                         country = row['country'] if pd.notna(row['country']) else 'N/A'
@@ -494,11 +533,58 @@ class OkamaFinanceBot:
                         if len(name) > 40:
                             name = name[:37] + "..."
                         
-                        response += f"`{symbol}` | {name} | {country} | {currency}\n"
+                        first_10.append([symbol, name, country, currency])
                     
-                    response += f"\n📈 Всего символов: **{len(symbols_df)}**"
+                    # Get last 10 rows
+                    last_10 = []
+                    for _, row in symbols_df.tail(10).iterrows():
+                        symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                        name = row['name'] if pd.notna(row['name']) else 'N/A'
+                        country = row['country'] if pd.notna(row['country']) else 'N/A'
+                        currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
+                        
+                        # Truncate long names for readability
+                        if len(name) > 40:
+                            name = name[:37] + "..."
+                        
+                        last_10.append([symbol, name, country, currency])
+                    
+                    # Create tables using tabulate
+                    if first_10:
+                        response += "**Первые 10 символов:**\n"
+                        first_table = tabulate.tabulate(first_10, headers=headers, tablefmt="grid")
+                        response += f"```\n{first_table}\n```\n\n"
+                    
+                    if last_10 and total_symbols > 10:
+                        response += "**Последние 10 символов:**\n"
+                        last_table = tabulate.tabulate(last_10, headers=headers, tablefmt="grid")
+                        response += f"```\n{last_table}\n```\n\n"
+                    
+                    response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
                     
                     await self._send_message_safe(update, response)
+                    
+                    # Send Excel file with full list of symbols
+                    try:
+                        await self._send_message_safe(update, "📊 Создаю Excel файл со всеми символами...")
+                        
+                        # Create Excel file in memory
+                        excel_buffer = io.BytesIO()
+                        symbols_df.to_excel(excel_buffer, index=False, sheet_name=f'{namespace}_Symbols')
+                        excel_buffer.seek(0)
+                        
+                        # Send Excel file
+                        await update.message.reply_document(
+                            document=excel_buffer,
+                            filename=f"{namespace}_symbols.xlsx",
+                            caption=f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)"
+                        )
+                        
+                        excel_buffer.close()
+                        
+                    except Exception as excel_error:
+                        self.logger.error(f"Error creating Excel file for {namespace}: {excel_error}")
+                        await self._send_message_safe(update, f"⚠️ Не удалось создать Excel файл: {str(excel_error)}")
                     
                 except Exception as e:
                     await self._send_message_safe(update, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
