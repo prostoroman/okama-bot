@@ -473,7 +473,8 @@ class OkamaFinanceBot:
                 
                 # Create table using tabulate or fallback to simple format
                 if TABULATE_AVAILABLE:
-                    table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="grid")
+                    # Use plain format for best Telegram display
+                    table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="plain")
                     response += f"```\n{table}\n```\n\n"
                 else:
                     # Fallback to simple text format
@@ -566,7 +567,8 @@ class OkamaFinanceBot:
                     if first_10:
                         response += "**Первые 10 символов:**\n"
                         if TABULATE_AVAILABLE:
-                            first_table = tabulate.tabulate(first_10, headers=headers, tablefmt="grid")
+                            # Use plain format for best Telegram display
+                            first_table = tabulate.tabulate(first_10, headers=headers, tablefmt="plain")
                             response += f"```\n{first_table}\n```\n\n"
                         else:
                             # Fallback to simple text format
@@ -579,7 +581,8 @@ class OkamaFinanceBot:
                     if last_10 and total_symbols > 10:
                         response += "**Последние 10 символов:**\n"
                         if TABULATE_AVAILABLE:
-                            last_table = tabulate.tabulate(last_10, headers=headers, tablefmt="grid")
+                            # Use plain format for best Telegram display
+                            last_table = tabulate.tabulate(last_10, headers=headers, tablefmt="plain")
                             response += f"```\n{last_table}\n```\n\n"
                         else:
                             # Fallback to simple text format
