@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import io
+import pandas as pd
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
@@ -185,7 +186,7 @@ class OkamaFinanceBot:
 
 Основные команды:
 /start — эта справка
-/asset [тикер] [период] — базовая информация об активе с графиком и анализом
+/info [тикер] [период] — базовая информация об активе с графиком и анализом
 /namespace [название] — список пространств имен или символы в пространстве
 
 Поддерживаемые форматы тикеров:
@@ -243,7 +244,7 @@ class OkamaFinanceBot:
             """📚 **Подробная справка по командам**
 
 **📊 Анализ активов:**
-• `/asset <тикер>` - Полная информация об активе + AI-анализ графиков
+• `/info <тикер>` - Полная информация об активе + AI-анализ графиков
 
 **📚 Пространства имен:**
 • `/namespace` - Список доступных пространств имен
@@ -288,11 +289,11 @@ class OkamaFinanceBot:
         )
 
 
-    async def asset_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /asset command"""
+    async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /info command"""
         if not context.args:
             await self._send_message_safe(update, 
-                "Укажите тикер актива. Пример: /asset AAPL.US или /asset SBER.MOEX")
+                "Укажите тикер актива. Пример: /info AAPL.US или /info SBER.MOEX")
             return
         
         symbol = context.args[0].upper()
@@ -443,37 +444,59 @@ class OkamaFinanceBot:
                 namespace = context.args[0].upper()
                 
                 try:
-                    symbols = ok.symbols_in_namespace(namespace)
+                    symbols_df = ok.symbols_in_namespace(namespace)
                     
-                    if not symbols:
+                    # Check if DataFrame is empty
+                    if symbols_df.empty:
                         await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не найдено или пусто")
                         return
                     
-                    # Format as table
+                    # Convert DataFrame to list of symbols
+                    # The DataFrame has 'symbol' column with full names like 'AAPL.US'
+                    # We want to extract just the ticker part
+                    if 'symbol' in symbols_df.columns:
+                        # Extract ticker part (before the dot)
+                        symbols = []
+                        for full_symbol in symbols_df['symbol'].tolist():
+                            if pd.isna(full_symbol) or full_symbol is None:
+                                continue
+                            symbol_str = str(full_symbol).strip()
+                            if '.' in symbol_str:
+                                ticker = symbol_str.split('.')[0]
+                                symbols.append(ticker)
+                            else:
+                                symbols.append(symbol_str)
+                    elif 'ticker' in symbols_df.columns:
+                        symbols = symbols_df['ticker'].tolist()
+                    else:
+                        # If no clear column, try to get the first column
+                        symbols = symbols_df.iloc[:, 0].tolist()
+                    
+                    if not symbols:
+                        await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не содержит символов")
+                        return
+                    
+                    # Format as detailed table with symbol, name, country, currency
                     response = f"📊 **Символы в пространстве {namespace}:**\n\n"
                     
-                    # Group symbols by first letter for better readability
-                    symbols_by_letter = {}
-                    for symbol in sorted(symbols):
-                        first_letter = symbol[0]
-                        if first_letter not in symbols_by_letter:
-                            symbols_by_letter[first_letter] = []
-                        symbols_by_letter[first_letter].append(symbol)
+                    # Create detailed table format
+                    response += "**Символ | Название | Страна | Валюта**\n"
+                    response += "--- | --- | --- | ---\n"
                     
-                    # Create table-like format
-                    for letter in sorted(symbols_by_letter.keys()):
-                        response += f"**{letter}:**\n"
-                        symbols_in_group = symbols_by_letter[letter]
+                    # Get additional info from DataFrame
+                    for _, row in symbols_df.iterrows():
+                        symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                        name = row['name'] if pd.notna(row['name']) else 'N/A'
+                        country = row['country'] if pd.notna(row['country']) else 'N/A'
+                        currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
                         
-                        # Split into columns for better readability
-                        col_width = 20
-                        for i in range(0, len(symbols_in_group), 3):
-                            row_symbols = symbols_in_group[i:i+3]
-                            row = " | ".join(f"`{s}`" for s in row_symbols)
-                            response += f"{row}\n"
-                        response += "\n"
+                        # Truncate long names for readability
+                        if len(name) > 40:
+                            name = name[:37] + "..."
+                        
+                        response += f"`{symbol}` | {name} | {country} | {currency}\n"
                     
-                    response += f"📈 Всего символов: **{len(symbols)}**"
+                    response += f"\n📈 Всего символов: **{len(symbols_df)}**"
                     
                     await self._send_message_safe(update, response)
                     
@@ -809,7 +832,7 @@ class OkamaFinanceBot:
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
-        application.add_handler(CommandHandler("asset", self.asset_command))
+        application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("namespace", self.namespace_command))
         
         # Add message and callback handlers
