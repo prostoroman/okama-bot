@@ -322,7 +322,7 @@ class EnhancedOkamaFinancialBrain:
             if isinstance(result.data_report, dict) and 'error' in result.data_report:
                 error_text = str(result.data_report.get('error') or 'Неизвестная ошибка данных')
                 response_parts.append(f"❌ Ошибка данных: {error_text}")
-                response_parts.append("Попробуйте переформулировать запрос или используйте /help. Для MOEX данные могут быть временно недоступны.")
+                response_parts.append("Попробуйте переформулировать запрос. Для MOEX данные могут быть временно недоступны.")
                 response_parts.append("")
             
             # Основные метрики из отчета
