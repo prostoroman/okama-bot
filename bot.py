@@ -744,56 +744,7 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
 
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle incoming text messages using Okama Financial Brain"""
-        user_message = update.message.text.strip()
-        
-        if not user_message:
-            return
-        
-        # Show typing indicator
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        
-        try:
-            # Используем Enhanced Okama Financial Brain для полного цикла анализа
-            result = self.financial_brain.process_query(user_message)
-            
-            # Формируем финальный ответ
-            final_response = self.financial_brain.format_final_response(result)
-            
-            # Отправляем текстовый ответ
-            await self.send_long_message(update, final_response)
-            
-            # Отправляем графики с AI-анализом в подписях
-            for i, img_bytes in enumerate(result.charts):
-                try:
-                    # Создаем подпись с анализом, если доступен
-                    if hasattr(result, 'chart_analyses') and result.chart_analyses and i < len(result.chart_analyses):
-                        caption = f"📊 График анализа\n\n🧠 AI-анализ:\n{result.chart_analyses[i]}"
-                    else:
-                        caption = f"📊 График анализа {i+1}"
-                    
-                    await context.bot.send_photo(
-                        chat_id=update.effective_chat.id, 
-                        photo=io.BytesIO(img_bytes),
-                        caption=caption
-                    )
-                except Exception as e:
-                    logger.error(f"Error sending chart: {e}")
-                    
-        except Exception as e:
-            logger.exception(f"Error in Enhanced Financial Brain processing: {e}")
-            
-            # Fallback к старому методу для совместимости
-            try:
-                await self._handle_message_fallback(update, context, user_message)
-            except Exception as fallback_error:
-                logger.error(f"Fallback also failed: {fallback_error}")
-                await update.message.reply_text(
-                    "Извините, произошла ошибка при обработке вашего запроса. "
-                    "Попробуйте переформулировать вопрос или используйте /help для доступных команд. "
-                    "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
-                )
+
 
     async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming photo messages for chart analysis"""
@@ -857,64 +808,15 @@ class OkamaFinanceBot:
             self.logger.error(f"Error handling photo: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при анализе изображения: {str(e)}")
 
-    async def _handle_message_fallback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_message: str):
-        """Fallback метод для обработки сообщений (старая логика)"""
-        try:
-            # Старая логика обработки
-            parsed = self.intent_parser.parse(user_message)
 
-            # Chat fallback
-            if parsed.intent == 'chat':
-                # Simple AI response using YandexGPT
-                try:
-                    ai_response = self.yandexgpt_service.ask_question(user_message)
-                    if ai_response:
-                        await self.send_long_message(update, f"🤖 AI-ответ:\n\n{ai_response}")
-                    else:
-                        await self._send_message_safe(update, "Извините, не удалось получить AI-ответ. Попробуйте переформулировать вопрос.")
-                except Exception as e:
-                    self.logger.error(f"Error in AI chat: {e}")
-                    await self._send_message_safe(update, "Извините, произошла ошибка при обработке AI-запроса.")
-                return
 
-            # Resolve assets as needed
-            resolved = self.asset_resolver.resolve(parsed.raw_assets) if parsed.raw_assets else []
-            valid_tickers = [r.ticker for r in resolved if r.valid]
 
-            # Dispatch by intent
-            report_text = None
-            images = []
-            ai_summary = None
 
-            if parsed.intent == 'asset_single':
-                if not valid_tickers:
-                    await self._send_message_safe(update, "Не удалось распознать актив. Укажите тикер, например AAPL.US, SBER.MOEX, GC.COMM")
-                    return
-                # Use existing info command logic for single assets
-                await self.info_command(update, context)
-                return
 
-            elif parsed.intent == 'asset_compare' or (parsed.intent == 'macro'):
-                if len(valid_tickers) < 2:
-                    # If only one valid, treat as single asset with chart
-                    if len(valid_tickers) == 1:
-                        await self.info_command(update, context)
-                        return
-                    else:
-                        await self._send_message_safe(update, "Для сравнения укажите как минимум два актива.")
-                        return
-                else:
-                    result = self.okama_handler.get_multiple_assets(valid_tickers)
-                    report_text, images = self.report_builder.build_multi_asset_report(result)
-                    ai_summary = self.analysis_engine.summarize('asset_compare', {"metrics": result.get("metrics", {}), "correlation": result.get("correlation", {})}, user_message)
 
-            elif parsed.intent == 'portfolio':
-                if len(valid_tickers) < 2:
-                    await self._send_message_safe(update, "Для анализа портфеля укажите как минимум два актива.")
-                    return
-                result = self.okama_handler.get_portfolio(valid_tickers)
-                report_text, images = self.report_builder.build_portfolio_report(result)
-                ai_summary = self.analysis_engine.summarize('portfolio', {"metrics": result.get("metrics", {})}, user_message)
+
+
+
 
             elif parsed.intent == 'inflation_data':
                 # Получаем параметры для инфляции
