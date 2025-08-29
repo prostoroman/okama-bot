@@ -186,8 +186,6 @@ class OkamaFinanceBot:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-
-        
         welcome_message = f"""🧠 Okama Financial Bot - Полная справка
 
 Привет, {user_name}! Я помогу с анализом рынков и портфелей.
@@ -270,9 +268,8 @@ class OkamaFinanceBot:
                 return
             
             # Показываем первые 10 символов
-            response = f"📊 **Пространство имен: {namespace}**\n\n"
-            response += f"📈 **Статистика:**\n"
-            response += f"• Всего символов: **{len(symbols_df)}**\n\n"
+            response = f"📊 Пространство имен: {namespace}\n\n"
+            response += f"• Всего символов: {len(symbols_df)}\n\n"
             
             # Подготавливаем данные для таблицы
             headers = ["Символ", "Название", "Страна", "Валюта"]
@@ -293,7 +290,7 @@ class OkamaFinanceBot:
             
             # Создаем простую таблицу символов
             if first_10:
-                response += "**Первые 10 символов:**\n\n"
+                response += "Первые 10 символов:\n\n"
                 
                 # Создаем простую таблицу
                 for row in first_10:
@@ -313,37 +310,7 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка при получении данных для '{namespace}': {str(e)}")
     
 
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /help command with detailed help"""
-        await self._send_message_safe(update, 
-            """📚 **Подробная справка по командам**
 
-**📊 Анализ активов:**
-• `/info <тикер>` - Полная информация об активе + AI-анализ графиков
-• `/compare <символ1> <символ2> ...` - Сравнение активов с графиком накопленной доходности
-
-**📚 Пространства имен:**
-• `/namespace` - Список доступных пространств имен
-• `/namespace <название>` - Символы в конкретном пространстве
-
-
-**📈 Поддерживаемые биржи:**
-• MOEX (Московская биржа)
-• US (NYSE, NASDAQ)
-• LSE (Лондонская биржа)
-• FX (Валютный рынок)
-• COMM (Товарные рынки)
-
-**💡 Примеры тикеров:**
-• `SBER.MOEX` - Сбербанк
-• `AAPL.US` - Apple
-• `TSLA.US` - Tesla
-• `XAU.COMM` - Золото
-• `EURUSD.FX` - EUR/USD
-
-
-"""
-        )
 
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -909,24 +876,83 @@ class OkamaFinanceBot:
             self.logger.error(f"Error handling photo: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при анализе изображения: {str(e)}")
 
-
-
-
-
-
-
-
-
-
-
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle incoming text messages"""
+        try:
+            user_message = update.message.text
+            user_id = update.effective_user.id
+            
+            # Update user context
+            self._update_user_context(user_id, conversation_history=user_message)
+            
+            # Parse intent
+            parsed = self.intent_parser.parse_intent(user_message)
+            
+            # Process based on intent
+            if parsed.intent == 'asset_analysis':
+                # Handle asset analysis
+                symbol = parsed.symbol
+                period = getattr(parsed, 'period', '10Y')
+                
+                # Get asset info
+                result = self.okama_handler.get_asset_info(symbol, period)
+                report_text, images = self.report_builder.build_asset_report(result)
+                ai_summary = self.analysis_engine.summarize('asset', result, user_message)
+                
+                # Send report
+                await self.send_long_message(update, report_text)
+                
+                # Send images with analysis
+                for img_bytes in images:
+                    try:
+                        await context.bot.send_photo(
+                            chat_id=update.effective_chat.id, 
+                            photo=io.BytesIO(img_bytes)
+                        )
+                    except Exception:
+                        pass
+                        
+            elif parsed.intent == 'portfolio_analysis':
+                # Handle portfolio analysis
+                portfolio_data = parsed.portfolio
+                result = self.okama_handler.analyze_portfolio(portfolio_data)
+                report_text, images = self.report_builder.build_portfolio_report(result)
+                ai_summary = self.analysis_engine.summarize('portfolio', result, user_message)
+                
+                # Send report
+                await self.send_long_message(update, report_text)
+                
+                # Send images
+                for img_bytes in images:
+                    try:
+                        await context.bot.send_photo(
+                            chat_id=update.effective_chat.id, 
+                            photo=io.BytesIO(img_bytes)
+                        )
+                    except Exception:
+                        pass
+                        
             elif parsed.intent == 'inflation_data':
-                # Получаем параметры для инфляции
+                # Handle inflation data
                 country = getattr(parsed, 'country', 'US')
                 period = getattr(parsed, 'period', '5Y')
                 result = self.okama_handler.get_inflation(country=country, period=period)
                 report_text, images = self.report_builder.build_inflation_report(result)
-                ai_summary = self.analysis_engine.summarize('inflation', {}, user_message)
-
+                ai_summary = self.analysis_engine.summarize('inflation', result, user_message)
+                
+                # Send report
+                await self.send_long_message(update, report_text)
+                
+                # Send images
+                for img_bytes in images:
+                    try:
+                        await context.bot.send_photo(
+                            chat_id=update.effective_chat.id, 
+                            photo=io.BytesIO(img_bytes)
+                        )
+                    except Exception:
+                        pass
+                        
             else:
                 # Fallback to AI chat if intent not recognized
                 try:
@@ -938,37 +964,14 @@ class OkamaFinanceBot:
                 except Exception as e:
                     self.logger.error(f"Error in AI chat: {e}")
                     await self._send_message_safe(update, "Извините, произошла ошибка при обработке AI-запроса.")
-                return
-
-            # Send text and AI summary
-            final_text = report_text or ""
-            if ai_summary:
-                final_text = f"{final_text}\n\nВыводы:\n{ai_summary}"
-            await self.send_long_message(update, final_text)
-
-            # Send images
-            for img_bytes in images:
-                try:
-                    await context.bot.send_photo(chat_id=update.effective_chat.id, photo=io.BytesIO(img_bytes))
-                except Exception:
-                    pass
                     
         except Exception as e:
-            logger.exception(f"Error in fallback message handling: {e}")
-            await update.message.reply_text(
+            self.logger.error(f"Error in handle_message: {e}")
+            await self._send_message_safe(update, 
                 "Извините, произошла ошибка при обработке вашего запроса. "
-                "Попробуйте переформулировать вопрос или используйте /help для доступных команд. "
-                "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступны."
+                                    "Попробуйте переформулировать вопрос или используйте доступные команды. "
+                "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступно."
             )
-
-
-
-
-    
-
-    
-
-    
 
     def run(self):
         """Run the bot"""
@@ -977,7 +980,6 @@ class OkamaFinanceBot:
         
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
-        application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("namespace", self.namespace_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
