@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 class AssetService:
+
+    def _add_copyright_signature(self, ax):
+        """Добавить копирайт подпись к графику"""
+        ax.text(0.02, -0.15, '________________________________________________________________________________________________________________',
+               transform=ax.transAxes, color='grey', alpha=0.7, fontsize=10)
+        ax.text(0.02, -0.25, '   ©Цбот                                                                               Source: okama   ',
+               transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
     """Service for retrieving asset information using Okama library"""
     
     def __init__(self):
@@ -318,7 +325,7 @@ class AssetService:
                     
                     # Create the plot
                     try:
-                        plt.style.use('bmh')  # Use bmh style with grid
+                        plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
                         fig, ax = plt.subplots(figsize=(10, 4))
                         ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
                         ax.set_title(f'Динамика цены по месяцам: {symbol}', fontsize=12)
@@ -601,7 +608,7 @@ class AssetService:
                             series_for_plot.index = series_for_plot.index.to_timestamp()
                     except Exception:
                         pass
-                    plt.style.use('bmh')  # Use bmh style with grid
+                    plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
                     fig, ax = plt.subplots(figsize=(10, 4))
                     ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
                     ax.set_title(f'Динамика цены: {symbol}', fontsize=12)
@@ -850,7 +857,7 @@ class AssetService:
                 end_date_str = "N/A"
             
             # Create the price chart
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(12, 6))
             
             # Plot price line
@@ -1130,7 +1137,7 @@ class AssetService:
                             series_for_plot.index = series_for_plot.index.to_timestamp()
                     except Exception:
                         pass
-                    plt.style.use('bmh')  # Use bmh style with grid
+                    plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
                     fig, ax = plt.subplots(figsize=(10, 4))
                     ax.bar(series_for_plot.index, series_for_plot.values, color='#2ca02c')
                     ax.set_title(f'Дивиденды: {symbol}', fontsize=12)

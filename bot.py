@@ -4,8 +4,8 @@ import os
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 import io
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -194,6 +194,13 @@ class OkamaFinanceBot:
             self.logger.error(f"Error creating additional charts: {e}")
             await self._send_message_safe(update, f"⚠️ Не удалось создать дополнительные графики: {str(e)}")
     
+    def _add_copyright_signature(self, ax):
+        """Добавить копирайт подпись к графику"""
+        ax.text(0.02, -0.15, '________________________________________________________________________________________________________________',
+               transform=ax.transAxes, color='grey', alpha=0.7, fontsize=10)
+        ax.text(0.02, -0.25, '   ©Цбот                                                                               Source: okama   ',
+               transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
+    
     async def _create_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
         """Создать график drawdowns"""
         try:
@@ -203,7 +210,7 @@ class OkamaFinanceBot:
                 return
             
             # Create drawdowns chart
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
             
             # Plot drawdowns
@@ -234,6 +241,9 @@ class OkamaFinanceBot:
             # Add subtle background pattern
             ax.set_alpha(0.95)
             
+            # Add copyright signature
+            self._add_copyright_signature(ax)
+            
             # Save chart to bytes
             img_buffer = io.BytesIO()
             fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
@@ -262,7 +272,7 @@ class OkamaFinanceBot:
                 return
             
             # Create dividend yield chart
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
             
             # Plot dividend yield
@@ -293,6 +303,9 @@ class OkamaFinanceBot:
             # Add subtle background pattern
             ax.set_alpha(0.95)
             
+            # Add copyright signature
+            self._add_copyright_signature(ax)
+            
             # Save chart to bytes
             img_buffer = io.BytesIO()
             fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
@@ -315,20 +328,36 @@ class OkamaFinanceBot:
     async def _create_correlation_matrix(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list):
         """Создать корреляционную матрицу активов"""
         try:
+            self.logger.info(f"Starting correlation matrix creation for symbols: {symbols}")
+            
             # Check if assets_ror data is available
-            if not hasattr(asset_list, 'assets_ror') or asset_list.assets_ror is None or asset_list.assets_ror.empty:
+            if not hasattr(asset_list, 'assets_ror'):
+                self.logger.warning("assets_ror attribute does not exist")
+                await self._send_message_safe(update, "ℹ️ Данные о доходности активов недоступны для создания корреляционной матрицы")
+                return
+                
+            if asset_list.assets_ror is None:
+                self.logger.warning("assets_ror is None")
+                await self._send_message_safe(update, "ℹ️ Данные о доходности активов недоступны для создания корреляционной матрицы")
+                return
+                
+            if asset_list.assets_ror.empty:
+                self.logger.warning("assets_ror is empty")
                 await self._send_message_safe(update, "ℹ️ Данные о доходности активов недоступны для создания корреляционной матрицы")
                 return
             
             # Get correlation matrix
             correlation_matrix = asset_list.assets_ror.corr()
             
+            self.logger.info(f"Correlation matrix created successfully, shape: {correlation_matrix.shape}")
+            
             if correlation_matrix.empty:
+                self.logger.warning("Correlation matrix is empty")
                 await self._send_message_safe(update, "ℹ️ Не удалось вычислить корреляционную матрицу")
                 return
             
             # Create correlation matrix visualization
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(12, 10), facecolor='white')
             
             # Create heatmap
@@ -379,6 +408,9 @@ class OkamaFinanceBot:
             # Add subtle background pattern
             ax.set_alpha(0.95)
             
+            # Add copyright signature
+            self._add_copyright_signature(ax)
+            
             # Save chart to bytes
             img_buffer = io.BytesIO()
             fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
@@ -386,11 +418,13 @@ class OkamaFinanceBot:
             img_bytes = img_buffer.getvalue()
             
             # Send correlation matrix
+            self.logger.info("Sending correlation matrix image...")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
                 caption=f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"
             )
+            self.logger.info("Correlation matrix image sent successfully")
             
             plt.close(fig)
             
@@ -888,13 +922,14 @@ class OkamaFinanceBot:
                     "• `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых\n"
                     "• `/compare GC.COMM CL.COMM` - сравнить золото и нефть (в USD)\n"
                     "• `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото (в USD)\n\n"
-                                         "Что вы получите:\n"
-                     "✅ График накопленной доходности всех активов\n"
-                     "✅ График истории drawdowns (риски)\n"
-                     "✅ График дивидендной доходности (если доступно)\n"
-                     "✅ Корреляционная матрица активов\n"
-                     "✅ Сравнительный анализ\n"
-                     "✅ AI-рекомендации\n\n"
+                                                             "Что вы получите:\n"
+                    "✅ График накопленной доходности всех активов\n"
+                    "✅ Кнопки для дополнительного анализа:\n"
+                    "   📉 Drawdowns - график рисков и волатильности\n"
+                    "   💰 Dividends - график дивидендной доходности\n"
+                    "   🔗 Correlation Matrix - корреляционная матрица\n"
+                    "✅ Сравнительный анализ\n"
+                    "✅ AI-рекомендации\n\n"
                     "💡 Автоматическое определение валюты:\n"
                     "• Первый актив в списке определяет базовую валюту\n"
                     "• MOEX активы → RUB, US активы → USD, LSE → GBP\n"
@@ -994,7 +1029,7 @@ class OkamaFinanceBot:
                 self.logger.info(f"Created AssetList with full available period")
                 
                 # Generate beautiful comparison chart
-                plt.style.use('bmh')  # Use bmh style with grid
+                plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
                 
                 fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
                 
@@ -1025,6 +1060,9 @@ class OkamaFinanceBot:
                 
                 # Add subtle background pattern
                 ax.set_alpha(0.95)
+                
+                # Add copyright signature
+                self._add_copyright_signature(ax)
                 
                 # Save chart to bytes
                 img_buffer = io.BytesIO()
@@ -1059,26 +1097,34 @@ class OkamaFinanceBot:
                 # Send text report
                 #await self.send_long_message(update, stats_text)
                 
-                # Send chart image
+                # Send chart image with buttons
+                keyboard = [
+                    [
+                        InlineKeyboardButton("📉 Drawdowns", callback_data=f"drawdowns_{','.join(symbols)}"),
+                        InlineKeyboardButton("💰 Dividends", callback_data=f"dividends_{','.join(symbols)}")
+                    ],
+                    [
+                        InlineKeyboardButton("🔗 Correlation Matrix", callback_data=f"correlation_{','.join(symbols)}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=stats_text
+                    caption=stats_text,
+                    reply_markup=reply_markup
                 )
                 
-                # Create and send additional analysis charts
-                await self._send_additional_charts(update, context, asset_list, symbols, currency)
-                
-                # Create and send correlation matrix
-                await self._create_correlation_matrix(update, context, asset_list, symbols)
-                
-                # Update user context
+                # Store asset_list in context for button callbacks
                 user_id = update.effective_user.id
                 self._update_user_context(
                     user_id, 
                     last_assets=symbols,
                     last_analysis_type='comparison',
-                    last_period='MAX'
+                    last_period='MAX',
+                    current_asset_list=asset_list,
+                    current_currency=currency
                 )
                 
             except Exception as e:
@@ -1257,6 +1303,89 @@ class OkamaFinanceBot:
                 "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступно."
             )
 
+    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle button callbacks for additional analysis"""
+        query = update.callback_query
+        await query.answer()
+        
+        try:
+            # Parse callback data
+            callback_data = query.data
+            if callback_data.startswith('drawdowns_'):
+                symbols = callback_data.replace('drawdowns_', '').split(',')
+                await self._handle_drawdowns_button(update, context, symbols)
+            elif callback_data.startswith('dividends_'):
+                symbols = callback_data.replace('dividends_', '').split(',')
+                await self._handle_dividends_button(update, context, symbols)
+            elif callback_data.startswith('correlation_'):
+                symbols = callback_data.replace('correlation_', '').split(',')
+                await self._handle_correlation_button(update, context, symbols)
+            else:
+                await self._send_message_safe(update, "❌ Неизвестная кнопка")
+                
+        except Exception as e:
+            self.logger.error(f"Error in button callback: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle drawdowns button click"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            if 'current_asset_list' not in user_context:
+                await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
+                return
+            
+            asset_list = user_context['current_asset_list']
+            currency = user_context.get('current_currency', 'USD')
+            
+            await self._send_message_safe(update, "📉 Создаю график drawdowns...")
+            await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling drawdowns button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании графика drawdowns: {str(e)}")
+
+    async def _handle_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle dividends button click"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            if 'current_asset_list' not in user_context:
+                await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
+                return
+            
+            asset_list = user_context['current_asset_list']
+            currency = user_context.get('current_currency', 'USD')
+            
+            await self._send_message_safe(update, "💰 Создаю график дивидендной доходности...")
+            await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling dividends button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании графика дивидендной доходности: {str(e)}")
+
+    async def _handle_correlation_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle correlation matrix button click"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            if 'current_asset_list' not in user_context:
+                await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
+                return
+            
+            asset_list = user_context['current_asset_list']
+            
+            await self._send_message_safe(update, "🔗 Создаю корреляционную матрицу...")
+            await self._create_correlation_matrix(update, context, asset_list, symbols)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling correlation button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании корреляционной матрицы: {str(e)}")
+
     def run(self):
         """Run the bot"""
         # Create application
@@ -1267,6 +1396,9 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("namespace", self.namespace_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
+        
+        # Add callback query handler for buttons
+        application.add_handler(CallbackQueryHandler(self.button_callback))
         
         # Add message handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))

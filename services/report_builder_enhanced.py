@@ -24,6 +24,13 @@ from yandexgpt_service import YandexGPTService
 logger = logging.getLogger(__name__)
 
 class EnhancedReportBuilder:
+
+    def _add_copyright_signature(self, ax):
+        """Добавить копирайт подпись к графику"""
+        ax.text(0.02, -0.15, '________________________________________________________________________________________________________________',
+               transform=ax.transAxes, color='grey', alpha=0.7, fontsize=10)
+        ax.text(0.02, -0.25, '   ©Цбот                                                                               Source: okama   ',
+               transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
     """Улучшенный генератор отчетов для финансового анализа"""
     
     def __init__(self):
@@ -164,7 +171,7 @@ class EnhancedReportBuilder:
         
         # 1. График изменения цен (если есть данные)
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty:
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
             
             # График цены
@@ -199,7 +206,7 @@ class EnhancedReportBuilder:
         # 3. Дополнительные графики для анализа
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty and len(prices) > 20:
             # График волатильности (скользящее окно)
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(10, 4))
             window_size = min(30, len(prices) // 4)
             rolling_vol = prices.pct_change().rolling(window=window_size).std() * np.sqrt(252)
@@ -216,7 +223,7 @@ class EnhancedReportBuilder:
             chart_analyses.append(analysis)
             
             # График просадок
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(10, 4))
             cummax = prices.cummax()
             drawdowns = (prices - cummax) / cummax * 100
@@ -357,7 +364,7 @@ class EnhancedReportBuilder:
         # 2) Wealth indexes из AssetList
         wealth_indexes = data.get('wealth_indexes')
         if wealth_indexes is not None and hasattr(wealth_indexes, 'empty') and isinstance(wealth_indexes, pd.DataFrame) and not wealth_indexes.empty:
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, ticker in enumerate(tickers):
                 if ticker in wealth_indexes:
@@ -374,7 +381,7 @@ class EnhancedReportBuilder:
         # 3) История просадок
         drawdowns = data.get('drawdowns')
         if drawdowns is not None and hasattr(drawdowns, 'empty') and isinstance(drawdowns, pd.DataFrame) and not drawdowns.empty:
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, ticker in enumerate(tickers):
                 if ticker in drawdowns:
@@ -391,7 +398,7 @@ class EnhancedReportBuilder:
         # 4) Дивидендная доходность
         dividend_yield = data.get('dividend_yield')
         if dividend_yield is not None and hasattr(dividend_yield, 'empty') and isinstance(dividend_yield, pd.DataFrame) and not dividend_yield.empty:
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, ticker in enumerate(tickers):
                 if ticker in dividend_yield:
@@ -408,7 +415,7 @@ class EnhancedReportBuilder:
         # 5) Скользящая корреляция с бенчмарком
         index_corr = data.get('index_corr')
         if index_corr is not None and hasattr(index_corr, 'empty') and isinstance(index_corr, pd.DataFrame) and not index_corr.empty:
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(12, 6))
             for i, col in enumerate(index_corr.columns):
                 ax.plot(index_corr.index, index_corr[col].values, 
@@ -478,7 +485,7 @@ class EnhancedReportBuilder:
         
         # Efficient Frontier
         if frontier is not None and hasattr(frontier, 'empty') and isinstance(frontier, pd.DataFrame) and not frontier.empty and 'vol' in frontier.columns and 'ret' in frontier.columns:
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.scatter(frontier['vol'], frontier['ret'], s=20, alpha=0.6, color=self.colors[0])
             ax.set_xlabel('Риск (волатильность)', fontsize=12)
@@ -542,7 +549,7 @@ class EnhancedReportBuilder:
         
         # 2. Дополнительный график CPI (если есть данные)
         if cpi_data is not None and hasattr(cpi_data, 'empty') and isinstance(cpi_data, pd.Series) and not cpi_data.empty:
-            plt.style.use('bmh')  # Use bmh style with grid
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.plot(cpi_data.index, cpi_data.values, color=self.colors[0], linewidth=2)
             ax.set_title(f'{name} - Динамика CPI ({country})', fontsize=14, fontweight='bold')
@@ -556,7 +563,7 @@ class EnhancedReportBuilder:
             
             # 3. График годового изменения CPI
             if len(cpi_data) > 12:  # Если есть достаточно данных для годового изменения
-                plt.style.use('bmh')  # Use bmh style with grid
+                plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
                 fig, ax = plt.subplots(figsize=(10, 4))
                 yearly_change = cpi_data.pct_change(12).dropna() * 100  # Годовое изменение в %
                 ax.plot(yearly_change.index, yearly_change.values, color=self.colors[1], linewidth=2)
