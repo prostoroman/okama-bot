@@ -148,7 +148,7 @@ class OkamaFinanceBot:
         for chunk in self._split_text(text):
             await update.message.reply_text(chunk)
     
-    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None):
+    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None, reply_markup = None):
         """Безопасная отправка сообщения с автоматическим разбиением на части"""
         try:
             # Проверяем, что text действительно является строкой
@@ -158,9 +158,18 @@ class OkamaFinanceBot:
             
             # Проверяем длину строки
             if len(text) <= 4000:
-                await update.message.reply_text(text, parse_mode=parse_mode)
+                await update.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
             else:
-                await self.send_long_message(update, text)
+                # Для длинных сообщений с кнопками отправляем первую часть с кнопками
+                if reply_markup:
+                    first_part = text[:4000]
+                    await update.message.reply_text(first_part, parse_mode=parse_mode, reply_markup=reply_markup)
+                    # Остальную часть отправляем без кнопок
+                    remaining_text = text[4000:]
+                    if remaining_text:
+                        await self.send_long_message(update, remaining_text)
+                else:
+                    await self.send_long_message(update, text)
         except Exception as e:
             self.logger.error(f"Error in _send_message_safe: {e}")
             # Fallback: попробуем отправить как обычный текст
@@ -241,7 +250,16 @@ class OkamaFinanceBot:
 
 Начните с простого запроса или используйте команды выше!"""
 
-        await self._send_message_safe(update, welcome_message)
+        # Создаем кнопки для быстрого доступа к основным командам
+        keyboard = [
+            [
+                InlineKeyboardButton("📊 Информация об активе (/info)", callback_data="quick_info"),
+                InlineKeyboardButton("📚 Пространства имен (/namespace)", callback_data="quick_namespace")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await self._send_message_safe(update, welcome_message, reply_markup=reply_markup)
     
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -488,7 +506,28 @@ class OkamaFinanceBot:
                 
                 response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
                 
-                await self._send_message_safe(update, response)
+                # Создаем кнопки для быстрого доступа к популярным пространствам имен
+                keyboard = [
+                    [
+                        InlineKeyboardButton("🇺🇸 US акции", callback_data="namespace_US"),
+                        InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX")
+                    ],
+                    [
+                        InlineKeyboardButton("📈 Индексы", callback_data="namespace_INDX"),
+                        InlineKeyboardButton("💱 Валюты", callback_data="namespace_FX")
+                    ],
+                    [
+                        InlineKeyboardButton("🪙 Товары", callback_data="namespace_COMM"),
+                        InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
+                    ],
+                    [
+                        InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE"),
+                        InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_message_safe(update, response, reply_markup=reply_markup)
                 
             else:
                 # Show symbols in specific namespace
@@ -938,6 +977,190 @@ class OkamaFinanceBot:
 
 Я предоставлю экспертную финансовую консультацию на базе YandexGPT!"""
             )
+        elif query.data == "quick_info":
+            # Показываем справку по команде /info
+            await query.edit_message_text(
+                """📊 **Команда /info - Информация об активе**
+
+Используйте команду `/info [тикер] [период]` для получения полной информации об активе.
+
+**Примеры:**
+• `/info AAPL.US` - информация об Apple
+• `/info SBER.MOEX` - информация о Сбербанке
+• `/info GC.COMM 5Y` - золото за 5 лет
+• `/info SPX.INDX 10Y` - S&P 500 за 10 лет
+
+**Поддерживаемые периоды:**
+• 1Y, 2Y, 5Y, 10Y, MAX
+• По умолчанию: 10Y для акций, 5Y для макро
+
+**Что вы получите:**
+✅ График цены актива
+✅ Основные метрики
+✅ AI-анализ графика
+✅ Рекомендации
+
+Просто введите команду в чат!"""
+            )
+        elif query.data == "quick_namespace":
+            # Показываем справку по команде /namespace
+            await query.edit_message_text(
+                """📚 **Команда /namespace - Пространства имен**
+
+Используйте команду `/namespace` для просмотра всех доступных пространств имен.
+
+**Популярные пространства:**
+• `/namespace US` - американские акции
+• `/namespace MOEX` - российские акции
+• `/namespace INDX` - мировые индексы
+• `/namespace FX` - валютные пары
+• `/namespace COMM` - товарные активы
+
+**Что вы получите:**
+✅ Список всех пространств имен
+✅ Категоризация по типам
+✅ Количество символов в каждом
+✅ Быстрые кнопки для популярных
+
+Просто введите `/namespace` в чат!"""
+            )
+        elif query.data.startswith("namespace_"):
+            # Обрабатываем кнопки пространств имен
+            namespace = query.data.replace("namespace_", "")
+            try:
+                import okama as ok
+                symbols_df = ok.symbols_in_namespace(namespace)
+                
+                if symbols_df.empty:
+                    await query.edit_message_text(f"❌ Пространство имен '{namespace}' не найдено или пусто")
+                    return
+                
+                # Показываем первые 10 символов
+                response = f"📊 **Пространство имен: {namespace}**\n\n"
+                response += f"📈 **Статистика:**\n"
+                response += f"• Всего символов: **{len(symbols_df)}**\n\n"
+                
+                # Подготавливаем данные для таблицы
+                headers = ["Символ", "Название", "Страна", "Валюта"]
+                
+                # Получаем первые 10 строк
+                first_10 = []
+                for _, row in symbols_df.head(10).iterrows():
+                    symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                    name = row['name'] if pd.notna(row['name']) else 'N/A'
+                    country = row['country'] if pd.notna(row['country']) else 'N/A'
+                    currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
+                    
+                    # Обрезаем длинные названия для читаемости
+                    if len(name) > 40:
+                        name = name[:37] + "..."
+                    
+                    first_10.append([symbol, name, country, currency])
+                
+                # Создаем таблицу
+                if first_10:
+                    response += "**Первые 10 символов:**\n"
+                    if TABULATE_AVAILABLE:
+                        table = tabulate.tabulate(first_10, headers=headers, tablefmt="plain")
+                        response += f"```\n{table}\n```\n\n"
+                    else:
+                        response += "**Символ | Название | Страна | Валюта**\n"
+                        response += "--- | --- | --- | ---\n"
+                        for row in first_10:
+                            response += f"`{row[0]}` | {row[1]} | {row[2]} | {row[3]}\n"
+                        response += "\n"
+                
+                response += f"💡 Используйте `/namespace {namespace}` для полного списка символов"
+                
+                # Добавляем кнопку "Назад"
+                keyboard = [[InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_namespaces")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(response, reply_markup=reply_markup)
+                
+            except Exception as e:
+                await query.edit_message_text(f"❌ Ошибка при получении данных для '{namespace}': {str(e)}")
+        elif query.data == "back_to_namespaces":
+            # Возвращаемся к списку пространств имен
+            try:
+                import okama as ok
+                namespaces = ok.namespaces
+                
+                response = "📚 **Доступные пространства имен (namespaces):**\n\n"
+                response += f"📈 **Статистика:**\n"
+                response += f"• Всего пространств имен: **{len(namespaces)}**\n\n"
+                
+                # Подготавливаем данные для tabulate
+                headers = ["Код", "Описание", "Категория"]
+                namespace_data = []
+                
+                # Категоризируем пространства имен для лучшей организации
+                categories = {
+                    'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE'],
+                    'Индексы': ['INDX'],
+                    'Валюты': ['FX', 'CBR'],
+                    'Товары': ['COMM'],
+                    'Криптовалюты': ['CC'],
+                    'Инфляция': ['INFL'],
+                    'Недвижимость': ['RE'],
+                    'Портфели': ['PF', 'PIF'],
+                    'Депозиты': ['RATE'],
+                    'Коэффициенты': ['RATIO']
+                }
+                
+                # Создаем категоризированные данные
+                for namespace, description in namespaces.items():
+                    category = "Другое"
+                    for cat_name, cat_namespaces in categories.items():
+                        if namespace in cat_namespaces:
+                            category = cat_name
+                            break
+                    
+                    namespace_data.append([namespace, description, category])
+                
+                # Сортируем по категории и затем по пространству имен
+                namespace_data.sort(key=lambda x: (x[2], x[0]))
+                
+                # Создаем таблицу используя tabulate или fallback к простому формату
+                if TABULATE_AVAILABLE:
+                    # Используем plain формат для лучшего отображения в Telegram
+                    table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="plain")
+                    response += f"```\n{table}\n```\n\n"
+                else:
+                    # Fallback к простому текстовому формату
+                    response += "**Код | Описание | Категория**\n"
+                    response += "--- | --- | ---\n"
+                    for row in namespace_data:
+                        response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
+                    response += "\n"
+                
+                response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
+                
+                # Создаем кнопки для быстрого доступа к популярным пространствам имен
+                keyboard = [
+                    [
+                        InlineKeyboardButton("🇺🇸 US акции", callback_data="namespace_US"),
+                        InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX")
+                    ],
+                    [
+                        InlineKeyboardButton("📈 Индексы", callback_data="namespace_INDX"),
+                        InlineKeyboardButton("💱 Валюты", callback_data="namespace_FX")
+                    ],
+                    [
+                        InlineKeyboardButton("🪙 Товары", callback_data="namespace_COMM"),
+                        InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
+                    ],
+                    [
+                        InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE"),
+                        InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(response, reply_markup=reply_markup)
+                
+            except Exception as e:
+                await query.edit_message_text(f"❌ Ошибка при получении списка пространств имен: {str(e)}")
     
 
     
