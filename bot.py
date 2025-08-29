@@ -510,7 +510,7 @@ class OkamaFinanceBot:
 """
         
         await self._send_message_safe(update, help_text)
-
+    
     async def show_namespace_symbols(self, update: Update, namespace: str):
         """Показать символы в пространстве имен"""
         try:
@@ -1260,7 +1260,7 @@ class OkamaFinanceBot:
                         )
                     except Exception:
                         pass
-                        
+
             elif parsed.intent == 'inflation_data':
                 # Handle inflation data
                 country = getattr(parsed, 'country', 'US')
@@ -1281,7 +1281,7 @@ class OkamaFinanceBot:
                         )
                     except Exception:
                         pass
-                        
+
             else:
                 # Fallback to AI chat if intent not recognized
                 try:
@@ -1312,9 +1312,12 @@ class OkamaFinanceBot:
                     text=text,
                     parse_mode=parse_mode
                 )
-            else:
+            elif update.message:
                 # Для обычных сообщений используем _send_message_safe
                 await self._send_message_safe(update, text, parse_mode)
+            else:
+                # Если ни то, ни другое - логируем ошибку
+                self.logger.error("Cannot send message: neither callback_query nor message available")
         except Exception as e:
             self.logger.error(f"Error sending callback message: {e}")
             # Fallback: попробуем отправить через context.bot
