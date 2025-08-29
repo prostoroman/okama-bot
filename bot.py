@@ -242,11 +242,17 @@ class OkamaFinanceBot:
             # Add copyright signature
             self._add_copyright_signature(ax)
             
-            # Save chart to bytes
+            # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache to free memory
+            plt.close(fig)
+            plt.clf()
+            plt.cla()
             
             # Send drawdowns chart
             await context.bot.send_photo(
@@ -304,11 +310,17 @@ class OkamaFinanceBot:
             # Add copyright signature
             self._add_copyright_signature(ax)
             
-            # Save chart to bytes
+            # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache to free memory
+            plt.close(fig)
+            plt.clf()
+            plt.cla()
             
             # Send dividend yield chart
             await context.bot.send_photo(
@@ -356,7 +368,8 @@ class OkamaFinanceBot:
             
             # Create correlation matrix visualization
             plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-            fig, ax = plt.subplots(figsize=(12, 10), facecolor='white')
+            # Use smaller figure size and lower DPI to save memory
+            fig, ax = plt.subplots(figsize=(10, 8), facecolor='white', dpi=150)
             
             # Create heatmap
             im = ax.imshow(correlation_matrix.values, cmap='RdYlBu_r', aspect='auto', vmin=-1, vmax=1)
@@ -371,25 +384,26 @@ class OkamaFinanceBot:
             cbar = plt.colorbar(im, ax=ax, shrink=0.8)
             cbar.set_label('Корреляция', rotation=270, labelpad=15)
             
-            # Add correlation values as text
-            for i in range(len(correlation_matrix.index)):
-                for j in range(len(correlation_matrix.columns)):
-                    value = correlation_matrix.iloc[i, j]
-                    # Color text based on correlation value
-                    if abs(value) > 0.7:
-                        text_color = 'white'
-                    else:
-                        text_color = 'black'
-                    
-                    ax.text(j, i, f'{value:.2f}', 
-                           ha='center', va='center', 
-                           color=text_color, fontsize=10, fontweight='bold')
+            # Add correlation values as text (only for smaller matrices to save memory)
+            if len(correlation_matrix) <= 8:  # Only add text for matrices with 8 or fewer assets
+                for i in range(len(correlation_matrix.index)):
+                    for j in range(len(correlation_matrix.columns)):
+                        value = correlation_matrix.iloc[i, j]
+                        # Color text based on correlation value
+                        if abs(value) > 0.7:
+                            text_color = 'white'
+                        else:
+                            text_color = 'black'
+                        
+                        ax.text(j, i, f'{value:.2f}', 
+                               ha='center', va='center', 
+                               color=text_color, fontsize=9, fontweight='bold')
             
             # Customize chart
-            ax.set_title('Корреляционная матрица активов\n(assets_ror.corr())', 
-                       fontsize=16, fontweight='bold', pad=20, color='#2E3440')
-            ax.set_xlabel('Активы', fontsize=13, fontweight='semibold', color='#4C566A')
-            ax.set_ylabel('Активы', fontsize=13, fontweight='semibold', color='#4C566A')
+            ax.set_title('Корреляционная матрица активов', 
+                       fontsize=14, fontweight='bold', pad=15, color='#2E3440')
+            ax.set_xlabel('Активы', fontsize=11, fontweight='semibold', color='#4C566A')
+            ax.set_ylabel('Активы', fontsize=11, fontweight='semibold', color='#4C566A')
             
             # Enhanced grid
             ax.grid(False)  # No grid for heatmap
@@ -409,11 +423,17 @@ class OkamaFinanceBot:
             # Add copyright signature
             self._add_copyright_signature(ax)
             
-            # Save chart to bytes
+            # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache to free memory
+            plt.close(fig)
+            plt.clf()
+            plt.cla()
             
             # Send correlation matrix
             self.logger.info("Sending correlation matrix image...")
@@ -1062,11 +1082,17 @@ class OkamaFinanceBot:
                 # Add copyright signature
                 self._add_copyright_signature(ax)
                 
-                # Save chart to bytes
+                # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
-                fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+                fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none')
                 img_buffer.seek(0)
                 img_bytes = img_buffer.getvalue()
+                
+                # Clear matplotlib cache to free memory
+                plt.close(fig)
+                plt.clf()
+                plt.cla()
                 
                 # Get basic statistics
                 stats_text = f"📊 Сравнение: {', '.join(symbols)}\n\n"
