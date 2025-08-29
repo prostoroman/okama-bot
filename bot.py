@@ -374,27 +374,26 @@ class OkamaFinanceBot:
                 
                 first_10.append([symbol, name, country, currency])
             
-            # Создаем кнопки для символов
+            # Создаем таблицу с кликабельными ссылками в названиях символов
             if first_10:
                 response += "**Первые 10 символов:**\n\n"
                 
-                # Создаем кнопки для каждого символа
-                symbol_buttons = []
+                # Создаем таблицу с кликабельными ссылками
                 for row in first_10:
                     symbol = row[0]
                     name = row[1]
-                    # Создаем кнопку с названием символа, которая ведет на команду /info
-                    button_text = f"📊 {symbol} - {name}"
-                    button_url = f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol}"
-                    symbol_buttons.append([InlineKeyboardButton(button_text, url=button_url)])
+                    country = row[2]
+                    currency = row[3]
+                    
+                    # Создаем кликабельную ссылку в названии символа
+                    symbol_link = f"[{symbol}](https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol})"
+                    response += f"• **{symbol_link}** - {name} | {country} | {currency}\n"
                 
                 # Добавляем кнопку возврата
-                symbol_buttons.append([InlineKeyboardButton("🔙 К списку пространств", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")])
+                keyboard = [[InlineKeyboardButton("🔙 К списку пространств", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # Создаем клавиатуру с кнопками символов и возврата
-                symbol_keyboard = InlineKeyboardMarkup(symbol_buttons)
-                
-                await self._send_message_safe(update, response, reply_markup=symbol_keyboard)
+                await self._send_message_safe(update, response, parse_mode="MarkdownV2", reply_markup=reply_markup)
             else:
                 response += f"💡 Используйте `/namespace {namespace}` для полного списка символов"
                 
@@ -750,41 +749,40 @@ class OkamaFinanceBot:
                         
                         last_10.append([symbol, name, country, currency])
                     
-                    # Создаем кнопки для символов (первые 10)
+                    # Создаем таблицу с кликабельными ссылками в названиях символов
                     if first_10:
                         response += "**Первые 10 символов:**\n\n"
                         
-                        # Создаем кнопки для каждого символа
-                        symbol_buttons = []
+                        # Создаем таблицу с кликабельными ссылками
                         for row in first_10:
                             symbol = row[0]
                             name = row[1]
-                            # Создаем кнопку с названием символа, которая ведет на команду /info
-                            button_text = f"📊 {symbol} - {name}"
-                            button_url = f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol}"
-                            symbol_buttons.append([InlineKeyboardButton(button_text, url=button_url)])
+                            country = row[2]
+                            currency = row[3]
+                            
+                            # Создаем кликабельную ссылку в названии символа
+                            symbol_link = f"[{symbol}](https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol})"
+                            response += f"• **{symbol_link}** - {name} | {country} | {currency}\n"
                         
-                        # Добавляем кнопки символов к основному сообщению
-                        symbol_keyboard = InlineKeyboardMarkup(symbol_buttons)
-                        
-                        # Отправляем основное сообщение с кнопками символов
-                        await self._send_message_safe(update, response, reply_markup=symbol_keyboard)
+                        # Отправляем основное сообщение с таблицей
+                        await self._send_message_safe(update, response, parse_mode="MarkdownV2")
                         
                         # Если есть еще символы, показываем их отдельно
                         if last_10 and total_symbols > 10:
                             last_response = "**Последние 10 символов:**\n\n"
                             
-                            # Создаем кнопки для последних символов
-                            last_symbol_buttons = []
+                            # Создаем таблицу для последних символов
                             for row in last_10:
                                 symbol = row[0]
                                 name = row[1]
-                                button_text = f"📊 {symbol} - {name}"
-                                button_url = f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol}"
-                                last_symbol_buttons.append([InlineKeyboardButton(button_text, url=button_url)])
+                                country = row[2]
+                                currency = row[3]
+                                
+                                # Создаем кликабельную ссылку в названии символа
+                                symbol_link = f"[{symbol}](https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol})"
+                                last_response += f"• **{symbol_link}** - {name} | {country} | {currency}\n"
                             
-                            last_symbol_keyboard = InlineKeyboardMarkup(last_symbol_buttons)
-                            await self._send_message_safe(update, last_response, reply_markup=last_symbol_keyboard)
+                            await self._send_message_safe(update, last_response, parse_mode="MarkdownV2")
                     else:
                         response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
                         await self._send_message_safe(update, response)
