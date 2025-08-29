@@ -88,7 +88,7 @@ class OkamaFinanceBot:
             }
         return self.user_sessions[user_id]
     
-    def _update_user_context(self, user_id: int, kwargs):
+    def _update_user_context(self, user_id: int, **kwargs):
         """Обновить контекст пользователя"""
         context = self._get_user_context(user_id)
         context.update(kwargs)
@@ -846,7 +846,7 @@ class OkamaFinanceBot:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption={stats_text}
+                    caption=stats_text
                 )
                 
                 # Update user context
