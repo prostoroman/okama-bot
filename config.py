@@ -11,7 +11,7 @@ class Config:
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     BOT_USERNAME = os.getenv('BOT_USERNAME', 'okama_finance_bot')
     # Полное имя бота для ссылок (например: @okama_finance_bot)
-    BOT_FULL_NAME = os.getenv('BOT_FULL_NAME', '@okama_finance_bot')
+    BOT_FULL_NAME = os.getenv('BOT_FULL_NAME', '@kapitan_portfel_bot')
     ADMIN_USER_ID = os.getenv('ADMIN_USER_ID')
     
     # YandexGPT Configuration
