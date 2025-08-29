@@ -8,6 +8,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import io
 import pandas as pd
+import matplotlib.pyplot as plt
 try:
     import tabulate
     TABULATE_AVAILABLE = True
@@ -42,7 +43,6 @@ logger = logging.getLogger(__name__)
 # Health check for deployment
 def health_check():
     """Simple health check for deployment"""
-    logger.info("✅ Health check: Okama Finance Bot is running")
     logger.info(f"✅ Environment: {'PRODUCTION' if os.getenv('PRODUCTION') else 'LOCAL'}")
     logger.info(f"✅ Python version: {sys.version}")
     logger.info(f"✅ Bot token configured: {'Yes' if Config.TELEGRAM_BOT_TOKEN else 'No'}")
@@ -188,7 +188,7 @@ class OkamaFinanceBot:
         
 
         
-        welcome_message = f"""🧠 Okama Financial Brain - Полная справка
+        welcome_message = f"""🧠 Okama Financial Bot - Полная справка
 
 Привет, {user_name}! Я помогу с анализом рынков и портфелей.
 
@@ -204,6 +204,7 @@ class OkamaFinanceBot:
 Основные команды:
 /start — эта справка
 /info [тикер] [период] — базовая информация об активе с графиком и анализом
+/compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /namespace [название] — список пространств имен или символы в пространстве
 
 Поддерживаемые форматы тикеров:
@@ -214,43 +215,12 @@ class OkamaFinanceBot:
 • Валюты: EURUSD.FX, GBPUSD.FX, USDJPY.FX
 • LSE: VOD.LSE, HSBA.LSE, BP.LSE
 
-Периоды анализа:
-• 1Y, 2Y, 5Y, 10Y, MAX
-• По умолчанию: 10Y для акций, 5Y для макро
-
-Как обращаться (просто текстом):
-• "Проанализируй Apple"
-• "Сравни золото и нефть"
-• "Портфель VOO.US 60% и AGG.US 40%"
-• "Инфляция в США за 5 лет"
-• "Сравни S&P 500 и NASDAQ в рублях"
-
-Примеры запросов:
-• "Проанализируй SBER.MOEX за 2 года"
-• "Сравни VOO.US и QQQ.US"
-• "Портфель: 70% VOO.US, 20% AGG.US, 10% GC.COMM"
-• "Инфляция в России за 10 лет"
-• "Динамика нефти и золота в рублях"
-
-Особенности:
-✅ Автоматическое распознавание намерений
-✅ Нормализация названий активов
-✅ Построение аналитических отчетов
-✅ Генерация графиков
-✅ Выводы и рекомендации
-✅ Поддержка конвертации валют
-✅ Автоматическое разбиение длинных сообщений
-✅ Контекстная память для лучшего понимания
-✅ **🆕 AI-анализ изображений графиков** - отправьте фото для анализа!
-✅ **🆕 Автоматический анализ каждого графика в подписях**
-
-Поддержка:
-Если у вас возникли вопросы или проблемы, попробуйте:
-1. Переформулировать запрос
-2. Использовать более простые названия активов
-3. Проверить доступность данных (MOEX может быть временно недоступен)
-
-Начните с простого запроса или используйте команды выше!"""
+Примеры команд:
+• `/compare SPY.US QQQ.US` - сравнить S&P 500 и NASDAQ
+• `/compare SBER.MOEX GAZP.MOEX` - сравнить Сбербанк и Газпром
+• `/compare GC.COMM CL.COMM` - сравнить золото и нефть
+Базовая валюта опрелеляется по первому символу в списке.
+"""
 
         await self._send_message_safe(update, welcome_message)
     
@@ -269,14 +239,7 @@ class OkamaFinanceBot:
 **Поддерживаемые периоды:**
 • 1Y, 2Y, 5Y, 10Y, MAX
 • По умолчанию: 10Y для акций, 5Y для макро
-
-**Что вы получите:**
-✅ График цены актива
-✅ Основные метрики
-✅ AI-анализ графика
-✅ Рекомендации
-
-Просто введите команду в чат!"""
+"""
         
         await self._send_message_safe(update, help_text)
     
@@ -286,23 +249,16 @@ class OkamaFinanceBot:
 
 Используйте команду `/namespace` для просмотра всех доступных пространств имен.
 
-**Популярные пространства:**
 • `/namespace US` - американские акции
 • `/namespace MOEX` - российские акции
 • `/namespace INDX` - мировые индексы
 • `/namespace FX` - валютные пары
 • `/namespace COMM` - товарные активы
 
-**Что вы получите:**
-✅ Список всех пространств имен
-✅ Категоризация по типам
-✅ Количество символов в каждом
-✅ Быстрые кнопки для популярных
-
-Просто введите `/namespace` в чат!"""
+"""
         
         await self._send_message_safe(update, help_text)
-    
+
     async def show_namespace_symbols(self, update: Update, namespace: str):
         """Показать символы в пространстве имен"""
         try:
@@ -364,18 +320,12 @@ class OkamaFinanceBot:
 
 **📊 Анализ активов:**
 • `/info <тикер>` - Полная информация об активе + AI-анализ графиков
+• `/compare <символ1> <символ2> ...` - Сравнение активов с графиком накопленной доходности
 
 **📚 Пространства имен:**
 • `/namespace` - Список доступных пространств имен
 • `/namespace <название>` - Символы в конкретном пространстве
 
-**🤖 AI-помощник:**
-• **🆕 Отправьте фото графика** - AI-анализ изображения!
-
-**💡 Дополнительные возможности:**
-• Анализ активов через текстовые запросы
-• AI-консультации по финансам
-• **🆕 Автоматический анализ графиков в подписях**
 
 **📈 Поддерживаемые биржи:**
 • MOEX (Московская биржа)
@@ -391,20 +341,8 @@ class OkamaFinanceBot:
 • `XAU.COMM` - Золото
 • `EURUSD.FX` - EUR/USD
 
-**🆕 Новые возможности:**
-• **Vision AI** - анализ графиков с помощью YandexGPT
-• **🆕 Автоматический анализ каждого графика в подписи**
-• Автоматический анализ трендов и паттернов
-• Определение уровней поддержки/сопротивления
-• Оценка волатильности и рисков
 
-**💡 Как работает анализ графиков:**
-• Каждый график автоматически анализируется AI
-• Анализ включается в подпись к графику
-• Общий анализ учитывает выводы по графикам
-• Анализ трендов, уровней поддержки/сопротивления, волатильности
-
-Отправьте фото любого финансового графика для получения профессионального AI-анализа!"""
+"""
         )
 
 
@@ -743,8 +681,171 @@ class OkamaFinanceBot:
             self.logger.error(f"Error in namespace command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
+    async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /compare command for comparing multiple assets"""
+        try:
+            if not context.args:
+                await self._send_message_safe(update, 
+                    "📊 **Команда /compare - Сравнение активов**\n\n"
+                    "**Использование:**\n"
+                    "`/compare символ1 символ2 символ3 ...`\n\n"
+                    "**Примеры:**\n"
+                    "• `/compare SPY.US QQQ.US` - сравнить S&P 500 и NASDAQ (в USD)\n"
+                    "• `/compare SBER.MOEX GAZP.MOEX` - сравнить Сбербанк и Газпром (в RUB)\n"
+                    "• `/compare GC.COMM CL.COMM` - сравнить золото и нефть (в USD)\n"
+                    "• `/compare VOO.US BND.US GC.COMM` - сравнить акции, облигации и золото (в USD)\n\n"
+                    "**Что вы получите:**\n"
+                    "✅ График накопленной доходности всех активов\n"
+                    "✅ Сравнительный анализ\n"
+                    "✅ AI-рекомендации\n\n"
+                    "**💡 Автоматическое определение валюты:**\n"
+                    "• Первый актив в списке определяет базовую валюту\n"
+                    "• MOEX активы → RUB, US активы → USD, LSE → GBP\n"
+                    "• Остальные → USD по умолчанию\n\n"
+                    "**Поддерживаемые форматы:**\n"
+                    "• US акции: AAPL.US, VOO.US, SPY.US\n"
+                    "• MOEX: SBER.MOEX, GAZP.MOEX\n"
+                    "• Индексы: SPX.INDX, IXIC.INDX\n"
+                    "• Товары: GC.COMM, CL.COMM, SI.COMM\n"
+                    "• Валюты: EURUSD.FX, GBPUSD.FX"
+                )
+                return
 
+            # Extract symbols from command arguments
+            symbols = [symbol.upper() for symbol in context.args]
+            
+            if len(symbols) < 2:
+                await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
+                return
+            
+            if len(symbols) > 10:
+                await self._send_message_safe(update, "❌ Максимум 10 символов для сравнения")
+                return
 
+            await self._send_message_safe(update, f"🔄 Сравниваю активы: {', '.join(symbols)}...")
+
+            # Create comparison using okama
+            import okama as ok
+            
+            # Determine base currency from the first asset
+            first_symbol = symbols[0]
+            currency_info = ""
+            try:
+                # Try to get currency info for the first asset
+                if '.' in first_symbol:
+                    namespace = first_symbol.split('.')[1]
+                    if namespace == 'MOEX':
+                        currency = "RUB"  # Russian assets in RUB
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'US':
+                        currency = "USD"  # US assets in USD
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'LSE':
+                        currency = "GBP"  # London assets in GBP
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'FX':
+                        currency = "USD"  # Forex pairs in USD
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'COMM':
+                        currency = "USD"  # Commodities in USD
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'INDX':
+                        currency = "USD"  # Indices in USD
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    else:
+                        currency = "USD"  # Default to USD
+                        currency_info = "по умолчанию (USD)"
+                else:
+                    currency = "USD"  # Default to USD
+                    currency_info = "по умолчанию (USD)"
+                
+                self.logger.info(f"Auto-detected currency for {first_symbol}: {currency}")
+                
+            except Exception as e:
+                self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
+                currency = "USD"
+                currency_info = "по умолчанию (USD)"
+            
+            try:
+                # Create AssetList for comparison with detected currency
+                asset_list = ok.AssetList(symbols, ccy=currency)
+                
+                # Generate comparison chart
+                fig, ax = plt.subplots(figsize=(12, 8))
+                asset_list.wealth_indexes.plot(ax=ax)
+                
+                # Customize chart
+                ax.set_title(f'Сравнение накопленной доходности\n{", ".join(symbols)}', fontsize=14, fontweight='bold')
+                ax.set_xlabel('Дата', fontsize=12)
+                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=12)
+                ax.grid(True, alpha=0.3)
+                ax.legend(fontsize=10)
+                
+                # Save chart to bytes
+                img_buffer = io.BytesIO()
+                fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+                img_buffer.seek(0)
+                img_bytes = img_buffer.getvalue()
+                
+                # Get basic statistics
+                stats_text = f"📊 **Сравнение активов: {', '.join(symbols)}**\n\n"
+                stats_text += f"💰 **Базовая валюта:** {currency} ({currency_info})\n"
+                stats_text += f"📅 **Период:** {asset_list.first_date} - {asset_list.last_date}\n"
+                stats_text += f"⏱️ **Длительность:** {asset_list.period_length}\n\n"
+                
+                # Get asset names
+                if hasattr(asset_list, 'names') and asset_list.names:
+                    stats_text += "📋 **Названия активов:**\n"
+                    for symbol, name in asset_list.names.items():
+                        stats_text += f"• **{symbol}** - {name}\n"
+                    stats_text += "\n"
+                
+                # Calculate and show final returns
+                try:
+                    final_values = asset_list.wealth_indexes.iloc[-1]
+                    stats_text += f"📈 **Финальная доходность ({currency}):**\n"
+                    for symbol in symbols:
+                        if symbol in final_values:
+                            value = final_values[symbol]
+                            stats_text += f"• **{symbol}**: {value:.2f}\n"
+                except Exception as e:
+                    self.logger.warning(f"Could not get final values: {e}")
+                
+                # Send text report
+                await self.send_long_message(update, stats_text)
+                
+                # Send chart image
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id, 
+                    photo=io.BytesIO(img_bytes),
+                    caption=f"📊 График накопленной доходности для {len(symbols)} активов"
+                )
+                
+                # Update user context
+                user_id = update.effective_user.id
+                self._update_user_context(
+                    user_id, 
+                    last_assets=symbols,
+                    last_analysis_type='comparison',
+                    last_period='MAX'
+                )
+                
+            except Exception as e:
+                self.logger.error(f"Error creating comparison: {e}")
+                await self._send_message_safe(update, 
+                    f"❌ Ошибка при создании сравнения: {str(e)}\n\n"
+                    "💡 **Возможные причины:**\n"
+                    "• Один из символов недоступен\n"
+                    "• Проблемы с данными MOEX\n"
+                    "• Неверный формат символа\n\n"
+                    "**Проверьте:**\n"
+                    "• Правильность написания символов\n"
+                    "• Доступность данных для указанных активов"
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error in compare command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при выполнении команды сравнения: {str(e)}")
 
     async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming photo messages for chart analysis"""
@@ -879,6 +980,7 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("namespace", self.namespace_command))
+        application.add_handler(CommandHandler("compare", self.compare_command))
         
         # Add message handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
