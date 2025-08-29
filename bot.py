@@ -178,6 +178,140 @@ class OkamaFinanceBot:
             except:
                 await update.message.reply_text("Произошла ошибка при отправке сообщения")
     
+    async def _send_additional_charts(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
+        """Отправить дополнительные графики анализа (drawdowns, dividend yield)"""
+        try:
+            # Send typing indicator
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+            
+            # Create drawdowns chart
+            await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
+            
+            # Create dividend yield chart if available
+            await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating additional charts: {e}")
+            await self._send_message_safe(update, f"⚠️ Не удалось создать дополнительные графики: {str(e)}")
+    
+    async def _create_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
+        """Создать график drawdowns"""
+        try:
+            # Check if drawdowns data is available
+            if not hasattr(asset_list, 'drawdowns') or asset_list.drawdowns.empty:
+                await self._send_message_safe(update, "ℹ️ Данные о drawdowns недоступны для выбранных активов")
+                return
+            
+            # Create drawdowns chart
+            plt.style.use('seaborn-v0_8')
+            fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
+            
+            # Plot drawdowns
+            asset_list.drawdowns.plot(ax=ax, linewidth=2.5, alpha=0.9)
+            
+            # Enhanced chart customization
+            ax.set_title(f'История Drawdowns\n{", ".join(symbols)}', 
+                       fontsize=16, fontweight='bold', pad=20, color='#2E3440')
+            ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
+            ax.set_ylabel(f'Drawdown ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
+            
+            # Enhanced grid and background
+            ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
+            ax.set_facecolor('#F8F9FA')
+            
+            # Enhanced legend
+            ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
+                     loc='upper left', bbox_to_anchor=(0.02, 0.98))
+            
+            # Customize spines
+            for spine in ax.spines.values():
+                spine.set_color('#D1D5DB')
+                spine.set_linewidth(0.8)
+            
+            # Enhance tick labels
+            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
+            
+            # Add subtle background pattern
+            ax.set_alpha(0.95)
+            
+            # Save chart to bytes
+            img_buffer = io.BytesIO()
+            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Send drawdowns chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id, 
+                photo=io.BytesIO(img_bytes),
+                caption=f"📉 График Drawdowns для {len(symbols)} активов\n\nПоказывает периоды падения активов и их восстановление"
+            )
+            
+            plt.close(fig)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating drawdowns chart: {e}")
+            await self._send_message_safe(update, f"⚠️ Не удалось создать график drawdowns: {str(e)}")
+    
+    async def _create_dividend_yield_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
+        """Создать график dividend yield"""
+        try:
+            # Check if dividend yield data is available
+            if not hasattr(asset_list, 'dividend_yield') or asset_list.dividend_yield.empty:
+                await self._send_message_safe(update, "ℹ️ Данные о дивидендной доходности недоступны для выбранных активов")
+                return
+            
+            # Create dividend yield chart
+            plt.style.use('seaborn-v0_8')
+            fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
+            
+            # Plot dividend yield
+            asset_list.dividend_yield.plot(ax=ax, linewidth=2.5, alpha=0.9)
+            
+            # Enhanced chart customization
+            ax.set_title(f'Дивидендная доходность\n{", ".join(symbols)}', 
+                       fontsize=16, fontweight='bold', pad=20, color='#2E3440')
+            ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
+            ax.set_ylabel(f'Дивидендная доходность (%)', fontsize=13, fontweight='semibold', color='#4C566A')
+            
+            # Enhanced grid and background
+            ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
+            ax.set_facecolor('#F8F9FA')
+            
+            # Enhanced legend
+            ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
+                     loc='upper left', bbox_to_anchor=(0.02, 0.98))
+            
+            # Customize spines
+            for spine in ax.spines.values():
+                spine.set_color('#D1D5DB')
+                spine.set_linewidth(0.8)
+            
+            # Enhance tick labels
+            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
+            
+            # Add subtle background pattern
+            ax.set_alpha(0.95)
+            
+            # Save chart to bytes
+            img_buffer = io.BytesIO()
+            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Send dividend yield chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id, 
+                photo=io.BytesIO(img_bytes),
+                caption=f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность"
+            )
+            
+            plt.close(fig)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating dividend yield chart: {e}")
+            await self._send_message_safe(update, f"⚠️ Не удалось создать график дивидендной доходности: {str(e)}")
+    
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with full help"""
         user = update.effective_user
@@ -668,10 +802,12 @@ class OkamaFinanceBot:
                     "• `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых\n"
                     "• `/compare GC.COMM CL.COMM` - сравнить золото и нефть (в USD)\n"
                     "• `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото (в USD)\n\n"
-                    "Что вы получите:\n"
-                    "✅ График накопленной доходности всех активов\n"
-                    "✅ Сравнительный анализ\n"
-                    "✅ AI-рекомендации\n\n"
+                                         "Что вы получите:\n"
+                     "✅ График накопленной доходности всех активов\n"
+                     "✅ График истории drawdowns (риски)\n"
+                     "✅ График дивидендной доходности (если доступно)\n"
+                     "✅ Сравнительный анализ\n"
+                     "✅ AI-рекомендации\n\n"
                     "💡 Автоматическое определение валюты:\n"
                     "• Первый актив в списке определяет базовую валюту\n"
                     "• MOEX активы → RUB, US активы → USD, LSE → GBP\n"
@@ -785,10 +921,10 @@ class OkamaFinanceBot:
                 asset_list.wealth_indexes.plot(ax=ax, linewidth=2.5, alpha=0.9)
                 
                 # Enhanced chart customization
-                ax.set_title(f'📊 Сравнение накопленной доходности\n{", ".join(symbols)}', 
+                ax.set_title(f'Накопленная доходность\n{", ".join(symbols)}', 
                            fontsize=16, fontweight='bold', pad=20, color='#2E3440')
-                ax.set_xlabel('📅 Дата', fontsize=13, fontweight='semibold', color='#4C566A')
-                ax.set_ylabel(f'💰 Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
+                ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
+                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
                 
                 # Enhanced grid and background
                 ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
@@ -816,7 +952,7 @@ class OkamaFinanceBot:
                 img_bytes = img_buffer.getvalue()
                 
                 # Get basic statistics
-                stats_text = f"📊 Сравнение активов: {', '.join(symbols)}\n\n"
+                stats_text = f"📊 Сравнение: {', '.join(symbols)}\n\n"
                 stats_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
                 stats_text += f"📅 Период: {asset_list.first_date} - {asset_list.last_date}\n"
                 stats_text += f"⏱️ Длительность: {asset_list.period_length}\n\n"
@@ -831,7 +967,7 @@ class OkamaFinanceBot:
                 # Calculate and show final returns
                 try:
                     final_values = asset_list.wealth_indexes.iloc[-1]
-                    stats_text += f"📈 Финальная доходность ({currency}):\n"
+                    stats_text += f"📈 Накопленная доходность ({currency}):\n"
                     for symbol in symbols:
                         if symbol in final_values:
                             value = final_values[symbol]
@@ -848,6 +984,9 @@ class OkamaFinanceBot:
                     photo=io.BytesIO(img_bytes),
                     caption=stats_text
                 )
+                
+                # Create and send additional analysis charts
+                await self._send_additional_charts(update, context, asset_list, symbols, currency)
                 
                 # Update user context
                 user_id = update.effective_user.id
