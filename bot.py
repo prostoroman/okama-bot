@@ -1302,6 +1302,31 @@ class OkamaFinanceBot:
                 "Если вы запрашиваете данные по MOEX (например, SBER.MOEX), они могут быть временно недоступно."
             )
 
+    async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
+        """Отправить сообщение в callback query"""
+        try:
+            if update.callback_query:
+                # Для callback query используем context.bot.send_message
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=text,
+                    parse_mode=parse_mode
+                )
+            else:
+                # Для обычных сообщений используем _send_message_safe
+                await self._send_message_safe(update, text, parse_mode)
+        except Exception as e:
+            self.logger.error(f"Error sending callback message: {e}")
+            # Fallback: попробуем отправить через context.bot
+            try:
+                if update.callback_query:
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=f"❌ Ошибка отправки: {text[:500]}..."
+                    )
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback message sending also failed: {fallback_error}")
+
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
         query = update.callback_query
@@ -1328,11 +1353,11 @@ class OkamaFinanceBot:
                 await self._handle_correlation_button(update, context, symbols)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
-                await self._send_message_safe(update, "❌ Неизвестная кнопка")
+                await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
                 
         except Exception as e:
             self.logger.error(f"Error in button callback: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при обработке кнопки: {str(e)}")
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
@@ -1345,14 +1370,14 @@ class OkamaFinanceBot:
             
             if 'current_symbols' not in user_context:
                 self.logger.warning(f"current_symbols not found in user context for user {user_id}")
-                await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
+                await self._send_callback_message(update, context, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
                 return
             
             symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
             
             self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}")
-            await self._send_message_safe(update, "📉 Создаю график drawdowns...")
+            await self._send_callback_message(update, context, "📉 Создаю график drawdowns...")
             
             # Create AssetList again
             import okama as ok
@@ -1362,7 +1387,7 @@ class OkamaFinanceBot:
             
         except Exception as e:
             self.logger.error(f"Error handling drawdowns button: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при создании графика drawdowns: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика drawdowns: {str(e)}")
 
     async def _handle_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle dividends button click"""
@@ -1375,14 +1400,14 @@ class OkamaFinanceBot:
             
             if 'current_symbols' not in user_context:
                 self.logger.warning(f"current_symbols not found in user context for user {user_id}")
-                await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
+                await self._send_callback_message(update, context, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
                 return
             
             symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
             
             self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}")
-            await self._send_message_safe(update, "💰 Создаю график дивидендной доходности...")
+            await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности...")
             
             # Create AssetList again
             import okama as ok
@@ -1392,7 +1417,7 @@ class OkamaFinanceBot:
             
         except Exception as e:
             self.logger.error(f"Error handling dividends button: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при создании графика дивидендной доходности: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика дивидендной доходности: {str(e)}")
 
     async def _handle_correlation_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle correlation matrix button click"""
@@ -1405,14 +1430,14 @@ class OkamaFinanceBot:
             
             if 'current_symbols' not in user_context:
                 self.logger.warning(f"current_symbols not found in user context for user {user_id}")
-                await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
+                await self._send_callback_message(update, context, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
                 return
             
             symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
             
             self.logger.info(f"Creating correlation matrix for symbols: {symbols}, currency: {currency}")
-            await self._send_message_safe(update, "🔗 Создаю корреляционную матрицу...")
+            await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу...")
             
             # Create AssetList again
             import okama as ok
@@ -1422,7 +1447,7 @@ class OkamaFinanceBot:
             
         except Exception as e:
             self.logger.error(f"Error handling correlation button: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при создании корреляционной матрицы: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании корреляционной матрицы: {str(e)}")
 
     def run(self):
         """Run the bot"""
