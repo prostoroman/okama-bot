@@ -253,6 +253,7 @@ class EnhancedOkamaHandler:
                 if hasattr(prices, 'iloc') and len(prices) > 1:
                     # Создаем график динамики цены
                     
+                    plt.style.use('bmh')  # Use bmh style with grid
                     fig, ax = plt.subplots(figsize=(10, 4))
                     ax.plot(prices.index, prices.values, color='#1f77b4', linewidth=2)
                     ax.set_title(f'Динамика цены: {asset}', fontsize=12)
@@ -531,6 +532,7 @@ class EnhancedOkamaHandler:
             # Генерируем график
             try:
                 if hasattr(cpi_data, 'iloc') and len(cpi_data) > 1:
+                    plt.style.use('bmh')  # Use bmh style with grid
                     fig, ax = plt.subplots(figsize=(10, 4))
                     ax.plot(cpi_data.index, cpi_data.values, color='#1f77b4', linewidth=2)
                     ax.set_title(f'{name} - Динамика CPI', fontsize=12)

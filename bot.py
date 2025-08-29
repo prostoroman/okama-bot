@@ -203,7 +203,7 @@ class OkamaFinanceBot:
                 return
             
             # Create drawdowns chart
-            plt.style.use('seaborn-v0_8')
+            plt.style.use('bmh')  # Use bmh style with grid
             fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
             
             # Plot drawdowns
@@ -262,7 +262,7 @@ class OkamaFinanceBot:
                 return
             
             # Create dividend yield chart
-            plt.style.use('seaborn-v0_8')
+            plt.style.use('bmh')  # Use bmh style with grid
             fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
             
             # Plot dividend yield
@@ -907,13 +907,7 @@ class OkamaFinanceBot:
                 self.logger.info(f"Created AssetList with full available period")
                 
                 # Generate beautiful comparison chart
-                try:
-                    plt.style.use('seaborn-v0_8')  # Use modern seaborn style
-                except:
-                    try:
-                        plt.style.use('seaborn')  # Try alternative seaborn style
-                    except:
-                        plt.style.use('default')  # Fallback to default style
+                plt.style.use('bmh')  # Use bmh style with grid
                 
                 fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
                 
