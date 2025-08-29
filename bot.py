@@ -196,9 +196,7 @@ class OkamaFinanceBot:
     
     def _add_copyright_signature(self, ax):
         """Добавить копирайт подпись к графику"""
-        ax.text(0.02, -0.15, '________________________________________________________________________________________________________________',
-               transform=ax.transAxes, color='grey', alpha=0.7, fontsize=10)
-        ax.text(0.02, -0.25, '   ©Цбот                                                                               Source: okama   ',
+        ax.text(0.02, -0.25, '   © Цбот, data source: okama',
                transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
     
     async def _create_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
@@ -1123,8 +1121,9 @@ class OkamaFinanceBot:
                     last_assets=symbols,
                     last_analysis_type='comparison',
                     last_period='MAX',
-                    current_asset_list=asset_list,
-                    current_currency=currency
+                    current_symbols=symbols,
+                    current_currency=currency,
+                    current_currency_info=currency_info
                 )
                 
             except Exception as e:
@@ -1308,19 +1307,27 @@ class OkamaFinanceBot:
         query = update.callback_query
         await query.answer()
         
+        self.logger.info(f"Button callback received: {query.data}")
+        
         try:
             # Parse callback data
             callback_data = query.data
+            self.logger.info(f"Processing callback data: {callback_data}")
+            
             if callback_data.startswith('drawdowns_'):
                 symbols = callback_data.replace('drawdowns_', '').split(',')
+                self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
                 await self._handle_drawdowns_button(update, context, symbols)
             elif callback_data.startswith('dividends_'):
                 symbols = callback_data.replace('dividends_', '').split(',')
+                self.logger.info(f"Dividends button clicked for symbols: {symbols}")
                 await self._handle_dividends_button(update, context, symbols)
             elif callback_data.startswith('correlation_'):
                 symbols = callback_data.replace('correlation_', '').split(',')
+                self.logger.info(f"Correlation button clicked for symbols: {symbols}")
                 await self._handle_correlation_button(update, context, symbols)
             else:
+                self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_message_safe(update, "❌ Неизвестная кнопка")
                 
         except Exception as e:
@@ -1331,16 +1338,26 @@ class OkamaFinanceBot:
         """Handle drawdowns button click"""
         try:
             user_id = update.effective_user.id
-            user_context = self._get_user_context(user_id)
+            self.logger.info(f"Handling drawdowns button for user {user_id}")
             
-            if 'current_asset_list' not in user_context:
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context keys: {list(user_context.keys())}")
+            
+            if 'current_symbols' not in user_context:
+                self.logger.warning(f"current_symbols not found in user context for user {user_id}")
                 await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
                 return
             
-            asset_list = user_context['current_asset_list']
+            symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
             
+            self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}")
             await self._send_message_safe(update, "📉 Создаю график drawdowns...")
+            
+            # Create AssetList again
+            import okama as ok
+            asset_list = ok.AssetList(symbols, ccy=currency)
+            
             await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
             
         except Exception as e:
@@ -1351,16 +1368,26 @@ class OkamaFinanceBot:
         """Handle dividends button click"""
         try:
             user_id = update.effective_user.id
-            user_context = self._get_user_context(user_id)
+            self.logger.info(f"Handling dividends button for user {user_id}")
             
-            if 'current_asset_list' not in user_context:
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context keys: {list(user_context.keys())}")
+            
+            if 'current_symbols' not in user_context:
+                self.logger.warning(f"current_symbols not found in user context for user {user_id}")
                 await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
                 return
             
-            asset_list = user_context['current_asset_list']
+            symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
             
+            self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}")
             await self._send_message_safe(update, "💰 Создаю график дивидендной доходности...")
+            
+            # Create AssetList again
+            import okama as ok
+            asset_list = ok.AssetList(symbols, ccy=currency)
+            
             await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
             
         except Exception as e:
@@ -1371,15 +1398,26 @@ class OkamaFinanceBot:
         """Handle correlation matrix button click"""
         try:
             user_id = update.effective_user.id
-            user_context = self._get_user_context(user_id)
+            self.logger.info(f"Handling correlation button for user {user_id}")
             
-            if 'current_asset_list' not in user_context:
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context keys: {list(user_context.keys())}")
+            
+            if 'current_symbols' not in user_context:
+                self.logger.warning(f"current_symbols not found in user context for user {user_id}")
                 await self._send_message_safe(update, "❌ Данные о сравнении не найдены. Выполните команду /compare заново.")
                 return
             
-            asset_list = user_context['current_asset_list']
+            symbols = user_context['current_symbols']
+            currency = user_context.get('current_currency', 'USD')
             
+            self.logger.info(f"Creating correlation matrix for symbols: {symbols}, currency: {currency}")
             await self._send_message_safe(update, "🔗 Создаю корреляционную матрицу...")
+            
+            # Create AssetList again
+            import okama as ok
+            asset_list = ok.AssetList(symbols, ccy=currency)
+            
             await self._create_correlation_matrix(update, context, asset_list, symbols)
             
         except Exception as e:
