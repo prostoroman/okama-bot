@@ -215,8 +215,10 @@ class OkamaFinanceBot:
 
 Примеры команд:
 • `/compare SPY.US QQQ.US` - сравнить S&P 500 и NASDAQ
-• `/compare SBER.MOEX GAZP.MOEX` - сравнить Сбербанк и Газпром
+• `/compare SBER.MOEX,GAZP.MOEX` - сравнить Сбербанк и Газпром
+• `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых
 • `/compare GC.COMM CL.COMM` - сравнить золото и нефть
+• `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото
 Базовая валюта опрелеляется по первому символу в списке.
 """
 
@@ -655,12 +657,17 @@ class OkamaFinanceBot:
                 await self._send_message_safe(update, 
                     "📊 **Команда /compare - Сравнение активов**\n\n"
                     "**Использование:**\n"
-                    "`/compare символ1 символ2 символ3 ...`\n\n"
+                    "`/compare символ1 символ2 символ3 ...`\n"
+                    "или\n"
+                    "`/compare символ1,символ2,символ3`\n"
+                    "или\n"
+                    "`/compare символ1, символ2, символ3`\n\n"
                     "**Примеры:**\n"
                     "• `/compare SPY.US QQQ.US` - сравнить S&P 500 и NASDAQ (в USD)\n"
-                    "• `/compare SBER.MOEX GAZP.MOEX` - сравнить Сбербанк и Газпром (в RUB)\n"
+                    "• `/compare SBER.MOEX,GAZP.MOEX` - сравнить Сбербанк и Газпром (в RUB)\n"
+                    "• `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых\n"
                     "• `/compare GC.COMM CL.COMM` - сравнить золото и нефть (в USD)\n"
-                    "• `/compare VOO.US BND.US GC.COMM` - сравнить акции, облигации и золото (в USD)\n\n"
+                    "• `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото (в USD)\n\n"
                     "**Что вы получите:**\n"
                     "✅ График накопленной доходности всех активов\n"
                     "✅ Сравнительный анализ\n"
@@ -669,6 +676,10 @@ class OkamaFinanceBot:
                     "• Первый актив в списке определяет базовую валюту\n"
                     "• MOEX активы → RUB, US активы → USD, LSE → GBP\n"
                     "• Остальные → USD по умолчанию\n\n"
+                    "**📅 Период сравнения:**\n"
+                    "• Автоматически устанавливается на **последние 10 лет**\n"
+                    "• Обеспечивает релевантность данных для современного анализа\n"
+                    "• Покрывает различные рыночные циклы\n\n"
                     "**Поддерживаемые форматы:**\n"
                     "• US акции: AAPL.US, VOO.US, SPY.US\n"
                     "• MOEX: SBER.MOEX, GAZP.MOEX\n"
@@ -679,7 +690,27 @@ class OkamaFinanceBot:
                 return
 
             # Extract symbols from command arguments
-            symbols = [symbol.upper() for symbol in context.args]
+            # Support multiple formats: space-separated, comma-separated, and comma+space
+            raw_args = ' '.join(context.args)  # Join all arguments into one string
+            
+            # Enhanced parsing logic for multiple formats
+            if ',' in raw_args:
+                # Handle comma-separated symbols (with or without spaces)
+                # Split by comma and clean each symbol
+                symbols = []
+                for symbol_part in raw_args.split(','):
+                    # Handle cases like "SPY.US, QQQ.US" (comma + space)
+                    symbol_part = symbol_part.strip()
+                    if symbol_part:  # Only add non-empty symbols
+                        symbols.append(symbol_part.upper())
+                self.logger.info(f"Parsed comma-separated symbols: {symbols}")
+            else:
+                # Handle space-separated symbols (original behavior)
+                symbols = [symbol.upper() for symbol in context.args]
+                self.logger.info(f"Parsed space-separated symbols: {symbols}")
+            
+            # Clean up symbols (remove empty strings and whitespace)
+            symbols = [symbol for symbol in symbols if symbol.strip()]
             
             if len(symbols) < 2:
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
@@ -734,8 +765,20 @@ class OkamaFinanceBot:
                 currency_info = "по умолчанию (USD)"
             
             try:
-                # Create AssetList for comparison with detected currency
-                asset_list = ok.AssetList(symbols, ccy=currency)
+                # Create AssetList for comparison with detected currency and 10-year period
+                # Calculate date 10 years ago from today
+                from datetime import datetime, timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=365*10)  # 10 years
+                
+                # Format dates for okama (YYYY-MM format)
+                start_date_str = start_date.strftime("%Y-%m")
+                end_date_str = end_date.strftime("%Y-%m")
+                
+                self.logger.info(f"Setting comparison period: {start_date_str} to {end_date_str}")
+                
+                # Create AssetList with period limits
+                asset_list = ok.AssetList(symbols, ccy=currency, first_date=start_date_str, last_date=end_date_str)
                 
                 # Generate comparison chart
                 fig, ax = plt.subplots(figsize=(12, 8))
