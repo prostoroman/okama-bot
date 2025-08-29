@@ -4,8 +4,8 @@ import os
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import io
 import pandas as pd
 try:
@@ -186,29 +186,7 @@ class OkamaFinanceBot:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        # Проверяем параметр start из URL
-        start_param = None
-        if context.args:
-            start_param = context.args[0]
-        
-        # Если есть параметр start, обрабатываем его
-        if start_param:
-            if start_param == "info":
-                await self.show_info_help(update)
-                return
-            elif start_param == "namespace":
-                await self.show_namespace_help(update)
-                return
-            elif start_param.startswith("namespace_"):
-                namespace = start_param.replace("namespace_", "")
-                await self.show_namespace_symbols(update, namespace)
-                return
-            elif start_param.startswith("info_"):
-                symbol = start_param.replace("info_", "")
-                # Устанавливаем символ в контекст и вызываем команду info
-                context.args = [symbol]
-                await self.info_command(update, context)
-                return
+
         
         welcome_message = f"""🧠 Okama Financial Brain - Полная справка
 
@@ -274,16 +252,7 @@ class OkamaFinanceBot:
 
 Начните с простого запроса или используйте команды выше!"""
 
-        # Создаем кнопки для быстрого доступа к основным командам
-        keyboard = [
-            [
-                InlineKeyboardButton("📊 Информация об активе", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info"),
-                InlineKeyboardButton("📚 Пространства имен", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await self._send_message_safe(update, welcome_message, reply_markup=reply_markup)
+        await self._send_message_safe(update, welcome_message)
     
     async def show_info_help(self, update: Update):
         """Показать справку по команде /info"""
@@ -309,11 +278,7 @@ class OkamaFinanceBot:
 
 Просто введите команду в чат!"""
         
-        # Кнопка возврата к главному меню
-        keyboard = [[InlineKeyboardButton("🔙 Главное меню", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await self._send_message_safe(update, help_text, reply_markup=reply_markup)
+        await self._send_message_safe(update, help_text)
     
     async def show_namespace_help(self, update: Update):
         """Показать справку по команде /namespace"""
@@ -336,11 +301,7 @@ class OkamaFinanceBot:
 
 Просто введите `/namespace` в чат!"""
         
-        # Кнопка возврата к главному меню
-        keyboard = [[InlineKeyboardButton("🔙 Главное меню", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await self._send_message_safe(update, help_text, reply_markup=reply_markup)
+        await self._send_message_safe(update, help_text)
     
     async def show_namespace_symbols(self, update: Update, namespace: str):
         """Показать символы в пространстве имен"""
@@ -374,34 +335,23 @@ class OkamaFinanceBot:
                 
                 first_10.append([symbol, name, country, currency])
             
-            # Создаем таблицу с кликабельными ссылками в названиях символов
+            # Создаем простую таблицу символов
             if first_10:
                 response += "**Первые 10 символов:**\n\n"
                 
-                # Создаем таблицу с кликабельными ссылками
+                # Создаем простую таблицу
                 for row in first_10:
                     symbol = row[0]
                     name = row[1]
                     country = row[2]
                     currency = row[3]
                     
-                    # Создаем кликабельную ссылку в названии символа
-                    symbol_link = f"[{symbol}](https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol})"
-                    response += f"• **{symbol_link}** - {name} | {country} | {currency}\n"
+                    response += f"• **{symbol}** - {name} | {country} | {currency}\n"
                 
-                # Добавляем кнопку возврата
-                keyboard = [[InlineKeyboardButton("🔙 К списку пространств", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await self._send_message_safe(update, response, parse_mode="MarkdownV2", reply_markup=reply_markup)
+                await self._send_message_safe(update, response)
             else:
                 response += f"💡 Используйте `/namespace {namespace}` для полного списка символов"
-                
-                # Кнопка возврата к списку пространств имен
-                keyboard = [[InlineKeyboardButton("🔙 К списку пространств", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await self._send_message_safe(update, response, reply_markup=reply_markup)
+                await self._send_message_safe(update, response)
             
         except Exception as e:
             await self._send_message_safe(update, f"❌ Ошибка при получении данных для '{namespace}': {str(e)}")
@@ -651,28 +601,7 @@ class OkamaFinanceBot:
                 
                 response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
                 
-                # Создаем кнопки для быстрого доступа к популярным пространствам имен
-                keyboard = [
-                    [
-                        InlineKeyboardButton("🇺🇸 US акции", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_US"),
-                        InlineKeyboardButton("🇷🇺 MOEX", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_MOEX")
-                    ],
-                    [
-                        InlineKeyboardButton("📈 Индексы", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_INDX"),
-                        InlineKeyboardButton("💱 Валюты", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_FX")
-                    ],
-                    [
-                        InlineKeyboardButton("🪙 Товары", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_COMM"),
-                        InlineKeyboardButton("🏦 CBR", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_CBR")
-                    ],
-                    [
-                        InlineKeyboardButton("🇬🇧 LSE", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_LSE"),
-                        InlineKeyboardButton("🇩🇪 XETR", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_XETR")
-                    ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await self._send_message_safe(update, response, reply_markup=reply_markup)
+                await self._send_message_safe(update, response)
                 
             else:
                 # Show symbols in specific namespace
@@ -749,23 +678,21 @@ class OkamaFinanceBot:
                         
                         last_10.append([symbol, name, country, currency])
                     
-                    # Создаем таблицу с кликабельными ссылками в названиях символов
+                    # Создаем простую таблицу символов
                     if first_10:
                         response += "**Первые 10 символов:**\n\n"
                         
-                        # Создаем таблицу с кликабельными ссылками
+                        # Создаем простую таблицу
                         for row in first_10:
                             symbol = row[0]
                             name = row[1]
                             country = row[2]
                             currency = row[3]
                             
-                            # Создаем кликабельную ссылку в названии символа
-                            symbol_link = f"[{symbol}](https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol})"
-                            response += f"• **{symbol_link}** - {name} | {country} | {currency}\n"
+                            response += f"• **{symbol}** - {name} | {country} | {currency}\n"
                         
                         # Отправляем основное сообщение с таблицей
-                        await self._send_message_safe(update, response, parse_mode="MarkdownV2")
+                        await self._send_message_safe(update, response)
                         
                         # Если есть еще символы, показываем их отдельно
                         if last_10 and total_symbols > 10:
@@ -778,11 +705,9 @@ class OkamaFinanceBot:
                                 country = row[2]
                                 currency = row[3]
                                 
-                                # Создаем кликабельную ссылку в названии символа
-                                symbol_link = f"[{symbol}](https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol})"
-                                last_response += f"• **{symbol_link}** - {name} | {country} | {currency}\n"
+                                last_response += f"• **{symbol}** - {name} | {country} | {currency}\n"
                             
-                            await self._send_message_safe(update, last_response, parse_mode="MarkdownV2")
+                            await self._send_message_safe(update, last_response)
                     else:
                         response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
                         await self._send_message_safe(update, response)
@@ -1035,101 +960,7 @@ class OkamaFinanceBot:
 
 
 
-    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle button callbacks"""
-        query = update.callback_query
-        await query.answer()
-        
-        if query.data == "analysis_help":
-            await query.edit_message_text(
-                "🧠 **Финансовый анализ**\n\n"
-                "Просто напишите ваш запрос естественным языком:\n\n"
-                "**Анализ одного актива:**\n"
-                "• \"Проанализируй Apple\"\n"
-                "• \"Информация о Tesla\"\n"
-                "• \"Покажи данные по SBER.MOEX\"\n\n"
-                "**Макроэкономический анализ:**\n"
-                "• \"Анализ золота\"\n"
-                "• \"Динамика нефти\"\n"
-                "• \"Тренды валютных пар\"\n\n"
-                "**Анализ инфляции:**\n"
-                "• \"Инфляция в США\"\n"
-                "• \"CPI данные по России\"\n\n"
-                "Я автоматически:\n"
-                "✅ Распознаю ваши намерения\n"
-                "✅ Нормализую названия активов\n"
-                "✅ Строю аналитические отчеты\n"
-                "✅ Генерирую графики\n"
-                "✅ Предоставляю AI-выводы"
-            )
-        elif query.data == "portfolio_help":
-            await query.edit_message_text(
-                "📊 **Анализ портфеля**\n\n"
-                "Просто напишите ваш запрос естественным языком:\n\n"
-                "**Базовый анализ:**\n"
-                "• \"Портфель из VOO.US и AGG.US\"\n"
-                "• \"Анализ рисков портфеля\"\n\n"
-                "**С весами:**\n"
-                "• \"Портфель 60% акции, 40% облигации\"\n"
-                "• \"Оптимизируй портфель с весами 70% и 30%\"\n\n"
-                "**Специфические запросы:**\n"
-                "• \"Анализ в рублях\"\n"
-                "• \"За период 2020-2024\"\n\n"
-                "Я автоматически:\n"
-                "✅ Оптимизирую веса (если не указаны)\n"
-                "✅ Рассчитываю метрики риска\n"
-                "✅ Строю efficient frontier\n"
-                "✅ Предоставляю рекомендации"
-            )
-        elif query.data == "compare_help":
-            await query.edit_message_text(
-                """⚖️ **Сравнение активов**
 
-Просто напишите ваш запрос естественным языком:
-
-**Сравнение акций:**
-• "Сравни Apple и Microsoft"
-• "Что лучше: VOO.US или SPY.US?"
-
-**Сравнение классов активов:**
-• "Сопоставь золото и серебро"
-• "Сравни S&P 500 и NASDAQ"
-
-**Сравнение валют:**
-• "EUR/USD vs GBP/USD"
-• "Анализ валютных пар"
-
-Я автоматически:
-✅ Сравниваю доходность
-✅ Анализирую корреляции
-✅ Строю сравнительные графики
-✅ Предоставляю AI-выводы"""
-            )
-        elif query.data == "chat_help":
-            await query.edit_message_text(
-                """💬 **AI-советник**
-
-Спросите меня о чем угодно по финансам:
-
-**Теория:**
-• "Что такое диверсификация?"
-• "Как рассчитать коэффициент Шарпа?"
-• "Объясни efficient frontier"
-
-**Практика:**
-• "Лучшие практики ребалансировки"
-• "Как управлять рисками?"
-• "Стратегии долгосрочного инвестирования"
-
-**Анализ:**
-• "Интерпретируй эти метрики"
-• "Что означают эти данные?"
-
-Я предоставлю экспертную финансовую консультацию на базе YandexGPT!"""
-            )
-        # Удаляем старые callback-обработчики, так как теперь используем прямые ссылки
-        # Оставляем только базовые обработчики для других функций
-        pass
     
 
     
@@ -1147,10 +978,9 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("namespace", self.namespace_command))
         
-        # Add message and callback handlers
+        # Add message handlers
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
-        application.add_handler(CallbackQueryHandler(self.handle_callback))
         
         # Start the bot
         logger.info("Starting Okama Finance Bot...")
