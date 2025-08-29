@@ -186,6 +186,30 @@ class OkamaFinanceBot:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
+        # Проверяем параметр start из URL
+        start_param = None
+        if context.args:
+            start_param = context.args[0]
+        
+        # Если есть параметр start, обрабатываем его
+        if start_param:
+            if start_param == "info":
+                await self.show_info_help(update)
+                return
+            elif start_param == "namespace":
+                await self.show_namespace_help(update)
+                return
+            elif start_param.startswith("namespace_"):
+                namespace = start_param.replace("namespace_", "")
+                await self.show_namespace_symbols(update, namespace)
+                return
+            elif start_param.startswith("info_"):
+                symbol = start_param.replace("info_", "")
+                # Устанавливаем символ в контекст и вызываем команду info
+                context.args = [symbol]
+                await self.info_command(update, context)
+                return
+        
         welcome_message = f"""🧠 Okama Financial Brain - Полная справка
 
 Привет, {user_name}! Я помогу с анализом рынков и портфелей.
@@ -253,13 +277,135 @@ class OkamaFinanceBot:
         # Создаем кнопки для быстрого доступа к основным командам
         keyboard = [
             [
-                InlineKeyboardButton("📊 Информация об активе (/info)", callback_data="quick_info"),
-                InlineKeyboardButton("📚 Пространства имен (/namespace)", callback_data="quick_namespace")
+                InlineKeyboardButton("📊 Информация об активе", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info"),
+                InlineKeyboardButton("📚 Пространства имен", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await self._send_message_safe(update, welcome_message, reply_markup=reply_markup)
+    
+    async def show_info_help(self, update: Update):
+        """Показать справку по команде /info"""
+        help_text = """📊 **Команда /info - Информация об активе**
+
+Используйте команду `/info [тикер] [период]` для получения полной информации об активе.
+
+**Примеры:**
+• `/info AAPL.US` - информация об Apple
+• `/info SBER.MOEX` - информация о Сбербанке
+• `/info GC.COMM 5Y` - золото за 5 лет
+• `/info SPX.INDX 10Y` - S&P 500 за 10 лет
+
+**Поддерживаемые периоды:**
+• 1Y, 2Y, 5Y, 10Y, MAX
+• По умолчанию: 10Y для акций, 5Y для макро
+
+**Что вы получите:**
+✅ График цены актива
+✅ Основные метрики
+✅ AI-анализ графика
+✅ Рекомендации
+
+Просто введите команду в чат!"""
+        
+        # Кнопка возврата к главному меню
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await self._send_message_safe(update, help_text, reply_markup=reply_markup)
+    
+    async def show_namespace_help(self, update: Update):
+        """Показать справку по команде /namespace"""
+        help_text = """📚 **Команда /namespace - Пространства имен**
+
+Используйте команду `/namespace` для просмотра всех доступных пространств имен.
+
+**Популярные пространства:**
+• `/namespace US` - американские акции
+• `/namespace MOEX` - российские акции
+• `/namespace INDX` - мировые индексы
+• `/namespace FX` - валютные пары
+• `/namespace COMM` - товарные активы
+
+**Что вы получите:**
+✅ Список всех пространств имен
+✅ Категоризация по типам
+✅ Количество символов в каждом
+✅ Быстрые кнопки для популярных
+
+Просто введите `/namespace` в чат!"""
+        
+        # Кнопка возврата к главному меню
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await self._send_message_safe(update, help_text, reply_markup=reply_markup)
+    
+    async def show_namespace_symbols(self, update: Update, namespace: str):
+        """Показать символы в пространстве имен"""
+        try:
+            import okama as ok
+            symbols_df = ok.symbols_in_namespace(namespace)
+            
+            if symbols_df.empty:
+                await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не найдено или пусто")
+                return
+            
+            # Показываем первые 10 символов
+            response = f"📊 **Пространство имен: {namespace}**\n\n"
+            response += f"📈 **Статистика:**\n"
+            response += f"• Всего символов: **{len(symbols_df)}**\n\n"
+            
+            # Подготавливаем данные для таблицы
+            headers = ["Символ", "Название", "Страна", "Валюта"]
+            
+            # Получаем первые 10 строк
+            first_10 = []
+            for _, row in symbols_df.head(10).iterrows():
+                symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                name = row['name'] if pd.notna(row['name']) else 'N/A'
+                country = row['country'] if pd.notna(row['country']) else 'N/A'
+                currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
+                
+                # Обрезаем длинные названия для читаемости
+                if len(name) > 40:
+                    name = name[:37] + "..."
+                
+                first_10.append([symbol, name, country, currency])
+            
+            # Создаем кнопки для символов
+            if first_10:
+                response += "**Первые 10 символов:**\n\n"
+                
+                # Создаем кнопки для каждого символа
+                symbol_buttons = []
+                for row in first_10:
+                    symbol = row[0]
+                    name = row[1]
+                    # Создаем кнопку с названием символа, которая ведет на команду /info
+                    button_text = f"📊 {symbol} - {name}"
+                    button_url = f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol}"
+                    symbol_buttons.append([InlineKeyboardButton(button_text, url=button_url)])
+                
+                # Добавляем кнопку возврата
+                symbol_buttons.append([InlineKeyboardButton("🔙 К списку пространств", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")])
+                
+                # Создаем клавиатуру с кнопками символов и возврата
+                symbol_keyboard = InlineKeyboardMarkup(symbol_buttons)
+                
+                await self._send_message_safe(update, response, reply_markup=symbol_keyboard)
+            else:
+                response += f"💡 Используйте `/namespace {namespace}` для полного списка символов"
+                
+                # Кнопка возврата к списку пространств имен
+                keyboard = [[InlineKeyboardButton("🔙 К списку пространств", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_message_safe(update, response, reply_markup=reply_markup)
+            
+        except Exception as e:
+            await self._send_message_safe(update, f"❌ Ошибка при получении данных для '{namespace}': {str(e)}")
     
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -509,20 +655,20 @@ class OkamaFinanceBot:
                 # Создаем кнопки для быстрого доступа к популярным пространствам имен
                 keyboard = [
                     [
-                        InlineKeyboardButton("🇺🇸 US акции", callback_data="namespace_US"),
-                        InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX")
+                        InlineKeyboardButton("🇺🇸 US акции", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_US"),
+                        InlineKeyboardButton("🇷🇺 MOEX", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_MOEX")
                     ],
                     [
-                        InlineKeyboardButton("📈 Индексы", callback_data="namespace_INDX"),
-                        InlineKeyboardButton("💱 Валюты", callback_data="namespace_FX")
+                        InlineKeyboardButton("📈 Индексы", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_INDX"),
+                        InlineKeyboardButton("💱 Валюты", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_FX")
                     ],
                     [
-                        InlineKeyboardButton("🪙 Товары", callback_data="namespace_COMM"),
-                        InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
+                        InlineKeyboardButton("🪙 Товары", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_COMM"),
+                        InlineKeyboardButton("🏦 CBR", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_CBR")
                     ],
                     [
-                        InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE"),
-                        InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR")
+                        InlineKeyboardButton("🇬🇧 LSE", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_LSE"),
+                        InlineKeyboardButton("🇩🇪 XETR", url=f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=namespace_XETR")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -604,38 +750,44 @@ class OkamaFinanceBot:
                         
                         last_10.append([symbol, name, country, currency])
                     
-                    # Create tables using tabulate or fallback to simple format
+                    # Создаем кнопки для символов (первые 10)
                     if first_10:
-                        response += "**Первые 10 символов:**\n"
-                        if TABULATE_AVAILABLE:
-                            # Use plain format for best Telegram display
-                            first_table = tabulate.tabulate(first_10, headers=headers, tablefmt="plain")
-                            response += f"```\n{first_table}\n```\n\n"
-                        else:
-                            # Fallback to simple text format
-                            response += "**Символ | Название | Страна | Валюта**\n"
-                            response += "--- | --- | --- | ---\n"
-                            for row in first_10:
-                                response += f"`{row[0]}` | {row[1]} | {row[2]} | {row[3]}\n"
-                            response += "\n"
-                    
-                    if last_10 and total_symbols > 10:
-                        response += "**Последние 10 символов:**\n"
-                        if TABULATE_AVAILABLE:
-                            # Use plain format for best Telegram display
-                            last_table = tabulate.tabulate(last_10, headers=headers, tablefmt="plain")
-                            response += f"```\n{last_table}\n```\n\n"
-                        else:
-                            # Fallback to simple text format
-                            response += "**Символ | Название | Страна | Валюта**\n"
-                            response += "--- | --- | --- | ---\n"
+                        response += "**Первые 10 символов:**\n\n"
+                        
+                        # Создаем кнопки для каждого символа
+                        symbol_buttons = []
+                        for row in first_10:
+                            symbol = row[0]
+                            name = row[1]
+                            # Создаем кнопку с названием символа, которая ведет на команду /info
+                            button_text = f"📊 {symbol} - {name}"
+                            button_url = f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol}"
+                            symbol_buttons.append([InlineKeyboardButton(button_text, url=button_url)])
+                        
+                        # Добавляем кнопки символов к основному сообщению
+                        symbol_keyboard = InlineKeyboardMarkup(symbol_buttons)
+                        
+                        # Отправляем основное сообщение с кнопками символов
+                        await self._send_message_safe(update, response, reply_markup=symbol_keyboard)
+                        
+                        # Если есть еще символы, показываем их отдельно
+                        if last_10 and total_symbols > 10:
+                            last_response = "**Последние 10 символов:**\n\n"
+                            
+                            # Создаем кнопки для последних символов
+                            last_symbol_buttons = []
                             for row in last_10:
-                                response += f"`{row[0]}` | {row[1]} | {row[2]} | {row[3]}\n"
-                            response += "\n"
-                    
-                    response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
-                    
-                    await self._send_message_safe(update, response)
+                                symbol = row[0]
+                                name = row[1]
+                                button_text = f"📊 {symbol} - {name}"
+                                button_url = f"https://t.me/{Config.BOT_FULL_NAME.replace('@', '')}?start=info_{symbol}"
+                                last_symbol_buttons.append([InlineKeyboardButton(button_text, url=button_url)])
+                            
+                            last_symbol_keyboard = InlineKeyboardMarkup(last_symbol_buttons)
+                            await self._send_message_safe(update, last_response, reply_markup=last_symbol_keyboard)
+                    else:
+                        response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
+                        await self._send_message_safe(update, response)
                     
                     # Send Excel file with full list of symbols
                     try:
@@ -977,190 +1129,9 @@ class OkamaFinanceBot:
 
 Я предоставлю экспертную финансовую консультацию на базе YandexGPT!"""
             )
-        elif query.data == "quick_info":
-            # Показываем справку по команде /info
-            await query.edit_message_text(
-                """📊 **Команда /info - Информация об активе**
-
-Используйте команду `/info [тикер] [период]` для получения полной информации об активе.
-
-**Примеры:**
-• `/info AAPL.US` - информация об Apple
-• `/info SBER.MOEX` - информация о Сбербанке
-• `/info GC.COMM 5Y` - золото за 5 лет
-• `/info SPX.INDX 10Y` - S&P 500 за 10 лет
-
-**Поддерживаемые периоды:**
-• 1Y, 2Y, 5Y, 10Y, MAX
-• По умолчанию: 10Y для акций, 5Y для макро
-
-**Что вы получите:**
-✅ График цены актива
-✅ Основные метрики
-✅ AI-анализ графика
-✅ Рекомендации
-
-Просто введите команду в чат!"""
-            )
-        elif query.data == "quick_namespace":
-            # Показываем справку по команде /namespace
-            await query.edit_message_text(
-                """📚 **Команда /namespace - Пространства имен**
-
-Используйте команду `/namespace` для просмотра всех доступных пространств имен.
-
-**Популярные пространства:**
-• `/namespace US` - американские акции
-• `/namespace MOEX` - российские акции
-• `/namespace INDX` - мировые индексы
-• `/namespace FX` - валютные пары
-• `/namespace COMM` - товарные активы
-
-**Что вы получите:**
-✅ Список всех пространств имен
-✅ Категоризация по типам
-✅ Количество символов в каждом
-✅ Быстрые кнопки для популярных
-
-Просто введите `/namespace` в чат!"""
-            )
-        elif query.data.startswith("namespace_"):
-            # Обрабатываем кнопки пространств имен
-            namespace = query.data.replace("namespace_", "")
-            try:
-                import okama as ok
-                symbols_df = ok.symbols_in_namespace(namespace)
-                
-                if symbols_df.empty:
-                    await query.edit_message_text(f"❌ Пространство имен '{namespace}' не найдено или пусто")
-                    return
-                
-                # Показываем первые 10 символов
-                response = f"📊 **Пространство имен: {namespace}**\n\n"
-                response += f"📈 **Статистика:**\n"
-                response += f"• Всего символов: **{len(symbols_df)}**\n\n"
-                
-                # Подготавливаем данные для таблицы
-                headers = ["Символ", "Название", "Страна", "Валюта"]
-                
-                # Получаем первые 10 строк
-                first_10 = []
-                for _, row in symbols_df.head(10).iterrows():
-                    symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
-                    name = row['name'] if pd.notna(row['name']) else 'N/A'
-                    country = row['country'] if pd.notna(row['country']) else 'N/A'
-                    currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
-                    
-                    # Обрезаем длинные названия для читаемости
-                    if len(name) > 40:
-                        name = name[:37] + "..."
-                    
-                    first_10.append([symbol, name, country, currency])
-                
-                # Создаем таблицу
-                if first_10:
-                    response += "**Первые 10 символов:**\n"
-                    if TABULATE_AVAILABLE:
-                        table = tabulate.tabulate(first_10, headers=headers, tablefmt="plain")
-                        response += f"```\n{table}\n```\n\n"
-                    else:
-                        response += "**Символ | Название | Страна | Валюта**\n"
-                        response += "--- | --- | --- | ---\n"
-                        for row in first_10:
-                            response += f"`{row[0]}` | {row[1]} | {row[2]} | {row[3]}\n"
-                        response += "\n"
-                
-                response += f"💡 Используйте `/namespace {namespace}` для полного списка символов"
-                
-                # Добавляем кнопку "Назад"
-                keyboard = [[InlineKeyboardButton("🔙 Назад к списку", callback_data="back_to_namespaces")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await query.edit_message_text(response, reply_markup=reply_markup)
-                
-            except Exception as e:
-                await query.edit_message_text(f"❌ Ошибка при получении данных для '{namespace}': {str(e)}")
-        elif query.data == "back_to_namespaces":
-            # Возвращаемся к списку пространств имен
-            try:
-                import okama as ok
-                namespaces = ok.namespaces
-                
-                response = "📚 **Доступные пространства имен (namespaces):**\n\n"
-                response += f"📈 **Статистика:**\n"
-                response += f"• Всего пространств имен: **{len(namespaces)}**\n\n"
-                
-                # Подготавливаем данные для tabulate
-                headers = ["Код", "Описание", "Категория"]
-                namespace_data = []
-                
-                # Категоризируем пространства имен для лучшей организации
-                categories = {
-                    'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE'],
-                    'Индексы': ['INDX'],
-                    'Валюты': ['FX', 'CBR'],
-                    'Товары': ['COMM'],
-                    'Криптовалюты': ['CC'],
-                    'Инфляция': ['INFL'],
-                    'Недвижимость': ['RE'],
-                    'Портфели': ['PF', 'PIF'],
-                    'Депозиты': ['RATE'],
-                    'Коэффициенты': ['RATIO']
-                }
-                
-                # Создаем категоризированные данные
-                for namespace, description in namespaces.items():
-                    category = "Другое"
-                    for cat_name, cat_namespaces in categories.items():
-                        if namespace in cat_namespaces:
-                            category = cat_name
-                            break
-                    
-                    namespace_data.append([namespace, description, category])
-                
-                # Сортируем по категории и затем по пространству имен
-                namespace_data.sort(key=lambda x: (x[2], x[0]))
-                
-                # Создаем таблицу используя tabulate или fallback к простому формату
-                if TABULATE_AVAILABLE:
-                    # Используем plain формат для лучшего отображения в Telegram
-                    table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="plain")
-                    response += f"```\n{table}\n```\n\n"
-                else:
-                    # Fallback к простому текстовому формату
-                    response += "**Код | Описание | Категория**\n"
-                    response += "--- | --- | ---\n"
-                    for row in namespace_data:
-                        response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
-                    response += "\n"
-                
-                response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
-                
-                # Создаем кнопки для быстрого доступа к популярным пространствам имен
-                keyboard = [
-                    [
-                        InlineKeyboardButton("🇺🇸 US акции", callback_data="namespace_US"),
-                        InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX")
-                    ],
-                    [
-                        InlineKeyboardButton("📈 Индексы", callback_data="namespace_INDX"),
-                        InlineKeyboardButton("💱 Валюты", callback_data="namespace_FX")
-                    ],
-                    [
-                        InlineKeyboardButton("🪙 Товары", callback_data="namespace_COMM"),
-                        InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
-                    ],
-                    [
-                        InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE"),
-                        InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR")
-                    ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await query.edit_message_text(response, reply_markup=reply_markup)
-                
-            except Exception as e:
-                await query.edit_message_text(f"❌ Ошибка при получении списка пространств имен: {str(e)}")
+        # Удаляем старые callback-обработчики, так как теперь используем прямые ссылки
+        # Оставляем только базовые обработчики для других функций
+        pass
     
 
     
