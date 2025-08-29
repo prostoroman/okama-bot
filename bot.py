@@ -88,7 +88,7 @@ class OkamaFinanceBot:
             }
         return self.user_sessions[user_id]
     
-    def _update_user_context(self, user_id: int, **kwargs):
+    def _update_user_context(self, user_id: int, kwargs):
         """Обновить контекст пользователя"""
         context = self._get_user_context(user_id)
         context.update(kwargs)
@@ -197,7 +197,7 @@ class OkamaFinanceBot:
 • Макро/товары/валюты
 • Анализ инфляции
 • Объяснения и рекомендации
-• **🆕 AI-анализ изображений графиков** - отправьте фото для анализа!
+• 🆕 AI-анализ изображений графиков - отправьте фото для анализа!
 
 Основные команды:
 /start — эта справка
@@ -226,17 +226,17 @@ class OkamaFinanceBot:
     
     async def show_info_help(self, update: Update):
         """Показать справку по команде /info"""
-        help_text = """📊 **Команда /info - Информация об активе**
+        help_text = """📊 Команда /info - Информация об активе
 
 Используйте команду `/info [тикер] [период]` для получения полной информации об активе.
 
-**Примеры:**
+Примеры:
 • `/info AAPL.US` - информация об Apple
 • `/info SBER.MOEX` - информация о Сбербанке
 • `/info GC.COMM 5Y` - золото за 5 лет
 • `/info SPX.INDX 10Y` - S&P 500 за 10 лет
 
-**Поддерживаемые периоды:**
+Поддерживаемые периоды:
 • 1Y, 2Y, 5Y, 10Y, MAX
 • По умолчанию: 10Y для акций, 5Y для макро
 """
@@ -245,7 +245,7 @@ class OkamaFinanceBot:
     
     async def show_namespace_help(self, update: Update):
         """Показать справку по команде /namespace"""
-        help_text = """📚 **Команда /namespace - Пространства имен**
+        help_text = """📚 Команда /namespace - Пространства имен
 
 Используйте команду `/namespace` для просмотра всех доступных пространств имен.
 
@@ -301,7 +301,7 @@ class OkamaFinanceBot:
                     country = row[2]
                     currency = row[3]
                     
-                    response += f"• **{symbol}** - {name} | {country} | {currency}\n"
+                    response += f"• {symbol} - {name} | {country} | {currency}\n"
                 
                 await self._send_message_safe(update, response)
             else:
@@ -435,7 +435,7 @@ class OkamaFinanceBot:
                     if 'error' in analysis:
                         await self._send_message_safe(update, f"⚠️ AI-анализ недоступен: {analysis['error']}")
                     else:
-                        await self._send_message_safe(update, f"🧠 **AI-анализ {symbol}**\n\n{analysis['analysis']}")
+                        await self._send_message_safe(update, f"🧠 AI-анализ {symbol}\n\n{analysis['analysis']}")
                         
                 except Exception as analysis_error:
                     self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
@@ -458,9 +458,9 @@ class OkamaFinanceBot:
                 # Show available namespaces
                 namespaces = ok.namespaces
                 
-                response = "📚 **Доступные пространства имен (namespaces):**\n\n"
-                response += f"📈 **Статистика:**\n"
-                response += f"• Всего пространств имен: **{len(namespaces)}**\n\n"
+                response = "📚 Доступные пространства имен (namespaces):\n\n"
+                response += f"📈 Статистика:\n"
+                response += f"• Всего пространств имен: {len(namespaces)}\n\n"
                 
                 # Prepare data for tabulate
                 headers = ["Код", "Описание", "Категория"]
@@ -500,7 +500,7 @@ class OkamaFinanceBot:
                     response += f"```\n{table}\n```\n\n"
                 else:
                     # Fallback to simple text format
-                    response += "**Код | Описание | Категория**\n"
+                    response += "Код | Описание | Категория\n"
                     response += "--- | --- | ---\n"
                     for row in namespace_data:
                         response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
@@ -549,9 +549,9 @@ class OkamaFinanceBot:
                     
                     # Show statistics first
                     total_symbols = len(symbols_df)
-                    response = f"📊 **Пространство имен: {namespace}**\n\n"
-                    response += f"📈 **Статистика:**\n"
-                    response += f"• Всего символов: **{total_symbols}**\n"
+                    response = f"📊 Пространство имен: {namespace}\n\n"
+                    response += f"📈 Статистика:\n"
+                    response += f"• Всего символов: {total_symbols}\n"
                     response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
                     
                     # Prepare data for tabulate
@@ -587,7 +587,7 @@ class OkamaFinanceBot:
                     
                     # Создаем простую таблицу символов
                     if first_10:
-                        response += "**Первые 10 символов:**\n\n"
+                        response += "Первые 10 символов:\n\n"
                         
                         # Создаем простую таблицу
                         for row in first_10:
@@ -596,14 +596,14 @@ class OkamaFinanceBot:
                             country = row[2]
                             currency = row[3]
                             
-                            response += f"• **{symbol}** - {name} | {country} | {currency}\n"
+                            response += f"• {symbol} - {name} | {country} | {currency}\n"
                         
                         # Отправляем основное сообщение с таблицей
                         await self._send_message_safe(update, response)
                         
                         # Если есть еще символы, показываем их отдельно
                         if last_10 and total_symbols > 10:
-                            last_response = "**Последние 10 символов:**\n\n"
+                            last_response = "Последние 10 символов:\n\n"
                             
                             # Создаем таблицу для последних символов
                             for row in last_10:
@@ -612,7 +612,7 @@ class OkamaFinanceBot:
                                 country = row[2]
                                 currency = row[3]
                                 
-                                last_response += f"• **{symbol}** - {name} | {country} | {currency}\n"
+                                last_response += f"• {symbol} - {name} | {country} | {currency}\n"
                             
                             await self._send_message_safe(update, last_response)
                     else:
@@ -655,32 +655,32 @@ class OkamaFinanceBot:
         try:
             if not context.args:
                 await self._send_message_safe(update, 
-                    "📊 **Команда /compare - Сравнение активов**\n\n"
-                    "**Использование:**\n"
+                    "📊 Команда /compare - Сравнение активов\n\n"
+                    "Использование:\n"
                     "`/compare символ1 символ2 символ3 ...`\n"
                     "или\n"
                     "`/compare символ1,символ2,символ3`\n"
                     "или\n"
                     "`/compare символ1, символ2, символ3`\n\n"
-                    "**Примеры:**\n"
+                    "Примеры:\n"
                     "• `/compare SPY.US QQQ.US` - сравнить S&P 500 и NASDAQ (в USD)\n"
                     "• `/compare SBER.MOEX,GAZP.MOEX` - сравнить Сбербанк и Газпром (в RUB)\n"
                     "• `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых\n"
                     "• `/compare GC.COMM CL.COMM` - сравнить золото и нефть (в USD)\n"
                     "• `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото (в USD)\n\n"
-                    "**Что вы получите:**\n"
+                    "Что вы получите:\n"
                     "✅ График накопленной доходности всех активов\n"
                     "✅ Сравнительный анализ\n"
                     "✅ AI-рекомендации\n\n"
-                    "**💡 Автоматическое определение валюты:**\n"
+                    "💡 Автоматическое определение валюты:\n"
                     "• Первый актив в списке определяет базовую валюту\n"
                     "• MOEX активы → RUB, US активы → USD, LSE → GBP\n"
                     "• Остальные → USD по умолчанию\n\n"
-                    "**📅 Период сравнения:**\n"
-                    "• Автоматически устанавливается на **последние 10 лет**\n"
-                    "• Обеспечивает релевантность данных для современного анализа\n"
-                    "• Покрывает различные рыночные циклы\n\n"
-                    "**Поддерживаемые форматы:**\n"
+                    "📅 Период сравнения:\n"
+                    "• Используется полный доступный период данных\n"
+                    "• Максимальная глубина исторического анализа\n"
+                    "• Покрывает все доступные рыночные циклы\n\n"
+                    "Поддерживаемые форматы:\n"
                     "• US акции: AAPL.US, VOO.US, SPY.US\n"
                     "• MOEX: SBER.MOEX, GAZP.MOEX\n"
                     "• Индексы: SPX.INDX, IXIC.INDX\n"
@@ -765,31 +765,49 @@ class OkamaFinanceBot:
                 currency_info = "по умолчанию (USD)"
             
             try:
-                # Create AssetList for comparison with detected currency and 10-year period
-                # Calculate date 10 years ago from today
-                from datetime import datetime, timedelta
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=365*10)  # 10 years
+                # Create AssetList for comparison with detected currency (full period)
+                asset_list = ok.AssetList(symbols, ccy=currency)
                 
-                # Format dates for okama (YYYY-MM format)
-                start_date_str = start_date.strftime("%Y-%m")
-                end_date_str = end_date.strftime("%Y-%m")
+                self.logger.info(f"Created AssetList with full available period")
                 
-                self.logger.info(f"Setting comparison period: {start_date_str} to {end_date_str}")
+                # Generate beautiful comparison chart
+                try:
+                    plt.style.use('seaborn-v0_8')  # Use modern seaborn style
+                except:
+                    try:
+                        plt.style.use('seaborn')  # Try alternative seaborn style
+                    except:
+                        plt.style.use('default')  # Fallback to default style
                 
-                # Create AssetList with period limits
-                asset_list = ok.AssetList(symbols, ccy=currency, first_date=start_date_str, last_date=end_date_str)
+                fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
                 
-                # Generate comparison chart
-                fig, ax = plt.subplots(figsize=(12, 8))
-                asset_list.wealth_indexes.plot(ax=ax)
+                # Plot with enhanced styling
+                asset_list.wealth_indexes.plot(ax=ax, linewidth=2.5, alpha=0.9)
                 
-                # Customize chart
-                ax.set_title(f'Сравнение накопленной доходности\n{", ".join(symbols)}', fontsize=14, fontweight='bold')
-                ax.set_xlabel('Дата', fontsize=12)
-                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=12)
-                ax.grid(True, alpha=0.3)
-                ax.legend(fontsize=10)
+                # Enhanced chart customization
+                ax.set_title(f'📊 Сравнение накопленной доходности\n{", ".join(symbols)}', 
+                           fontsize=16, fontweight='bold', pad=20, color='#2E3440')
+                ax.set_xlabel('📅 Дата', fontsize=13, fontweight='semibold', color='#4C566A')
+                ax.set_ylabel(f'💰 Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
+                
+                # Enhanced grid and background
+                ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
+                ax.set_facecolor('#F8F9FA')
+                
+                # Enhanced legend
+                ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
+                         loc='upper left', bbox_to_anchor=(0.02, 0.98))
+                
+                # Customize spines
+                for spine in ax.spines.values():
+                    spine.set_color('#D1D5DB')
+                    spine.set_linewidth(0.8)
+                
+                # Enhance tick labels
+                ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
+                
+                # Add subtle background pattern
+                ax.set_alpha(0.95)
                 
                 # Save chart to bytes
                 img_buffer = io.BytesIO()
@@ -798,37 +816,37 @@ class OkamaFinanceBot:
                 img_bytes = img_buffer.getvalue()
                 
                 # Get basic statistics
-                stats_text = f"📊 **Сравнение активов: {', '.join(symbols)}**\n\n"
-                stats_text += f"💰 **Базовая валюта:** {currency} ({currency_info})\n"
-                stats_text += f"📅 **Период:** {asset_list.first_date} - {asset_list.last_date}\n"
-                stats_text += f"⏱️ **Длительность:** {asset_list.period_length}\n\n"
+                stats_text = f"📊 Сравнение активов: {', '.join(symbols)}\n\n"
+                stats_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
+                stats_text += f"📅 Период: {asset_list.first_date} - {asset_list.last_date}\n"
+                stats_text += f"⏱️ Длительность: {asset_list.period_length}\n\n"
                 
                 # Get asset names
                 if hasattr(asset_list, 'names') and asset_list.names:
-                    stats_text += "📋 **Названия активов:**\n"
+                    stats_text += "📋 Названия активов:\n"
                     for symbol, name in asset_list.names.items():
-                        stats_text += f"• **{symbol}** - {name}\n"
+                        stats_text += f"• {symbol} - {name}\n"
                     stats_text += "\n"
                 
                 # Calculate and show final returns
                 try:
                     final_values = asset_list.wealth_indexes.iloc[-1]
-                    stats_text += f"📈 **Финальная доходность ({currency}):**\n"
+                    stats_text += f"📈 Финальная доходность ({currency}):\n"
                     for symbol in symbols:
                         if symbol in final_values:
                             value = final_values[symbol]
-                            stats_text += f"• **{symbol}**: {value:.2f}\n"
+                            stats_text += f"• {symbol}: {value:.2f}\n"
                 except Exception as e:
                     self.logger.warning(f"Could not get final values: {e}")
                 
                 # Send text report
-                await self.send_long_message(update, stats_text)
+                #await self.send_long_message(update, stats_text)
                 
                 # Send chart image
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=f"📊 График накопленной доходности для {len(symbols)} активов"
+                    caption={stats_text}
                 )
                 
                 # Update user context
@@ -844,11 +862,11 @@ class OkamaFinanceBot:
                 self.logger.error(f"Error creating comparison: {e}")
                 await self._send_message_safe(update, 
                     f"❌ Ошибка при создании сравнения: {str(e)}\n\n"
-                    "💡 **Возможные причины:**\n"
+                    "💡 Возможные причины:\n"
                     "• Один из символов недоступен\n"
                     "• Проблемы с данными MOEX\n"
                     "• Неверный формат символа\n\n"
-                    "**Проверьте:**\n"
+                    "Проверьте:\n"
                     "• Правильность написания символов\n"
                     "• Доступность данных для указанных активов"
                 )
