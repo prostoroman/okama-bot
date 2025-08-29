@@ -312,6 +312,92 @@ class OkamaFinanceBot:
             self.logger.error(f"Error creating dividend yield chart: {e}")
             await self._send_message_safe(update, f"⚠️ Не удалось создать график дивидендной доходности: {str(e)}")
     
+    async def _create_correlation_matrix(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list):
+        """Создать корреляционную матрицу активов"""
+        try:
+            # Check if assets_ror data is available
+            if not hasattr(asset_list, 'assets_ror') or asset_list.assets_ror is None or asset_list.assets_ror.empty:
+                await self._send_message_safe(update, "ℹ️ Данные о доходности активов недоступны для создания корреляционной матрицы")
+                return
+            
+            # Get correlation matrix
+            correlation_matrix = asset_list.assets_ror.corr()
+            
+            if correlation_matrix.empty:
+                await self._send_message_safe(update, "ℹ️ Не удалось вычислить корреляционную матрицу")
+                return
+            
+            # Create correlation matrix visualization
+            plt.style.use('bmh')  # Use bmh style with grid
+            fig, ax = plt.subplots(figsize=(12, 10), facecolor='white')
+            
+            # Create heatmap
+            im = ax.imshow(correlation_matrix.values, cmap='RdYlBu_r', aspect='auto', vmin=-1, vmax=1)
+            
+            # Set ticks and labels
+            ax.set_xticks(range(len(correlation_matrix.columns)))
+            ax.set_yticks(range(len(correlation_matrix.index)))
+            ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right')
+            ax.set_yticklabels(correlation_matrix.index)
+            
+            # Add colorbar
+            cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+            cbar.set_label('Корреляция', rotation=270, labelpad=15)
+            
+            # Add correlation values as text
+            for i in range(len(correlation_matrix.index)):
+                for j in range(len(correlation_matrix.columns)):
+                    value = correlation_matrix.iloc[i, j]
+                    # Color text based on correlation value
+                    if abs(value) > 0.7:
+                        text_color = 'white'
+                    else:
+                        text_color = 'black'
+                    
+                    ax.text(j, i, f'{value:.2f}', 
+                           ha='center', va='center', 
+                           color=text_color, fontsize=10, fontweight='bold')
+            
+            # Customize chart
+            ax.set_title('Корреляционная матрица активов\n(assets_ror.corr())', 
+                       fontsize=16, fontweight='bold', pad=20, color='#2E3440')
+            ax.set_xlabel('Активы', fontsize=13, fontweight='semibold', color='#4C566A')
+            ax.set_ylabel('Активы', fontsize=13, fontweight='semibold', color='#4C566A')
+            
+            # Enhanced grid
+            ax.grid(False)  # No grid for heatmap
+            ax.set_facecolor('#F8F9FA')
+            
+            # Customize spines
+            for spine in ax.spines.values():
+                spine.set_color('#D1D5DB')
+                spine.set_linewidth(0.8)
+            
+            # Enhance tick labels
+            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
+            
+            # Add subtle background pattern
+            ax.set_alpha(0.95)
+            
+            # Save chart to bytes
+            img_buffer = io.BytesIO()
+            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Send correlation matrix
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id, 
+                photo=io.BytesIO(img_bytes),
+                caption=f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"
+            )
+            
+            plt.close(fig)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating correlation matrix: {e}")
+            await self._send_message_safe(update, f"⚠️ Не удалось создать корреляционную матрицу: {str(e)}")
+    
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with full help"""
         user = update.effective_user
@@ -806,6 +892,7 @@ class OkamaFinanceBot:
                      "✅ График накопленной доходности всех активов\n"
                      "✅ График истории drawdowns (риски)\n"
                      "✅ График дивидендной доходности (если доступно)\n"
+                     "✅ Корреляционная матрица активов\n"
                      "✅ Сравнительный анализ\n"
                      "✅ AI-рекомендации\n\n"
                     "💡 Автоматическое определение валюты:\n"
@@ -981,6 +1068,9 @@ class OkamaFinanceBot:
                 
                 # Create and send additional analysis charts
                 await self._send_additional_charts(update, context, asset_list, symbols, currency)
+                
+                # Create and send correlation matrix
+                await self._create_correlation_matrix(update, context, asset_list, symbols)
                 
                 # Update user context
                 user_id = update.effective_user.id
