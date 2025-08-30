@@ -89,7 +89,7 @@ class OkamaFinanceBot:
             }
         return self.user_sessions[user_id]
     
-    def _update_user_context(self, user_id: int, kwargs):
+    def _update_user_context(self, user_id: int, **kwargs):
         """Обновить контекст пользователя"""
         context = self._get_user_context(user_id)
         context.update(kwargs)
