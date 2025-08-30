@@ -319,7 +319,7 @@ class OkamaFinanceBot:
             ax.set_facecolor('#F8F9FA')
             
             # Enhanced legend
-            ax.legend(chart_styles.legend_config)
+            ax.legend(**chart_styles.legend_config)
             
             # Customize spines
             for spine in ax.spines.values():
@@ -1439,7 +1439,7 @@ class OkamaFinanceBot:
                               color=chart_styles.axis_config['label_color'])
                 
                 # Enhanced legend
-                ax.legend(chart_styles.legend_config)
+                ax.legend(**chart_styles.legend_config)
                 
                 # Add copyright signature
                 chart_styles.add_copyright(ax)
