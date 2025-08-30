@@ -1479,6 +1479,12 @@ class OkamaFinanceBot:
                 # Get final portfolio value safely
                 try:
                     final_value = portfolio.wealth_index.iloc[-1]
+                    self.logger.info(f"Final value type: {type(final_value)}, value: {final_value}")
+                    
+                    # Log wealth_index info for debugging
+                    self.logger.info(f"Wealth index type: {type(portfolio.wealth_index)}")
+                    self.logger.info(f"Wealth index shape: {portfolio.wealth_index.shape if hasattr(portfolio.wealth_index, 'shape') else 'No shape'}")
+                    self.logger.info(f"Wealth index last few values: {portfolio.wealth_index.tail(3).tolist() if hasattr(portfolio.wealth_index, 'tail') else 'No tail method'}")
                     
                     # Handle different types of final_value
                     if hasattr(final_value, '__iter__') and not isinstance(final_value, str):
@@ -1490,11 +1496,30 @@ class OkamaFinanceBot:
                         else:
                             final_value = list(final_value)[0]
                     
+                    # Handle Period objects and other special types
+                    if hasattr(final_value, 'to_timestamp'):
+                        # If it's a Period object, convert to timestamp first
+                        final_value = final_value.to_timestamp()
+                    
                     # Convert to float safely
                     if isinstance(final_value, (int, float)):
                         final_value = float(final_value)
+                    elif hasattr(final_value, 'timestamp'):
+                        # If it's a datetime-like object with timestamp method
+                        final_value = float(final_value.timestamp())
                     else:
-                        final_value = float(str(final_value))
+                        # Try to convert to string first, then to float
+                        final_value_str = str(final_value)
+                        try:
+                            final_value = float(final_value_str)
+                        except (ValueError, TypeError):
+                            # If all else fails, try to extract numeric value
+                            import re
+                            numeric_match = re.search(r'[\d.]+', final_value_str)
+                            if numeric_match:
+                                final_value = float(numeric_match.group())
+                            else:
+                                raise ValueError(f"Cannot convert {final_value} to float")
                     
                     portfolio_text += f"\n📈 Накопленная доходность портфеля: {final_value:.2f} {currency}"
                 except Exception as e:
