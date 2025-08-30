@@ -268,7 +268,7 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"⚠️ Не удалось создать график drawdowns: {str(e)}")
     
     async def _create_dividend_yield_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
-        """Создать график dividend yield"""
+        """Создать график dividend yield с интерполяцией сплайнами"""
         try:
             # Check if dividend yield data is available
             if not hasattr(asset_list, 'dividend_yield') or asset_list.dividend_yield.empty:
@@ -276,51 +276,44 @@ class OkamaFinanceBot:
                 return
             
             # Create dividend yield chart
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-            fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
+            fig, ax = chart_styles.create_figure()
             
-            # Plot dividend yield
-            asset_list.dividend_yield.plot(ax=ax, linewidth=2.5, alpha=0.9)
+            # Apply base style
+            chart_styles.apply_base_style(fig, ax)
+            
+            # Plot dividend yield with spline interpolation
+            for column in asset_list.dividend_yield.columns:
+                x_data = asset_list.dividend_yield.index
+                y_data = asset_list.dividend_yield[column].values
+                chart_styles.plot_smooth_line(ax, x_data, y_data, label=column)
             
             # Enhanced chart customization
             ax.set_title(f'Дивидендная доходность\n{", ".join(symbols)}', 
-                       fontsize=16, fontweight='bold', pad=20, color='#2E3440')
-            ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
-            ax.set_ylabel(f'Дивидендная доходность (%)', fontsize=13, fontweight='semibold', color='#4C566A')
-            
-            # Enhanced grid and background
-            ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
-            ax.set_facecolor('#F8F9FA')
+                       fontsize=chart_styles.title_config['fontsize'], 
+                       fontweight=chart_styles.title_config['fontweight'], 
+                       pad=chart_styles.title_config['pad'], 
+                       color=chart_styles.title_config['color'])
+            ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'], 
+                         fontweight=chart_styles.axis_config['label_fontweight'], 
+                         color=chart_styles.axis_config['label_color'])
+            ax.set_ylabel(f'Дивидендная доходность (%)', fontsize=chart_styles.axis_config['label_fontsize'], 
+                          fontweight=chart_styles.axis_config['label_fontweight'], 
+                          color=chart_styles.axis_config['label_color'])
             
             # Enhanced legend
-            ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
-                     loc='upper left', bbox_to_anchor=(0.02, 0.98))
-            
-            # Customize spines
-            for spine in ax.spines.values():
-                spine.set_color('#D1D5DB')
-                spine.set_linewidth(0.8)
-            
-            # Enhance tick labels
-            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
-            
-            # Add subtle background pattern
-            ax.set_alpha(0.95)
+            ax.legend(**chart_styles.legend_config)
             
             # Add copyright signature
             self._add_copyright_signature(ax)
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
-                       facecolor='white', edgecolor='none')
+            chart_styles.save_figure(fig, img_buffer)
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            plt.close(fig)
-            plt.clf()
-            plt.cla()
+            chart_styles.cleanup_figure(fig)
             
             # Send dividend yield chart
             await context.bot.send_photo(
@@ -328,8 +321,6 @@ class OkamaFinanceBot:
                 photo=io.BytesIO(img_bytes),
                 caption=f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность"
             )
-            
-            plt.close(fig)
             
         except Exception as e:
             self.logger.error(f"Error creating dividend yield chart: {e}")
@@ -1891,6 +1882,28 @@ class OkamaFinanceBot:
             self.logger.error(f"Error getting dividend chart for {symbol}: {e}")
             return None
 
+    async def _get_dividend_table_image(self, symbol: str) -> Optional[bytes]:
+        """Получить изображение таблицы дивидендов с копирайтом"""
+        try:
+            # Получаем данные о дивидендах
+            dividend_info = self.asset_service.get_asset_dividends(symbol)
+            
+            if 'error' in dividend_info or not dividend_info.get('dividends'):
+                return None
+            
+            # Создаем изображение таблицы дивидендов
+            dividend_table = self._create_dividend_table_image(symbol, dividend_info['dividends'], dividend_info.get('currency', ''))
+            
+            if dividend_table:
+                # Добавляем копирайт на изображение
+                return self._add_copyright_to_chart(dividend_table)
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting dividend table image for {symbol}: {e}")
+            return None
+
     def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
         """Создать график дивидендов с таблицей выплат на графике"""
         try:
@@ -1997,6 +2010,96 @@ class OkamaFinanceBot:
             
         except Exception as e:
             self.logger.error(f"Error creating dividend chart: {e}")
+            return None
+
+    def _create_dividend_table_image(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
+        """Создать отдельное изображение с таблицей дивидендов"""
+        try:
+            import matplotlib.pyplot as plt
+            import io
+            import pandas as pd
+            from datetime import datetime
+            
+            # Конвертируем дивиденды в pandas Series
+            dividend_series = pd.Series(dividends)
+            
+            # Сортируем по дате (новые сверху)
+            dividend_series = dividend_series.sort_index(ascending=False)
+            
+            # Берем последние 15 выплат для таблицы
+            recent_dividends = dividend_series.head(15)
+            
+            # Создаем таблицу
+            table_data = []
+            table_headers = ['Дата', f'Сумма ({currency})']
+            
+            for date, amount in recent_dividends.items():
+                # Форматируем дату для лучшей читаемости
+                if hasattr(date, 'strftime'):
+                    formatted_date = date.strftime('%Y-%m-%d')
+                else:
+                    formatted_date = str(date)[:10]
+                table_data.append([formatted_date, f'{amount:.2f}'])
+            
+            # Создаем фигуру для таблицы
+            fig, ax = plt.subplots(figsize=(10, 8))
+            ax.axis('tight')
+            ax.axis('off')
+            
+            # Создаем таблицу
+            table = ax.table(cellText=table_data,
+                           colLabels=table_headers,
+                           cellLoc='center',
+                           loc='center')
+            
+            # Стилизуем таблицу
+            table.auto_set_font_size(False)
+            table.set_fontsize(11)
+            table.scale(1, 2.0)
+            
+            # Цвета для заголовков
+            for i in range(len(table_headers)):
+                table[(0, i)].set_facecolor('#4CAF50')
+                table[(0, i)].set_text_props(weight='bold', color='white')
+                table[(0, i)].set_height(0.12)
+            
+            # Цвета для строк данных (чередование)
+            for i in range(1, len(table_data) + 1):
+                for j in range(len(table_headers)):
+                    if i % 2 == 0:
+                        table[(i, j)].set_facecolor('#F5F5F5')
+                    else:
+                        table[(i, j)].set_facecolor('#FFFFFF')
+                    table[(i, j)].set_text_props(color='black')
+                    table[(i, j)].set_height(0.08)
+            
+            # Добавляем заголовок таблицы
+            ax.set_title(f'Таблица дивидендов {symbol}\nПоследние {len(table_data)} выплат', 
+                        fontsize=16, fontweight='bold', pad=20, color='#2E3440')
+            
+            # Добавляем общую статистику внизу
+            total_dividends = dividend_series.sum()
+            avg_dividend = dividend_series.mean()
+            max_dividend = dividend_series.max()
+            
+            stats_text = f'Общая сумма: {total_dividends:.2f} {currency} | '
+            stats_text += f'Средняя выплата: {avg_dividend:.2f} {currency} | '
+            stats_text += f'Максимальная выплата: {max_dividend:.2f} {currency}'
+            
+            ax.text(0.5, 0.02, stats_text, transform=ax.transAxes, 
+                   fontsize=10, ha='center', color='#4C566A',
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='#F8F9FA', alpha=0.8))
+            
+            # Сохраняем в bytes
+            output = io.BytesIO()
+            fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight', facecolor='white')
+            output.seek(0)
+            plt.close(fig)
+            
+            return output.getvalue()
+            
+        except Exception as e:
+            self.logger.error(f"Error creating dividend table image: {e}")
             return None
 
     def run(self):
