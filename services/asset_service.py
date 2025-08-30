@@ -804,20 +804,52 @@ class AssetService:
         try:
             import pandas as pd
             
+            self.logger.debug(f"Input price_data type: {type(price_data)}")
+            self.logger.debug(f"Input price_data shape: {getattr(price_data, 'shape', 'N/A')}")
+            self.logger.debug(f"Input price_data length: {getattr(price_data, '__len__', lambda: 'N/A')()}")
+            
             # Ensure we have a pandas Series
             if getattr(price_data, 'ndim', 1) == 1:
                 series_for_plot = price_data.dropna()
+                self.logger.debug(f"Created series from 1D data, length: {len(series_for_plot)}")
             else:
                 # If DataFrame, take first column
                 df_non_nan = price_data.dropna(how='all')
                 if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
                     first_col = df_non_nan.columns[0]
                     series_for_plot = df_non_nan[first_col].dropna()
+                    self.logger.debug(f"Created series from DataFrame column {first_col}, length: {len(series_for_plot)}")
                 else:
+                    self.logger.error("No valid data found in DataFrame")
                     return None
             
             if len(series_for_plot) < 2:
+                self.logger.error(f"Insufficient data points: {len(series_for_plot)}")
                 return None
+            
+            # Handle large numbers by converting to float64 and handling overflow
+            try:
+                # Convert to float64 and handle any overflow issues
+                series_for_plot = series_for_plot.astype('float64')
+                self.logger.debug(f"Successfully converted series to float64")
+            except (OverflowError, ValueError) as e:
+                self.logger.warning(f"Overflow error converting to float64: {e}")
+                # Try to handle large numbers by scaling down if necessary
+                try:
+                    # Check if values are extremely large
+                    max_val = series_for_plot.max()
+                    if max_val > 1e15:  # Very large numbers
+                        # Scale down by dividing by a large factor
+                        scale_factor = 1000
+                        series_for_plot = series_for_plot / scale_factor
+                        self.logger.info(f"Scaled down values by factor {scale_factor}")
+                    else:
+                        # Try alternative conversion method
+                        series_for_plot = pd.Series([float(x) for x in series_for_plot.values], 
+                                                  index=series_for_plot.index)
+                except Exception as scale_error:
+                    self.logger.error(f"Failed to handle large numbers: {scale_error}")
+                    return None
             
             # Convert PeriodIndex to Timestamp if needed
             try:
@@ -855,13 +887,75 @@ class AssetService:
             chart_styles.apply_base_style(fig, ax)
             
             # Plot price line with spline interpolation
-            chart_styles.plot_smooth_line(ax, series_for_plot.index, series_for_plot.values, 
-                                        color='#1f77b4', alpha=0.8)
+            # Handle large numbers by converting to float64
+            try:
+                values = series_for_plot.values.astype('float64')
+                self.logger.debug(f"Successfully converted values to float64, range: {values.min():.2f} to {values.max():.2f}")
+            except Exception as e:
+                self.logger.warning(f"Failed to convert to float64: {e}")
+                # Fallback: convert to list and then to float
+                try:
+                    values = [float(x) for x in series_for_plot.values]
+                    self.logger.debug(f"Fallback conversion successful, range: {min(values):.2f} to {max(values):.2f}")
+                except Exception as fallback_error:
+                    self.logger.error(f"Fallback conversion also failed: {fallback_error}")
+                    # Last resort: try to handle extremely large numbers
+                    try:
+                        # Check if values are extremely large and scale them down
+                        max_val = max(series_for_plot.values)
+                        if max_val > 1e10:
+                            scale_factor = 1000
+                            values = [float(x) / scale_factor for x in series_for_plot.values]
+                            self.logger.info(f"Scaled down values by factor {scale_factor}")
+                        else:
+                            values = [float(x) for x in series_for_plot.values]
+                    except Exception as scale_error:
+                        self.logger.error(f"All conversion methods failed: {scale_error}")
+                        return None
+            
+            # Additional safety check for values
+            if not values or len(values) == 0:
+                self.logger.error("No valid values to plot")
+                return None
+            
+            # Check for infinite or NaN values
+            valid_values = []
+            for v in values:
+                try:
+                    if not (float('inf') == v or float('-inf') == v or v != v):
+                        valid_values.append(v)
+                except Exception:
+                    continue
+            
+            if len(valid_values) != len(values):
+                self.logger.warning(f"Found {len(values) - len(valid_values)} invalid values, using only valid ones")
+                values = valid_values
+            
+            try:
+                chart_styles.plot_smooth_line(ax, series_for_plot.index, values, 
+                                            color='#1f77b4', alpha=0.8)
+            except Exception as plot_error:
+                self.logger.error(f"Error in plot_smooth_line: {plot_error}")
+                # Fallback to simple line plot
+                try:
+                    ax.plot(series_for_plot.index, values, color='#1f77b4', linewidth=2, alpha=0.8)
+                except Exception as simple_plot_error:
+                    self.logger.error(f"Simple plot also failed: {simple_plot_error}")
+                    return None
             
             # Add current price annotation
-            current_price = series_for_plot.iloc[-1]
+            current_price = float(series_for_plot.iloc[-1])
             current_date = series_for_plot.index[-1]
-            ax.annotate(f'{current_price:.2f}', 
+            
+            # Format price annotation based on magnitude
+            if current_price >= 1000:
+                price_format = f'{current_price:.0f}'
+            elif current_price >= 100:
+                price_format = f'{current_price:.1f}'
+            else:
+                price_format = f'{current_price:.2f}'
+            
+            ax.annotate(price_format, 
                        xy=(current_date, current_price),
                        xytext=(10, 10), textcoords='offset points',
                        bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
@@ -886,15 +980,27 @@ class AssetService:
                 plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
             
             # Add some statistics
-            start_price = series_for_plot.iloc[0]
+            start_price = float(series_for_plot.iloc[0])
+            min_price = float(series_for_plot.min())
+            max_price = float(series_for_plot.max())
+            
             if start_price != 0:
                 price_change = ((current_price - start_price) / start_price) * 100
             else:
                 price_change = 0.0
+            
+            # Format statistics based on price magnitude
+            def format_price(price):
+                if price >= 1000:
+                    return f'{price:.0f}'
+                elif price >= 100:
+                    return f'{price:.1f}'
+                else:
+                    return f'{price:.2f}'
                 
             stats_text = f'Изменение: {price_change:+.2f}%\n'
-            stats_text += f'Мин: {series_for_plot.min():.2f}\n'
-            stats_text += f'Макс: {series_for_plot.max():.2f}'
+            stats_text += f'Мин: {format_price(min_price)}\n'
+            stats_text += f'Макс: {format_price(max_price)}'
             
             ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
                    verticalalignment='top', fontsize=10,
