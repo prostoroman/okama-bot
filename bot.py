@@ -1565,6 +1565,20 @@ class OkamaFinanceBot:
                     caption=self._truncate_caption(portfolio_text)
                 )
                 
+                # Add risk metrics button
+                keyboard = [
+                    [
+                        InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{','.join(symbols)}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="Выберите дополнительный анализ:",
+                    reply_markup=reply_markup
+                )
+                
                 # Store portfolio data in context
                 user_id = update.effective_user.id
                 self._update_user_context(
@@ -1816,6 +1830,10 @@ class OkamaFinanceBot:
                 symbol = callback_data.replace('dividends_', '')
                 self.logger.info(f"Dividends button clicked for symbol: {symbol}")
                 await self._handle_single_dividends_button(update, context, symbol)
+            elif callback_data.startswith('risk_metrics_'):
+                symbols = callback_data.replace('risk_metrics_', '').split(',')
+                self.logger.info(f"Risk metrics button clicked for symbols: {symbols}")
+                await self._handle_risk_metrics_button(update, context, symbols)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -2244,6 +2262,246 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error creating dividend table image: {e}")
             return None
+
+    async def _handle_risk_metrics_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle risk metrics button click for portfolio"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling risk metrics button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context keys: {list(user_context.keys())}")
+            
+            if 'current_symbols' not in user_context:
+                self.logger.warning(f"current_symbols not found in user context for user {user_id}")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            symbols = user_context['current_symbols']
+            currency = user_context.get('current_currency', 'USD')
+            weights = user_context.get('portfolio_weights', [])
+            
+            self.logger.info(f"Creating risk metrics for portfolio: {symbols}, currency: {currency}")
+            await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
+            
+            # Create Portfolio again
+            import okama as ok
+            portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+            
+            await self._create_risk_metrics_report(update, context, portfolio, symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling risk metrics button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
+
+    async def _create_risk_metrics_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+        """Create and send risk metrics report for portfolio"""
+        try:
+            # Get portfolio description (y.describe())
+            portfolio_description = portfolio.describe()
+            
+            # Create risk metrics table
+            risk_text = f"📊 Риск метрики портфеля: {', '.join(symbols)}\n\n"
+            risk_text += "📈 Основные показатели риска:\n\n"
+            
+            # Parse and explain each metric
+            metrics_explained = self._explain_risk_metrics(portfolio_description, portfolio)
+            
+            for metric_name, explanation in metrics_explained.items():
+                risk_text += f"**{metric_name}**\n{explanation}\n\n"
+            
+            # Add general risk assessment
+            risk_text += "💡 **Общая оценка риска:**\n"
+            risk_text += self._assess_portfolio_risk(portfolio_description, portfolio)
+            
+            # Send text report
+            await self._send_callback_message(update, context, risk_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating risk metrics report: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании отчета о рисках: {str(e)}")
+
+    def _explain_risk_metrics(self, portfolio_description, portfolio) -> dict:
+        """Explain each risk metric in detail"""
+        explanations = {}
+        
+        try:
+            # 1. Годовая волатильность
+            if hasattr(portfolio, 'risk_annual'):
+                risk_annual = portfolio.risk_annual
+                if hasattr(risk_annual, 'tail'):
+                    risk_value = risk_annual.tail(1).iloc[0] if not risk_annual.empty else None
+                else:
+                    risk_value = risk_annual.iloc[-1] if hasattr(risk_annual, 'iloc') else risk_annual
+                
+                if risk_value is not None:
+                    risk_pct = float(risk_value) * 100
+                    explanations["1. Годовая волатильность (risk_annual)"] = (
+                        f"Показывает годовую волатильность портфеля — насколько сильно колеблется его доходность.\n\n"
+                        f"**Значение: {risk_pct:.2f}%**\n\n"
+                        f"💡 **Как интерпретировать:**\n"
+                        f"• {risk_pct:.1f}% годовых — это {'высокая' if risk_pct > 20 else 'средняя' if risk_pct > 10 else 'низкая'} волатильность\n"
+                        f"• {'Типично для акций' if risk_pct > 15 else 'Типично для смешанного портфеля' if risk_pct > 8 else 'Типично для облигаций'}\n\n"
+                        f"💡 **Как использовать:** сравнивайте с другими портфелями. Если доходность одинаковая, выбирайте тот, у которого ниже волатильность."
+                    )
+            
+            # 2. Полуотклонение (риск только вниз)
+            if hasattr(portfolio, 'semideviation_annual'):
+                semidev = portfolio.semideviation_annual
+                if hasattr(semidev, 'iloc'):
+                    semidev_value = semidev.iloc[-1] if not semidev.empty else None
+                else:
+                    semidev_value = semidev
+                
+                if semidev_value is not None:
+                    semidev_pct = float(semidev_value) * 100
+                    explanations["2. Полуотклонение (semideviation_annual)"] = (
+                        f"Это риск просадок — учитывает только отрицательные отклонения от средней доходности.\n\n"
+                        f"**Значение: {semidev_pct:.2f}%**\n\n"
+                        f"💡 **Как интерпретировать:**\n"
+                        f"• Более точный показатель страха инвестора, чем общая волатильность\n"
+                        f"• Если полуотклонение близко к общей волатильности — портфель теряет и растёт примерно одинаково\n"
+                        f"• Если полуотклонение намного меньше — портфель 'гладкий' вниз, но растёт резко"
+                    )
+            
+            # 3. VaR (Value at Risk)
+            try:
+                var_1 = portfolio.get_var_historic(level=1)
+                var_5 = portfolio.get_var_historic(level=5)
+                
+                if var_1 is not None and var_5 is not None:
+                    var_1_pct = float(var_1) * 100
+                    var_5_pct = float(var_5) * 100
+                    
+                    explanations["3. VaR (Value at Risk)"] = (
+                        f"Показывает максимальные потери с заданной вероятностью.\n\n"
+                        f"**Значения:**\n"
+                        f"• 1% VaR: {var_1_pct:.1f}% (с вероятностью 99% потери не превысят)\n"
+                        f"• 5% VaR: {var_5_pct:.1f}% (с вероятностью 95% потери не превысят)\n\n"
+                        f"💡 **Как интерпретировать:**\n"
+                        f"• Это исторический VaR — рассчитан на основе прошлых данных\n"
+                        f"• Оцените, готовы ли вы потерять {var_1_pct:.1f}% капитала в один месяц\n"
+                        f"• Если нет — портфель слишком агрессивный"
+                    )
+            except Exception as e:
+                self.logger.warning(f"Could not get VaR: {e}")
+            
+            # 4. CVaR (Conditional Value at Risk)
+            try:
+                cvar_5 = portfolio.get_cvar_historic(level=5)
+                
+                if cvar_5 is not None:
+                    cvar_5_pct = float(cvar_5) * 100
+                    
+                    explanations["4. CVaR (Conditional Value at Risk)"] = (
+                        f"Показывает средние потери в худших 5% месяцев.\n\n"
+                        f"**Значение: {cvar_5_pct:.1f}%**\n\n"
+                        f"💡 **Как интерпретировать:**\n"
+                        f"• Более консервативный показатель, чем VaR\n"
+                        f"• CVaR помогает понять, насколько глубоко может 'провалиться' портфель в кризис\n"
+                        f"• В худшем случае ожидайте потери около {cvar_5_pct:.1f}%"
+                    )
+            except Exception as e:
+                self.logger.warning(f"Could not get CVaR: {e}")
+            
+            # 5. Максимальная просадка
+            if hasattr(portfolio, 'drawdowns'):
+                drawdowns = portfolio.drawdowns
+                if hasattr(drawdowns, 'min'):
+                    max_dd = drawdowns.min()
+                    if max_dd is not None:
+                        max_dd_pct = float(max_dd) * 100
+                        
+                        explanations["5. Максимальная просадка (Max Drawdown)"] = (
+                            f"Самая большая потеря от пика до дна в истории портфеля.\n\n"
+                            f"**Значение: {max_dd_pct:.1f}%**\n\n"
+                            f"💡 **Как интерпретировать:**\n"
+                            f"• Один из важнейших показателей психологической устойчивости\n"
+                            f"• Если вы не выдержите просадку в {abs(max_dd_pct):.1f}%, пересмотрите состав активов\n"
+                            f"• Добавьте облигации или золото для снижения риска"
+                        )
+            
+            # 6. Период восстановления
+            if hasattr(portfolio, 'recovery_period'):
+                recovery = portfolio.recovery_period
+                if hasattr(recovery, 'max'):
+                    max_recovery = recovery.max()
+                    if max_recovery is not None:
+                        recovery_years = float(max_recovery) / 12  # в годах
+                        
+                        explanations["6. Период восстановления"] = (
+                            f"Показывает, сколько времени портфель восстанавливался после самой долгой просадки.\n\n"
+                            f"**Значение: {recovery_years:.1f} года**\n\n"
+                            f"💡 **Как интерпретировать:**\n"
+                            f"• Если вы планируете снимать деньги (например, на пенсию), важно, чтобы портфель быстро восстанавливался\n"
+                            f"• {recovery_years:.1f} года на возврат к предыдущему максимуму\n"
+                            f"• Иначе есть риск 'обнулиться' в неподходящий момент"
+                        )
+            
+        except Exception as e:
+            self.logger.error(f"Error explaining risk metrics: {e}")
+            explanations["Ошибка анализа"] = f"Не удалось проанализировать метрики риска: {str(e)}"
+        
+        return explanations
+
+    def _assess_portfolio_risk(self, portfolio_description, portfolio) -> str:
+        """Assess overall portfolio risk level"""
+        try:
+            risk_level = "Средний"
+            risk_color = "🟡"
+            recommendations = []
+            
+            # Check volatility
+            if hasattr(portfolio, 'risk_annual'):
+                risk_annual = portfolio.risk_annual
+                if hasattr(risk_annual, 'tail'):
+                    risk_value = risk_annual.tail(1).iloc[0] if not risk_annual.empty else None
+                else:
+                    risk_value = risk_annual.iloc[-1] if hasattr(risk_annual, 'iloc') else risk_annual
+                
+                if risk_value is not None:
+                    risk_pct = float(risk_value) * 100
+                    if risk_pct > 25:
+                        risk_level = "Высокий"
+                        risk_color = "🔴"
+                        recommendations.append("• Рассмотрите добавление облигаций для снижения волатильности")
+                        recommendations.append("• Увеличьте долю золота или других защитных активов")
+                    elif risk_pct < 10:
+                        risk_level = "Средний"
+                        risk_color = "🟢"
+                        recommendations.append("• Портфель консервативный, подходит для сохранения капитала")
+                        recommendations.append("• Рассмотрите добавление акций для роста доходности")
+                    else:
+                        recommendations.append("• Портфель сбалансированный, подходит для большинства инвесторов")
+            
+            # Check max drawdown
+            if hasattr(portfolio, 'drawdowns'):
+                drawdowns = portfolio.drawdowns
+                if hasattr(drawdowns, 'min'):
+                    max_dd = drawdowns.min()
+                    if max_dd is not None:
+                        max_dd_pct = abs(float(max_dd) * 100)
+                        if max_dd_pct > 50:
+                            recommendations.append("• Максимальная просадка очень высокая - убедитесь, что вы готовы к таким потерям")
+                        elif max_dd_pct > 30:
+                            recommendations.append("• Просадка умеренная, но требует психологической устойчивости")
+                        else:
+                            recommendations.append("• Просадка приемлемая для большинства инвесторов")
+            
+            assessment = f"{risk_color} **Уровень риска: {risk_level}**\n\n"
+            
+            if recommendations:
+                assessment += "📋 **Рекомендации:**\n"
+                for rec in recommendations:
+                    assessment += f"{rec}\n"
+            else:
+                assessment += "📋 Портфель сбалансированный, специальных рекомендаций не требуется."
+            
+            return assessment
+            
+        except Exception as e:
+            self.logger.error(f"Error assessing portfolio risk: {e}")
+            return "Не удалось оценить общий уровень риска портфеля."
 
     def run(self):
         """Run the bot"""
