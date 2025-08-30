@@ -857,12 +857,14 @@ class AssetService:
                 end_date_str = "N/A"
             
             # Create the price chart
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-            fig, ax = plt.subplots(figsize=(12, 6))
+            fig, ax = chart_styles.create_figure(figsize=(12, 6))
             
-            # Plot price line
-            ax.plot(series_for_plot.index, series_for_plot.values, 
-                   color='#1f77b4', linewidth=2, alpha=0.8)
+            # Apply base style
+            chart_styles.apply_base_style(fig, ax)
+            
+            # Plot price line with spline interpolation
+            chart_styles.plot_smooth_line(ax, series_for_plot.index, series_for_plot.values, 
+                                        color='#1f77b4', alpha=0.8)
             
             # Add current price annotation
             current_price = series_for_plot.iloc[-1]
@@ -874,10 +876,10 @@ class AssetService:
                        fontsize=10, fontweight='bold')
             
             # Customize chart
-            ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=14, fontweight='bold')
-            ax.set_xlabel('Дата', fontsize=12)
-            ax.set_ylabel(f'Цена ({currency})', fontsize=12)
-            ax.grid(True, linestyle='--', alpha=0.3)
+            ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
+                       fontweight=chart_styles.title_config['fontweight'])
+            ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'])
+            ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
             
             # Format x-axis dates
             fig.autofmt_xdate()
@@ -901,8 +903,8 @@ class AssetService:
             
             # Save chart to bytes
             buf = io.BytesIO()
-            fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-            plt.close(fig)
+            chart_styles.save_figure(fig, buf)
+            chart_styles.cleanup_figure(fig)
             
             return buf.getvalue()
             
