@@ -1833,6 +1833,8 @@ class OkamaFinanceBot:
             elif callback_data.startswith('risk_metrics_'):
                 symbols = callback_data.replace('risk_metrics_', '').split(',')
                 self.logger.info(f"Risk metrics button clicked for symbols: {symbols}")
+                self.logger.info(f"Callback data: {callback_data}")
+                self.logger.info(f"Extracted symbols: {symbols}")
                 await self._handle_risk_metrics_button(update, context, symbols)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
@@ -2271,6 +2273,7 @@ class OkamaFinanceBot:
             
             user_context = self._get_user_context(user_id)
             self.logger.info(f"User context keys: {list(user_context.keys())}")
+            self.logger.info(f"User context content: {user_context}")
             
             if 'current_symbols' not in user_context:
                 self.logger.warning(f"current_symbols not found in user context for user {user_id}")
@@ -2281,7 +2284,7 @@ class OkamaFinanceBot:
             currency = user_context.get('current_currency', 'USD')
             weights = user_context.get('portfolio_weights', [])
             
-            self.logger.info(f"Creating risk metrics for portfolio: {symbols}, currency: {currency}")
+            self.logger.info(f"Creating risk metrics for portfolio: {symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
             
             # Create Portfolio again
@@ -2292,6 +2295,8 @@ class OkamaFinanceBot:
             
         except Exception as e:
             self.logger.error(f"Error handling risk metrics button: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
 
     async def _create_risk_metrics_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
