@@ -162,13 +162,9 @@ class ChartStyles:
             
             # Безопасная обработка Period объектов в x_data
             if hasattr(x_data, 'dtype') and str(x_data.dtype).startswith('period'):
-                logger.info("Detected Period dtype, converting to timestamp for safe processing")
-                try:
-                    x_data = x_data.to_timestamp()
-                except Exception as e:
-                    logger.warning(f"Failed to convert Period to timestamp: {e}")
-                    # Fallback: используем числовые индексы
-                    x_data = pd.Series(range(len(x_data)), index=x_data.index)
+                logger.info("Detected Period dtype, using numeric indices for safe processing")
+                # Для Period объектов используем числовые индексы
+                x_data = np.arange(len(x_data))
             
             # Убираем NaN значения
             valid_mask = ~(np.isnan(x_data) | np.isnan(y_data))
@@ -179,9 +175,9 @@ class ChartStyles:
             x_valid = x_data[valid_mask]
             y_valid = y_data[valid_mask]
             
-            # Проверяем типы данных
-            if hasattr(x_valid, 'dtype') and x_valid.dtype.kind in ['M', 'O']:
-                # Для datetime или object типов используем числовые индексы
+            # Для Period объектов всегда используем числовые индексы
+            if hasattr(x_valid, 'dtype') and (x_valid.dtype.kind in ['M', 'O'] or str(x_valid.dtype).startswith('period')):
+                # Для datetime, object или period типов используем числовые индексы
                 x_numeric = np.arange(len(x_valid))
                 use_numeric_x = True
             else:
@@ -248,7 +244,12 @@ class ChartStyles:
                     x_valid_timestamps = []
                     for x_val in x_valid:
                         if hasattr(x_val, 'to_timestamp'):
-                            x_valid_timestamps.append(x_val.to_timestamp())
+                            timestamp = x_val.to_timestamp()
+                            # Конвертируем timestamp в float для безопасной интерполяции
+                            if hasattr(timestamp, 'timestamp'):
+                                x_valid_timestamps.append(timestamp.timestamp())
+                            else:
+                                x_valid_timestamps.append(float(timestamp))
                         else:
                             x_valid_timestamps.append(x_val)
                     
