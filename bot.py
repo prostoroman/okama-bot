@@ -2374,8 +2374,24 @@ class OkamaFinanceBot:
             
             currency = user_context.get('current_currency', 'USD')
             weights = user_context.get('portfolio_weights', [])
-            
-            self.logger.info(f"Creating Monte Carlo forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
+
+            # Sanitize and normalize weights to ensure they sum to 1.0
+            try:
+                if not isinstance(weights, list) or len(weights) != len(symbols) or any(w is None for w in weights):
+                    weights = [1.0 / len(symbols)] * len(symbols)
+                else:
+                    weights = [float(w) if w is not None else 0.0 for w in weights]
+                    weights = [w if w >= 0.0 else 0.0 for w in weights]
+                    total_w = sum(weights)
+                    if total_w <= 0:
+                        weights = [1.0 / len(symbols)] * len(symbols)
+                    else:
+                        weights = [w / total_w for w in weights]
+            except Exception as e:
+                self.logger.warning(f"Failed to sanitize weights, defaulting to equal: {e}")
+                weights = [1.0 / len(symbols)] * len(symbols)
+
+            self.logger.info(f"Creating Monte Carlo forecast for portfolio: {symbols}, currency: {currency}, weights: {weights} (sum={sum(weights):.6f})")
             await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
             
             # Create Portfolio again
@@ -2418,8 +2434,24 @@ class OkamaFinanceBot:
             
             currency = user_context.get('current_currency', 'USD')
             weights = user_context.get('portfolio_weights', [])
-            
-            self.logger.info(f"Creating forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
+
+            # Sanitize and normalize weights to ensure they sum to 1.0
+            try:
+                if not isinstance(weights, list) or len(weights) != len(symbols) or any(w is None for w in weights):
+                    weights = [1.0 / len(symbols)] * len(symbols)
+                else:
+                    weights = [float(w) if w is not None else 0.0 for w in weights]
+                    weights = [w if w >= 0.0 else 0.0 for w in weights]
+                    total_w = sum(weights)
+                    if total_w <= 0:
+                        weights = [1.0 / len(symbols)] * len(symbols)
+                    else:
+                        weights = [w / total_w for w in weights]
+            except Exception as e:
+                self.logger.warning(f"Failed to sanitize weights, defaulting to equal: {e}")
+                weights = [1.0 / len(symbols)] * len(symbols)
+
+            self.logger.info(f"Creating forecast for portfolio: {symbols}, currency: {currency}, weights: {weights} (sum={sum(weights):.6f})")
             await self._send_callback_message(update, context, "📈 Создаю прогноз с перцентилями...")
             
             # Create Portfolio again
