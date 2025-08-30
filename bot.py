@@ -2016,14 +2016,34 @@ class OkamaFinanceBot:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
                 return None
             
-            # Ищем месячный график
+            # Ищем месячный график - charts это словарь, а не список
             if 'charts' in price_history and price_history['charts']:
                 charts = price_history['charts']
-                for chart_data in charts:
-                    if chart_data:
+                self.logger.info(f"Available chart types for {symbol}: {list(charts.keys())}")
+                
+                # Ищем месячный график по ключу 'close_monthly'
+                if 'close_monthly' in charts and charts['close_monthly']:
+                    chart_data = charts['close_monthly']
+                    self.logger.info(f"Found monthly chart for {symbol}, type: {type(chart_data)}, length: {len(chart_data) if hasattr(chart_data, '__len__') else 'N/A'}")
+                    
+                    # Проверяем, что данные действительно являются bytes
+                    if isinstance(chart_data, bytes) and len(chart_data) > 0:
                         # Добавляем копирайт на график
                         return self._add_copyright_to_chart(chart_data)
+                    else:
+                        self.logger.error(f"Invalid monthly chart data for {symbol}: type={type(chart_data)}, length={len(chart_data) if hasattr(chart_data, '__len__') else 'N/A'}")
+                        return None
+                
+                # Если месячного графика нет, попробуем любой доступный
+                for chart_key, chart_data in charts.items():
+                    if chart_data and isinstance(chart_data, bytes) and len(chart_data) > 0:
+                        self.logger.info(f"Using fallback chart: {chart_key} for {symbol}")
+                        # Добавляем копирайт на график
+                        return self._add_copyright_to_chart(chart_data)
+                    else:
+                        self.logger.warning(f"Skipping invalid chart {chart_key} for {symbol}: type={type(chart_data)}, length={len(chart_data) if hasattr(chart_data, '__len__') else 'N/A'}")
             
+            self.logger.warning(f"No valid charts found for {symbol}")
             return None
             
         except Exception as e:
