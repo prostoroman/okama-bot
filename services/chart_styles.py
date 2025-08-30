@@ -52,8 +52,14 @@ class ChartStyles:
         # Monte Carlo
         self.monte_carlo_config = {
             'linewidth': 0.6,
-            'alpha': 0.35,
-            'color': self.colors['primary']
+            'alpha': 0.45,
+            'colors': [
+                self.colors['primary'],    # глубокий морской синий
+                self.colors['secondary'],  # бирюзовый акцент
+                self.colors['success'],    # мягкий мятный
+                self.colors['warning'],    # янтарный
+                self.colors['danger']      # глубокий красный
+            ]
         }
 
         # Копирайт
@@ -131,12 +137,14 @@ class ChartStyles:
         """Применить специальные стили для линий Монте-Карло"""
         try:
             # Находим все линии на графике и применяем стили Монте-Карло
-            for line in ax.lines:
+            colors = self.monte_carlo_config['colors']
+            for i, line in enumerate(ax.lines):
                 line.set_linewidth(self.monte_carlo_config['linewidth'])
                 line.set_alpha(self.monte_carlo_config['alpha'])
-                line.set_color(self.monte_carlo_config['color'])
+                # Применяем разные цвета по кругу для контраста
+                line.set_color(colors[i % len(colors)])
             
-            logger.info(f"Applied Monte Carlo styles to {len(ax.lines)} lines")
+            logger.info(f"Applied Monte Carlo styles to {len(ax.lines)} lines with {len(colors)} colors")
             
         except Exception as e:
             logger.error(f"Error applying Monte Carlo styles: {e}")
