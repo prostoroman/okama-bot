@@ -1916,7 +1916,7 @@ class OkamaFinanceBot:
                 caption += "Показывает долгосрочные тренды и сезонность"
                 
                 await update.callback_query.message.reply_photo(
-                    photo=monthly_chart,
+                    photo=io.BytesIO(monthly_chart),
                     caption=self._truncate_caption(caption)
                 )
             else:
@@ -1977,10 +1977,22 @@ class OkamaFinanceBot:
             # Ищем месячный график
             if 'charts' in price_history and price_history['charts']:
                 charts = price_history['charts']
-                for chart_data in charts:
-                    if chart_data:
-                        # Добавляем копирайт на график
-                        return self._add_copyright_to_chart(chart_data)
+                # charts ожидается как dict с ключами 'adj_close', 'close_monthly', 'fallback'
+                if isinstance(charts, dict):
+                    # Приоритет: close_monthly -> adj_close -> fallback -> любое доступное значение
+                    try_keys = ['close_monthly', 'adj_close', 'fallback']
+                    for key in try_keys:
+                        chart_bytes = charts.get(key)
+                        if chart_bytes:
+                            return self._add_copyright_to_chart(chart_bytes)
+                    # Если ничего из приоритетных не найдено, пробуем любые значения
+                    for _k, chart_bytes in charts.items():
+                        if chart_bytes:
+                            return self._add_copyright_to_chart(chart_bytes)
+                elif isinstance(charts, (list, tuple)):
+                    for chart_bytes in charts:
+                        if chart_bytes:
+                            return self._add_copyright_to_chart(chart_bytes)
             
             return None
             
