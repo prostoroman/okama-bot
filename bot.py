@@ -475,6 +475,7 @@ class OkamaFinanceBot:
 /start — эта справка
 /info [тикер] [период] — базовая информация об активе с графиком и анализом
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
+/portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
 /namespace [название] — список пространств имен или символы в пространстве
 
 Поддерживаемые форматы тикеров:
@@ -491,6 +492,8 @@ class OkamaFinanceBot:
 • `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых
 • `/compare GC.COMM CL.COMM` - сравнить золото и нефть
 • `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото
+• `/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации
+• `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель
 Базовая валюта опрелеляется по первому символу в списке.
 """
 
@@ -1169,6 +1172,230 @@ class OkamaFinanceBot:
             self.logger.error(f"Error in compare command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при выполнении команды сравнения: {str(e)}")
 
+    async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /portfolio command for creating portfolio with weights"""
+        try:
+            if not context.args:
+                await self._send_message_safe(update, 
+                    "📊 Команда /portfolio - Создание портфеля\n\n"
+                    "Использование:\n"
+                    "`/portfolio символ1:доля1 символ2:доля2 символ3:доля3 ...`\n\n"
+                    "Примеры:\n"
+                    "• `/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации\n"
+                    "• `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель\n"
+                    "• `/portfolio VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - портфель с золотом\n\n"
+                    "💡 Важные моменты:\n"
+                    "• Доли должны суммироваться в 1.0 (100%)\n"
+                    "• Базовая валюта определяется по первому символу\n"
+                    "• Поддерживаются все типы активов: акции, облигации, товары, индексы\n\n"
+                    "Что вы получите:\n"
+                    "✅ График накопленной доходности портфеля\n"
+                    "✅ Таблица активов с весами\n"
+                    "✅ Основные характеристики портфеля\n"
+                    "✅ AI-анализ и рекомендации"
+                )
+                return
+
+            # Extract symbols and weights from command arguments
+            raw_args = ' '.join(context.args)
+            portfolio_data = []
+            
+            for arg in raw_args.split():
+                if ':' in arg:
+                    symbol_part, weight_part = arg.split(':', 1)
+                    symbol = symbol_part.strip().upper()
+                    weight = float(weight_part.strip())
+                    
+                    if weight <= 0 or weight > 1:
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: {weight}. Доля должна быть от 0 до 1")
+                        return
+                    
+                    portfolio_data.append((symbol, weight))
+                else:
+                    await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
+                    return
+            
+            if not portfolio_data:
+                await self._send_message_safe(update, "❌ Не указаны активы для портфеля")
+                return
+            
+            # Check if weights sum to approximately 1.0
+            total_weight = sum(weight for _, weight in portfolio_data)
+            if abs(total_weight - 1.0) > 0.01:
+                await self._send_message_safe(update, f"❌ Сумма долей должна быть равна 1.0, текущая сумма: {total_weight:.3f}")
+                return
+            
+            if len(portfolio_data) > 10:
+                await self._send_message_safe(update, "❌ Максимум 10 активов в портфеле")
+                return
+            
+            symbols = [symbol for symbol, _ in portfolio_data]
+            weights = [weight for _, weight in portfolio_data]
+            
+            await self._send_message_safe(update, f"🔄 Создаю портфель: {', '.join(symbols)}...")
+            
+            # Create portfolio using okama
+            import okama as ok
+            
+            # Determine base currency from the first asset
+            first_symbol = symbols[0]
+            currency_info = ""
+            try:
+                if '.' in first_symbol:
+                    namespace = first_symbol.split('.')[1]
+                    if namespace == 'MOEX':
+                        currency = "RUB"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'US':
+                        currency = "USD"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'LSE':
+                        currency = "GBP"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'FX':
+                        currency = "USD"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'COMM':
+                        currency = "USD"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'INDX':
+                        currency = "USD"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    else:
+                        currency = "USD"
+                        currency_info = "по умолчанию (USD)"
+                else:
+                    currency = "USD"
+                    currency_info = "по умолчанию (USD)"
+                
+                self.logger.info(f"Auto-detected currency for portfolio {first_symbol}: {currency}")
+                
+            except Exception as e:
+                self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
+                currency = "USD"
+                currency_info = "по умолчанию (USD)"
+            
+            try:
+                # Create Portfolio with detected currency
+                portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+                
+                self.logger.info(f"Created Portfolio with weights: {weights}")
+                
+                # Generate beautiful portfolio chart
+                plt.style.use('fivethirtyeight')
+                
+                fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
+                
+                # Plot portfolio wealth index
+                portfolio.wealth_index.plot(ax=ax, linewidth=2.5, alpha=0.9, color='#2E5BBA', label='Портфель')
+                
+                # Enhanced chart customization
+                ax.set_title(f'Накопленная доходность портфеля\n{", ".join(symbols)}', 
+                           fontsize=16, fontweight='bold', pad=20, color='#2E3440')
+                ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
+                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
+                
+                # Enhanced grid and background
+                ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
+                ax.set_facecolor('#F8F9FA')
+                
+                # Enhanced legend
+                ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
+                         loc='upper left', bbox_to_anchor=(0.02, 0.98))
+                
+                # Customize spines
+                for spine in ax.spines.values():
+                    spine.set_color('#D1D5DB')
+                    spine.set_linewidth(0.8)
+                
+                # Enhance tick labels
+                ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
+                
+                # Add subtle background pattern
+                ax.set_alpha(0.95)
+                
+                # Add copyright signature
+                self._add_copyright_signature(ax)
+                
+                # Save chart to bytes with memory optimization
+                img_buffer = io.BytesIO()
+                fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none')
+                img_buffer.seek(0)
+                img_bytes = img_buffer.getvalue()
+                
+                # Clear matplotlib cache to free memory
+                plt.close(fig)
+                plt.clf()
+                plt.cla()
+                
+                # Get portfolio information
+                portfolio_text = f"📊 Портфель: {', '.join(symbols)}\n\n"
+                portfolio_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
+                portfolio_text += f"📅 Период: {portfolio.first_date} - {portfolio.last_date}\n"
+                portfolio_text += f"⏱️ Длительность: {portfolio.period_length}\n\n"
+                
+                # Show portfolio table
+                portfolio_text += "📋 Состав портфеля:\n"
+                if hasattr(portfolio, 'table') and not portfolio.table.empty:
+                    for _, row in portfolio.table.iterrows():
+                        symbol = row['ticker']
+                        weight = weights[symbols.index(symbol)]
+                        name = row.get('asset name', symbol)
+                        portfolio_text += f"• {symbol} ({name}): {weight:.1%}\n"
+                else:
+                    # Fallback if table is not available
+                    for symbol, weight in portfolio_data:
+                        portfolio_text += f"• {symbol}: {weight:.1%}\n"
+                
+                # Get final portfolio value safely
+                try:
+                    final_value = portfolio.wealth_index.iloc[-1]
+                    if hasattr(final_value, '__iter__') and not isinstance(final_value, str):
+                        # If it's a Series, get the first value
+                        final_value = final_value.iloc[0] if hasattr(final_value, 'iloc') else list(final_value)[0]
+                    portfolio_text += f"\n📈 Накопленная доходность портфеля: {float(final_value):.2f} {currency}"
+                except Exception as e:
+                    self.logger.warning(f"Could not get final portfolio value: {e}")
+                    portfolio_text += f"\n📈 Накопленная доходность портфеля: недоступна"
+                
+                # Send portfolio chart and information
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id, 
+                    photo=io.BytesIO(img_bytes),
+                    caption=portfolio_text
+                )
+                
+                # Store portfolio data in context
+                user_id = update.effective_user.id
+                self._update_user_context(
+                    user_id, 
+                    last_assets=symbols,
+                    last_analysis_type='portfolio',
+                    last_period='MAX',
+                    current_symbols=symbols,
+                    current_currency=currency,
+                    current_currency_info=currency_info,
+                    portfolio_weights=weights
+                )
+                
+            except Exception as e:
+                self.logger.error(f"Error creating portfolio: {e}")
+                await self._send_message_safe(update, 
+                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
+                    "💡 Возможные причины:\n"
+                    "• Один из символов недоступен\n"
+                    "• Проблемы с данными\n"
+                    "• Неверный формат символа\n\n"
+                    "Проверьте:\n"
+                    "• Правильность написания символов\n"
+                    "• Доступность данных для указанных активов"
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error in portfolio command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при выполнении команды портфеля: {str(e)}")
+
     async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming photo messages for chart analysis"""
         try:
@@ -1488,6 +1715,7 @@ class OkamaFinanceBot:
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("namespace", self.namespace_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
+        application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
