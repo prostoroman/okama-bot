@@ -32,7 +32,7 @@ from services.okama_handler_enhanced import EnhancedOkamaHandler
 from services.report_builder_enhanced import EnhancedReportBuilder
 from services.analysis_engine_enhanced import EnhancedAnalysisEngine
 from services.financial_brain_enhanced import EnhancedOkamaFinancialBrain
-from services.chart_styles import ChartStyles
+from services.chart_styles import chart_styles
 
 # Configure logging
 logging.basicConfig(
