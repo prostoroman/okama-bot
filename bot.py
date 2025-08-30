@@ -195,10 +195,7 @@ class OkamaFinanceBot:
             self.logger.error(f"Error creating additional charts: {e}")
             await self._send_message_safe(update, f"⚠️ Не удалось создать дополнительные графики: {str(e)}")
     
-    def _add_copyright_signature(self, ax):
-        """Добавить копирайт подпись к графику"""
-        ax.text(0.02, -0.25, '   © Цбот, data source: okama',
-               transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
+
     
     async def _create_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
         """Создать график drawdowns"""
@@ -241,7 +238,7 @@ class OkamaFinanceBot:
             ax.set_alpha(0.95)
             
             # Add copyright signature
-            self._add_copyright_signature(ax)
+            chart_styles.add_copyright(ax)
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
@@ -315,7 +312,7 @@ class OkamaFinanceBot:
             ax.set_alpha(0.95)
             
             # Add copyright signature
-            self._add_copyright_signature(ax)
+            chart_styles.add_copyright(ax)
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
@@ -428,7 +425,7 @@ class OkamaFinanceBot:
             ax.set_alpha(0.95)
             
             # Add copyright signature
-            self._add_copyright_signature(ax)
+            chart_styles.add_copyright(ax)
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
@@ -1164,7 +1161,7 @@ class OkamaFinanceBot:
                 ax.set_alpha(0.95)
                 
                 # Add copyright signature
-                self._add_copyright_signature(ax)
+                chart_styles.add_copyright(ax)
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
@@ -1390,7 +1387,7 @@ class OkamaFinanceBot:
                 ax.legend(**chart_styles.legend_config)
                 
                 # Add copyright signature
-                self._add_copyright_signature(ax)
+                chart_styles.add_copyright(ax)
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()

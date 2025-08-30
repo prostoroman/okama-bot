@@ -48,7 +48,7 @@ class ChartStyles:
         self.line_config = {
             'linewidth': 2.5,
             'alpha': 0.9,
-            'smooth_points': 1000  # Количество точек для интерполяции
+            'smooth_points': 3000  # Увеличено количество точек для более плавного скругления
         }
         
         # Настройки копирайта
