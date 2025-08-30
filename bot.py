@@ -77,6 +77,48 @@ class OkamaFinanceBot:
         self.MAX_HISTORY_MESSAGES = 20
         self.MAX_TELEGRAM_CHUNK = 4000
         
+    def _normalize_or_equalize_weights(self, symbols: list, weights: list) -> list:
+        """Return valid weights for okama: normalize if close to 1, else equal weights.
+
+        - If weights list is empty or length mismatch with symbols, fallback to equal weights.
+        - If any weight is non-positive, fallback to equal weights.
+        - If sum differs from 1.0 beyond small epsilon, normalize to sum=1.0.
+        """
+        try:
+            if not symbols:
+                return []
+
+            num_assets = len(symbols)
+
+            # Fallback to equal weights when missing or invalid length
+            if not weights or len(weights) != num_assets:
+                return [1.0 / num_assets] * num_assets
+
+            # Validate positivity
+            if any((w is None) or (w <= 0) for w in weights):
+                return [1.0 / num_assets] * num_assets
+
+            total = sum(weights)
+            if total <= 0:
+                return [1.0 / num_assets] * num_assets
+
+            # If already ~1 within tolerance, keep; else normalize precisely
+            if abs(total - 1.0) <= 1e-6:
+                return [float(w) for w in weights]
+
+            normalized = [float(w) / total for w in weights]
+
+            # Guard against numerical drift
+            norm_total = sum(normalized)
+            if abs(norm_total - 1.0) > 1e-9:
+                # Final correction by scaling the first element
+                diff = 1.0 - norm_total
+                normalized[0] += diff
+            return normalized
+        except Exception:
+            # Safe fallback
+            return [1.0 / len(symbols)] * len(symbols) if symbols else []
+
     def _get_user_context(self, user_id: int) -> Dict[str, Any]:
         """Получить контекст пользователя"""
         if user_id not in self.user_sessions:
@@ -2329,7 +2371,8 @@ class OkamaFinanceBot:
                 return
             
             currency = user_context.get('current_currency', 'USD')
-            weights = user_context.get('portfolio_weights', [])
+            raw_weights = user_context.get('portfolio_weights', [])
+            weights = self._normalize_or_equalize_weights(symbols, raw_weights)
             
             self.logger.info(f"Creating risk metrics for portfolio: {symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
@@ -2373,7 +2416,8 @@ class OkamaFinanceBot:
                 return
             
             currency = user_context.get('current_currency', 'USD')
-            weights = user_context.get('portfolio_weights', [])
+            raw_weights = user_context.get('portfolio_weights', [])
+            weights = self._normalize_or_equalize_weights(symbols, raw_weights)
             
             self.logger.info(f"Creating Monte Carlo forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
@@ -2417,7 +2461,8 @@ class OkamaFinanceBot:
                 return
             
             currency = user_context.get('current_currency', 'USD')
-            weights = user_context.get('portfolio_weights', [])
+            raw_weights = user_context.get('portfolio_weights', [])
+            weights = self._normalize_or_equalize_weights(symbols, raw_weights)
             
             self.logger.info(f"Creating forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📈 Создаю прогноз с перцентилями...")
