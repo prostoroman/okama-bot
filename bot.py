@@ -701,9 +701,14 @@ class OkamaFinanceBot:
             # Ищем ежедневный график
             if 'charts' in price_history and price_history['charts']:
                 charts = price_history['charts']
-                for chart_data in charts:
+                # Приоритет: adj_close (ежедневные данные), затем fallback
+                if 'adj_close' in charts and charts['adj_close']:
+                    return self._add_copyright_to_chart(charts['adj_close'])
+                elif 'fallback' in charts and charts['fallback']:
+                    return self._add_copyright_to_chart(charts['fallback'])
+                # Если нет ежедневных, берем первый доступный
+                for chart_type, chart_data in charts.items():
                     if chart_data:
-                        # Добавляем копирайт на график
                         return self._add_copyright_to_chart(chart_data)
             
             return None
