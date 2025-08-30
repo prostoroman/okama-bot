@@ -1565,10 +1565,14 @@ class OkamaFinanceBot:
                     caption=self._truncate_caption(portfolio_text)
                 )
                 
-                # Add risk metrics button
+                # Add risk metrics, Monte Carlo, and forecast buttons
                 keyboard = [
                     [
-                        InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{','.join(symbols)}")
+                        InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{','.join(symbols)}"),
+                        InlineKeyboardButton("🎲 Monte Carlo", callback_data=f"monte_carlo_{','.join(symbols)}")
+                    ],
+                    [
+                        InlineKeyboardButton("📈 Прогноз %", callback_data=f"forecast_{','.join(symbols)}")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1581,6 +1585,11 @@ class OkamaFinanceBot:
                 
                 # Store portfolio data in context
                 user_id = update.effective_user.id
+                self.logger.info(f"Storing portfolio data in context for user {user_id}")
+                self.logger.info(f"Symbols: {symbols}")
+                self.logger.info(f"Currency: {currency}")
+                self.logger.info(f"Weights: {weights}")
+                
                 self._update_user_context(
                     user_id, 
                     last_assets=symbols,
@@ -1591,6 +1600,13 @@ class OkamaFinanceBot:
                     current_currency_info=currency_info,
                     portfolio_weights=weights
                 )
+                
+                # Verify context was saved
+                saved_context = self._get_user_context(user_id)
+                self.logger.info(f"Saved context keys: {list(saved_context.keys())}")
+                self.logger.info(f"Saved current_symbols: {saved_context.get('current_symbols')}")
+                self.logger.info(f"Saved last_assets: {saved_context.get('last_assets')}")
+                self.logger.info(f"Saved portfolio_weights: {saved_context.get('portfolio_weights')}")
                 
             except Exception as e:
                 self.logger.error(f"Error creating portfolio: {e}")
@@ -1836,6 +1852,18 @@ class OkamaFinanceBot:
                 self.logger.info(f"Callback data: {callback_data}")
                 self.logger.info(f"Extracted symbols: {symbols}")
                 await self._handle_risk_metrics_button(update, context, symbols)
+            elif callback_data.startswith('monte_carlo_'):
+                symbols = callback_data.replace('monte_carlo_', '').split(',')
+                self.logger.info(f"Monte Carlo button clicked for symbols: {symbols}")
+                self.logger.info(f"Callback data: {callback_data}")
+                self.logger.info(f"Extracted symbols: {symbols}")
+                await self._handle_monte_carlo_button(update, context, symbols)
+            elif callback_data.startswith('forecast_'):
+                symbols = callback_data.replace('forecast_', '').split(',')
+                self.logger.info(f"Forecast button clicked for symbols: {symbols}")
+                self.logger.info(f"Callback data: {callback_data}")
+                self.logger.info(f"Extracted symbols: {symbols}")
+                await self._handle_forecast_button(update, context, symbols)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -2275,12 +2303,22 @@ class OkamaFinanceBot:
             self.logger.info(f"User context keys: {list(user_context.keys())}")
             self.logger.info(f"User context content: {user_context}")
             
-            if 'current_symbols' not in user_context:
-                self.logger.warning(f"current_symbols not found in user context for user {user_id}")
+            # Try to get symbols from different possible keys
+            symbols = None
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            
+            if 'current_symbols' in user_context:
+                symbols = user_context['current_symbols']
+                self.logger.info(f"Found symbols in current_symbols: {symbols}")
+            elif 'last_assets' in user_context:
+                symbols = user_context['last_assets']
+                self.logger.info(f"Found symbols in last_assets: {symbols}")
+            else:
+                self.logger.warning(f"Neither current_symbols nor last_assets found in user context")
+                self.logger.warning(f"Available keys: {list(user_context.keys())}")
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
             weights = user_context.get('portfolio_weights', [])
             
@@ -2298,6 +2336,94 @@ class OkamaFinanceBot:
             import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
+
+    async def _handle_monte_carlo_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle Monte Carlo button click for portfolio"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling Monte Carlo button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context keys: {list(user_context.keys())}")
+            self.logger.info(f"User context content: {user_context}")
+            
+            # Try to get symbols from different possible keys
+            symbols = None
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            
+            if 'current_symbols' in user_context:
+                symbols = user_context['current_symbols']
+                self.logger.info(f"Found symbols in current_symbols: {symbols}")
+            elif 'last_assets' in user_context:
+                symbols = user_context['last_assets']
+                self.logger.info(f"Found symbols in last_assets: {symbols}")
+            else:
+                self.logger.warning(f"Neither current_symbols nor last_assets found in user context")
+                self.logger.warning(f"Available keys: {list(user_context.keys())}")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            currency = user_context.get('current_currency', 'USD')
+            weights = user_context.get('portfolio_weights', [])
+            
+            self.logger.info(f"Creating Monte Carlo forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
+            await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
+            
+            # Create Portfolio again
+            import okama as ok
+            portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+            
+            await self._create_monte_carlo_forecast(update, context, portfolio, symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling Monte Carlo button: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании прогноза Monte Carlo: {str(e)}")
+
+    async def _handle_forecast_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle forecast button click for portfolio"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling forecast button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context keys: {list(user_context.keys())}")
+            self.logger.info(f"User context content: {user_context}")
+            
+            # Try to get symbols from different possible keys
+            symbols = None
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            
+            if 'current_symbols' in user_context:
+                symbols = user_context['current_symbols']
+                self.logger.info(f"Found symbols in current_symbols: {symbols}")
+            elif 'last_assets' in user_context:
+                symbols = user_context['last_assets']
+                self.logger.info(f"Found symbols in last_assets: {symbols}")
+            else:
+                self.logger.warning(f"Neither current_symbols nor last_assets found in user context")
+                self.logger.warning(f"Available keys: {list(user_context.keys())}")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            currency = user_context.get('current_currency', 'USD')
+            weights = user_context.get('portfolio_weights', [])
+            
+            self.logger.info(f"Creating forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
+            await self._send_callback_message(update, context, "📈 Создаю прогноз с перцентилями...")
+            
+            # Create Portfolio again
+            import okama as ok
+            portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+            
+            await self._create_forecast_chart(update, context, portfolio, symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling forecast button: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании прогноза: {str(e)}")
 
     async def _create_risk_metrics_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
         """Create and send risk metrics report for portfolio"""
@@ -2507,6 +2633,100 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error assessing portfolio risk: {e}")
             return "Не удалось оценить общий уровень риска портфеля."
+
+    async def _create_monte_carlo_forecast(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+        """Create and send Monte Carlo forecast chart for portfolio"""
+        try:
+            self.logger.info(f"Creating Monte Carlo forecast chart for portfolio: {symbols}")
+            
+            # Create Monte Carlo forecast using okama
+            # y.plot_forecast_monte_carlo(distr="norm", years=5, n=20)
+            fig = chart_styles.create_figure()
+            chart_styles.apply_base_style(fig)
+            
+            # Generate Monte Carlo forecast
+            forecast_data = portfolio.plot_forecast_monte_carlo(distr="norm", years=5, n=20)
+            
+            # Get the current figure from matplotlib
+            current_fig = plt.gcf()
+            
+            # Save the figure
+            img_buffer = io.BytesIO()
+            current_fig.savefig(img_buffer, format='PNG', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache to free memory
+            plt.close(current_fig)
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(
+                    f"🎲 Прогноз Monte Carlo для портфеля: {', '.join(symbols)}\n\n"
+                    f"📊 Параметры:\n"
+                    f"• Распределение: Нормальное (norm)\n"
+                    f"• Период: 5 лет\n"
+                    f"• Количество симуляций: 20\n"
+                    f"• Валюта: {currency}\n\n"
+                    f"💡 График показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
+                )
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating Monte Carlo forecast chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика Monte Carlo: {str(e)}")
+
+    async def _create_forecast_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+        """Create and send forecast chart with percentiles for portfolio"""
+        try:
+            self.logger.info(f"Creating forecast chart with percentiles for portfolio: {symbols}")
+            
+            # Create forecast chart using okama
+            # y.plot_forecast(years=5, today_value=1000, percentiles=[10, 50, 90])
+            fig = chart_styles.create_figure()
+            chart_styles.apply_base_style(fig)
+            
+            # Generate forecast with percentiles
+            forecast_data = portfolio.plot_forecast(
+                years=5, 
+                today_value=1000, 
+                percentiles=[10, 50, 90]
+            )
+            
+            # Get the current figure from matplotlib
+            current_fig = plt.gcf()
+            
+            # Save the figure
+            img_buffer = io.BytesIO()
+            current_fig.savefig(img_buffer, format='PNG', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache to free memory
+            plt.close(current_fig)
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(
+                    f"📈 Прогноз с перцентилями для портфеля: {', '.join(symbols)}\n\n"
+                    f"📊 Параметры:\n"
+                    f"• Период: 5 лет\n"
+                    f"• Начальная стоимость: 1000 {currency}\n"
+                    f"• Перцентили: 10%, 50%, 90%\n\n"
+                    f"💡 График показывает:\n"
+                    f"• 10% перцентиль: пессимистичный сценарий\n"
+                    f"• 50% перцентиль: средний сценарий\n"
+                    f"• 90% перцентиль: оптимистичный сценарий"
+                )
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating forecast chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика прогноза: {str(e)}")
 
     def run(self):
         """Run the bot"""
