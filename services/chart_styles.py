@@ -160,6 +160,16 @@ class ChartStyles:
                 logger.warning("Insufficient data for spline interpolation, returning original data")
                 return x_data, y_data
             
+            # Безопасная обработка Period объектов в x_data
+            if hasattr(x_data, 'dtype') and str(x_data.dtype).startswith('period'):
+                logger.info("Detected Period dtype, converting to timestamp for safe processing")
+                try:
+                    x_data = x_data.to_timestamp()
+                except Exception as e:
+                    logger.warning(f"Failed to convert Period to timestamp: {e}")
+                    # Fallback: используем числовые индексы
+                    x_data = pd.Series(range(len(x_data)), index=x_data.index)
+            
             # Убираем NaN значения
             valid_mask = ~(np.isnan(x_data) | np.isnan(y_data))
             if np.sum(valid_mask) < 3:
@@ -200,18 +210,55 @@ class ChartStyles:
             # Создаем сплайн
             spline = make_interp_spline(x_unique, y_unique, k=min(3, len(x_unique) - 1))
             
-            # Генерируем новые точки
-            x_smooth = np.linspace(x_unique.min(), x_unique.max(), n_points)
+            # Генерируем новые точки - безопасно обрабатываем Period объекты
+            try:
+                if hasattr(x_unique, 'min') and hasattr(x_unique, 'max'):
+                    x_min = x_unique.min()
+                    x_max = x_unique.max()
+                    
+                    # Безопасно конвертируем Period объекты
+                    if hasattr(x_min, 'to_timestamp'):
+                        x_min = x_min.to_timestamp()
+                    if hasattr(x_max, 'to_timestamp'):
+                        x_max = x_max.to_timestamp()
+                    
+                    # Конвертируем в float для np.linspace
+                    x_min_float = float(x_min)
+                    x_max_float = float(x_max)
+                    
+                    x_smooth = np.linspace(x_min_float, x_max_float, n_points)
+                else:
+                    # Fallback для случаев без min/max методов
+                    x_smooth = np.linspace(0, len(x_unique) - 1, n_points)
+                    x_smooth = x_unique[0] + (x_unique[-1] - x_unique[0]) * x_smooth / (len(x_unique) - 1)
+            except Exception as e:
+                logger.warning(f"Error in x_smooth generation: {e}, using fallback")
+                x_smooth = np.linspace(0, len(x_unique) - 1, n_points)
+                x_smooth = x_unique[0] + (x_unique[-1] - x_unique[0]) * x_smooth / (len(x_unique) - 1)
+            
             y_smooth = spline(x_smooth)
             
             # Если использовали числовые индексы, конвертируем обратно к оригинальным датам
             if use_numeric_x:
-                # Интерполируем оригинальные даты
-                from scipy.interpolate import interp1d
-                date_interp = interp1d(x_numeric, x_valid, kind='linear', 
-                                      bounds_error=False, fill_value='extrapolate')
-                x_smooth_dates = date_interp(x_smooth)
-                return x_smooth_dates, y_smooth
+                try:
+                    # Интерполируем оригинальные даты
+                    from scipy.interpolate import interp1d
+                    
+                    # Безопасно конвертируем Period объекты в timestamp
+                    x_valid_timestamps = []
+                    for x_val in x_valid:
+                        if hasattr(x_val, 'to_timestamp'):
+                            x_valid_timestamps.append(x_val.to_timestamp())
+                        else:
+                            x_valid_timestamps.append(x_val)
+                    
+                    date_interp = interp1d(x_numeric, x_valid_timestamps, kind='linear', 
+                                          bounds_error=False, fill_value='extrapolate')
+                    x_smooth_dates = date_interp(x_smooth)
+                    return x_smooth_dates, y_smooth
+                except Exception as e:
+                    logger.warning(f"Error in date interpolation: {e}, returning numeric x")
+                    return x_smooth, y_smooth
             
             return x_smooth, y_smooth
             
