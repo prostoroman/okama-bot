@@ -89,7 +89,7 @@ class OkamaFinanceBot:
             }
         return self.user_sessions[user_id]
     
-    def _update_user_context(self, user_id: int, **kwargs):
+    def _update_user_context(self, user_id: int, kwargs):
         """Обновить контекст пользователя"""
         context = self._get_user_context(user_id)
         context.update(kwargs)
@@ -319,7 +319,7 @@ class OkamaFinanceBot:
             ax.set_facecolor('#F8F9FA')
             
             # Enhanced legend
-            ax.legend(**chart_styles.legend_config)
+            ax.legend(chart_styles.legend_config)
             
             # Customize spines
             for spine in ax.spines.values():
@@ -1430,7 +1430,7 @@ class OkamaFinanceBot:
                               color=chart_styles.axis_config['label_color'])
                 
                 # Enhanced legend
-                ax.legend(**chart_styles.legend_config)
+                ax.legend(chart_styles.legend_config)
                 
                 # Add copyright signature
                 chart_styles.add_copyright(ax)
@@ -1572,7 +1572,7 @@ class OkamaFinanceBot:
                         InlineKeyboardButton("🎲 Monte Carlo", callback_data=f"monte_carlo_{','.join(symbols)}")
                     ],
                     [
-                        InlineKeyboardButton("📈 Прогноз %", callback_data=f"forecast_{','.join(symbols)}")
+                        InlineKeyboardButton("📈 Прогноз по процентилям 10, 50, 90", callback_data=f"forecast_{','.join(symbols)}")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2433,16 +2433,16 @@ class OkamaFinanceBot:
             
             # Create risk metrics table
             risk_text = f"📊 Риск метрики портфеля: {', '.join(symbols)}\n\n"
-            risk_text += "📈 Основные показатели риска:\n\n"
+
             
             # Parse and explain each metric
             metrics_explained = self._explain_risk_metrics(portfolio_description, portfolio)
             
             for metric_name, explanation in metrics_explained.items():
-                risk_text += f"**{metric_name}**\n{explanation}\n\n"
+                risk_text += f"{metric_name}\n{explanation}\n\n"
             
             # Add general risk assessment
-            risk_text += "💡 **Общая оценка риска:**\n"
+            risk_text += "💡 Общая оценка риска:\n"
             risk_text += self._assess_portfolio_risk(portfolio_description, portfolio)
             
             # Send text report
@@ -2469,11 +2469,11 @@ class OkamaFinanceBot:
                     risk_pct = float(risk_value) * 100
                     explanations["1. Годовая волатильность (risk_annual)"] = (
                         f"Показывает годовую волатильность портфеля — насколько сильно колеблется его доходность.\n\n"
-                        f"**Значение: {risk_pct:.2f}%**\n\n"
-                        f"💡 **Как интерпретировать:**\n"
+                        f"Значение: {risk_pct:.2f}%\n\n"
+                        f"💡 Как интерпретировать:\n"
                         f"• {risk_pct:.1f}% годовых — это {'высокая' if risk_pct > 20 else 'средняя' if risk_pct > 10 else 'низкая'} волатильность\n"
                         f"• {'Типично для акций' if risk_pct > 15 else 'Типично для смешанного портфеля' if risk_pct > 8 else 'Типично для облигаций'}\n\n"
-                        f"💡 **Как использовать:** сравнивайте с другими портфелями. Если доходность одинаковая, выбирайте тот, у которого ниже волатильность."
+                        f"💡 Как использовать: сравнивайте с другими портфелями. Если доходность одинаковая, выбирайте тот, у которого ниже волатильность."
                     )
             
             # 2. Полуотклонение (риск только вниз)
@@ -2488,8 +2488,8 @@ class OkamaFinanceBot:
                     semidev_pct = float(semidev_value) * 100
                     explanations["2. Полуотклонение (semideviation_annual)"] = (
                         f"Это риск просадок — учитывает только отрицательные отклонения от средней доходности.\n\n"
-                        f"**Значение: {semidev_pct:.2f}%**\n\n"
-                        f"💡 **Как интерпретировать:**\n"
+                        f"Значение: {semidev_pct:.2f}%\n\n"
+                        f"💡 Как интерпретировать:\n"
                         f"• Более точный показатель страха инвестора, чем общая волатильность\n"
                         f"• Если полуотклонение близко к общей волатильности — портфель теряет и растёт примерно одинаково\n"
                         f"• Если полуотклонение намного меньше — портфель 'гладкий' вниз, но растёт резко"
@@ -2506,10 +2506,10 @@ class OkamaFinanceBot:
                     
                     explanations["3. VaR (Value at Risk)"] = (
                         f"Показывает максимальные потери с заданной вероятностью.\n\n"
-                        f"**Значения:**\n"
+                        f"Значения:\n"
                         f"• 1% VaR: {var_1_pct:.1f}% (с вероятностью 99% потери не превысят)\n"
                         f"• 5% VaR: {var_5_pct:.1f}% (с вероятностью 95% потери не превысят)\n\n"
-                        f"💡 **Как интерпретировать:**\n"
+                        f"💡 Как интерпретировать:\n"
                         f"• Это исторический VaR — рассчитан на основе прошлых данных\n"
                         f"• Оцените, готовы ли вы потерять {var_1_pct:.1f}% капитала в один месяц\n"
                         f"• Если нет — портфель слишком агрессивный"
@@ -2526,8 +2526,8 @@ class OkamaFinanceBot:
                     
                     explanations["4. CVaR (Conditional Value at Risk)"] = (
                         f"Показывает средние потери в худших 5% месяцев.\n\n"
-                        f"**Значение: {cvar_5_pct:.1f}%**\n\n"
-                        f"💡 **Как интерпретировать:**\n"
+                        f"Значение: {cvar_5_pct:.1f}%\n\n"
+                        f"💡 Как интерпретировать:\n"
                         f"• Более консервативный показатель, чем VaR\n"
                         f"• CVaR помогает понять, насколько глубоко может 'провалиться' портфель в кризис\n"
                         f"• В худшем случае ожидайте потери около {cvar_5_pct:.1f}%"
@@ -2545,8 +2545,8 @@ class OkamaFinanceBot:
                         
                         explanations["5. Максимальная просадка (Max Drawdown)"] = (
                             f"Самая большая потеря от пика до дна в истории портфеля.\n\n"
-                            f"**Значение: {max_dd_pct:.1f}%**\n\n"
-                            f"💡 **Как интерпретировать:**\n"
+                            f"Значение: {max_dd_pct:.1f}%\n\n"
+                            f"💡 Как интерпретировать:\n"
                             f"• Один из важнейших показателей психологической устойчивости\n"
                             f"• Если вы не выдержите просадку в {abs(max_dd_pct):.1f}%, пересмотрите состав активов\n"
                             f"• Добавьте облигации или золото для снижения риска"
@@ -2562,8 +2562,8 @@ class OkamaFinanceBot:
                         
                         explanations["6. Период восстановления"] = (
                             f"Показывает, сколько времени портфель восстанавливался после самой долгой просадки.\n\n"
-                            f"**Значение: {recovery_years:.1f} года**\n\n"
-                            f"💡 **Как интерпретировать:**\n"
+                            f"Значение: {recovery_years:.1f} года\n\n"
+                            f"💡 Как интерпретировать:\n"
                             f"• Если вы планируете снимать деньги (например, на пенсию), важно, чтобы портфель быстро восстанавливался\n"
                             f"• {recovery_years:.1f} года на возврат к предыдущему максимуму\n"
                             f"• Иначе есть риск 'обнулиться' в неподходящий момент"
@@ -2619,10 +2619,10 @@ class OkamaFinanceBot:
                         else:
                             recommendations.append("• Просадка приемлемая для большинства инвесторов")
             
-            assessment = f"{risk_color} **Уровень риска: {risk_level}**\n\n"
+            assessment = f"{risk_color} Уровень риска: {risk_level}\n\n"
             
             if recommendations:
-                assessment += "📋 **Рекомендации:**\n"
+                assessment += "📋 Рекомендации:\n"
                 for rec in recommendations:
                     assessment += f"{rec}\n"
             else:
@@ -2683,20 +2683,31 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating forecast chart with percentiles for portfolio: {symbols}")
             
-            # Create forecast chart using okama
+            # Generate forecast chart using okama
             # y.plot_forecast(years=5, today_value=1000, percentiles=[10, 50, 90])
-            fig = chart_styles.create_figure()
-            chart_styles.apply_base_style(fig)
-            
-            # Generate forecast with percentiles
             forecast_data = portfolio.plot_forecast(
                 years=5, 
                 today_value=1000, 
                 percentiles=[10, 50, 90]
             )
             
-            # Get the current figure from matplotlib
+            # Get the current figure from matplotlib (created by okama)
             current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]  # Get the first (and usually only) axes
+                chart_styles.apply_base_style(current_fig, ax)
+                
+                # Customize the chart
+                ax.set_title(f'Прогноз с перцентилями\n{", ".join(symbols)}', 
+                           fontsize=chart_styles.title_config['fontsize'], 
+                           fontweight=chart_styles.title_config['fontweight'], 
+                           pad=chart_styles.title_config['pad'], 
+                           color=chart_styles.title_config['color'])
+                
+                # Add copyright signature
+                chart_styles.add_copyright(ax)
             
             # Save the figure
             img_buffer = io.BytesIO()
