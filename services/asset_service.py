@@ -903,11 +903,22 @@ class AssetService:
             fig.tight_layout()
             
             # Save chart to bytes
-            buf = io.BytesIO()
-            chart_styles.save_figure(fig, buf)
-            chart_styles.cleanup_figure(fig)
-            
-            return buf.getvalue()
+            try:
+                self.logger.debug("Saving chart to bytes...")
+                buf = io.BytesIO()
+                chart_styles.save_figure(fig, buf)
+                self.logger.debug("Chart saved successfully")
+                chart_styles.cleanup_figure(fig)
+                self.logger.debug("Figure cleaned up")
+                
+                buf.seek(0)
+                result = buf.getvalue()
+                self.logger.debug(f"Chart bytes length: {len(result)}")
+                return result
+                
+            except Exception as save_error:
+                self.logger.error(f"Error saving chart: {save_error}")
+                raise
             
         except Exception as e:
             self.logger.error(f"Error creating price chart: {e}")

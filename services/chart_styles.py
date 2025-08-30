@@ -233,8 +233,13 @@ class ChartStyles:
             matplotlib.lines.Line2D: объект линии
         """
         try:
+            logger.debug(f"plot_smooth_line called with x_data type={type(x_data)}, y_data type={type(y_data)}")
+            logger.debug(f"x_data length={len(x_data)}, y_data length={len(y_data)}")
+            
             # Сглаживаем данные
             x_smooth, y_smooth = self.smooth_line_data(x_data, y_data)
+            
+            logger.debug(f"Smoothing completed, x_smooth type={type(x_smooth)}, y_smooth type={type(y_smooth)}")
             
             # Применяем настройки по умолчанию
             plot_kwargs = {
