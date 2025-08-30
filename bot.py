@@ -591,138 +591,207 @@ class OkamaFinanceBot:
 
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /info command"""
+        """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
         if not context.args:
             await self._send_message_safe(update, 
                 "Укажите тикер актива. Пример: /info AAPL.US или /info SBER.MOEX")
             return
         
         symbol = context.args[0].upper()
-        period = context.args[1] if len(context.args) > 1 else '10Y'
         
         # Update user context
         user_id = update.effective_user.id
         self._update_user_context(user_id, 
-                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []),
-                                last_period=period)
+                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []))
         
         await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
         
         try:
+            # Получаем базовую информацию об активе
             asset_info = self.asset_service.get_asset_info(symbol)
             
             if 'error' in asset_info:
                 await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
                 return
             
-            # Format asset info
-            response = f"📊 Информация об активе: {symbol}\n\n"
-            response += f"Название: {asset_info.get('name', 'N/A')}\n"
-            response += f"Страна: {asset_info.get('country', 'N/A')}\n"
-            response += f"Биржа: {asset_info.get('exchange', 'N/A')}\n"
-            response += f"Валюта: {asset_info.get('currency', 'N/A')}\n"
-            response += f"Тип: {asset_info.get('type', 'N/A')}\n"
-            response += f"ISIN: {asset_info.get('isin', 'N/A')}\n"
-            response += f"Период данных: {asset_info.get('period_length', 'N/A')}\n"
-            
-            if asset_info.get('current_price') is not None:
-                response += f"Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-            
-            if asset_info.get('annual_return') != 'N/A':
-                response += f"Годовая доходность: {asset_info['annual_return']}\n"
-            
-            if asset_info.get('total_return') != 'N/A':
-                response += f"Общая доходность: {asset_info['total_return']}\n"
-            
-            if asset_info.get('volatility') != 'N/A':
-                response += f"Волатильность: {asset_info['volatility']}\n"
-            
-            await self._send_message_safe(update, response)
-            
-            # Check if asset type suggests dividends and add dividend information
-            asset_type = asset_info.get('type', '').lower()
-            if any(keyword in asset_type for keyword in ['stock', 'акция', 'share', 'equity']):
-                await self._send_message_safe(update, "💵 Получаю информацию о дивидендах...")
-                
-                try:
-                    dividend_info = self.asset_service.get_asset_dividends(symbol)
-                    
-                    if 'error' not in dividend_info and dividend_info.get('dividends'):
-                        dividends = dividend_info['dividends']
-                        currency = dividend_info.get('currency', '')
-                        
-                        if dividends:
-                            # Get current price for yield calculation
-                            current_price = asset_info.get('current_price')
-                            
-                            dividend_response = f"💵 Дивиденды {symbol}\n\n"
-                            dividend_response += f"Количество выплат: {len(dividends)}\n\n"
-                            
-                            # Show last 5 dividends with yield calculation
-                            sorted_dividends = sorted(dividends.items(), key=lambda x: x[0], reverse=True)[:10]
-                            
-                            for date, amount in sorted_dividends:
-                                dividend_response += f"{date}: {amount:.2f} {currency}\n"
-                                
-                            
-                            await self._send_message_safe(update, dividend_response)
-                        else:
-                            await self._send_message_safe(update, "💵 Дивиденды не выплачивались в указанный период")
-                    else:
-                        await self._send_message_safe(update, "💵 Информация о дивидендах недоступна")
-                        
-                except Exception as div_error:
-                    self.logger.error(f"Error getting dividends for {symbol}: {div_error}")
-                    await self._send_message_safe(update, f"⚠️ Ошибка при получении дивидендов: {str(div_error)}")
-            
-            # Get charts for analysis
-            await self._send_message_safe(update, "📈 Получаю графики цен...")
+            # Получаем ежедневный график (1Y)
+            await self._send_message_safe(update, "📈 Получаю ежедневный график...")
             
             try:
-                self.logger.info(f"Getting price history for {symbol} with period {period}")
-                price_history = self.asset_service.get_asset_price_history(symbol, period)
+                daily_chart = await self._get_daily_chart(symbol)
                 
-                if 'error' in price_history:
-                    self.logger.error(f"Error in price_history: {price_history['error']}")
-                    await self._send_message_safe(update, f"❌ Ошибка при получении истории цен: {price_history['error']}")
-                    return
-                
-                # Display charts from price history
-                if 'charts' in price_history and price_history['charts']:
-                    charts = price_history['charts']
-                    for i, chart_data in enumerate(charts):
-                        if chart_data:  # Check if chart data exists
-                            await update.message.reply_photo(
-                                photo=chart_data,
-                                caption=f"📈 График цен {symbol} за период {period}"
-                            )
-                        else:
-                            await self._send_message_safe(update, f"⚠️ График {i+1} не удалось отобразить")
-                else:
-                    await self._send_message_safe(update, "❌ Не удалось получить графики цен")
-                
-                # Get AI analysis
-                await self._send_message_safe(update, "🧠 Получаю AI-анализ...")
-                
-                try:
-                    analysis = self.analysis_engine.analyze_asset(symbol, price_history, period)
+                if daily_chart:
+                    # Формируем базовую информацию для подписи
+                    caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                    caption += f"🏛️ Биржа: {asset_info.get('exchange', 'N/A')}\n"
+                    caption += f"🌍 Страна: {asset_info.get('country', 'N/A')}\n"
+                    caption += f"💰 Валюта: {asset_info.get('currency', 'N/A')}\n"
+                    caption += f"📈 Тип: {asset_info.get('type', 'N/A')}\n"
                     
-                    if 'error' in analysis:
-                        await self._send_message_safe(update, f"⚠️ AI-анализ недоступен: {analysis['error']}")
-                    else:
-                        await self._send_message_safe(update, f"🧠 AI-анализ {symbol}\n\n{analysis['analysis']}")
-                        
-                except Exception as analysis_error:
-                    self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
-                    await self._send_message_safe(update, "⚠️ AI-анализ временно недоступен")
-                
+                    if asset_info.get('current_price') is not None:
+                        caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                    
+                    if asset_info.get('annual_return') != 'N/A':
+                        caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                    
+                    if asset_info.get('volatility') != 'N/A':
+                        caption += f"📉 Волатильность: {asset_info['volatility']}\n"
+                    
+                    caption += "\n🧠 AI-анализ:\n"
+                    
+                    # Получаем AI анализ
+                    try:
+                        analysis = await self._get_ai_analysis(symbol)
+                        if analysis:
+                            caption += analysis
+                        else:
+                            caption += "AI-анализ временно недоступен"
+                    except Exception as analysis_error:
+                        self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
+                        caption += "AI-анализ временно недоступен"
+                    
+                    # Отправляем график с информацией
+                    await update.message.reply_photo(
+                        photo=daily_chart,
+                        caption=caption
+                    )
+                    
+                    # Создаем кнопки для дополнительных функций
+                    keyboard = [
+                        [
+                            InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
+                            InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                        ]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await update.message.reply_text(
+                        "Выберите дополнительную информацию:",
+                        reply_markup=reply_markup
+                    )
+                    
+                else:
+                    await self._send_message_safe(update, "❌ Не удалось получить ежедневный график")
+                    
             except Exception as chart_error:
-                self.logger.error(f"Error creating chart for {symbol}: {chart_error}")
+                self.logger.error(f"Error creating daily chart for {symbol}: {chart_error}")
                 await self._send_message_safe(update, f"❌ Ошибка при создании графика: {str(chart_error)}")
                 
         except Exception as e:
             self.logger.error(f"Error in info command for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
+    async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
+        """Получить ежедневный график за 1 год с копирайтом"""
+        try:
+            # Получаем данные для ежедневного графика
+            price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            
+            if 'error' in price_history:
+                self.logger.error(f"Error in price_history: {price_history['error']}")
+                return None
+            
+            # Ищем ежедневный график
+            if 'charts' in price_history and price_history['charts']:
+                charts = price_history['charts']
+                for chart_data in charts:
+                    if chart_data:
+                        # Добавляем копирайт на график
+                        return self._add_copyright_to_chart(chart_data)
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting daily chart for {symbol}: {e}")
+            return None
+
+    async def _get_ai_analysis(self, symbol: str) -> Optional[str]:
+        """Получить AI анализ актива без рекомендаций"""
+        try:
+            # Получаем базовые данные для анализа
+            price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            
+            if 'error' in price_history:
+                return None
+            
+            # Получаем анализ
+            analysis = self.analysis_engine.analyze_asset(symbol, price_history, '1Y')
+            
+            if 'error' in analysis:
+                return None
+            
+            # Модифицируем анализ, убирая рекомендации
+            analysis_text = analysis['analysis']
+            
+            # Убираем фразы о рекомендациях и заменяем на отказ от ответственности
+            analysis_text = analysis_text.replace('рекомендации', 'анализ')
+            analysis_text = analysis_text.replace('рекомендуем', 'анализируем')
+            analysis_text = analysis_text.replace('рекомендация', 'анализ')
+            
+            # Добавляем отказ от ответственности
+            analysis_text += "\n\n⚠️ Важно: Данный анализ предоставляется исключительно в информационных целях. Для принятия инвестиционных решений обратитесь к опытному финансовому профессионалу."
+            
+            return analysis_text
+            
+        except Exception as e:
+            self.logger.error(f"Error getting AI analysis for {symbol}: {e}")
+            return None
+
+    def _add_copyright_to_chart(self, chart_data: bytes) -> bytes:
+        """Добавить копирайт на график"""
+        try:
+            import matplotlib.pyplot as plt
+            import io
+            from PIL import Image, ImageDraw, ImageFont
+            
+            # Конвертируем bytes в PIL Image
+            img = Image.open(io.BytesIO(chart_data))
+            
+            # Создаем объект для рисования
+            draw = ImageDraw.Draw(img)
+            
+            # Получаем размеры изображения
+            width, height = img.size
+            
+            # Добавляем копирайт в правом нижнем углу
+            copyright_text = "© Okama Finance Bot"
+            
+            # Пытаемся использовать системный шрифт
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
+            except:
+                try:
+                    font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
+                except:
+                    font = ImageFont.load_default()
+            
+            # Получаем размер текста
+            bbox = draw.textbbox((0, 0), copyright_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            # Позиция текста (правый нижний угол с отступом)
+            x = width - text_width - 10
+            y = height - text_height - 10
+            
+            # Рисуем фон для текста
+            draw.rectangle([x-5, y-5, x+text_width+5, y+text_height+5], 
+                         fill='white', outline='black', width=1)
+            
+            # Рисуем текст
+            draw.text((x, y), copyright_text, fill='black', font=font)
+            
+            # Конвертируем обратно в bytes
+            output = io.BytesIO()
+            img.save(output, format='PNG')
+            output.seek(0)
+            
+            return output.getvalue()
+            
+        except Exception as e:
+            self.logger.error(f"Error adding copyright to chart: {e}")
+            # Возвращаем оригинальный график если не удалось добавить копирайт
+            return chart_data
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /namespace command"""
@@ -1607,6 +1676,14 @@ class OkamaFinanceBot:
                 symbols = callback_data.replace('correlation_', '').split(',')
                 self.logger.info(f"Correlation button clicked for symbols: {symbols}")
                 await self._handle_correlation_button(update, context, symbols)
+            elif callback_data.startswith('monthly_chart_'):
+                symbol = callback_data.replace('monthly_chart_', '')
+                self.logger.info(f"Monthly chart button clicked for symbol: {symbol}")
+                await self._handle_monthly_chart_button(update, context, symbol)
+            elif callback_data.startswith('dividends_'):
+                symbol = callback_data.replace('dividends_', '')
+                self.logger.info(f"Dividends button clicked for symbol: {symbol}")
+                await self._handle_single_dividends_button(update, context, symbol)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -1704,6 +1781,178 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error handling correlation button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании корреляционной матрицы: {str(e)}")
+
+    async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle monthly chart button click for single asset"""
+        try:
+            await self._send_callback_message(update, context, "📅 Получаю месячный график за 10 лет...")
+            
+            # Получаем месячный график за 10 лет
+            monthly_chart = await self._get_monthly_chart(symbol)
+            
+            if monthly_chart:
+                caption = f"📅 Месячный график {symbol} за 10 лет\n\n"
+                caption += "Показывает долгосрочные тренды и сезонность"
+                
+                await update.callback_query.message.reply_photo(
+                    photo=monthly_chart,
+                    caption=caption
+                )
+            else:
+                await self._send_callback_message(update, context, "❌ Не удалось получить месячный график")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling monthly chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании месячного графика: {str(e)}")
+
+    async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle dividends button click for single asset"""
+        try:
+            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
+            
+            # Получаем информацию о дивидендах
+            dividend_info = self.asset_service.get_asset_dividends(symbol)
+            
+            if 'error' not in dividend_info and dividend_info.get('dividends'):
+                dividends = dividend_info['dividends']
+                currency = dividend_info.get('currency', '')
+                
+                if dividends:
+                    # Формируем список дивидендов
+                    dividend_response = f"💵 Дивиденды {symbol}\n\n"
+                    dividend_response += f"Количество выплат: {len(dividends)}\n"
+                    dividend_response += f"Валюта: {currency}\n\n"
+                    
+                    # Показываем последние 10 дивидендов
+                    sorted_dividends = sorted(dividends.items(), key=lambda x: x[0], reverse=True)[:10]
+                    
+                    for date, amount in sorted_dividends:
+                        dividend_response += f"📅 {date}: {amount:.2f} {currency}\n"
+                    
+                    # Получаем график дивидендов
+                    dividend_chart = await self._get_dividend_chart(symbol)
+                    
+                    if dividend_chart:
+                        await update.callback_query.message.reply_photo(
+                            photo=dividend_chart,
+                            caption=dividend_response
+                        )
+                    else:
+                        await self._send_callback_message(update, context, dividend_response)
+                else:
+                    await self._send_callback_message(update, context, "💵 Дивиденды не выплачивались в указанный период")
+            else:
+                await self._send_callback_message(update, context, "💵 Информация о дивидендах недоступна")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling dividends button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
+
+    async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
+        """Получить месячный график за 10 лет с копирайтом"""
+        try:
+            # Получаем данные для месячного графика
+            price_history = self.asset_service.get_asset_price_history(symbol, '10Y')
+            
+            if 'error' in price_history:
+                self.logger.error(f"Error in price_history: {price_history['error']}")
+                return None
+            
+            # Ищем месячный график
+            if 'charts' in price_history and price_history['charts']:
+                charts = price_history['charts']
+                for chart_data in charts:
+                    if chart_data:
+                        # Добавляем копирайт на график
+                        return self._add_copyright_to_chart(chart_data)
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting monthly chart for {symbol}: {e}")
+            return None
+
+    async def _get_dividend_chart(self, symbol: str) -> Optional[bytes]:
+        """Получить график дивидендов с копирайтом"""
+        try:
+            # Получаем данные о дивидендах
+            dividend_info = self.asset_service.get_asset_dividends(symbol)
+            
+            if 'error' in dividend_info or not dividend_info.get('dividends'):
+                return None
+            
+            # Создаем график дивидендов
+            dividend_chart = self._create_dividend_chart(symbol, dividend_info['dividends'], dividend_info.get('currency', ''))
+            
+            if dividend_chart:
+                # Добавляем копирайт на график
+                return self._add_copyright_to_chart(dividend_chart)
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting dividend chart for {symbol}: {e}")
+            return None
+
+    def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
+        """Создать график дивидендов"""
+        try:
+            import matplotlib.pyplot as plt
+            import io
+            import pandas as pd
+            from datetime import datetime
+            
+            # Конвертируем дивиденды в pandas Series
+            dividend_series = pd.Series(dividends)
+            
+            # Сортируем по дате
+            dividend_series = dividend_series.sort_index()
+            
+            # Создаем график
+            plt.style.use('fivethirtyeight')
+            fig, ax = plt.subplots(figsize=(12, 6))
+            
+            # Рисуем столбчатую диаграмму
+            dates = [pd.to_datetime(date) for date in dividend_series.index]
+            amounts = dividend_series.values
+            
+            ax.bar(dates, amounts, color='#2E8B57', alpha=0.7, width=20)
+            
+            # Настройка графика
+            ax.set_title(f'Дивиденды {symbol}', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Дата', fontsize=12)
+            ax.set_ylabel(f'Сумма ({currency})', fontsize=12)
+            ax.grid(True, linestyle='--', alpha=0.3)
+            
+            # Форматирование оси X
+            fig.autofmt_xdate()
+            
+            # Добавляем статистику
+            total_dividends = dividend_series.sum()
+            avg_dividend = dividend_series.mean()
+            max_dividend = dividend_series.max()
+            
+            stats_text = f'Общая сумма: {total_dividends:.2f} {currency}\n'
+            stats_text += f'Средняя выплата: {avg_dividend:.2f} {currency}\n'
+            stats_text += f'Максимальная выплата: {max_dividend:.2f} {currency}'
+            
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                   verticalalignment='top', fontsize=10,
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+            
+            fig.tight_layout()
+            
+            # Сохраняем в bytes
+            output = io.BytesIO()
+            fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+            output.seek(0)
+            plt.close(fig)
+            
+            return output.getvalue()
+            
+        except Exception as e:
+            self.logger.error(f"Error creating dividend chart: {e}")
+            return None
 
     def run(self):
         """Run the bot"""
