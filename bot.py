@@ -2693,16 +2693,28 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating Monte Carlo forecast chart for portfolio: {symbols}")
             
-            # Create Monte Carlo forecast using okama
-            # y.plot_forecast_monte_carlo(distr="norm", years=5, n=20)
-            fig = chart_styles.create_figure()
-            chart_styles.apply_base_style(fig)
-            
-            # Generate Monte Carlo forecast
+            # Generate Monte Carlo forecast (okama creates the figure)
             forecast_data = portfolio.plot_forecast_monte_carlo(distr="norm", years=5, n=20)
-            
-            # Get the current figure from matplotlib
+
+            # Get the current figure from matplotlib (created by okama)
             current_fig = plt.gcf()
+
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                chart_styles.apply_base_style(current_fig, ax)
+
+                # Customize the chart
+                ax.set_title(
+                    f'Прогноз Monte Carlo\n{", ".join(symbols)}',
+                    fontsize=chart_styles.title_config['fontsize'],
+                    fontweight=chart_styles.title_config['fontweight'],
+                    pad=chart_styles.title_config['pad'],
+                    color=chart_styles.title_config['color']
+                )
+
+                # Add copyright signature
+                chart_styles.add_copyright(ax)
             
             # Save the figure
             img_buffer = io.BytesIO()
