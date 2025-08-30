@@ -32,6 +32,7 @@ from services.okama_handler_enhanced import EnhancedOkamaHandler
 from services.report_builder_enhanced import EnhancedReportBuilder
 from services.analysis_engine_enhanced import EnhancedAnalysisEngine
 from services.financial_brain_enhanced import EnhancedOkamaFinancialBrain
+from services.chart_styles import ChartStyles
 
 # Configure logging
 logging.basicConfig(
@@ -268,7 +269,7 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"⚠️ Не удалось создать график drawdowns: {str(e)}")
     
     async def _create_dividend_yield_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
-        """Создать график dividend yield с интерполяцией сплайнами"""
+        """Создать график dividend yield"""
         try:
             # Check if dividend yield data is available
             if not hasattr(asset_list, 'dividend_yield') or asset_list.dividend_yield.empty:
@@ -276,16 +277,11 @@ class OkamaFinanceBot:
                 return
             
             # Create dividend yield chart
-            fig, ax = chart_styles.create_figure()
+            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
+            fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
             
-            # Apply base style
-            chart_styles.apply_base_style(fig, ax)
-            
-            # Plot dividend yield with spline interpolation
-            for column in asset_list.dividend_yield.columns:
-                x_data = asset_list.dividend_yield.index
-                y_data = asset_list.dividend_yield[column].values
-                chart_styles.plot_smooth_line(ax, x_data, y_data, label=column)
+            # Plot dividend yield
+            asset_list.dividend_yield.plot(ax=ax, linewidth=2.5, alpha=0.9)
             
             # Enhanced chart customization
             ax.set_title(f'Дивидендная доходность\n{", ".join(symbols)}', 
@@ -300,20 +296,38 @@ class OkamaFinanceBot:
                           fontweight=chart_styles.axis_config['label_fontweight'], 
                           color=chart_styles.axis_config['label_color'])
             
+            # Enhanced grid and background
+            ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
+            ax.set_facecolor('#F8F9FA')
+            
             # Enhanced legend
             ax.legend(**chart_styles.legend_config)
+            
+            # Customize spines
+            for spine in ax.spines.values():
+                spine.set_color('#D1D5DB')
+                spine.set_linewidth(0.8)
+            
+            # Enhance tick labels
+            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
+            
+            # Add subtle background pattern
+            ax.set_alpha(0.95)
             
             # Add copyright signature
             self._add_copyright_signature(ax)
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
+            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(fig)
+            plt.close(fig)
+            plt.clf()
+            plt.cla()
             
             # Send dividend yield chart
             await context.bot.send_photo(
@@ -321,6 +335,8 @@ class OkamaFinanceBot:
                 photo=io.BytesIO(img_bytes),
                 caption=f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность"
             )
+            
+            plt.close(fig)
             
         except Exception as e:
             self.logger.error(f"Error creating dividend yield chart: {e}")
@@ -1342,52 +1358,43 @@ class OkamaFinanceBot:
                 self.logger.info(f"Created Portfolio with weights: {weights}")
                 
                 # Generate beautiful portfolio chart
-                plt.style.use('fivethirtyeight')
+                fig, ax = chart_styles.create_figure()
                 
-                fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
+                # Apply base style
+                chart_styles.apply_base_style(fig, ax)
                 
-                # Plot portfolio wealth index
-                portfolio.wealth_index.plot(ax=ax, linewidth=2.5, alpha=0.9, color='#2E5BBA', label='Портфель')
+                # Plot portfolio wealth index with spline interpolation
+                x_data = portfolio.wealth_index.index
+                y_data = portfolio.wealth_index.values
+                chart_styles.plot_smooth_line(ax, x_data, y_data, color='#2E5BBA', label='Портфель')
                 
                 # Enhanced chart customization
                 ax.set_title(f'Накопленная доходность портфеля\n{", ".join(symbols)}', 
-                           fontsize=16, fontweight='bold', pad=20, color='#2E3440')
-                ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
-                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
-                
-                # Enhanced grid and background
-                ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
-                ax.set_facecolor('#F8F9FA')
+                           fontsize=chart_styles.title_config['fontsize'], 
+                           fontweight=chart_styles.title_config['fontweight'], 
+                           pad=chart_styles.title_config['pad'], 
+                           color=chart_styles.title_config['color'])
+                ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'], 
+                             fontweight=chart_styles.axis_config['label_fontweight'], 
+                             color=chart_styles.axis_config['label_color'])
+                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=chart_styles.axis_config['label_fontsize'], 
+                              fontweight=chart_styles.axis_config['label_fontweight'], 
+                              color=chart_styles.axis_config['label_color'])
                 
                 # Enhanced legend
-                ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
-                         loc='upper left', bbox_to_anchor=(0.02, 0.98))
-                
-                # Customize spines
-                for spine in ax.spines.values():
-                    spine.set_color('#D1D5DB')
-                    spine.set_linewidth(0.8)
-                
-                # Enhance tick labels
-                ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
-                
-                # Add subtle background pattern
-                ax.set_alpha(0.95)
+                ax.legend(**chart_styles.legend_config)
                 
                 # Add copyright signature
                 self._add_copyright_signature(ax)
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
-                fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
-                           facecolor='white', edgecolor='none')
+                chart_styles.save_figure(fig, img_buffer)
                 img_buffer.seek(0)
                 img_bytes = img_buffer.getvalue()
                 
                 # Clear matplotlib cache to free memory
-                plt.close(fig)
-                plt.clf()
-                plt.cla()
+                chart_styles.cleanup_figure(fig)
                 
                 # Get portfolio information
                 portfolio_text = f"📊 Портфель: {', '.join(symbols)}\n\n"

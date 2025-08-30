@@ -206,7 +206,6 @@ class EnhancedReportBuilder:
         # 3. Дополнительные графики для анализа
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty and len(prices) > 20:
             # График волатильности (скользящее окно)
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(10, 4))
             window_size = min(30, len(prices) // 4)
             rolling_vol = prices.pct_change().rolling(window=window_size).std() * np.sqrt(252)
@@ -223,7 +222,6 @@ class EnhancedReportBuilder:
             chart_analyses.append(analysis)
             
             # График просадок
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
             fig, ax = plt.subplots(figsize=(10, 4))
             cummax = prices.cummax()
             drawdowns = (prices - cummax) / cummax * 100
