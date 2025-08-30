@@ -1616,14 +1616,18 @@ class OkamaFinanceBot:
                     caption=self._truncate_caption(portfolio_text)
                 )
                 
-                # Add risk metrics, Monte Carlo, and forecast buttons
+                # Add risk metrics, Monte Carlo, forecast, and drawdowns buttons
                 keyboard = [
                     [
                         InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{','.join(symbols)}"),
                         InlineKeyboardButton("🎲 Monte Carlo", callback_data=f"monte_carlo_{','.join(symbols)}")
                     ],
                     [
-                        InlineKeyboardButton("📈 Прогноз по процентилям 10, 50, 90", callback_data=f"forecast_{','.join(symbols)}")
+                        InlineKeyboardButton("📈 Прогноз по процентилям 10, 50, 90", callback_data=f"forecast_{','.join(symbols)}"),
+                        InlineKeyboardButton("📉 Drawdowns", callback_data=f"drawdowns_{','.join(symbols)}")
+                    ],
+                    [
+                        InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{','.join(symbols)}")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1915,6 +1919,18 @@ class OkamaFinanceBot:
                 self.logger.info(f"Callback data: {callback_data}")
                 self.logger.info(f"Extracted symbols: {symbols}")
                 await self._handle_forecast_button(update, context, symbols)
+            elif callback_data.startswith('drawdowns_'):
+                symbols = callback_data.replace('drawdowns_', '').split(',')
+                self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
+                self.logger.info(f"Callback data: {callback_data}")
+                self.logger.info(f"Extracted symbols: {symbols}")
+                await self._handle_portfolio_drawdowns_button(update, context, symbols)
+            elif callback_data.startswith('returns_'):
+                symbols = callback_data.replace('returns_', '').split(',')
+                self.logger.info(f"Returns button clicked for symbols: {symbols}")
+                self.logger.info(f"Callback data: {callback_data}")
+                self.logger.info(f"Extracted symbols: {symbols}")
+                await self._handle_portfolio_returns_button(update, context, symbols)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -2673,7 +2689,7 @@ class OkamaFinanceBot:
             self.logger.info(f"Creating Monte Carlo forecast chart for portfolio: {symbols}")
             
             # Generate Monte Carlo forecast (okama creates the figure)
-            forecast_data = portfolio.plot_forecast_monte_carlo(distr="norm", years=5, n=20)
+            forecast_data = portfolio.plot_forecast_monte_carlo(distr="norm", years=10, n=20)
 
             # Get the current figure from matplotlib (created by okama)
             current_fig = plt.gcf()
@@ -2715,7 +2731,7 @@ class OkamaFinanceBot:
                     f"🎲 Прогноз Monte Carlo для портфеля: {', '.join(symbols)}\n\n"
                     f"📊 Параметры:\n"
                     f"• Распределение: Нормальное (norm)\n"
-                    f"• Период: 5 лет\n"
+                    f"• Период: 10 лет\n"
                     f"• Количество симуляций: 20\n"
                     f"• Валюта: {currency}\n\n"
                     f"💡 График показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
@@ -2732,9 +2748,9 @@ class OkamaFinanceBot:
             self.logger.info(f"Creating forecast chart with percentiles for portfolio: {symbols}")
             
             # Generate forecast chart using okama
-            # y.plot_forecast(years=5, today_value=1000, percentiles=[10, 50, 90])
+            # y.plot_forecast(years=10, today_value=1000, percentiles=[10, 50, 90])
             forecast_data = portfolio.plot_forecast(
-                years=5, 
+                years=10, 
                 today_value=1000, 
                 percentiles=[10, 50, 90]
             )
@@ -2776,7 +2792,7 @@ class OkamaFinanceBot:
                 caption=self._truncate_caption(
                     f"📈 Прогноз с процентилями для портфеля: {', '.join(symbols)}\n\n"
                     f"📊 Параметры:\n"
-                    f"• Период: 5 лет\n"
+                    f"• Период: 10 лет\n"
                     f"• Начальная стоимость: 1000 {currency}\n"
                     f"• процентили: 10%, 50%, 90%\n\n"
                     f"💡 График показывает:\n"
@@ -2789,6 +2805,251 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error creating forecast chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика прогноза: {str(e)}")
+
+    async def _handle_portfolio_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle portfolio drawdowns button click"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio drawdowns button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context content: {user_context}")
+            
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            currency = user_context.get('current_currency', 'USD')
+            raw_weights = user_context.get('portfolio_weights', [])
+            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            
+            self.logger.info(f"Creating drawdowns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
+            await self._send_callback_message(update, context, "📉 Создаю график просадок...")
+            
+            # Create Portfolio again
+            import okama as ok
+            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            
+            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio drawdowns button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
+
+    async def _create_portfolio_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+        """Create and send portfolio drawdowns chart"""
+        try:
+            self.logger.info(f"Creating portfolio drawdowns chart for portfolio: {symbols}")
+            
+            # Generate drawdowns chart using okama
+            # portfolio.drawdowns.plot()
+            drawdowns_data = portfolio.drawdowns.plot()
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                chart_styles.apply_base_style(current_fig, ax)
+                
+                # Customize the chart
+                ax.set_title(
+                    f'Просадки портфеля\n{", ".join(symbols)}',
+                    fontsize=chart_styles.title_config['fontsize'],
+                    fontweight=chart_styles.title_config['fontweight'],
+                    pad=chart_styles.title_config['pad'],
+                    color=chart_styles.title_config['color']
+                )
+                
+                # Add copyright signature
+                chart_styles.add_copyright(ax)
+            
+            # Save the figure
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(current_fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(current_fig)
+            
+            # Get drawdowns statistics
+            try:
+                # Get 5 largest drawdowns
+                largest_drawdowns = portfolio.drawdowns.nsmallest(5)
+                
+                # Get longest recovery periods (convert to years)
+                longest_recoveries = portfolio.recovery_period.nlargest(5) / 12
+                
+                # Build enhanced caption
+                caption = f"📉 Просадки портфеля: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                
+                # Add largest drawdowns
+                caption += f"📉 5 самых больших просадок:\n"
+                for i, (date, drawdown) in enumerate(largest_drawdowns.items(), 1):
+                    date_str = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)
+                    drawdown_pct = drawdown * 100
+                    caption += f"{i}. {date_str}: {drawdown_pct:.2f}%\n"
+                
+                caption += f"\n⏱️ Самые долгие периоды восстановления:\n"
+                for i, (date, recovery_years) in enumerate(longest_recoveries.items(), 1):
+                    date_str = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)
+                    caption += f"{i}. {date_str}: {recovery_years:.1f} лет\n"
+                
+                caption += f"\n💡 График показывает:\n"
+                caption += f"• Максимальную просадку портфеля\n"
+                caption += f"• Периоды восстановления\n"
+                caption += f"• Волатильность доходности"
+                
+            except Exception as e:
+                self.logger.warning(f"Could not get drawdowns statistics: {e}")
+                # Fallback to basic caption
+                caption = f"📉 Просадки портфеля: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"💡 График показывает:\n"
+                caption += f"• Максимальную просадку портфеля\n"
+                caption += f"• Периоды восстановления\n"
+                caption += f"• Волатильность доходности"
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio drawdowns chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
+
+    async def _handle_portfolio_returns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle portfolio returns button click"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio returns button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context content: {user_context}")
+            
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            currency = user_context.get('current_currency', 'USD')
+            raw_weights = user_context.get('portfolio_weights', [])
+            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            
+            self.logger.info(f"Creating returns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
+            await self._send_callback_message(update, context, "💰 Создаю график доходности...")
+            
+            # Create Portfolio again
+            import okama as ok
+            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            
+            await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio returns button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика доходности: {str(e)}")
+
+    async def _create_portfolio_returns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+        """Create and send portfolio returns chart"""
+        try:
+            self.logger.info(f"Creating portfolio returns chart for portfolio: {symbols}")
+            
+            # Generate annual returns chart using okama
+            # portfolio.annual_return_ts.plot(kind="bar")
+            returns_data = portfolio.annual_return_ts.plot(kind="bar")
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                chart_styles.apply_base_style(current_fig, ax)
+                
+                # Customize the chart
+                ax.set_title(
+                    f'Годовая доходность портфеля\n{", ".join(symbols)}',
+                    fontsize=chart_styles.title_config['fontsize'],
+                    fontweight=chart_styles.title_config['fontweight'],
+                    pad=chart_styles.title_config['pad'],
+                    color=chart_styles.title_config['color']
+                )
+                
+                # Add copyright signature
+                chart_styles.add_copyright(ax)
+            
+            # Save the figure
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(current_fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(current_fig)
+            
+            # Get returns statistics
+            try:
+                # Get returns statistics
+                mean_return_monthly = portfolio.mean_return_monthly
+                mean_return_annual = portfolio.mean_return_annual
+                cagr = portfolio.get_cagr()
+                
+                # Build enhanced caption
+                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                
+                # Add returns statistics
+                caption += f"📈 Статистика доходности:\n"
+                caption += f"• Средняя месячная доходность: {mean_return_monthly:.2%}\n"
+                caption += f"• Средняя годовая доходность: {mean_return_annual:.2%}\n"
+                caption += f"• CAGR (Compound Annual Growth Rate): {cagr:.2%}\n\n"
+                
+                caption += f"💡 График показывает:\n"
+                caption += f"• Годовую доходность по годам\n"
+                caption += f"• Волатильность доходности\n"
+                caption += f"• Тренды доходности портфеля"
+                
+            except Exception as e:
+                self.logger.warning(f"Could not get returns statistics: {e}")
+                # Fallback to basic caption
+                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"💡 График показывает:\n"
+                caption += f"• Годовую доходность по годам\n"
+                caption += f"• Волатильность доходности\n"
+                caption += f"• Тренды доходности портфеля"
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio returns chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика доходности: {str(e)}")
 
     def run(self):
         """Run the bot"""
