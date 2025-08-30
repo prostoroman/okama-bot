@@ -179,6 +179,27 @@ class OkamaFinanceBot:
             except:
                 await update.message.reply_text("Произошла ошибка при отправке сообщения")
     
+    def _truncate_caption(self, text: Any) -> str:
+        """Обрезать подпись до допустимой длины Telegram.
+        Гарантирует, что длина не превышает Config.MAX_CAPTION_LENGTH.
+        """
+        try:
+            if text is None:
+                return ""
+            if not isinstance(text, str):
+                text = str(text)
+            max_len = getattr(Config, 'MAX_CAPTION_LENGTH', 1024)
+            if len(text) <= max_len:
+                return text
+            ellipsis = "…"
+            if max_len > len(ellipsis):
+                return text[: max_len - len(ellipsis)] + ellipsis
+            return text[:max_len]
+        except Exception as e:
+            self.logger.error(f"Error truncating caption: {e}")
+            safe_text = "" if text is None else str(text)
+            return safe_text[:1024]
+    
     async def _send_additional_charts(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
         """Отправить дополнительные графики анализа (drawdowns, dividend yield)"""
         try:
@@ -256,7 +277,7 @@ class OkamaFinanceBot:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=f"📉 График Drawdowns для {len(symbols)} активов\n\nПоказывает периоды падения активов и их восстановление"
+                caption=self._truncate_caption(f"📉 График Drawdowns для {len(symbols)} активов\n\nПоказывает периоды падения активов и их восстановление")
             )
             
             plt.close(fig)
@@ -330,7 +351,7 @@ class OkamaFinanceBot:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность"
+                caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
             )
             
             plt.close(fig)
@@ -444,7 +465,7 @@ class OkamaFinanceBot:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"
+                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция")
             )
             self.logger.info("Correlation matrix image sent successfully")
             
@@ -660,7 +681,7 @@ class OkamaFinanceBot:
                     # Отправляем график с информацией
                     await update.message.reply_photo(
                         photo=daily_chart,
-                        caption=caption
+                        caption=self._truncate_caption(caption)
                     )
                     
                     # Создаем кнопки для дополнительных функций
@@ -999,7 +1020,7 @@ class OkamaFinanceBot:
                         await update.message.reply_document(
                             document=excel_buffer,
                             filename=f"{namespace}_symbols.xlsx",
-                            caption=f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)"
+                            caption=self._truncate_caption(f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)")
                         )
                         
                         excel_buffer.close()
@@ -1231,7 +1252,7 @@ class OkamaFinanceBot:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=stats_text,
+                    caption=self._truncate_caption(stats_text),
                     reply_markup=reply_markup
                 )
                 
@@ -1530,7 +1551,7 @@ class OkamaFinanceBot:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=portfolio_text
+                    caption=self._truncate_caption(portfolio_text)
                 )
                 
                 # Store portfolio data in context
@@ -1896,7 +1917,7 @@ class OkamaFinanceBot:
                 
                 await update.callback_query.message.reply_photo(
                     photo=monthly_chart,
-                    caption=caption
+                    caption=self._truncate_caption(caption)
                 )
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось получить месячный график")
@@ -1930,7 +1951,7 @@ class OkamaFinanceBot:
                     if dividend_chart:
                         await update.callback_query.message.reply_photo(
                             photo=dividend_chart,
-                            caption=dividend_response
+                            caption=self._truncate_caption(dividend_response)
                         )
                     else:
                         await self._send_callback_message(update, context, dividend_response)
