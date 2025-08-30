@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import make_interp_spline
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -160,108 +161,94 @@ class ChartStyles:
                 logger.warning("Insufficient data for spline interpolation, returning original data")
                 return x_data, y_data
             
-            # Безопасная обработка Period объектов в x_data
-            if hasattr(x_data, 'dtype') and str(x_data.dtype).startswith('period'):
-                logger.info("Detected Period dtype, using numeric indices for safe processing")
-                # Для Period объектов используем числовые индексы
-                x_data = np.arange(len(x_data))
-            
-            # Убираем NaN значения
-            valid_mask = ~(np.isnan(x_data) | np.isnan(y_data))
+            # Убираем NaN значения (безопасно для нечисловых x)
+            try:
+                y_arr = np.asarray(y_data, dtype=float)
+            except Exception:
+                y_arr = np.array(y_data, dtype=float)
+            x_arr = np.asarray(x_data)
+            y_isnan = np.isnan(y_arr)
+            if getattr(x_arr, 'dtype', None) is not None and getattr(x_arr.dtype, 'kind', '') == 'f':
+                x_isnan = np.isnan(x_arr)
+            else:
+                x_isnan = np.zeros_like(y_isnan, dtype=bool)
+            valid_mask = ~(x_isnan | y_isnan)
             if np.sum(valid_mask) < 3:
                 logger.warning("Too many NaN values for interpolation, returning original data")
                 return x_data, y_data
             
-            x_valid = x_data[valid_mask]
-            y_valid = y_data[valid_mask]
+            x_valid = x_arr[valid_mask]
+            y_valid = y_arr[valid_mask]
             
-            # Для Period объектов всегда используем числовые индексы
-            if hasattr(x_valid, 'dtype') and (x_valid.dtype.kind in ['M', 'O'] or str(x_valid.dtype).startswith('period')):
-                # Для datetime, object или period типов используем числовые индексы
-                x_numeric = np.arange(len(x_valid))
-                use_numeric_x = True
-            else:
-                x_numeric = x_valid
-                use_numeric_x = False
+            # Определяем, датоподобные ли x (datetime/period/obj)
+            is_period = hasattr(x_arr, 'dtype') and str(x_arr.dtype).startswith('period')
+            is_datetime_kind = hasattr(x_arr, 'dtype') and getattr(x_arr.dtype, 'kind', '') == 'M'
+            is_object = hasattr(x_arr, 'dtype') and getattr(x_arr.dtype, 'kind', '') == 'O'
+            is_date_like = is_period or is_datetime_kind or is_object
             
-            # Сортируем данные по x для корректной интерполяции
-            if use_numeric_x:
+            if is_date_like:
+                # Преобразуем x в числовые таймстемпы (секунды с эпохи)
+                x_numeric = []
+                for x_val in x_valid:
+                    try:
+                        if hasattr(x_val, 'to_timestamp'):
+                            x_val = x_val.to_timestamp()
+                        if hasattr(x_val, 'timestamp'):
+                            x_numeric.append(float(x_val.timestamp()))
+                        elif isinstance(x_val, np.datetime64):
+                            x_numeric.append(float(np.datetime64(x_val).astype('datetime64[s]').astype(int)))
+                        else:
+                            # Попытка привести через pandas
+                            try:
+                                import pandas as pd
+                                ts = pd.to_datetime(x_val)
+                                x_numeric.append(float(ts.timestamp()))
+                            except Exception:
+                                # Последний шанс: индекс позиции
+                                x_numeric.append(float(len(x_numeric)))
+                    except Exception:
+                        x_numeric.append(float(len(x_numeric)))
+                x_numeric = np.asarray(x_numeric, dtype=float)
+                
+                # Сортируем
                 sort_idx = np.argsort(x_numeric)
                 x_sorted = x_numeric[sort_idx]
                 y_sorted = y_valid[sort_idx]
+                
+                # Убираем дубли
+                unique_mask = np.concatenate(([True], np.diff(x_sorted) > 0))
+                x_unique = x_sorted[unique_mask]
+                y_unique = y_sorted[unique_mask]
+                if len(x_unique) < 3:
+                    logger.warning("Too few unique x-coordinates for interpolation, returning original data")
+                    return x_data, y_data
+                
+                # Сплайн и новые точки
+                spline = make_interp_spline(x_unique, y_unique, k=min(3, len(x_unique) - 1))
+                x_smooth_num = np.linspace(x_unique.min(), x_unique.max(), n_points)
+                y_smooth = spline(x_smooth_num)
+                
+                # Конвертация обратно в datetime
+                try:
+                    x_smooth_dates = np.array([datetime.fromtimestamp(ts) for ts in x_smooth_num])
+                    return x_smooth_dates, y_smooth
+                except Exception:
+                    return x_smooth_num, y_smooth
             else:
+                # Чисто числовые x
                 sort_idx = np.argsort(x_valid)
                 x_sorted = x_valid[sort_idx]
                 y_sorted = y_valid[sort_idx]
-            
-            # Убираем дублирующиеся x-координаты
-            unique_mask = np.concatenate(([True], np.diff(x_sorted) > 0))
-            x_unique = x_sorted[unique_mask]
-            y_unique = y_sorted[unique_mask]
-            
-            if len(x_unique) < 3:
-                logger.warning("Too few unique x-coordinates for interpolation, returning original data")
-                return x_data, y_data
-            
-            # Создаем сплайн
-            spline = make_interp_spline(x_unique, y_unique, k=min(3, len(x_unique) - 1))
-            
-            # Генерируем новые точки - безопасно обрабатываем Period объекты
-            try:
-                if hasattr(x_unique, 'min') and hasattr(x_unique, 'max'):
-                    x_min = x_unique.min()
-                    x_max = x_unique.max()
-                    
-                    # Безопасно конвертируем Period объекты
-                    if hasattr(x_min, 'to_timestamp'):
-                        x_min = x_min.to_timestamp()
-                    if hasattr(x_max, 'to_timestamp'):
-                        x_max = x_max.to_timestamp()
-                    
-                    # Конвертируем в float для np.linspace
-                    x_min_float = float(x_min)
-                    x_max_float = float(x_max)
-                    
-                    x_smooth = np.linspace(x_min_float, x_max_float, n_points)
-                else:
-                    # Fallback для случаев без min/max методов
-                    x_smooth = np.linspace(0, len(x_unique) - 1, n_points)
-                    x_smooth = x_unique[0] + (x_unique[-1] - x_unique[0]) * x_smooth / (len(x_unique) - 1)
-            except Exception as e:
-                logger.warning(f"Error in x_smooth generation: {e}, using fallback")
-                x_smooth = np.linspace(0, len(x_unique) - 1, n_points)
-                x_smooth = x_unique[0] + (x_unique[-1] - x_unique[0]) * x_smooth / (len(x_unique) - 1)
-            
-            y_smooth = spline(x_smooth)
-            
-            # Если использовали числовые индексы, конвертируем обратно к оригинальным датам
-            if use_numeric_x:
-                try:
-                    # Интерполируем оригинальные даты
-                    from scipy.interpolate import interp1d
-                    
-                    # Безопасно конвертируем Period объекты в timestamp
-                    x_valid_timestamps = []
-                    for x_val in x_valid:
-                        if hasattr(x_val, 'to_timestamp'):
-                            timestamp = x_val.to_timestamp()
-                            # Конвертируем timestamp в float для безопасной интерполяции
-                            if hasattr(timestamp, 'timestamp'):
-                                x_valid_timestamps.append(timestamp.timestamp())
-                            else:
-                                x_valid_timestamps.append(float(timestamp))
-                        else:
-                            x_valid_timestamps.append(x_val)
-                    
-                    date_interp = interp1d(x_numeric, x_valid_timestamps, kind='linear', 
-                                          bounds_error=False, fill_value='extrapolate')
-                    x_smooth_dates = date_interp(x_smooth)
-                    return x_smooth_dates, y_smooth
-                except Exception as e:
-                    logger.warning(f"Error in date interpolation: {e}, returning numeric x")
-                    return x_smooth, y_smooth
-            
-            return x_smooth, y_smooth
+                unique_mask = np.concatenate(([True], np.diff(x_sorted) > 0))
+                x_unique = x_sorted[unique_mask]
+                y_unique = y_sorted[unique_mask]
+                if len(x_unique) < 3:
+                    logger.warning("Too few unique x-coordinates for interpolation, returning original data")
+                    return x_data, y_data
+                spline = make_interp_spline(x_unique, y_unique, k=min(3, len(x_unique) - 1))
+                x_smooth = np.linspace(float(x_unique.min()), float(x_unique.max()), n_points)
+                y_smooth = spline(x_smooth)
+                return x_smooth, y_smooth
             
         except Exception as e:
             logger.error(f"Error in spline interpolation: {e}")
