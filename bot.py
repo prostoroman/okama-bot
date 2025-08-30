@@ -1882,8 +1882,8 @@ class OkamaFinanceBot:
             dividend_chart = self._create_dividend_chart(symbol, dividend_info['dividends'], dividend_info.get('currency', ''))
             
             if dividend_chart:
-                # Добавляем копирайт на график
-                return self._add_copyright_to_chart(dividend_chart)
+                # Копирайт уже добавлен в _create_dividend_chart
+                return dividend_chart
             
             return None
             
