@@ -465,7 +465,14 @@ class EnhancedReportBuilder:
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
             
             # Стоимость портфеля
-            ax1.plot(portfolio_prices.index, portfolio_prices.values, 
+            try:
+                idx = portfolio_prices.index
+                # Безопасная конвертация PeriodIndex -> Timestamp
+                if hasattr(idx, 'to_timestamp'):
+                    idx = idx.to_timestamp()
+            except Exception:
+                idx = portfolio_prices.index
+            ax1.plot(idx, portfolio_prices.values,
                     color=self.colors[0], linewidth=2)
             ax1.set_title('Стоимость портфеля', fontsize=14, fontweight='bold')
             ax1.set_ylabel(f'Стоимость ({currency})', fontsize=12)
