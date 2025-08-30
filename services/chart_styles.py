@@ -52,6 +52,13 @@ class ChartStyles:
             'smooth_points': 3000  # Увеличено количество точек для более плавного скругления
         }
         
+        # Настройки для линий Монте-Карло
+        self.monte_carlo_config = {
+            'linewidth': 0.8,  # Тонкие линии для Монте-Карло
+            'alpha': 0.6,      # Прозрачность для лучшей видимости множественных линий
+            'color': '#1f77b4' # Цвет линий Монте-Карло
+        }
+        
         # Настройки копирайта
         self.copyright_config = {
             'text': '© Цбот, data source: okama',
@@ -126,6 +133,20 @@ class ChartStyles:
             
         except Exception as e:
             logger.error(f"Error applying base style: {e}")
+    
+    def apply_monte_carlo_style(self, ax):
+        """Применить специальные стили для линий Монте-Карло"""
+        try:
+            # Находим все линии на графике и применяем стили Монте-Карло
+            for line in ax.lines:
+                line.set_linewidth(self.monte_carlo_config['linewidth'])
+                line.set_alpha(self.monte_carlo_config['alpha'])
+                line.set_color(self.monte_carlo_config['color'])
+            
+            logger.info(f"Applied Monte Carlo styles to {len(ax.lines)} lines")
+            
+        except Exception as e:
+            logger.error(f"Error applying Monte Carlo styles: {e}")
     
     def add_copyright(self, ax):
         """Добавить копирайт к графику"""
