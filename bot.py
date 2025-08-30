@@ -622,9 +622,12 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, "📈 Получаю ежедневный график...")
             
             try:
+                self.logger.info(f"Calling _get_daily_chart for {symbol}")
                 daily_chart = await self._get_daily_chart(symbol)
                 
+                self.logger.info(f"Daily chart result for {symbol}: {type(daily_chart)}")
                 if daily_chart:
+                    self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
                     # Формируем базовую информацию для подписи
                     caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
                     caption += f"🏛️ Биржа: {asset_info.get('exchange', 'N/A')}\n"
@@ -689,7 +692,14 @@ class OkamaFinanceBot:
         """Получить ежедневный график за 1 год с копирайтом"""
         try:
             # Получаем данные для ежедневного графика
+            self.logger.info(f"Getting daily chart for {symbol}")
             price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            
+            self.logger.info(f"Price history result for {symbol}: {type(price_history)}")
+            if isinstance(price_history, dict):
+                self.logger.info(f"Price history keys: {list(price_history.keys())}")
+                if 'charts' in price_history:
+                    self.logger.info(f"Charts keys: {list(price_history['charts'].keys()) if price_history['charts'] else 'No charts'}")
             
             if 'error' in price_history:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
@@ -700,14 +710,18 @@ class OkamaFinanceBot:
                 charts = price_history['charts']
                 # Приоритет: adj_close (ежедневные данные), затем fallback
                 if 'adj_close' in charts and charts['adj_close']:
+                    self.logger.info(f"Found adj_close chart for {symbol}")
                     return charts['adj_close']  # Копирайт уже добавлен в asset_service
                 elif 'fallback' in charts and charts['fallback']:
+                    self.logger.info(f"Found fallback chart for {symbol}")
                     return charts['fallback']  # Копирайт уже добавлен в asset_service
                 # Если нет ежедневных, берем первый доступный
                 for chart_type, chart_data in charts.items():
                     if chart_data:
+                        self.logger.info(f"Using {chart_type} chart for {symbol}")
                         return chart_data  # Копирайт уже добавлен в asset_service
             
+            self.logger.warning(f"No charts found for {symbol}")
             return None
             
         except Exception as e:
@@ -1401,19 +1415,50 @@ class OkamaFinanceBot:
                 # Get portfolio information
                 portfolio_text = f"📊 Портфель: {', '.join(symbols)}\n\n"
                 portfolio_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
-                portfolio_text += f"📅 Период: {portfolio.first_date} - {portfolio.last_date}\n"
+                
+                # Safely get first and last dates
+                try:
+                    first_date = portfolio.first_date
+                    last_date = portfolio.last_date
+                    
+                    # Handle Period objects and other date types
+                    if hasattr(first_date, 'strftime'):
+                        first_date_str = first_date.strftime('%Y-%m-%d')
+                    elif hasattr(first_date, 'to_timestamp'):
+                        first_date_str = first_date.to_timestamp().strftime('%Y-%m-%d')
+                    else:
+                        first_date_str = str(first_date)
+                    
+                    if hasattr(last_date, 'strftime'):
+                        last_date_str = last_date.strftime('%Y-%m-%d')
+                    elif hasattr(last_date, 'to_timestamp'):
+                        last_date_str = last_date.to_timestamp().strftime('%Y-%m-%d')
+                    else:
+                        last_date_str = str(last_date)
+                    
+                    portfolio_text += f"📅 Период: {first_date_str} - {last_date_str}\n"
+                except Exception as e:
+                    self.logger.warning(f"Could not get portfolio dates: {e}")
+                    portfolio_text += "📅 Период: недоступен\n"
+                
                 # Safely get period length
                 try:
-                    if hasattr(portfolio.period_length, 'strftime'):
+                    period_length = portfolio.period_length
+                    
+                    if hasattr(period_length, 'strftime'):
                         # If it's a datetime-like object
-                        period_length = str(portfolio.period_length)
-                    elif hasattr(portfolio.period_length, 'days'):
+                        period_length_str = str(period_length)
+                    elif hasattr(period_length, 'days'):
                         # If it's a timedelta-like object
-                        period_length = str(portfolio.period_length)
+                        period_length_str = str(period_length)
+                    elif hasattr(period_length, 'to_timestamp'):
+                        # If it's a Period object
+                        period_length_str = str(period_length)
                     else:
                         # Try to convert to string directly
-                        period_length = str(portfolio.period_length)
-                    portfolio_text += f"⏱️ Длительность: {period_length}\n\n"
+                        period_length_str = str(period_length)
+                    
+                    portfolio_text += f"⏱️ Длительность: {period_length_str}\n\n"
                 except Exception as e:
                     self.logger.warning(f"Could not get period length: {e}")
                     portfolio_text += "⏱️ Длительность: недоступна\n\n"
