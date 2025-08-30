@@ -1668,7 +1668,8 @@ class OkamaFinanceBot:
                 symbols = callback_data.replace('drawdowns_', '').split(',')
                 self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
                 await self._handle_drawdowns_button(update, context, symbols)
-            elif callback_data.startswith('dividends_'):
+            elif callback_data.startswith('dividends_') and ',' in callback_data:
+                # Для сравнения активов (dividends_AAA,BBB)
                 symbols = callback_data.replace('dividends_', '').split(',')
                 self.logger.info(f"Dividends button clicked for symbols: {symbols}")
                 await self._handle_dividends_button(update, context, symbols)
@@ -1680,7 +1681,8 @@ class OkamaFinanceBot:
                 symbol = callback_data.replace('monthly_chart_', '')
                 self.logger.info(f"Monthly chart button clicked for symbol: {symbol}")
                 await self._handle_monthly_chart_button(update, context, symbol)
-            elif callback_data.startswith('dividends_'):
+            elif callback_data.startswith('dividends_') and ',' not in callback_data:
+                # Для одиночного актива (dividends_AAA)
                 symbol = callback_data.replace('dividends_', '')
                 self.logger.info(f"Dividends button clicked for symbol: {symbol}")
                 await self._handle_single_dividends_button(update, context, symbol)
