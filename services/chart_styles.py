@@ -273,6 +273,46 @@ class ChartStyles:
             
             # Сглаживаем данные
             x_smooth, y_smooth = self.smooth_line_data(x_data, y_data)
+
+            # Гарантируем совместимость x с matplotlib (конвертация Period -> datetime)
+            try:
+                import numpy as np  # noqa: F401
+                # Преобразуем потенциальные Period/PeriodIndex к datetime перед отрисовкой
+                def _coerce_dates(seq):
+                    try:
+                        # Если это pandas Index/Series с методом to_timestamp
+                        if hasattr(seq, 'to_timestamp'):
+                            return seq.to_timestamp()
+                    except Exception:
+                        pass
+                    try:
+                        # Итерируем и конвертируем элементы с to_timestamp()/timestamp()
+                        converted = []
+                        for xv in list(seq):
+                            try:
+                                if hasattr(xv, 'to_timestamp'):
+                                    xv = xv.to_timestamp()
+                                # datetime-like с методом timestamp
+                                if hasattr(xv, 'timestamp'):
+                                    converted.append(xv)
+                                else:
+                                    # Попробуем привести через pandas
+                                    try:
+                                        import pandas as pd  # noqa: F401
+                                        xv_dt = pd.to_datetime(xv)
+                                        converted.append(xv_dt.to_pydatetime())
+                                    except Exception:
+                                        converted.append(xv)
+                            except Exception:
+                                converted.append(xv)
+                        return converted
+                    except Exception:
+                        return seq
+
+                x_smooth = _coerce_dates(x_smooth)
+            except Exception:
+                # В случае любой ошибки оставляем исходные значения
+                pass
             
             logger.debug(f"Smoothing completed, x_smooth type={type(x_smooth)}, y_smooth type={type(y_smooth)}")
             
@@ -290,13 +330,36 @@ class ChartStyles:
             
         except Exception as e:
             logger.error(f"Error plotting smooth line: {e}")
-            # Fallback к обычной линии
+            # Fallback к обычной линии с безопасной конвертацией дат
             plot_kwargs = {
                 'linewidth': self.line_config['linewidth'],
                 'alpha': self.line_config['alpha']
             }
             plot_kwargs.update(kwargs)
-            return ax.plot(x_data, y_data, **plot_kwargs)
+            try:
+                # Конвертируем возможный Period/PeriodIndex в datetime
+                def _coerce_dates_simple(seq):
+                    try:
+                        if hasattr(seq, 'to_timestamp'):
+                            return seq.to_timestamp()
+                    except Exception:
+                        pass
+                    try:
+                        out = []
+                        for xv in list(seq):
+                            try:
+                                if hasattr(xv, 'to_timestamp'):
+                                    xv = xv.to_timestamp()
+                                out.append(xv)
+                            except Exception:
+                                out.append(xv)
+                        return out
+                    except Exception:
+                        return seq
+                x_safe = _coerce_dates_simple(x_data)
+            except Exception:
+                x_safe = x_data
+            return ax.plot(x_safe, y_data, **plot_kwargs)
     
     def create_figure(self, figsize=None, **kwargs):
         """Создать фигуру с настройками по умолчанию"""
