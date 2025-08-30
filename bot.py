@@ -1401,9 +1401,20 @@ class OkamaFinanceBot:
                 chart_styles.apply_base_style(fig, ax)
                 
                 # Plot portfolio wealth index with spline interpolation
-                x_data = portfolio.wealth_index.index
-                y_data = portfolio.wealth_index.values
-                chart_styles.plot_smooth_line(ax, x_data, y_data, color='#2E5BBA', label='Портфель')
+                wealth_index = portfolio.wealth_index
+                # If wealth_index contains multiple series (e.g., portfolio and inflation), label them explicitly
+                if hasattr(wealth_index, 'ndim') and getattr(wealth_index, 'ndim', 1) == 2 and getattr(wealth_index, 'shape', (0, 0))[1] >= 2:
+                    x_data = wealth_index.index
+                    # First series: portfolio
+                    y_portfolio = wealth_index.iloc[:, 0].values
+                    chart_styles.plot_smooth_line(ax, x_data, y_portfolio, color='#2E5BBA', label='Портфель')
+                    # Second series: inflation
+                    y_inflation = wealth_index.iloc[:, 1].values
+                    chart_styles.plot_smooth_line(ax, x_data, y_inflation, color=chart_styles.get_color(1), label='Инфляция')
+                else:
+                    x_data = wealth_index.index
+                    y_data = wealth_index.values
+                    chart_styles.plot_smooth_line(ax, x_data, y_data, color='#2E5BBA', label='Портфель')
                 
                 # Enhanced chart customization
                 ax.set_title(f'Накопленная доходность портфеля\n{", ".join(symbols)}', 
