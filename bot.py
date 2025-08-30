@@ -1404,7 +1404,15 @@ class OkamaFinanceBot:
                 portfolio_text += f"📅 Период: {portfolio.first_date} - {portfolio.last_date}\n"
                 # Safely get period length
                 try:
-                    period_length = str(portfolio.period_length)
+                    if hasattr(portfolio.period_length, 'strftime'):
+                        # If it's a datetime-like object
+                        period_length = str(portfolio.period_length)
+                    elif hasattr(portfolio.period_length, 'days'):
+                        # If it's a timedelta-like object
+                        period_length = str(portfolio.period_length)
+                    else:
+                        # Try to convert to string directly
+                        period_length = str(portfolio.period_length)
                     portfolio_text += f"⏱️ Длительность: {period_length}\n\n"
                 except Exception as e:
                     self.logger.warning(f"Could not get period length: {e}")
@@ -1426,10 +1434,24 @@ class OkamaFinanceBot:
                 # Get final portfolio value safely
                 try:
                     final_value = portfolio.wealth_index.iloc[-1]
+                    
+                    # Handle different types of final_value
                     if hasattr(final_value, '__iter__') and not isinstance(final_value, str):
-                        # If it's a Series, get the first value
-                        final_value = final_value.iloc[0] if hasattr(final_value, 'iloc') else list(final_value)[0]
-                    portfolio_text += f"\n📈 Накопленная доходность портфеля: {float(final_value):.2f} {currency}"
+                        # If it's a Series or array-like, get the first value
+                        if hasattr(final_value, 'iloc'):
+                            final_value = final_value.iloc[0]
+                        elif hasattr(final_value, '__getitem__'):
+                            final_value = final_value[0]
+                        else:
+                            final_value = list(final_value)[0]
+                    
+                    # Convert to float safely
+                    if isinstance(final_value, (int, float)):
+                        final_value = float(final_value)
+                    else:
+                        final_value = float(str(final_value))
+                    
+                    portfolio_text += f"\n📈 Накопленная доходность портфеля: {final_value:.2f} {currency}"
                 except Exception as e:
                     self.logger.warning(f"Could not get final portfolio value: {e}")
                     portfolio_text += f"\n📈 Накопленная доходность портфеля: недоступна"
