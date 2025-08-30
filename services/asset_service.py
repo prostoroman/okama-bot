@@ -804,9 +804,17 @@ class AssetService:
         try:
             import pandas as pd
             
-            self.logger.debug(f"Input price_data type: {type(price_data)}")
-            self.logger.debug(f"Input price_data shape: {getattr(price_data, 'shape', 'N/A')}")
-            self.logger.debug(f"Input price_data length: {getattr(price_data, '__len__', lambda: 'N/A')()}")
+            self.logger.info(f"Input price_data type: {type(price_data)}")
+            self.logger.info(f"Input price_data shape: {getattr(price_data, 'shape', 'N/A')}")
+            self.logger.info(f"Input price_data length: {getattr(price_data, '__len__', lambda: 'N/A')()}")
+            
+            # Add more detailed logging for debugging
+            if hasattr(price_data, 'dtype'):
+                self.logger.info(f"Input price_data dtype: {price_data.dtype}")
+            if hasattr(price_data, 'values'):
+                self.logger.info(f"Input price_data values type: {type(price_data.values)}")
+                if hasattr(price_data.values, 'dtype'):
+                    self.logger.info(f"Input price_data values dtype: {price_data.values.dtype}")
             
             # Ensure we have a pandas Series
             if getattr(price_data, 'ndim', 1) == 1:
@@ -830,8 +838,9 @@ class AssetService:
             # Handle large numbers by converting to float64 and handling overflow
             try:
                 # Convert to float64 and handle any overflow issues
+                self.logger.info(f"Attempting to convert series to float64...")
                 series_for_plot = series_for_plot.astype('float64')
-                self.logger.debug(f"Successfully converted series to float64")
+                self.logger.info(f"Successfully converted series to float64")
             except (OverflowError, ValueError) as e:
                 self.logger.warning(f"Overflow error converting to float64: {e}")
                 # Try to handle large numbers by scaling down if necessary
@@ -889,8 +898,18 @@ class AssetService:
             # Plot price line with spline interpolation
             # Handle large numbers by converting to float64
             try:
+                self.logger.info(f"Converting values to float64...")
                 values = series_for_plot.values.astype('float64')
-                self.logger.debug(f"Successfully converted values to float64, range: {values.min():.2f} to {values.max():.2f}")
+                
+                # Safe min/max calculation
+                try:
+                    min_val = float(values.min())
+                    max_val = float(values.max())
+                    self.logger.info(f"Successfully converted values to float64, range: {min_val:.2f} to {max_val:.2f}")
+                except Exception as minmax_error:
+                    self.logger.warning(f"Min/max calculation failed: {minmax_error}")
+                    self.logger.info(f"Successfully converted values to float64, length: {len(values)}")
+                    
             except Exception as e:
                 self.logger.warning(f"Failed to convert to float64: {e}")
                 # Fallback: convert to list and then to float
@@ -914,26 +933,74 @@ class AssetService:
                         return None
             
             # Additional safety check for values
-            if not values or len(values) == 0:
-                self.logger.error("No valid values to plot")
+            self.logger.info(f"Starting safety checks...")
+            
+            # Safe check for numpy arrays
+            try:
+                if values is None:
+                    self.logger.error("Values is None")
+                    return None
+                elif hasattr(values, '__len__'):
+                    if len(values) == 0:
+                        self.logger.error("Values is empty")
+                        return None
+                    else:
+                        self.logger.info(f"Values check passed, length: {len(values)}")
+                else:
+                    self.logger.error("Values has no length attribute")
+                    return None
+            except Exception as check_error:
+                self.logger.error(f"Values check failed: {check_error}")
                 return None
             
             # Check for infinite or NaN values
+            self.logger.info(f"Checking for infinite or NaN values...")
+            self.logger.info(f"Values type: {type(values)}, length: {len(values)}")
+            self.logger.info(f"First few values: {values[:5] if len(values) >= 5 else values}")
+            
             valid_values = []
-            for v in values:
+            for i, v in enumerate(values):
                 try:
-                    if not (float('inf') == v or float('-inf') == v or v != v):
-                        valid_values.append(v)
-                except Exception:
+                    self.logger.info(f"Processing value {i}: {v} (type: {type(v)})")
+                    
+                    # Handle numpy arrays and pandas Series
+                    if hasattr(v, '__iter__') and not isinstance(v, str):
+                        self.logger.info(f"Value {i} is array-like, skipping")
+                        continue
+                    
+                    # Check for valid numeric values
+                    if isinstance(v, (int, float)):
+                        if not (float('inf') == v or float('-inf') == v or v != v):
+                            valid_values.append(v)
+                            self.logger.info(f"Value {i} is valid numeric")
+                        else:
+                            self.logger.info(f"Value {i} is invalid (inf/nan)")
+                    else:
+                        # Try to convert to float
+                        try:
+                            v_float = float(v)
+                            if not (float('inf') == v_float or float('-inf') == v_float or v_float != v_float):
+                                valid_values.append(v_float)
+                                self.logger.info(f"Value {i} converted to valid float: {v_float}")
+                            else:
+                                self.logger.info(f"Value {i} converted but invalid: {v_float}")
+                        except (ValueError, TypeError) as conv_error:
+                            self.logger.info(f"Value {i} conversion failed: {conv_error}")
+                            continue
+                except Exception as e:
+                    self.logger.info(f"Value {i} processing failed: {e}")
                     continue
             
+            self.logger.info(f"Valid values count: {len(valid_values)} out of {len(values)}")
             if len(valid_values) != len(values):
                 self.logger.warning(f"Found {len(values) - len(valid_values)} invalid values, using only valid ones")
                 values = valid_values
             
+            self.logger.info(f"Attempting to plot with chart_styles.plot_smooth_line...")
             try:
                 chart_styles.plot_smooth_line(ax, series_for_plot.index, values, 
                                             color='#1f77b4', alpha=0.8)
+                self.logger.info(f"Successfully plotted with plot_smooth_line")
             except Exception as plot_error:
                 self.logger.error(f"Error in plot_smooth_line: {plot_error}")
                 # Fallback to simple line plot
@@ -1010,16 +1077,66 @@ class AssetService:
             
             # Save chart to bytes
             try:
-                self.logger.debug("Saving chart to bytes...")
-                buf = io.BytesIO()
-                chart_styles.save_figure(fig, buf)
-                self.logger.debug("Chart saved successfully")
+                self.logger.info("Saving chart to bytes...")
+                
+                # Ensure index is properly formatted before saving
+                try:
+                    # Convert Period index to datetime if needed
+                    if hasattr(series_for_plot.index, 'to_timestamp'):
+                        self.logger.info("Converting Period index to datetime for saving...")
+                        series_for_plot.index = series_for_plot.index.to_timestamp()
+                        # Update the plot with new index
+                        ax.clear()
+                        ax.plot(series_for_plot.index, values, color='#1f77b4', linewidth=2, alpha=0.8)
+                        # Reapply formatting
+                        ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
+                                   fontweight=chart_styles.title_config['fontweight'])
+                        ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'])
+                        ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
+                        ax.grid(True, alpha=0.3)
+                    else:
+                        # If no Period index, ensure we have a clean datetime index
+                        self.logger.info("Ensuring clean datetime index for saving...")
+                        # Convert any problematic index types to string first, then to datetime
+                        try:
+                            clean_index = pd.to_datetime([str(x) for x in series_for_plot.index])
+                            series_for_plot.index = clean_index
+                            # Update the plot with new index
+                            ax.clear()
+                            ax.plot(series_for_plot.index, values, color='#1f77b4', linewidth=2, alpha=0.8)
+                            # Reapply formatting
+                            ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
+                                       fontweight=chart_styles.title_config['fontweight'])
+                            ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'])
+                            ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
+                            ax.grid(True, alpha=0.3)
+                        except Exception as clean_error:
+                            self.logger.warning(f"Could not clean index: {clean_error}")
+                except Exception as index_error:
+                    self.logger.warning(f"Could not convert index: {index_error}")
+                
+                # Try to save with matplotlib directly if chart_styles fails
+                try:
+                    buf = io.BytesIO()
+                    chart_styles.save_figure(fig, buf)
+                    self.logger.info("Chart saved successfully with chart_styles")
+                except Exception as chart_styles_error:
+                    self.logger.warning(f"chart_styles.save_figure failed: {chart_styles_error}")
+                    # Fallback: save with matplotlib directly
+                    try:
+                        buf = io.BytesIO()
+                        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+                        self.logger.info("Chart saved successfully with matplotlib fallback")
+                    except Exception as matplotlib_error:
+                        self.logger.error(f"matplotlib fallback also failed: {matplotlib_error}")
+                        raise
+                
                 chart_styles.cleanup_figure(fig)
-                self.logger.debug("Figure cleaned up")
+                self.logger.info("Figure cleaned up")
                 
                 buf.seek(0)
                 result = buf.getvalue()
-                self.logger.debug(f"Chart bytes length: {len(result)}")
+                self.logger.info(f"Chart bytes length: {len(result)}")
                 return result
                 
             except Exception as save_error:
