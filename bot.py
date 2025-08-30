@@ -2682,6 +2682,9 @@ class OkamaFinanceBot:
             if current_fig.axes:
                 ax = current_fig.axes[0]
                 chart_styles.apply_base_style(current_fig, ax)
+                
+                # Apply Monte Carlo specific styles to make lines thinner
+                chart_styles.apply_monte_carlo_style(ax)
 
                 # Customize the chart
                 ax.set_title(
@@ -2743,6 +2746,9 @@ class OkamaFinanceBot:
             if current_fig.axes:
                 ax = current_fig.axes[0]  # Get the first (and usually only) axes
                 chart_styles.apply_base_style(current_fig, ax)
+                
+                # Apply Monte Carlo specific styles to make lines thinner
+                chart_styles.apply_monte_carlo_style(ax)
                 
                 # Customize the chart
                 ax.set_title(f'Прогноз с перцентилями\n{", ".join(symbols)}', 
