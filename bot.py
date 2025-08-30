@@ -2354,34 +2354,27 @@ class OkamaFinanceBot:
             self.logger.info(f"User context keys: {list(user_context.keys())}")
             self.logger.info(f"User context content: {user_context}")
             
-            # Try to get symbols from different possible keys
-            symbols = None
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
             self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
-            
-            if 'current_symbols' in user_context:
-                symbols = user_context['current_symbols']
-                self.logger.info(f"Found symbols in current_symbols: {symbols}")
-            elif 'last_assets' in user_context:
-                symbols = user_context['last_assets']
-                self.logger.info(f"Found symbols in last_assets: {symbols}")
-            else:
-                self.logger.warning(f"Neither current_symbols nor last_assets found in user context")
-                self.logger.warning(f"Available keys: {list(user_context.keys())}")
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
             currency = user_context.get('current_currency', 'USD')
             raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(symbols, raw_weights)
+            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
             
-            self.logger.info(f"Creating risk metrics for portfolio: {symbols}, currency: {currency}, weights: {weights}")
+            self.logger.info(f"Creating risk metrics for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
             
             # Create Portfolio again
             import okama as ok
-            portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
-            await self._create_risk_metrics_report(update, context, portfolio, symbols, currency)
+            await self._create_risk_metrics_report(update, context, portfolio, final_symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling risk metrics button: {e}")
@@ -2399,34 +2392,27 @@ class OkamaFinanceBot:
             self.logger.info(f"User context keys: {list(user_context.keys())}")
             self.logger.info(f"User context content: {user_context}")
             
-            # Try to get symbols from different possible keys
-            symbols = None
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
             self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
-            
-            if 'current_symbols' in user_context:
-                symbols = user_context['current_symbols']
-                self.logger.info(f"Found symbols in current_symbols: {symbols}")
-            elif 'last_assets' in user_context:
-                symbols = user_context['last_assets']
-                self.logger.info(f"Found symbols in last_assets: {symbols}")
-            else:
-                self.logger.warning(f"Neither current_symbols nor last_assets found in user context")
-                self.logger.warning(f"Available keys: {list(user_context.keys())}")
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
             currency = user_context.get('current_currency', 'USD')
             raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(symbols, raw_weights)
+            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
             
-            self.logger.info(f"Creating Monte Carlo forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
+            self.logger.info(f"Creating Monte Carlo forecast for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
             
             # Create Portfolio again
             import okama as ok
-            portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
-            await self._create_monte_carlo_forecast(update, context, portfolio, symbols, currency)
+            await self._create_monte_carlo_forecast(update, context, portfolio, final_symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling Monte Carlo button: {e}")
@@ -2444,34 +2430,27 @@ class OkamaFinanceBot:
             self.logger.info(f"User context keys: {list(user_context.keys())}")
             self.logger.info(f"User context content: {user_context}")
             
-            # Try to get symbols from different possible keys
-            symbols = None
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
             self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
-            
-            if 'current_symbols' in user_context:
-                symbols = user_context['current_symbols']
-                self.logger.info(f"Found symbols in current_symbols: {symbols}")
-            elif 'last_assets' in user_context:
-                symbols = user_context['last_assets']
-                self.logger.info(f"Found symbols in last_assets: {symbols}")
-            else:
-                self.logger.warning(f"Neither current_symbols nor last_assets found in user context")
-                self.logger.warning(f"Available keys: {list(user_context.keys())}")
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
             currency = user_context.get('current_currency', 'USD')
             raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(symbols, raw_weights)
+            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
             
-            self.logger.info(f"Creating forecast for portfolio: {symbols}, currency: {currency}, weights: {weights}")
+            self.logger.info(f"Creating forecast for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📈 Создаю прогноз с перцентилями...")
             
             # Create Portfolio again
             import okama as ok
-            portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
-            await self._create_forecast_chart(update, context, portfolio, symbols, currency)
+            await self._create_forecast_chart(update, context, portfolio, final_symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling forecast button: {e}")
