@@ -1939,13 +1939,44 @@ class OkamaFinanceBot:
                 currency = dividend_info.get('currency', '')
                 
                 if dividends:
-                    # Формируем краткую информацию о дивидендах
-                    dividend_response = f"💵 Дивиденды {symbol}\n\n"
-                    dividend_response += f"📊 Количество выплат: {len(dividends)}\n"
-                    dividend_response += f"💰 Валюта: {currency}\n"
-                    dividend_response += f"📈 График содержит таблицу последних выплат"
+                    # Формируем краткую информацию о дивидендах + текст последних выплат
+                    try:
+                        import pandas as pd
+                        dividend_series = pd.Series(dividends)
+                        recent = dividend_series.sort_index(ascending=False).head(10)
+                        payouts_lines = []
+                        for date, amount in recent.items():
+                            if hasattr(date, 'strftime'):
+                                formatted_date = date.strftime('%Y-%m-%d')
+                            else:
+                                formatted_date = str(date)[:10]
+                            try:
+                                amount_value = float(amount)
+                            except Exception:
+                                amount_value = amount
+                            payouts_lines.append(f"{formatted_date} — {amount_value:.2f} {currency}")
+                        payouts_text = "\n".join(payouts_lines)
+                    except Exception:
+                        # Fallback без pandas
+                        items = list(dividends.items())[-10:][::-1]
+                        payouts_lines = []
+                        for date, amount in items:
+                            formatted_date = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)[:10]
+                            try:
+                                amount_value = float(amount)
+                            except Exception:
+                                amount_value = amount
+                            payouts_lines.append(f"{formatted_date} — {amount_value:.2f} {currency}")
+                        payouts_text = "\n".join(payouts_lines)
+
+                    dividend_response = (
+                        f"💵 Дивиденды {symbol}\n\n"
+                        f"📊 Количество выплат: {len(dividends)}\n"
+                        f"💰 Валюта: {currency}\n\n"
+                        f"🗓️ Последние выплаты:\n{payouts_text}"
+                    )
                     
-                    # Получаем график дивидендов с таблицей
+                    # Получаем график дивидендов (без встроенной таблицы)
                     dividend_chart = await self._get_dividend_chart(symbol)
                     
                     if dividend_chart:
@@ -2033,7 +2064,7 @@ class OkamaFinanceBot:
             return None
 
     def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
-        """Создать график дивидендов с таблицей выплат на графике"""
+        """Создать график дивидендов без встроенной таблицы выплат"""
         try:
             import matplotlib.pyplot as plt
             import io
@@ -2078,55 +2109,8 @@ class OkamaFinanceBot:
                    verticalalignment='top', fontsize=10,
                    bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
             
-            # Создаем таблицу дивидендов в правой части графика
-            # Берем последние 10 выплат для таблицы
-            recent_dividends = dividend_series.tail(10).sort_index(ascending=False)
-            
-            # Создаем таблицу
-            table_data = []
-            table_headers = ['Дата', f'Сумма ({currency})']
-            
-            for date, amount in recent_dividends.items():
-                # Форматируем дату для лучшей читаемости
-                if hasattr(date, 'strftime'):
-                    formatted_date = date.strftime('%Y-%m-%d')
-                else:
-                    formatted_date = str(date)[:10]
-                table_data.append([formatted_date, f'{amount:.2f}'])
-            
-            # Добавляем таблицу на график
-            table = ax.table(cellText=table_data,
-                           colLabels=table_headers,
-                           cellLoc='center',
-                           loc='right',
-                           bbox=[0.65, 0.1, 0.3, 0.8])
-            
-            # Стилизуем таблицу
-            table.auto_set_font_size(False)
-            table.set_fontsize(9)
-            table.scale(1, 1.5)
-            
-            # Цвета для заголовков и ячеек
-            for i in range(len(table_headers)):
-                table[(0, i)].set_facecolor('#4CAF50')
-                table[(0, i)].set_text_props(weight='bold', color='white')
-            
-            # Цвета для строк данных (чередование)
-            for i in range(1, len(table_data) + 1):
-                for j in range(len(table_headers)):
-                    if i % 2 == 0:
-                        table[(i, j)].set_facecolor('#F5F5F5')
-                    else:
-                        table[(i, j)].set_facecolor('#FFFFFF')
-                    table[(i, j)].set_text_props(color='black')
-            
-            # Добавляем заголовок таблицы
-            ax.text(0.8, 0.95, 'Последние выплаты', transform=ax.transAxes,
-                   fontsize=12, fontweight='bold', ha='center',
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='#4CAF50', alpha=0.8))
-            
-            # Настраиваем layout
-            plt.subplots_adjust(right=0.85)
+            # Убираем таблицу с графика и используем стандартные отступы
+            plt.subplots_adjust(right=0.95)
             
             # Сохраняем в bytes
             output = io.BytesIO()
