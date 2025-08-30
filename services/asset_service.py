@@ -873,8 +873,17 @@ class AssetService:
             ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'])
             ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
             
-            # Format x-axis dates
-            fig.autofmt_xdate()
+            # Format x-axis dates properly
+            import matplotlib.dates as mdates
+            
+            # Set date formatter for x-axis
+            if hasattr(series_for_plot.index, 'dtype') and series_for_plot.index.dtype.kind in ['M', 'O']:
+                # For datetime data, format dates properly
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))  # Show every 3 months
+                
+                # Rotate x-axis labels for better readability
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
             
             # Add some statistics
             start_price = series_for_plot.iloc[0]
