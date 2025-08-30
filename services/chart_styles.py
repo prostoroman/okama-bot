@@ -20,117 +20,110 @@ class ChartStyles:
     """Класс для управления стилями графиков"""
     
     def __init__(self):
-        """Инициализация стилей"""
-        # Цветовая палитра
+        # Цветовая палитра (Nordic Pro)
         self.colors = {
-            'primary': '#1f77b4',      # Синий
-            'secondary': '#ff7f0e',    # Оранжевый
-            'success': '#2ca02c',      # Зеленый
-            'danger': '#d62728',       # Красный
-            'purple': '#9467bd',       # Фиолетовый
-            'brown': '#8c564b',        # Коричневый
-            'pink': '#e377c2',         # Розовый
-            'gray': '#7f7f7f',         # Серый
-            'olive': '#bcbd22',        # Оливковый
-            'cyan': '#17becf'          # Голубой
+            'primary':   '#005F73',   # глубокий морской синий
+            'secondary': '#0A9396',   # бирюзовый акцент
+            'success':   '#94D2BD',   # мягкий мятный
+            'danger':    '#AE2012',   # глубокий красный
+            'warning':   '#EE9B00',   # янтарный
+            'neutral':   '#E9ECEF',   # светло-серый фон
+            'text':      '#2E3440',   # строгий графитовый
+            'grid':      '#CBD5E1',   # светло-серые линии сетки
         }
         
-        # Настройки стиля
+        # Базовый стиль
         self.style_config = {
-            'style': 'fivethirtyeight',
-            'figsize': (14, 9),
-            'dpi': 150,
+            'style': 'seaborn-v0_8-whitegrid',
+            'figsize': (12, 7),
+            'dpi': 160,
             'facecolor': 'white',
             'edgecolor': 'none',
             'bbox_inches': 'tight'
         }
-        
-        # Настройки линий
+
+        # Линии
         self.line_config = {
-            'linewidth': 2.5,
-            'alpha': 0.9,
-            'smooth_points': 3000  # Увеличено количество точек для более плавного скругления
+            'linewidth': 2.2,
+            'alpha': 0.95,
+            'smooth_points': 2000
         }
-        
-        # Настройки для линий Монте-Карло
+
+        # Monte Carlo
         self.monte_carlo_config = {
-            'linewidth': 0.8,  # Тонкие линии для Монте-Карло
-            'alpha': 0.6,      # Прозрачность для лучшей видимости множественных линий
-            'color': '#1f77b4' # Цвет линий Монте-Карло
+            'linewidth': 0.6,
+            'alpha': 0.35,
+            'color': self.colors['primary']
         }
-        
-        # Настройки копирайта
+
+        # Копирайт
         self.copyright_config = {
-            'text': '© Цбот, data source: okama',
-            'fontsize': 12,
-            'color': 'grey',
-            'alpha': 0.7,
-            'position': (0.02, -0.25)
+            'text': '© Цбот Pro | Data source: okama',
+            'fontsize': 10,
+            'color': self.colors['text'],
+            'alpha': 0.55,
+            'position': (0.01, -0.18)
         }
-        
-        # Настройки заголовков
+
+        # Заголовки
         self.title_config = {
-            'fontsize': 16,
-            'fontweight': 'bold',
-            'pad': 20,
-            'color': '#2E3440'
+            'fontsize': 18,
+            'fontweight': 'semibold',
+            'pad': 18,
+            'color': self.colors['text']
         }
-        
-        # Настройки осей
+
+        # Оси
         self.axis_config = {
-            'label_fontsize': 13,
-            'label_fontweight': 'semibold',
-            'label_color': '#4C566A',
+            'label_fontsize': 12,
+            'label_fontweight': 'medium',
+            'label_color': self.colors['text'],
             'tick_fontsize': 10,
-            'tick_color': '#4C566A'
+            'tick_color': '#475569'
         }
-        
-        # Настройки сетки
+
+        # Сетка
         self.grid_config = {
-            'alpha': 0.2,
-            'linestyle': '-',
-            'linewidth': 0.8
+            'alpha': 0.15,
+            'linestyle': '--',
+            'linewidth': 0.8,
+            'color': self.colors['grid']
         }
-        
-        # Настройки рамок
+
+        # Рамки
         self.spine_config = {
-            'color': '#D1D5DB',
-            'linewidth': 0.8
+            'color': '#E2E8F0',
+            'linewidth': 1.0
         }
-        
-        # Настройки легенды
+
+        # Легенда
         self.legend_config = {
-            'fontsize': 11,
-            'frameon': True,
-            'fancybox': True,
-            'shadow': True,
-            'loc': 'upper left',
-            'bbox_to_anchor': (0.02, 0.98)
+            'fontsize': 10,
+            'frameon': False,
+            'loc': 'upper right'
         }
-    
+
     def apply_base_style(self, fig, ax):
-        """Применить базовый стиль к графику"""
+        """Применить базовый стиль"""
         try:
-            # Применяем стиль matplotlib
             plt.style.use(self.style_config['style'])
+            ax.set_facecolor(self.colors['neutral'])
             
-            # Настройка фона
-            ax.set_facecolor('#F8F9FA')
-            ax.set_alpha(0.95)
-            
-            # Настройка сетки
+            # Сетка
             ax.grid(True, **self.grid_config)
             
-            # Настройка рамок
-            for spine in ax.spines.values():
-                spine.set_color(self.spine_config['color'])
-                spine.set_linewidth(self.spine_config['linewidth'])
+            # Рамки — только снизу и слева (минимализм)
+            for spine in ['top', 'right']:
+                ax.spines[spine].set_visible(False)
+            for spine in ['left', 'bottom']:
+                ax.spines[spine].set_color(self.spine_config['color'])
+                ax.spines[spine].set_linewidth(self.spine_config['linewidth'])
             
-            # Настройка меток осей
+            # Тики
             ax.tick_params(axis='both', which='major', 
-                          labelsize=self.axis_config['tick_fontsize'], 
-                          colors=self.axis_config['tick_color'])
-            
+                           labelsize=self.axis_config['tick_fontsize'], 
+                           colors=self.axis_config['tick_color'])
+                
         except Exception as e:
             logger.error(f"Error applying base style: {e}")
     
