@@ -13,6 +13,7 @@ import io
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from .chart_styles import chart_styles
 
 logger = logging.getLogger(__name__)
 
@@ -761,21 +762,12 @@ class AssetService:
             if not charts:
                 return {'error': 'Не удалось создать ни одного графика'}
             
-            # Convert charts dictionary to list for consistent return format
-            charts_list = []
-            if 'adj_close' in charts:
-                charts_list.append(charts['adj_close'])
-            if 'close_monthly' in charts:
-                charts_list.append(charts['close_monthly'])
-            if 'fallback' in charts:
-                charts_list.append(charts['fallback'])
-            
-            # Prepare response data
+            # Prepare response data with charts as dictionary for better identification
             response_data = {
                 'symbol': symbol,
                 'currency': currency,
                 'period': period,
-                'charts': charts_list,  # List of chart bytes
+                'charts': charts,  # Keep as dictionary with chart types
                 'price_data': price_data_info
             }
             
