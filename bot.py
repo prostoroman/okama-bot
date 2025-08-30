@@ -700,13 +700,13 @@ class OkamaFinanceBot:
                 charts = price_history['charts']
                 # Приоритет: adj_close (ежедневные данные), затем fallback
                 if 'adj_close' in charts and charts['adj_close']:
-                    return self._add_copyright_to_chart(charts['adj_close'])
+                    return charts['adj_close']  # Копирайт уже добавлен в asset_service
                 elif 'fallback' in charts and charts['fallback']:
-                    return self._add_copyright_to_chart(charts['fallback'])
+                    return charts['fallback']  # Копирайт уже добавлен в asset_service
                 # Если нет ежедневных, берем первый доступный
                 for chart_type, chart_data in charts.items():
                     if chart_data:
-                        return self._add_copyright_to_chart(chart_data)
+                        return chart_data  # Копирайт уже добавлен в asset_service
             
             return None
             
@@ -1402,7 +1402,13 @@ class OkamaFinanceBot:
                 portfolio_text = f"📊 Портфель: {', '.join(symbols)}\n\n"
                 portfolio_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
                 portfolio_text += f"📅 Период: {portfolio.first_date} - {portfolio.last_date}\n"
-                portfolio_text += f"⏱️ Длительность: {portfolio.period_length}\n\n"
+                # Safely get period length
+                try:
+                    period_length = str(portfolio.period_length)
+                    portfolio_text += f"⏱️ Длительность: {period_length}\n\n"
+                except Exception as e:
+                    self.logger.warning(f"Could not get period length: {e}")
+                    portfolio_text += "⏱️ Длительность: недоступна\n\n"
                 
                 # Show portfolio table
                 portfolio_text += "📋 Состав портфеля:\n"
