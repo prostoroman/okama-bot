@@ -2444,7 +2444,7 @@ class OkamaFinanceBot:
             weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
             
             self.logger.info(f"Creating forecast for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "📈 Создаю прогноз с перцентилями...")
+            await self._send_callback_message(update, context, "📈 Создаю прогноз с процентилями...")
             
             # Create Portfolio again
             import okama as ok
@@ -2751,7 +2751,7 @@ class OkamaFinanceBot:
                 chart_styles.apply_monte_carlo_style(ax)
                 
                 # Customize the chart
-                ax.set_title(f'Прогноз с перцентилями\n{", ".join(symbols)}', 
+                ax.set_title(f'Прогноз с процентилями\n{", ".join(symbols)}', 
                            fontsize=chart_styles.title_config['fontsize'], 
                            fontweight=chart_styles.title_config['fontweight'], 
                            pad=chart_styles.title_config['pad'], 
@@ -2774,15 +2774,15 @@ class OkamaFinanceBot:
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(
-                    f"📈 Прогноз с перцентилями для портфеля: {', '.join(symbols)}\n\n"
+                    f"📈 Прогноз с процентилями для портфеля: {', '.join(symbols)}\n\n"
                     f"📊 Параметры:\n"
                     f"• Период: 5 лет\n"
                     f"• Начальная стоимость: 1000 {currency}\n"
-                    f"• Перцентили: 10%, 50%, 90%\n\n"
+                    f"• процентили: 10%, 50%, 90%\n\n"
                     f"💡 График показывает:\n"
-                    f"• 10% перцентиль: пессимистичный сценарий\n"
-                    f"• 50% перцентиль: средний сценарий\n"
-                    f"• 90% перцентиль: оптимистичный сценарий"
+                    f"• 10% процентиль: пессимистичный сценарий\n"
+                    f"• 50% процентиль: средний сценарий\n"
+                    f"• 90% процентиль: оптимистичный сценарий"
                 )
             )
             
