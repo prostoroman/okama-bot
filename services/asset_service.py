@@ -48,7 +48,7 @@ class AssetService:
 
         Supports:
         - Ticker in okama format (e.g., 'AAPL.US', 'SBER.MOEX')
-        - Plain ticker (e.g., 'AAPL') – returned uppercased as-is
+        - Plain ticker (e.g., 'AAPL') – automatically adds appropriate namespace
         - ISIN (e.g., 'US0378331005') – tries to resolve via MOEX ISS for Russian listings
 
         Returns dict: { 'symbol': str, 'type': 'ticker'|'isin', 'source': str }
@@ -90,11 +90,67 @@ class AssetService:
                         )
                     }
 
-            # Plain ticker without suffix – return upper-case; upstream may guess suffix
-            return { 'symbol': upper, 'type': 'ticker', 'source': 'plain' }
+            # Plain ticker without suffix – try to guess the appropriate namespace
+            guessed_symbol = self._guess_namespace(upper)
+            if guessed_symbol:
+                return { 'symbol': guessed_symbol, 'type': 'ticker', 'source': 'guessed' }
+            else:
+                return { 'symbol': upper, 'type': 'ticker', 'source': 'plain' }
 
         except Exception as e:
             return { 'error': f"Ошибка при разборе идентификатора: {str(e)}" }
+
+    def _guess_namespace(self, ticker: str) -> Optional[str]:
+        """
+        Guess the appropriate namespace for a plain ticker based on known patterns
+        """
+        # Common Russian stocks (MOEX)
+        russian_stocks = {
+            'SBER', 'GAZP', 'LKOH', 'GMKN', 'YNDX', 'MGNT', 'VTBR', 'ROSN', 'NVTK', 'TATN',
+            'SNGS', 'SNGSP', 'CHMF', 'PLZL', 'POLY', 'RUAL', 'RUALR', 'MTSS', 'MVID', 'OZON'
+        }
+        
+        # Common US stocks
+        us_stocks = {
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC',
+            'KO', 'DIS', 'MCD', 'SBUX', 'NKE', 'ADBE', 'CRM', 'VOO', 'SPY', 'QQQ', 'AGG'
+        }
+        
+        # Common indices
+        indices = {
+            'SPX', 'IXIC', 'DJI', 'RTSI', 'IMOEX', 'RGBITR', 'MCFTR'
+        }
+        
+        # Common commodities
+        commodities = {
+            'GC', 'SI', 'CL', 'BRENT', 'HG', 'ZC', 'ZS', 'ZW'
+        }
+        
+        # Common currencies
+        currencies = {
+            'EUR', 'USD', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD', 'RUB', 'CNY'
+        }
+        
+        # Common crypto
+        crypto = {
+            'BTC', 'ETH', 'XRP', 'ADA', 'DOT', 'LINK', 'LTC', 'BCH'
+        }
+        
+        if ticker in russian_stocks:
+            return f"{ticker}.MOEX"
+        elif ticker in us_stocks:
+            return f"{ticker}.US"
+        elif ticker in indices:
+            return f"{ticker}.INDX"
+        elif ticker in commodities:
+            return f"{ticker}.COMM"
+        elif ticker in currencies:
+            return f"{ticker}.FX"
+        elif ticker in crypto:
+            return f"{ticker}.CC"
+        
+        # If no match found, return None (will use plain ticker)
+        return None
 
     def _try_resolve_isin_via_moex(self, isin: str) -> Optional[str]:
         """
