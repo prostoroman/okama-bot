@@ -1389,10 +1389,19 @@ class OkamaFinanceBot:
                 currency_info = "по умолчанию (USD)"
             
             try:
+                # Final validation of weights before creating portfolio
+                final_total = sum(weights)
+                if abs(final_total - 1.0) > 0.001:
+                    await self._send_message_safe(update, 
+                        f"❌ Ошибка валидации весов: сумма {final_total:.6f} не равна 1.0\n"
+                        f"Веса: {', '.join([f'{w:.6f}' for w in weights])}"
+                    )
+                    return
+                
                 # Create Portfolio with detected currency
                 portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
                 
-                self.logger.info(f"Created Portfolio with weights: {weights}")
+                self.logger.info(f"Created Portfolio with weights: {weights}, total: {sum(weights):.6f}")
                 
                 # Generate beautiful portfolio chart
                 fig, ax = chart_styles.create_figure()
