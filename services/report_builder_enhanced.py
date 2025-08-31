@@ -166,7 +166,6 @@ class EnhancedReportBuilder:
         # 1. График изменения цен (если есть данные)
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty:
             try:
-                from services.chart_styles import chart_styles
                 
                 # Создаем график с двумя подграфиками
                 fig, (ax1, ax2) = chart_styles.create_standard_chart(figsize=(10, 8), style='fivethirtyeight')
