@@ -993,9 +993,11 @@ class OkamaFinanceBot:
                     for portfolio_symbol, portfolio_info in saved_portfolios.items():
                         symbols_str = ', '.join(portfolio_info['symbols'])
                         help_text += f"• `{portfolio_symbol}` - {symbols_str}\n"
+                    
                     help_text += "\n💡 Вы можете использовать символы портфелей в сравнении:\n"
                     help_text += "`/compare PORTFOLIO_1 SPY.US` - сравнить ваш портфель с S&P 500\n"
                     help_text += "`/compare PORTFOLIO_1 PORTFOLIO_2` - сравнить два ваших портфеля\n\n"
+                    help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
                 
                 help_text += "Примеры:\n"
                 help_text += "• `/compare SPY.US QQQ.US` - сравнить S&P 500 и NASDAQ (в USD)\n"
@@ -1227,35 +1229,63 @@ class OkamaFinanceBot:
                     # Create DataFrame from wealth data
                     wealth_df = pd.DataFrame(wealth_data)
                     
-                    # Generate beautiful comparison chart using chart_styles
-                    fig, ax = chart_styles.create_comparison_chart(
-                        data=wealth_df,
-                        symbols=symbols,
-                        currency=currency,
-                        figsize=(14, 9)
-                    )
+                    # Generate beautiful comparison chart
+                    plt.style.use('fivethirtyeight')
+                    fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
+                    
+                    # Plot with enhanced styling
+                    wealth_df.plot(ax=ax, linewidth=2.5, alpha=0.9)
                     
                 else:
                     # Regular assets only, use AssetList
                     asset_list = ok.AssetList(symbols, ccy=currency)
                     self.logger.info("Created AssetList with full available period")
                     
-                    # Generate beautiful comparison chart using chart_styles
-                    fig, ax = chart_styles.create_comparison_chart(
-                        data=asset_list.wealth_indexes,
-                        symbols=symbols,
-                        currency=currency,
-                        figsize=(14, 9)
-                    )
+                    # Generate beautiful comparison chart
+                    plt.style.use('fivethirtyeight')
+                    fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
+                    
+                    # Plot with enhanced styling
+                    asset_list.wealth_indexes.plot(ax=ax, linewidth=2.5, alpha=0.9)
+                
+                # Enhanced chart customization
+                ax.set_title(f'Накопленная доходность\n{", ".join(symbols)}', 
+                           fontsize=16, fontweight='bold', pad=20, color='#2E3440')
+
+                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
+                
+                # Enhanced grid and background
+                ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
+                ax.set_facecolor('#F8F9FA')
+                
+                # Enhanced legend
+                ax.legend(**chart_styles.legend_config)
+                
+                # Customize spines
+                for spine in ax.spines.values():
+                    spine.set_color('#D1D5DB')
+                    spine.set_linewidth(0.8)
+                
+                # Enhance tick labels
+                ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
+                
+                # Add subtle background pattern
+                ax.set_alpha(0.95)
+                
+                # Add copyright signature
+                chart_styles.add_copyright(ax)
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
-                chart_styles.save_figure(fig, img_buffer)
+                fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none')
                 img_buffer.seek(0)
                 img_bytes = img_buffer.getvalue()
                 
                 # Clear matplotlib cache to free memory
-                chart_styles.cleanup_figure(fig)
+                plt.close(fig)
+                plt.clf()
+                plt.cla()
                 
                 # Get basic statistics
                 stats_text = f"📊 Сравнение: {', '.join(symbols)}\n\n"
@@ -1354,6 +1384,82 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error in compare command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при выполнении команды сравнения: {str(e)}")
+
+    async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /my command for displaying saved portfolios"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            if not saved_portfolios:
+                await self._send_message_safe(update, 
+                    "💼 У вас пока нет сохраненных портфелей\n\n"
+                    "Создайте портфель командой:\n"
+                    "`/portfolio символ1:доля1 символ2:доля2 ...`\n\n"
+                    "Пример:\n"
+                    "`/portfolio SPY.US:0.6 QQQ.US:0.4`"
+                )
+                return
+            
+            # Create comprehensive portfolio list
+            portfolio_list = "💼 Ваши сохраненные портфели:\n\n"
+            
+            for portfolio_symbol, portfolio_info in saved_portfolios.items():
+                portfolio_list += f"🏷️ **{portfolio_symbol}**\n"
+                
+                # Basic info
+                symbols = portfolio_info.get('symbols', [])
+                weights = portfolio_info.get('weights', [])
+                currency = portfolio_info.get('currency', 'N/A')
+                created_at = portfolio_info.get('created_at', 'N/A')
+                
+                portfolio_list += f"📊 Состав: {', '.join(symbols)}\n"
+                
+                # Weights breakdown
+                if symbols and weights and len(symbols) == len(weights):
+                    portfolio_list += "💰 Доли:\n"
+                    for i, (symbol, weight) in enumerate(zip(symbols, weights)):
+                        portfolio_list += f"   • {symbol}: {weight:.1%}\n"
+                
+                portfolio_list += f"💱 Валюта: {currency}\n"
+                
+                # Performance metrics if available
+                if 'mean_return_annual' in portfolio_info:
+                    portfolio_list += f"📈 Годовая доходность: {portfolio_info['mean_return_annual']:.2%}\n"
+                if 'volatility_annual' in portfolio_info:
+                    portfolio_list += f"📉 Годовая волатильность: {portfolio_info['volatility_annual']:.2%}\n"
+                if 'sharpe_ratio' in portfolio_info:
+                    portfolio_list += f"⚡ Коэффициент Шарпа: {portfolio_info['sharpe_ratio']:.2f}\n"
+                
+                # Dates if available
+                if 'first_date' in portfolio_info and 'last_date' in portfolio_info:
+                    portfolio_list += f"📅 Период: {portfolio_info['first_date']} - {portfolio_info['last_date']}\n"
+                
+                # Final value if available
+                if 'final_value' in portfolio_info and portfolio_info['final_value'] is not None:
+                    portfolio_list += f"💵 Финальная стоимость: {portfolio_info['final_value']:.2f} {currency}\n"
+                
+                portfolio_list += f"🕐 Создан: {created_at}\n"
+                portfolio_list += "\n" + "─" * 40 + "\n\n"
+            
+            # Add usage instructions
+            portfolio_list += "💡 **Использование в сравнении:**\n"
+            portfolio_list += "• `/compare PORTFOLIO_1 SPY.US` - сравнить портфель с активом\n"
+            portfolio_list += "• `/compare PORTFOLIO_1 PORTFOLIO_2` - сравнить два портфеля\n"
+            portfolio_list += "• `/compare PORTFOLIO_1 SPY.US QQQ.US` - смешанное сравнение\n\n"
+            
+            portfolio_list += "🔧 **Управление:**\n"
+            portfolio_list += "• Портфели автоматически сохраняются при создании\n"
+            portfolio_list += "• Используйте символы для сравнения и анализа\n"
+            portfolio_list += "• Все данные сохраняются в контексте сессии"
+            
+            # Send the portfolio list
+            await self._send_message_safe(update, portfolio_list, parse_mode='Markdown')
+            
+        except Exception as e:
+            self.logger.error(f"Error in my portfolios command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при получении списка портфелей: {str(e)}")
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command for creating portfolio with weights"""
@@ -2384,13 +2490,43 @@ class OkamaFinanceBot:
             # Сортируем по дате
             dividend_series = dividend_series.sort_index()
             
-            # Создаем график дивидендов используя chart_styles
-            fig, ax = chart_styles.create_dividends_chart_enhanced(
-                data=dividend_series,
-                symbol=symbol,
-                currency=currency,
-                figsize=(14, 10)
-            )
+            # Создаем график с увеличенной высотой для таблицы
+            plt.style.use('fivethirtyeight')
+            fig, ax = plt.subplots(figsize=(14, 10))
+            
+            # Рисуем столбчатую диаграмму
+            dates = [pd.to_datetime(date) for date in dividend_series.index]
+            amounts = dividend_series.values
+            
+            bars = ax.bar(dates, amounts, color='#2E8B57', alpha=0.7, width=20)
+            
+            # Настройка графика
+            ax.set_title(f'Дивиденды {symbol}', fontsize=16, fontweight='bold', pad=20)
+
+            ax.set_ylabel(f'Сумма ({currency})', fontsize=12)
+            ax.grid(True, linestyle='--', alpha=0.3)
+            
+            # Форматирование оси X
+            fig.autofmt_xdate()
+            
+            # Добавляем статистику в левом верхнем углу
+            total_dividends = dividend_series.sum()
+            avg_dividend = dividend_series.mean()
+            max_dividend = dividend_series.max()
+            
+            stats_text = f'Общая сумма: {total_dividends:.2f} {currency}\n'
+            stats_text += f'Средняя выплата: {avg_dividend:.2f} {currency}\n'
+            stats_text += f'Максимальная выплата: {max_dividend:.2f} {currency}'
+            
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                   verticalalignment='top', fontsize=10,
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+            
+            # Убираем таблицу с графика и используем стандартные отступы
+            plt.subplots_adjust(right=0.95)
+            
+            # Добавляем копирайт к axes
+            chart_styles.add_copyright(ax)
             
             # Сохраняем в bytes
             output = io.BytesIO()
@@ -2433,12 +2569,19 @@ class OkamaFinanceBot:
                     formatted_date = str(date)[:10]
                 table_data.append([formatted_date, f'{amount:.2f}'])
             
-            # Создаем таблицу дивидендов используя chart_styles
-            fig, ax = chart_styles.create_dividend_table_chart(
-                table_data=table_data,
-                headers=table_headers,
-                figsize=(10, 8)
-            )
+            # Создаем фигуру для таблицы
+            fig, ax = plt.subplots(figsize=(10, 8))
+            ax.axis('tight')
+            ax.axis('off')
+            
+            # Создаем таблицу
+            table = ax.table(cellText=table_data,
+                           colLabels=table_headers,
+                           cellLoc='center',
+                           loc='center')
+            
+            # Добавляем копирайт к axes
+            chart_styles.add_copyright(ax)
             
             # Стилизуем таблицу
             table.auto_set_font_size(False)
@@ -3071,21 +3214,37 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating Monte Carlo forecast chart for portfolio: {symbols}")
             
-            # Generate Monte Carlo forecast using chart_styles
-            fig, ax = chart_styles.create_monte_carlo_chart(
-                data=portfolio.plot_forecast_monte_carlo(distr="norm", years=10, n=20),
-                symbols=symbols,
-                figsize=(14, 9)
-            )
+            # Generate Monte Carlo forecast (okama creates the figure)
+            forecast_data = portfolio.plot_forecast_monte_carlo(distr="norm", years=10, n=20)
+
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                
+                # Apply Monte Carlo specific styles to make lines thinner
+                chart_styles.apply_monte_carlo_style(ax)
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Прогноз Monte Carlo\n{", ".join(symbols)}',
+                    ylabel='Накопленная доходность',
+                    grid=True,
+                    legend=True,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
+            current_fig.savefig(img_buffer, format='PNG', dpi=300, bbox_inches='tight')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(fig)
+            plt.close(current_fig)
             
             # Send the chart
             await context.bot.send_photo(
@@ -3111,25 +3270,47 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating forecast chart with percentiles for portfolio: {symbols}")
             
-            # Generate forecast chart using chart_styles
-            fig, ax = chart_styles.create_percentile_chart(
-                data=portfolio.plot_forecast(
-                    years=10, 
-                    today_value=1000, 
-                    percentiles=[10, 50, 90]
-                ),
-                symbols=symbols,
-                figsize=(14, 9)
+            # Generate forecast chart using okama
+            # y.plot_forecast(years=10, today_value=1000, percentiles=[10, 50, 90])
+            forecast_data = portfolio.plot_forecast(
+                years=10, 
+                today_value=1000, 
+                percentiles=[10, 50, 90]
             )
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]  # Get the first (and usually only) axes
+                
+                # Apply percentile specific styles to ensure colors match legend
+                chart_styles.apply_percentile_style(ax)
+                
+                # Force legend update to match the new colors
+                if ax.get_legend():
+                    ax.get_legend().remove()
+                ax.legend(**chart_styles.legend_config)
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Прогноз с процентилями\n{", ".join(symbols)}',
+                    ylabel='Накопленная доходность',
+                    grid=True,
+                    legend=True,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
+            current_fig.savefig(img_buffer, format='PNG', dpi=300, bbox_inches='tight')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(fig)
+            plt.close(current_fig)
             
             # Send the chart
             await context.bot.send_photo(
@@ -3197,21 +3378,34 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio drawdowns chart for portfolio: {symbols}")
             
-            # Generate drawdowns chart using chart_styles
-            fig, ax = chart_styles.create_portfolio_drawdowns_chart(
-                data=portfolio.drawdowns,
-                symbols=symbols,
-                currency=currency,
-                figsize=(14, 9)
-            )
+            # Generate drawdowns chart using okama
+            # portfolio.drawdowns.plot()
+            drawdowns_data = portfolio.drawdowns.plot()
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Просадки портфеля\n{", ".join(symbols)}',
+                    ylabel='Просадка (%)',
+                    grid=True,
+                    legend=False,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.save_figure(current_fig, img_buffer)
             img_buffer.seek(0)
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(fig)
+            chart_styles.cleanup_figure(current_fig)
             
             # Get drawdowns statistics
             try:
@@ -3228,7 +3422,7 @@ class OkamaFinanceBot:
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
                 
                 # Add largest drawdowns
-                caption += f"📉 Cамые глубокие просадки:\n"
+                caption += f"📉 5 самых больших просадок:\n"
                 for i, (date, drawdown) in enumerate(largest_drawdowns.items(), 1):
                     date_str = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)
                     drawdown_pct = drawdown * 100
@@ -3307,21 +3501,34 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio returns chart for portfolio: {symbols}")
             
-            # Generate annual returns chart using chart_styles
-            fig, ax = chart_styles.create_portfolio_returns_chart(
-                data=portfolio.annual_return_ts,
-                symbols=symbols,
-                currency=currency,
-                figsize=(14, 9)
-            )
+            # Generate annual returns chart using okama
+            # portfolio.annual_return_ts.plot(kind="bar")
+            returns_data = portfolio.annual_return_ts.plot(kind="bar")
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Годовая доходность портфеля\n{", ".join(symbols)}',
+                    ylabel='Доходность (%)',
+                    grid=True,
+                    legend=False,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.save_figure(current_fig, img_buffer)
             img_buffer.seek(0)
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(fig)
+            chart_styles.cleanup_figure(current_fig)
             
             # Get returns statistics
             try:
@@ -3422,21 +3629,34 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio rolling CAGR chart for portfolio: {symbols}")
             
-            # Generate rolling CAGR chart using chart_styles
-            fig, ax = chart_styles.create_portfolio_rolling_cagr_chart(
-                data=portfolio.get_rolling_cagr(),
-                symbols=symbols,
-                currency=currency,
-                figsize=(14, 9)
-            )
+            # Generate rolling CAGR chart using okama
+            # portfolio.get_rolling_cagr().plot()  # Uses MAX period (entire available data)
+            rolling_cagr_data = portfolio.get_rolling_cagr().plot()  # MAX period rolling window
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Rolling CAGR \n{", ".join(symbols)}',
+                    ylabel='CAGR (%)',
+                    grid=True,
+                    legend=False,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.save_figure(current_fig, img_buffer)
             img_buffer.seek(0)
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(fig)
+            chart_styles.cleanup_figure(current_fig)
             
             # Get rolling CAGR statistics
             try:
@@ -3542,34 +3762,47 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio compare assets chart for portfolio: {symbols}")
             
-            # Generate wealth index with assets chart using chart_styles
-            fig, ax = chart_styles.create_portfolio_top30_excel_chart(
-                data=portfolio.wealth_index_with_assets,
-                symbols=symbols,
-                currency=currency,
-                figsize=(14, 9)
-            )
+            # Generate wealth index with assets chart using okama
+            # portfolio.wealth_index_with_assets.plot()
+            compare_data = portfolio.wealth_index_with_assets.plot()
             
-            # Customize line styles: portfolio line thicker, asset lines thinner
-            lines = ax.get_lines()
-            if len(lines) > 0:
-                # First line is usually the portfolio (combined)
-                if len(lines) >= 1:
-                    lines[0].set_linewidth(3.0)  # Portfolio line thicker
-                    lines[0].set_alpha(1.0)      # Full opacity
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
                 
-                # Asset lines are thinner
-                for i in range(1, len(lines)):
-                    lines[i].set_linewidth(1.5)  # Asset lines thinner
-                    lines[i].set_alpha(0.8)      # Slightly transparent
+                # Customize line styles: portfolio line thicker, asset lines thinner
+                lines = ax.get_lines()
+                if len(lines) > 0:
+                    # First line is usually the portfolio (combined)
+                    if len(lines) >= 1:
+                        lines[0].set_linewidth(3.0)  # Portfolio line thicker
+                        lines[0].set_alpha(1.0)      # Full opacity
+                    
+                    # Asset lines are thinner
+                    for i in range(1, len(lines)):
+                        lines[i].set_linewidth(1.5)  # Asset lines thinner
+                        lines[i].set_alpha(0.8)      # Slightly transparent
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Портфель vs Активы\n{", ".join(symbols)}',
+                    ylabel='Накопленная доходность',
+                    grid=True,
+                    legend=True,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.save_figure(current_fig, img_buffer)
             img_buffer.seek(0)
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(fig)
+            chart_styles.cleanup_figure(current_fig)
             
             # Get portfolio comparison statistics
             try:
