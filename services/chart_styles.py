@@ -9,6 +9,7 @@ Chart Styles Module
 """
 
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 from scipy.interpolate import make_interp_spline
 import logging
@@ -21,66 +22,82 @@ class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
-        # Цветовая палитра (Nordic Pro)
+        # Настройки шрифта IBM Plex Sans
+        mpl.rcParams.update({
+            'font.family': 'IBM Plex Sans',
+            'font.weight': 'medium',
+            'axes.titleweight': 'semibold',
+            'axes.labelweight': 'medium',
+            'figure.titlesize': 16,
+            'axes.titlesize': 14,
+            'axes.labelsize': 12,
+            'xtick.labelsize': 10,
+            'ytick.labelsize': 10,
+            'legend.title_fontsize': 11,
+            'legend.fontsize': 10,
+            'axes.edgecolor': '#2E3440',
+            'axes.linewidth': 1.1,
+            'grid.color': '#CBD5E1',
+            'grid.linewidth': 0.7,
+            'grid.alpha': 0.25,
+        })
+        # Цветовая палитра (Nordic Premium)
         self.colors = {
-            'primary': '#005F73',   # глубокий морской синий
+            'primary':   '#004B6B',   # глубокий премиум-синий
             'secondary': '#0A9396',   # бирюзовый акцент
-            'success': '#94D2BD',   # мягкий мятный
-            'danger': '#AE2012',   # глубокий красный
-            'warning': '#EE9B00',   # янтарный
-            'neutral': '#E9ECEF',   # светло-серый фон
-            'text': '#2E3440',   # строгий графитовый
-            'grid': '#CBD5E1',   # светло-серые линии сетки
+            'success':   '#5FA777',   # благородный зеленый
+            'danger':    '#B3261E',   # строгий красный
+            'warning':   '#E6A500',   # тёплый янтарный
+            'neutral':   '#F8FAFC',   # почти белый фон
+            'text':      '#1E293B',   # графитовый текст
+            'text_sub':  '#64748B',   # серо-стальной второстепенный
+            'grid':      '#D0D7DE',   # серебристая сетка
         }
-        
+
         # Базовый стиль
         self.style_config = {
-            'style': 'seaborn-v0_8-whitegrid',
-            'figsize': (12, 7),
-            'dpi': 160,
-            'facecolor': 'white',
+            'style': 'seaborn-v0_8-white',
+            'figsize': (13, 7.5),
+            'dpi': 170,
+            'facecolor': self.colors['neutral'],
             'edgecolor': 'none',
             'bbox_inches': 'tight'
         }
 
         # Линии
         self.line_config = {
-            'linewidth': 2.2,
+            'linewidth': 2.6,
             'alpha': 0.95,
-            'smooth_points': 2000
+            'smooth_points': 2500
         }
 
-        # Monte Carlo
+        # Monte Carlo (строже, премиум оттенки)
         self.monte_carlo_config = {
-            'main_linewidth': 3.0,        # основная линия графика - плотная
-            'main_alpha': 0.95,           # основная линия - непрозрачная
-            'test_linewidth': 0.8,        # линии тестирования - тонкие
-            'test_alpha': 0.6,            # линии тестирования - полупрозрачные
+            'main_linewidth': 3.0,
+            'main_alpha': 0.95,
+            'test_linewidth': 0.7,
+            'test_alpha': 0.35,
             'test_colors': [
-                '#FF6B6B',    # яркий красный
-                '#4ECDC4',    # яркий бирюзовый
-                '#45B7D1',    # яркий синий
-                '#96CEB4',    # яркий зеленый
-                '#FFEAA7',    # яркий желтый
-                '#DDA0DD',    # яркий пурпурный
-                '#98D8C8',    # яркий мятный
-                '#F7DC6F'     # яркий золотой
+                '#7D8597',   # стальной серый
+                '#5A7184',   # сине-серый
+                '#0A9396',   # акцентный бирюзовый
+                '#B3261E'    # строгий красный
             ]
         }
 
         # Копирайт
         self.copyright_config = {
             'text': '© shans.ai | data source: okama',
-            'fontsize': 10,
-            'color': self.colors['text'],
-            'alpha': 0.55,
-            'position': (0.01, -0.18)
+            'fontsize': 9,
+            'color': self.colors['text_sub'],
+            'alpha': 0.6,
+            'position': (0.01, -0.15)
         }
 
         # Заголовки
         self.title_config = {
-            'fontsize': 16,
-            'fontweight': 'semibold',
+            'fontsize': 20,
+            'fontweight': 'bold',
             'pad': 18,
             'color': self.colors['text']
         }
@@ -90,36 +107,37 @@ class ChartStyles:
             'fontsize': 12,
             'fontweight': 'medium',
             'color': self.colors['text'],
-            'label_fontsize': 12,
-            'label_fontweight': 'medium',
+            'label_fontsize': 13,
+            'label_fontweight': 'semibold',
             'label_color': self.colors['text'],
-            'tick_fontsize': 10,
-            'tick_color': self.colors['text']
+            'tick_fontsize': 11,
+            'tick_color': self.colors['text_sub']
         }
 
-        # Сетка
+        # Сетка (только Y, пунктир)
         self.grid_config = {
-            'alpha': 0.25,
-            'linestyle': '-',
-            'linewidth': 0.6,
+            'alpha': 0.2,
+            'linestyle': (0, (3, 3)),  # пунктир
+            'linewidth': 0.8,
             'color': self.colors['grid'],
             'zorder': 0
         }
 
-        # Рамки
+        # Рамки (только снизу и слева)
         self.spine_config = {
-            'color': '#E2E8F0',
-            'linewidth': 1.0
+            'color': self.colors['grid'],
+            'linewidth': 1.1
         }
 
-        # Легенда
+        # Легенда (премиум)
         self.legend_config = {
-            'fontsize': 10,
-            'frameon': True,
-            'fancybox': True,
-            'shadow': True,
-            'loc': 'upper left'
+            'fontsize': 11,
+            'frameon': False,
+            'loc': 'upper center',
+            'bbox_to_anchor': (0.5, 1.1),
+            'ncol': 3
         }
+
 
     def apply_base_style(self, fig, ax):
         """Применить базовый стиль"""

@@ -10,6 +10,7 @@ Chart Styles Module - Refactored Version
 """
 
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 from scipy.interpolate import make_interp_spline
 import logging
@@ -22,6 +23,25 @@ class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
+        # Настройки шрифта IBM Plex Sans
+        mpl.rcParams.update({
+            'font.family': 'IBM Plex Sans',
+            'font.weight': 'medium',
+            'axes.titleweight': 'semibold',
+            'axes.labelweight': 'medium',
+            'figure.titlesize': 16,
+            'axes.titlesize': 14,
+            'axes.labelsize': 12,
+            'xtick.labelsize': 10,
+            'ytick.labelsize': 10,
+            'legend.title_fontsize': 11,
+            'legend.fontsize': 10,
+            'axes.edgecolor': '#2E3440',
+            'axes.linewidth': 1.1,
+            'grid.color': '#CBD5E1',
+            'grid.linewidth': 0.7,
+            'grid.alpha': 0.25,
+        })
         # Цветовая палитра (Nordic Pro)
         self.colors = {
             'primary': '#005F73',   # глубокий морской синий
