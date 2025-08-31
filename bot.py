@@ -1657,8 +1657,8 @@ class OkamaFinanceBot:
                     self.logger.warning(f"Could not get final portfolio value: {e}")
                     portfolio_text += f"\n📈 Накопленная доходность портфеля: недоступна"
                 
-                # Create portfolio data string with weights for callback
-                portfolio_data_str = ','.join([f"{symbol}:{weight:.3f}" for symbol, weight in zip(symbols, weights)])
+                # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
+                portfolio_data_str = ','.join(symbols)
                 
                 # Add risk metrics, Monte Carlo, forecast, and drawdowns buttons
                 keyboard = [
@@ -1921,9 +1921,8 @@ class OkamaFinanceBot:
             self.logger.info(f"Processing callback data: {callback_data}")
             
             if callback_data.startswith('drawdowns_'):
-                portfolio_data_str = callback_data.replace('drawdowns_', '')
-                symbols, weights = self._parse_portfolio_data(portfolio_data_str)
-                self.logger.info(f"Drawdowns button clicked for portfolio: {symbols}, weights: {weights}")
+                symbols = callback_data.replace('drawdowns_', '').split(',')
+                self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
                 
                 # Check user context to determine which type of analysis this is
                 user_id = update.effective_user.id
@@ -1933,7 +1932,7 @@ class OkamaFinanceBot:
                 self.logger.info(f"Last analysis type: {last_analysis_type}")
                 
                 if last_analysis_type == 'portfolio':
-                    await self._handle_portfolio_drawdowns_button(update, context, symbols, weights)
+                    await self._handle_portfolio_drawdowns_button(update, context, symbols)
                 else:
                     await self._handle_drawdowns_button(update, context, symbols)
             elif callback_data.startswith('dividends_') and ',' in callback_data:
@@ -1955,31 +1954,26 @@ class OkamaFinanceBot:
                 self.logger.info(f"Dividends button clicked for symbol: {symbol}")
                 await self._handle_single_dividends_button(update, context, symbol)
             elif callback_data.startswith('risk_metrics_'):
-                portfolio_data_str = callback_data.replace('risk_metrics_', '')
-                symbols, weights = self._parse_portfolio_data(portfolio_data_str)
-                self.logger.info(f"Risk metrics button clicked for portfolio: {symbols}, weights: {weights}")
-                await self._handle_risk_metrics_button(update, context, symbols, weights)
+                symbols = callback_data.replace('risk_metrics_', '').split(',')
+                self.logger.info(f"Risk metrics button clicked for symbols: {symbols}")
+                await self._handle_risk_metrics_button(update, context, symbols)
             elif callback_data.startswith('monte_carlo_'):
-                portfolio_data_str = callback_data.replace('monte_carlo_', '')
-                symbols, weights = self._parse_portfolio_data(portfolio_data_str)
-                self.logger.info(f"Monte Carlo button clicked for portfolio: {symbols}, weights: {weights}")
-                await self._handle_monte_carlo_button(update, context, symbols, weights)
+                symbols = callback_data.replace('monte_carlo_', '').split(',')
+                self.logger.info(f"Monte Carlo button clicked for symbols: {symbols}")
+                await self._handle_monte_carlo_button(update, context, symbols)
             elif callback_data.startswith('forecast_'):
-                portfolio_data_str = callback_data.replace('forecast_', '')
-                symbols, weights = self._parse_portfolio_data(portfolio_data_str)
-                self.logger.info(f"Forecast button clicked for portfolio: {symbols}, weights: {weights}")
-                await self._handle_forecast_button(update, context, symbols, weights)
+                symbols = callback_data.replace('forecast_', '').split(',')
+                self.logger.info(f"Forecast button clicked for symbols: {symbols}")
+                await self._handle_forecast_button(update, context, symbols)
 
             elif callback_data.startswith('returns_'):
-                portfolio_data_str = callback_data.replace('returns_', '')
-                symbols, weights = self._parse_portfolio_data(portfolio_data_str)
-                self.logger.info(f"Returns button clicked for portfolio: {symbols}, weights: {weights}")
-                await self._handle_portfolio_returns_button(update, context, symbols, weights)
+                symbols = callback_data.replace('returns_', '').split(',')
+                self.logger.info(f"Returns button clicked for symbols: {symbols}")
+                await self._handle_portfolio_returns_button(update, context, symbols)
             elif callback_data.startswith('compare_assets_'):
-                portfolio_data_str = callback_data.replace('compare_assets_', '')
-                symbols, weights = self._parse_portfolio_data(portfolio_data_str)
-                self.logger.info(f"Compare assets button clicked for portfolio: {symbols}, weights: {weights}")
-                await self._handle_portfolio_compare_assets_button(update, context, symbols, weights)
+                symbols = callback_data.replace('compare_assets_', '').split(',')
+                self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
+                await self._handle_portfolio_compare_assets_button(update, context, symbols)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -2855,7 +2849,7 @@ class OkamaFinanceBot:
             self.logger.error(f"Error creating forecast chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика прогноза: {str(e)}")
 
-    async def _handle_portfolio_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, weights: list):
+    async def _handle_portfolio_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle portfolio drawdowns button click"""
         try:
             user_id = update.effective_user.id
