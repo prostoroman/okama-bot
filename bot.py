@@ -1045,11 +1045,21 @@ class OkamaFinanceBot:
                     # Handle cases like "SPY.US, QQQ.US" (comma + space)
                     symbol_part = symbol_part.strip()
                     if symbol_part:  # Only add non-empty symbols
-                        symbols.append(symbol_part.upper())
+                        # Preserve original case for portfolio symbols, uppercase for regular assets
+                        if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                            symbols.append(symbol_part)  # Keep original case for portfolios
+                        else:
+                            symbols.append(symbol_part.upper())  # Uppercase for regular assets
                 self.logger.info(f"Parsed comma-separated symbols: {symbols}")
             else:
                 # Handle space-separated symbols (original behavior)
-                symbols = [symbol.upper() for symbol in context.args]
+                symbols = []
+                for symbol in context.args:
+                    # Preserve original case for portfolio symbols, uppercase for regular assets
+                    if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                        symbols.append(symbol)  # Keep original case for portfolios
+                    else:
+                        symbols.append(symbol.upper())  # Uppercase for regular assets
                 self.logger.info(f"Parsed space-separated symbols: {symbols}")
             
             # Clean up symbols (remove empty strings and whitespace)
