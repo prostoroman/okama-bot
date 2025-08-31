@@ -1138,35 +1138,52 @@ class OkamaFinanceBot:
             first_symbol = symbols[0]
             currency_info = ""
             try:
-                # Try to get currency info for the first asset
-                if '.' in first_symbol:
-                    namespace = first_symbol.split('.')[1]
-                    if namespace == 'MOEX':
-                        currency = "RUB"  # Russian assets in RUB
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'US':
-                        currency = "USD"  # US assets in USD
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'LSE':
-                        currency = "GBP"  # London assets in GBP
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'FX':
-                        currency = "USD"  # Forex pairs in USD
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'COMM':
-                        currency = "USD"  # Commodities in USD
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'INDX':
-                        currency = "USD"  # Indices in USD
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                # Check if first symbol is a portfolio symbol
+                is_first_portfolio = (
+                    (first_symbol.startswith('PORTFOLIO_') or 
+                     first_symbol.startswith('PF_') or 
+                     first_symbol.startswith('portfolio_') or
+                     first_symbol.endswith('.PF') or
+                     first_symbol.endswith('.pf')) and 
+                    first_symbol in saved_portfolios
+                )
+                
+                if is_first_portfolio:
+                    # First symbol is a portfolio, use its currency
+                    portfolio_info = saved_portfolios[first_symbol]
+                    currency = portfolio_info.get('currency', 'USD')
+                    currency_info = f"автоматически определена по портфелю ({first_symbol})"
+                    self.logger.info(f"Using portfolio currency for {first_symbol}: {currency}")
+                else:
+                    # Try to get currency info for the first asset
+                    if '.' in first_symbol:
+                        namespace = first_symbol.split('.')[1]
+                        if namespace == 'MOEX':
+                            currency = "RUB"  # Russian assets in RUB
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'US':
+                            currency = "USD"  # US assets in USD
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'LSE':
+                            currency = "GBP"  # London assets in GBP
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'FX':
+                            currency = "USD"  # Forex pairs in USD
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'COMM':
+                            currency = "USD"  # Commodities in USD
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'INDX':
+                            currency = "USD"  # Indices in USD
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        else:
+                            currency = "USD"  # Default to USD
+                            currency_info = "по умолчанию (USD)"
                     else:
                         currency = "USD"  # Default to USD
                         currency_info = "по умолчанию (USD)"
-                else:
-                    currency = "USD"  # Default to USD
-                    currency_info = "по умолчанию (USD)"
-                
-                self.logger.info(f"Auto-detected currency for {first_symbol}: {currency}")
+                    
+                    self.logger.info(f"Auto-detected currency for {first_symbol}: {currency}")
                 
             except Exception as e:
                 self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
@@ -1232,9 +1249,12 @@ class OkamaFinanceBot:
                             try:
                                 # Use the currency from the portfolio if available, otherwise use detected currency
                                 asset_currency = currency
-                                if isinstance(expanded_symbols[0], pd.Series):
-                                    # First item is a portfolio, use its currency
-                                    # Find the portfolio symbol in the original symbols list
+                                
+                                # Check if we have any portfolios in the comparison
+                                has_portfolios_in_comparison = any(isinstance(s, pd.Series) for s in expanded_symbols)
+                                
+                                if has_portfolios_in_comparison:
+                                    # Find the first portfolio symbol to use its currency
                                     portfolio_symbol = None
                                     for j, orig_symbol in enumerate(symbols):
                                         if isinstance(expanded_symbols[j], pd.Series):
@@ -1244,6 +1264,14 @@ class OkamaFinanceBot:
                                     if portfolio_symbol and portfolio_symbol in saved_portfolios:
                                         portfolio_info = saved_portfolios[portfolio_symbol]
                                         asset_currency = portfolio_info.get('currency', currency)
+                                        self.logger.info(f"Using portfolio currency {asset_currency} for asset {symbol}")
+                                    else:
+                                        # Fallback to detected currency
+                                        asset_currency = currency
+                                        self.logger.info(f"Using detected currency {asset_currency} for asset {symbol}")
+                                else:
+                                    # No portfolios, use detected currency
+                                    asset_currency = currency
                                 
                                 asset = ok.Asset(symbol, ccy=asset_currency)
                                 wealth_data[symbols[i]] = asset.wealth_index
