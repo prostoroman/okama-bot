@@ -847,7 +847,7 @@ class ChartStyles:
     
     def create_price_chart(self, data, symbol, currency, period='', **kwargs):
         """
-        Создать стандартный график цен
+        Создать стандартный график цен с аннотацией и статистикой
         
         Args:
             data: данные цен
@@ -859,11 +859,22 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        return self._create_single_asset_chart(
+        fig, ax = self._create_single_asset_chart(
             data=data, symbol=symbol, currency=currency, 
             chart_type='Динамика цены', period=period, 
             ylabel_suffix='', legend=False, grid=True, **kwargs
         )
+        
+        # Добавляем аннотацию текущей цены
+        if hasattr(data, 'values') and len(data) > 0:
+            current_price = float(data.iloc[-1])
+            current_date = data.index[-1]
+            self._add_current_price_annotation(ax, current_price, current_date)
+            
+            # Добавляем статистику цен
+            self._add_price_statistics(ax, data.values)
+        
+        return fig, ax
     
     def create_dividends_chart(self, data, symbol, currency, **kwargs):
         """
@@ -1186,6 +1197,26 @@ class ChartStyles:
                            fontsize=10, verticalalignment='top', horizontalalignment='right',
                            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, 
                                    edgecolor=self.colors['grid'], linewidth=0.8))
+        except Exception:
+            pass
+    
+    def _add_current_price_annotation(self, ax, current_price, current_date):
+        """Добавить аннотацию текущей цены на график"""
+        try:
+            # Форматирование цены в зависимости от величины
+            if current_price >= 1000:
+                price_format = f'{current_price:.0f}'
+            elif current_price >= 100:
+                price_format = f'{current_price:.1f}'
+            else:
+                price_format = f'{current_price:.2f}'
+            
+            # Добавляем аннотацию текущей цены
+            ax.annotate(price_format, 
+                       xy=(current_date, current_price),
+                       xytext=(10, 10), textcoords='offset points',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                       fontsize=10, fontweight='bold')
         except Exception:
             pass
 
