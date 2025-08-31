@@ -580,6 +580,9 @@ class OkamaFinanceBot:
 • `/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации
 • `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель
 Базовая валюта опрелеляется по первому символу в списке.
+
+⚠️ Вся информация предоставляется исключительно в информационных целях и не является инвестиционными рекомендациями.
+
 """
 
         await self._send_message_safe(update, welcome_message)
@@ -828,13 +831,6 @@ class OkamaFinanceBot:
             # Модифицируем анализ, убирая рекомендации
             analysis_text = analysis['analysis']
             
-            # Убираем фразы о рекомендациях и заменяем на отказ от ответственности
-            analysis_text = analysis_text.replace('рекомендации', 'анализ')
-            analysis_text = analysis_text.replace('рекомендуем', 'анализируем')
-            analysis_text = analysis_text.replace('рекомендация', 'анализ')
-            
-            # Добавляем отказ от ответственности
-            analysis_text += "\n\n⚠️ Важно: Данный анализ предоставляется исключительно в информационных целях. Для принятия инвестиционных решений обратитесь к опытному финансовому профессионалу."
             
             return analysis_text
             
@@ -842,75 +838,11 @@ class OkamaFinanceBot:
             self.logger.error(f"Error getting AI analysis for {symbol}: {e}")
             return None
 
-    def _add_copyright_to_chart(self, chart_data: bytes) -> bytes:
-        """Добавить копирайт на график"""
-        try:
-            import matplotlib.pyplot as plt
-            import io
-            from PIL import Image, ImageDraw, ImageFont
-            
-            # Конвертируем bytes в PIL Image
-            img = Image.open(io.BytesIO(chart_data))
-            
-            # Создаем объект для рисования
-            draw = ImageDraw.Draw(img)
-            
-            # Получаем размеры изображения
-            width, height = img.size
-            
-            # Добавляем копирайт в правом нижнем углу
-            copyright_text = "© Okama Finance Bot"
-            
-            # Пытаемся использовать системный шрифт
-            try:
-                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 16)
-            except:
-                try:
-                    font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
-                except:
-                    font = ImageFont.load_default()
-            
-            # Получаем размер текста
-            bbox = draw.textbbox((0, 0), copyright_text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            
-            # Позиция текста (правый нижний угол с отступом)
-            x = width - text_width - 10
-            y = height - text_height - 10
-            
-            # Рисуем фон для текста
-            draw.rectangle([x-5, y-5, x+text_width+5, y+text_height+5], 
-                         fill='white', outline='black', width=1)
-            
-            # Рисуем текст
-            draw.text((x, y), copyright_text, fill='black', font=font)
-            
-            # Конвертируем обратно в bytes
-            output = io.BytesIO()
-            img.save(output, format='PNG')
-            output.seek(0)
-            
-            return output.getvalue()
-            
-        except Exception as e:
-            self.logger.error(f"Error adding copyright to chart: {e}")
-            # Возвращаем оригинальный график если не удалось добавить копирайт
-            return chart_data
+
 
     def _create_daily_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
         """Создать ежедневный график с централизованными стилями"""
         try:
-            import matplotlib.pyplot as plt
-            import io
-            import matplotlib.dates as mdates
-            
-            # Создаем фигуру с использованием chart_styles
-            fig, ax = chart_styles.create_figure(figsize=(12, 7))
-            
-            # Применяем базовый стиль
-            chart_styles.apply_base_style(fig, ax)
-            
             # Подготавливаем данные для графика
             if hasattr(prices, 'index') and hasattr(prices, 'values'):
                 dates = prices.index
@@ -929,57 +861,15 @@ class OkamaFinanceBot:
             except Exception:
                 pass
             
-            # Рисуем линию с закругленными углами
-            line = chart_styles.plot_smooth_line(ax, dates, values, 
-                                               color=chart_styles.colors['primary'],
-                                               label=f'{symbol} ({currency})')
-            
-            # Настраиваем заголовок и оси
-            ax.set_title(f'Ежедневный график: {symbol} (1 год)', 
-                        **chart_styles.title_config)
-            ax.set_xlabel('Дата', **chart_styles.axis_config)
-            ax.set_ylabel(f'Цена ({currency})', **chart_styles.axis_config)
-            
-            # Форматируем ось X для дат
-            if hasattr(dates, 'dtype') and dates.dtype.kind in ['M', 'O']:
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-            
-            # Добавляем статистику на график
-            if len(values) > 0:
-                try:
-                    current_price = float(values[-1])
-                    start_price = float(values[0])
-                    min_price = float(min(values))
-                    max_price = float(max(values))
-                    
-                    if start_price != 0:
-                        price_change = ((current_price - start_price) / start_price) * 100
-                        stats_text = f'Изменение: {price_change:+.2f}%\n'
-                        stats_text += f'Мин: {min_price:.2f}\n'
-                        stats_text += f'Макс: {max_price:.2f}'
-                        
-                        # Добавляем статистику в правый верхний угол с закругленными углами
-                        ax.text(0.98, 0.98, stats_text, transform=ax.transAxes,
-                               fontsize=10, verticalalignment='top', horizontalalignment='right',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, 
-                                       edgecolor=chart_styles.colors['grid'], linewidth=0.8))
-                except Exception:
-                    pass
-            
-            # Добавляем копирайт
-            chart_styles.add_copyright(ax)
-            
-            # Сохраняем график
-            img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
-            img_buffer.seek(0)
-            
-            # Очищаем память
-            chart_styles.cleanup_figure(fig)
-            
-            return img_buffer.getvalue()
+            # Используем универсальный метод создания графика
+            return chart_styles.create_price_chart(
+                symbol=symbol,
+                dates=dates,
+                values=values,
+                currency=currency,
+                chart_type='daily',
+                title_suffix='(1 год)'
+            )
             
         except Exception as e:
             self.logger.error(f"Error creating daily chart with styles for {symbol}: {e}")
@@ -988,16 +878,6 @@ class OkamaFinanceBot:
     def _create_monthly_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
         """Создать месячный график с централизованными стилями"""
         try:
-            import matplotlib.pyplot as plt
-            import io
-            import matplotlib.dates as mdates
-            
-            # Создаем фигуру с использованием chart_styles
-            fig, ax = chart_styles.create_figure(figsize=(12, 7))
-            
-            # Применяем базовый стиль
-            chart_styles.apply_base_style(fig, ax)
-            
             # Подготавливаем данные для графика
             if hasattr(prices, 'index') and hasattr(prices, 'values'):
                 dates = prices.index
@@ -1016,57 +896,15 @@ class OkamaFinanceBot:
             except Exception:
                 pass
             
-            # Рисуем линию с закругленными углами
-            line = chart_styles.plot_smooth_line(ax, dates, values, 
-                                               color=chart_styles.colors['secondary'],
-                                               label=f'{symbol} ({currency})')
-            
-            # Настраиваем заголовок и оси
-            ax.set_title(f'Месячный график: {symbol} (10 лет)', 
-                        **chart_styles.title_config)
-            ax.set_xlabel('Дата', **chart_styles.axis_config)
-            ax.set_ylabel(f'Цена ({currency})', **chart_styles.axis_config)
-            
-            # Форматируем ось X для дат
-            if hasattr(dates, 'dtype') and dates.dtype.kind in ['M', 'O']:
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-                ax.xaxis.set_major_locator(mdates.YearLocator(2))
-                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-            
-            # Добавляем статистику на график
-            if len(values) > 0:
-                try:
-                    current_price = float(values[-1])
-                    start_price = float(values[0])
-                    min_price = float(min(values))
-                    max_price = float(max(values))
-                    
-                    if start_price != 0:
-                        price_change = ((current_price - start_price) / start_price) * 100
-                        stats_text = f'Изменение: {price_change:+.2f}%\n'
-                        stats_text += f'Мин: {min_price:.2f}\n'
-                        stats_text += f'Макс: {max_price:.2f}'
-                        
-                        # Добавляем статистику в правый верхний угол с закругленными углами
-                        ax.text(0.98, 0.98, stats_text, transform=ax.transAxes,
-                               fontsize=10, verticalalignment='top', horizontalalignment='right',
-                               bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, 
-                                       edgecolor=chart_styles.colors['grid'], linewidth=0.8))
-                except Exception:
-                    pass
-            
-            # Добавляем копирайт
-            chart_styles.add_copyright(ax)
-            
-            # Сохраняем график
-            img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
-            img_buffer.seek(0)
-            
-            # Очищаем память
-            chart_styles.cleanup_figure(fig)
-            
-            return img_buffer.getvalue()
+            # Используем универсальный метод создания графика
+            return chart_styles.create_price_chart(
+                symbol=symbol,
+                dates=dates,
+                values=values,
+                currency=currency,
+                chart_type='monthly',
+                title_suffix='(10 лет)'
+            )
             
         except Exception as e:
             self.logger.error(f"Error creating monthly chart with styles for {symbol}: {e}")
@@ -2354,12 +2192,12 @@ class OkamaFinanceBot:
                 if 'close_monthly' in charts and charts['close_monthly']:
                     chart_data = charts['close_monthly']
                     if isinstance(chart_data, bytes) and len(chart_data) > 0:
-                        return self._add_copyright_to_chart(chart_data)
+                        return chart_styles.add_copyright_to_image(chart_data)
                 
                 for chart_key, chart_data in charts.items():
                     if chart_data and isinstance(chart_data, bytes) and len(chart_data) > 0:
                         self.logger.info(f"Using fallback chart: {chart_key} for {symbol}")
-                        return self._add_copyright_to_chart(chart_data)
+                        return chart_styles.add_copyright_to_image(chart_data)
             
             self.logger.warning(f"No valid charts found for {symbol}")
             return None
@@ -2404,7 +2242,7 @@ class OkamaFinanceBot:
             
             if dividend_table:
                 # Добавляем копирайт на изображение
-                return self._add_copyright_to_chart(dividend_table)
+                return chart_styles.add_copyright_to_image(dividend_table)
             
             return None
             
