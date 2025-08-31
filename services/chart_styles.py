@@ -1244,6 +1244,228 @@ class ChartStyles:
         
         return fig, ax
     
+    def create_price_volatility_chart(self, data, symbol, currency, **kwargs):
+        """
+        Создать стандартный график скользящей волатильности
+        
+        Args:
+            data: данные цен
+            symbol: символ актива
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Вычисляем скользящую волатильность
+        window_size = min(30, len(data) // 4)
+        rolling_vol = data.pct_change().rolling(window=window_size).std() * np.sqrt(252)
+        
+        # Рисуем график волатильности
+        ax.plot(rolling_vol.index, rolling_vol.values, color=self.colors['warning'], linewidth=1.5)
+        
+        # Применяем стандартные стили
+        title = f'Скользящая волатильность ({window_size} дней): {symbol}'
+        ylabel = 'Волатильность (годовая)'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=True, legend=False, copyright=True
+        )
+        
+        # Настройка для временных рядов
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
+    
+    def create_drawdowns_history_chart(self, data, symbol, **kwargs):
+        """
+        Создать стандартный график истории просадок
+        
+        Args:
+            data: данные цен
+            symbol: символ актива
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Вычисляем просадки
+        cummax = data.cummax()
+        drawdowns = (data - cummax) / cummax * 100
+        
+        # Рисуем график просадок
+        ax.fill_between(drawdowns.index, drawdowns.values, 0, color=self.colors['danger'], alpha=0.3)
+        ax.plot(drawdowns.index, drawdowns.values, color=self.colors['danger'], linewidth=1)
+        
+        # Применяем стандартные стили
+        title = f'История просадок: {symbol}'
+        ylabel = 'Просадка (%)'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=True, legend=False, copyright=True
+        )
+        
+        # Настройка для временных рядов
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
+    
+    def create_price_returns_comparison_chart(self, prices, returns, symbol, currency, **kwargs):
+        """
+        Создать стандартный график сравнения цен и доходности
+        
+        Args:
+            prices: данные цен
+            returns: данные доходности
+            symbol: символ актива
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax1, ax2) - фигура и две оси
+        """
+        fig, (ax1, ax2) = self.create_standard_chart(2, 1)
+        
+        # График цены
+        ax1.plot(prices.index, prices.values, color=self.colors['primary'], linewidth=2)
+        ax1.set_title(f'Динамика цены: {symbol}', **self.title_config)
+        ax1.set_ylabel(f'Цена ({currency})', **self.axis_config)
+        ax1.grid(True, **self.grid_config)
+        ax1.tick_params(axis='x', rotation=45)
+        
+        # График доходности
+        ax2.plot(returns.index, returns.values, color=self.colors['success'], linewidth=2)
+        ax2.set_title('Накопленная доходность', **self.title_config)
+        ax2.set_ylabel('Доходность (разы)', **self.axis_config)
+        ax2.grid(True, **self.grid_config)
+        ax2.tick_params(axis='x', rotation=45)
+        
+        # Применяем базовые стили
+        self.apply_base_style(fig, ax1)
+        self.apply_base_style(fig, ax2)
+        
+        # Добавляем копирайт
+        self.add_copyright(ax1)
+        self.add_copyright(ax2)
+        
+        # Настройка макета
+        fig.tight_layout()
+        
+        return fig, ax1, ax2
+    
+    def create_asset_comparison_chart(self, data, symbols, currency, **kwargs):
+        """
+        Создать стандартный график сравнения активов
+        
+        Args:
+            data: данные для сравнения (DataFrame с ценами активов)
+            symbols: список символов активов
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Рисуем данные для каждого актива
+        for i, symbol in enumerate(symbols):
+            if symbol in data.columns:
+                color = self.get_color(i)
+                ax.plot(data.index, data[symbol].values, 
+                       color=color, linewidth=1.5, alpha=0.8, label=symbol)
+        
+        # Применяем стандартные стили
+        title = f'Сравнение активов: {", ".join(symbols)}'
+        ylabel = f'Цена ({currency})' if currency else 'Цена'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=True, legend=True, copyright=True
+        )
+        
+        # Настройка для временных рядов
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
+    
+    def create_correlation_chart(self, correlation_matrix, **kwargs):
+        """
+        Создать стандартный график корреляции
+        
+        Args:
+            correlation_matrix: матрица корреляции
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Создаем тепловую карту корреляции
+        im = ax.imshow(correlation_matrix.values, cmap='RdYlBu_r', aspect='auto')
+        
+        # Применяем стандартные стили
+        title = 'Корреляция между активами'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel='', xlabel='', show_xlabel=False,
+            grid=False, legend=False, copyright=True
+        )
+        
+        # Настройка цветовой шкалы
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label('Корреляция')
+        
+        # Настройка меток осей
+        ax.set_xticks(range(len(correlation_matrix.columns)))
+        ax.set_yticks(range(len(correlation_matrix.index)))
+        ax.set_xticklabels(correlation_matrix.columns, rotation=45)
+        ax.set_yticklabels(correlation_matrix.index)
+        
+        return fig, ax
+    
+    def create_dividend_yield_history_chart(self, data, symbols, **kwargs):
+        """
+        Создать стандартный график истории дивидендной доходности
+        
+        Args:
+            data: данные дивидендной доходности
+            symbols: список символов активов
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Рисуем данные для каждого актива
+        for i, symbol in enumerate(symbols):
+            if symbol in data.columns:
+                color = self.get_color(i)
+                ax.plot(data.index, data[symbol].values, 
+                       color=color, linewidth=1.5, alpha=0.8, label=symbol)
+        
+        # Применяем стандартные стили
+        title = f'История дивидендной доходности: {", ".join(symbols)}'
+        ylabel = 'Дивидендная доходность (%)'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=True, legend=True, copyright=True
+        )
+        
+        # Настройка для временных рядов
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
+    
     def save_figure(self, fig, output_buffer, **kwargs):
         """Сохранить фигуру с настройками по умолчанию"""
         save_kwargs = {

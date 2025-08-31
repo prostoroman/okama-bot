@@ -1134,6 +1134,7 @@ class OkamaFinanceBot:
                         
                         self.logger.info(f"Expanded portfolio {symbol} with {len(portfolio_symbols)} assets")
                         self.logger.info(f"Portfolio currency: {portfolio_currency}, weights: {portfolio_weights}")
+                        self.logger.info(f"DEBUG: Added portfolio description: '{symbol} ({', '.join(portfolio_symbols)})'")
                         
                     except Exception as e:
                         self.logger.error(f"Error expanding portfolio {symbol}: {e}")
@@ -1146,6 +1147,12 @@ class OkamaFinanceBot:
             
             # Update symbols list with expanded portfolio descriptions
             symbols = portfolio_descriptions
+            
+            # Debug logging for symbols and expanded_symbols
+            self.logger.info(f"DEBUG: portfolio_descriptions: {portfolio_descriptions}")
+            self.logger.info(f"DEBUG: symbols after update: {symbols}")
+            self.logger.info(f"DEBUG: expanded_symbols types: {[type(s) for s in expanded_symbols]}")
+            self.logger.info(f"DEBUG: expanded_symbols values: {expanded_symbols}")
             
             await self._send_message_safe(update, f"🔄 Сравниваю активы: {', '.join(symbols)}...")
 
@@ -1261,15 +1268,26 @@ class OkamaFinanceBot:
                     
                     # Create custom wealth index DataFrame
                     wealth_data = {}
+                    
+                    # Debug logging for expanded_symbols
+                    self.logger.info(f"DEBUG: Processing expanded_symbols: {expanded_symbols}")
+                    self.logger.info(f"DEBUG: expanded_symbols types: {[type(s) for s in expanded_symbols]}")
+                    
                     for i, symbol in enumerate(expanded_symbols):
+                        self.logger.info(f"DEBUG: Processing index {i}: symbol='{symbol}' (type: {type(symbol)})")
+                        
                         if isinstance(symbol, pd.Series):
                             # Portfolio wealth index
+                            self.logger.info(f"DEBUG: Found portfolio Series at index {i}")
                             wealth_data[symbols[i]] = symbol
                         else:
                             # Regular asset, need to get its wealth index
+                            self.logger.info(f"DEBUG: Found regular asset at index {i}: '{symbol}'")
                             try:
                                 # Log the current symbol being processed
                                 self.logger.info(f"Processing regular asset: '{symbol}' from symbols[{i}] = '{symbols[i]}'")
+                                self.logger.info(f"DEBUG: symbol type: {type(symbol)}, symbol value: '{symbol}'")
+                                self.logger.info(f"DEBUG: symbols[{i}] type: {type(symbols[i])}, symbols[{i}] value: '{symbols[i]}'")
                                 
                                 # Use the currency from the portfolio if available, otherwise use detected currency
                                 asset_currency = currency
@@ -1302,6 +1320,7 @@ class OkamaFinanceBot:
                                 
                                 # Log the symbol being processed for debugging
                                 self.logger.info(f"Processing asset symbol: '{symbol}' with currency: {asset_currency}")
+                                self.logger.info(f"DEBUG: About to create Asset with symbol: '{symbol}'")
                                 
                                 # Validate symbol format before creating Asset
                                 if not symbol or symbol.strip() == '':
@@ -1322,6 +1341,7 @@ class OkamaFinanceBot:
                                     await self._send_message_safe(update, f"❌ Ошибка: символ не содержит разделитель пространства имен '{symbol}'")
                                     return
                                 
+                                self.logger.info(f"DEBUG: Symbol validation passed, creating Asset with: '{symbol}'")
                                 asset = ok.Asset(symbol, ccy=asset_currency)
                                 wealth_data[symbols[i]] = asset.wealth_index
                             except Exception as e:
