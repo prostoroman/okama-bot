@@ -1382,7 +1382,13 @@ class OkamaFinanceBot:
                         grid=True, legend=True, copyright=True
                     )
                 else:
-                    # Ensure copyright is added for single series chart
+                    # Clear existing plot and add single series with proper legend
+                    ax.clear()
+                    x_data = wealth_index.index
+                    y_portfolio = wealth_index.values if hasattr(wealth_index, 'values') else wealth_index
+                    chart_styles.plot_smooth_line(ax, x_data, y_portfolio, color='#2E5BBA', label=f'Портфель ({", ".join(symbols)})')
+                    
+                    # Reapply styling for single series with copyright
                     chart_styles.apply_standard_chart_styling(
                         ax, 
                         title=f'Накопленная доходность портфеля\n{", ".join(symbols)}',

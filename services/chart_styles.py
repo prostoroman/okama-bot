@@ -673,17 +673,17 @@ class ChartStyles:
         """
         fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
         
-        # Рисуем данные
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=2.5, alpha=0.9)
+        # Не рисуем данные здесь - они будут нарисованы в bot.py с правильными метками
+        # if hasattr(data, 'plot'):
+        #     data.plot(ax=ax, linewidth=2.5, alpha=0.9)
         
-        # Применяем стили
+        # Применяем базовые стили без легенды (легенда будет добавлена позже)
         title = f'Накопленная доходность портфеля\n{", ".join(symbols)}'
         ylabel = f'Накопленная доходность ({currency})'
         
         self.apply_standard_chart_styling(
             ax, title=title, ylabel=ylabel,
-            grid=True, legend=True, copyright=True
+            grid=True, legend=False, copyright=False  # Легенда и копирайт будут добавлены позже
         )
         
         return fig, ax
