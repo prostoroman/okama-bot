@@ -24,6 +24,9 @@ class Config:
     MAX_MESSAGE_LENGTH = 4096
     MAX_CAPTION_LENGTH = 1024
     
+    # Chart Style Configuration
+    CHART_STYLE = os.getenv('CHART_STYLE', 'nordic')  # 'nordic' or 'constructivist'
+    
     # Supported Commands
     SUPPORTED_COMMANDS = {
         '/start': 'Start the bot and get help',
