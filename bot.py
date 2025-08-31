@@ -1363,7 +1363,9 @@ class OkamaFinanceBot:
             for arg in raw_args.split():
                 if ':' in arg:
                     symbol_part, weight_part = arg.split(':', 1)
-                    symbol = symbol_part.strip().upper()
+                    original_symbol = symbol_part.strip()
+                    # Преобразуем символ в верхний регистр
+                    symbol = original_symbol.upper()
                     weight = float(weight_part.strip())
                     
                     if weight <= 0 or weight > 1:
@@ -1371,6 +1373,10 @@ class OkamaFinanceBot:
                         return
                     
                     portfolio_data.append((symbol, weight))
+                    
+                    # Уведомляем пользователя об исправлении символа
+                    if original_symbol != symbol:
+                        await self._send_message_safe(update, f"⚠️ Исправлен формат символа: {original_symbol} → {symbol}")
                 else:
                     await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
                     return
@@ -1382,7 +1388,26 @@ class OkamaFinanceBot:
             # Check if weights sum to approximately 1.0
             total_weight = sum(weight for _, weight in portfolio_data)
             if abs(total_weight - 1.0) > 0.01:
-                await self._send_message_safe(update, f"❌ Сумма долей должна быть равна 1.0, текущая сумма: {total_weight:.3f}")
+                # Предлагаем исправление, если сумма близка к 1
+                if abs(total_weight - 1.0) <= 0.1:
+                    corrected_weights = []
+                    for symbol, weight in portfolio_data:
+                        corrected_weight = weight / total_weight
+                        corrected_weights.append((symbol, corrected_weight))
+                    
+                    await self._send_message_safe(update, 
+                        f"⚠️ Сумма долей ({total_weight:.3f}) не равна 1.0\n\n"
+                        f"Исправленные доли:\n"
+                        f"{chr(10).join([f'• {symbol}: {weight:.3f}' for symbol, weight in corrected_weights])}\n\n"
+                        f"Попробуйте команду:\n"
+                        f"`/portfolio {' '.join([f'{symbol}:{weight:.3f}' for symbol, weight in corrected_weights])}`"
+                    )
+                else:
+                    await self._send_message_safe(update, 
+                        f"❌ Сумма долей должна быть равна 1.0, текущая сумма: {total_weight:.3f}\n\n"
+                        f"Пример правильной команды:\n"
+                        f"`/portfolio LQDT.MOEX:0.78 OBLG.MOEX:0.16 GOLD.MOEX:0.06`"
+                    )
                 return
             
             if len(portfolio_data) > 10:
