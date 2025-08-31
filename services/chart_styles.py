@@ -701,7 +701,7 @@ class ChartStyles:
         return fig, ax
     
     def _create_single_asset_chart(self, data, symbol, currency, chart_type, period='', 
-                                  ylabel_suffix='', legend=False, grid=True, **kwargs):
+                                  ylabel_suffix='', legend=True, grid=True, **kwargs):
         """
         Базовый метод для создания графиков с одним активом
         
@@ -1148,6 +1148,25 @@ class ChartStyles:
             data=data, symbols=symbols, currency=currency, 
             chart_type='Накопленная доходность портфеля', ylabel_suffix='', 
             legend=True, grid=True, **kwargs
+        )
+    
+    def create_portfolio_returns_chart(self, data, symbols, currency, **kwargs):
+        """
+        Создать стандартный график годовой доходности портфеля
+        
+        Args:
+            data: данные годовой доходности
+            symbols: список символов
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        return self._create_standard_bar_chart(
+            data=data, symbol=', '.join(symbols), currency=currency, 
+            chart_type='Годовая доходность портфеля', ylabel_suffix='(%)', 
+            legend=False, grid=True, **kwargs
         )
     
     def save_figure(self, fig, output_buffer, **kwargs):

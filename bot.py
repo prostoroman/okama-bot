@@ -1268,6 +1268,9 @@ class OkamaFinanceBot:
                         else:
                             # Regular asset, need to get its wealth index
                             try:
+                                # Log the current symbol being processed
+                                self.logger.info(f"Processing regular asset: '{symbol}' from symbols[{i}] = '{symbols[i]}'")
+                                
                                 # Use the currency from the portfolio if available, otherwise use detected currency
                                 asset_currency = currency
                                 
@@ -1282,6 +1285,7 @@ class OkamaFinanceBot:
                                             # Extract the original symbol from the description
                                             original_symbol = orig_symbol.split(' (')[0] if ' (' in orig_symbol else orig_symbol
                                             portfolio_symbol = original_symbol
+                                            self.logger.info(f"Found portfolio symbol: '{portfolio_symbol}' from description: '{orig_symbol}'")
                                             break
                                     
                                     if portfolio_symbol and portfolio_symbol in saved_portfolios:
@@ -1303,6 +1307,19 @@ class OkamaFinanceBot:
                                 if not symbol or symbol.strip() == '':
                                     self.logger.error(f"Empty or invalid symbol: '{symbol}'")
                                     await self._send_message_safe(update, f"❌ Ошибка: неверный символ актива '{symbol}'")
+                                    return
+                                
+                                # Check for invalid characters that indicate extraction error
+                                invalid_chars = ['(', ')', ',']
+                                if any(char in symbol for char in invalid_chars):
+                                    self.logger.error(f"Symbol contains invalid characters: '{symbol}' - extraction error detected")
+                                    await self._send_message_safe(update, f"❌ Ошибка: символ содержит недопустимые символы '{symbol}' - ошибка извлечения")
+                                    return
+                                
+                                # Check for proper symbol format (must contain namespace separator)
+                                if '.' not in symbol:
+                                    self.logger.error(f"Symbol missing namespace separator: '{symbol}'")
+                                    await self._send_message_safe(update, f"❌ Ошибка: символ не содержит разделитель пространства имен '{symbol}'")
                                     return
                                 
                                 asset = ok.Asset(symbol, ccy=asset_currency)
@@ -2691,9 +2708,20 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            currency = user_context.get('current_currency', 'USD')
-            raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating risk metrics for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
@@ -2729,9 +2757,20 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            currency = user_context.get('current_currency', 'USD')
-            raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating Monte Carlo forecast for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
@@ -2767,9 +2806,20 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            currency = user_context.get('current_currency', 'USD')
-            raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating forecast for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📈 Создаю прогноз с процентилями...")
@@ -3395,9 +3445,20 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            currency = user_context.get('current_currency', 'USD')
-            raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating drawdowns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📉 Создаю график просадок...")
@@ -3518,9 +3579,20 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            currency = user_context.get('current_currency', 'USD')
-            raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating returns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "💰 Создаю график доходности...")
@@ -3646,9 +3718,20 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            currency = user_context.get('current_currency', 'USD')
-            raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating rolling CAGR chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
@@ -3762,9 +3845,20 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
-            currency = user_context.get('current_currency', 'USD')
-            raw_weights = user_context.get('portfolio_weights', [])
-            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating compare assets chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
