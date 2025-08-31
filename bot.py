@@ -519,7 +519,7 @@ class OkamaFinanceBot:
             
             # Prepare data for display - show top 30 or all if less than 30
             display_count = min(30, total_symbols)
-            response += f"📋 Показываю топ-{display_count} символов:\n\n"
+            response += f"📋 Показываю первые {display_count}:\n\n"
             
             # Get top symbols (first 30 or all if less than 30)
             top_symbols = []
@@ -618,7 +618,6 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, "📈 Получаю ежедневный график...")
             
             try:
-                self.logger.info(f"Calling _get_daily_chart for {symbol}")
                 daily_chart = await self._get_daily_chart(symbol)
                 
                 self.logger.info(f"Daily chart result for {symbol}: {type(daily_chart)}")
@@ -626,10 +625,10 @@ class OkamaFinanceBot:
                     self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
                     # Формируем базовую информацию для подписи
                     caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                    caption += f"🏛️ Биржа: {asset_info.get('exchange', 'N/A')}\n"
-                    caption += f"🌍 Страна: {asset_info.get('country', 'N/A')}\n"
-                    caption += f"💰 Валюта: {asset_info.get('currency', 'N/A')}\n"
-                    caption += f"📈 Тип: {asset_info.get('type', 'N/A')}\n"
+                    caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                    caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                    caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                    caption += f"📈: {asset_info.get('type', 'N/A')}\n"
                     
                     if asset_info.get('current_price') is not None:
                         caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
@@ -639,8 +638,6 @@ class OkamaFinanceBot:
                     
                     if asset_info.get('volatility') != 'N/A':
                         caption += f"📉 Волатильность: {asset_info['volatility']}\n"
-                    
-                    caption += "\n🧠 AI-анализ:\n"
                     
                     # Получаем AI анализ
                     try:
@@ -685,7 +682,7 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график за 1 год с централизованными стилями и копирайтом"""
+        """Получить ежедневный график за 1 год"""
         try:
             # Получаем данные для ежедневного графика
             self.logger.info(f"Getting daily chart for {symbol}")
@@ -2066,12 +2063,14 @@ class OkamaFinanceBot:
                 if 'close_monthly' in charts and charts['close_monthly']:
                     chart_data = charts['close_monthly']
                     if isinstance(chart_data, bytes) and len(chart_data) > 0:
-                        return chart_styles.add_copyright_to_image(chart_data)
+                        # Копирайт уже добавлен в готовом изображении
+                        return chart_data
                 
                 for chart_key, chart_data in charts.items():
                     if chart_data and isinstance(chart_data, bytes) and len(chart_data) > 0:
                         self.logger.info(f"Using fallback chart: {chart_key} for {symbol}")
-                        return chart_styles.add_copyright_to_image(chart_data)
+                        # Копирайт уже добавлен в готовом изображении
+                        return chart_data
             
             self.logger.warning(f"No valid charts found for {symbol}")
             return None
@@ -2115,8 +2114,8 @@ class OkamaFinanceBot:
             dividend_table = self._create_dividend_table_image(symbol, dividend_info['dividends'], dividend_info.get('currency', ''))
             
             if dividend_table:
-                # Добавляем копирайт на изображение
-                return chart_styles.add_copyright_to_image(dividend_table)
+                # Копирайт уже добавлен в _create_dividend_table_image
+                return dividend_table
             
             return None
             
@@ -2173,6 +2172,9 @@ class OkamaFinanceBot:
             # Убираем таблицу с графика и используем стандартные отступы
             plt.subplots_adjust(right=0.95)
             
+            # Добавляем копирайт к axes
+            chart_styles.add_copyright(ax)
+            
             # Сохраняем в bytes
             output = io.BytesIO()
             fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
@@ -2224,6 +2226,9 @@ class OkamaFinanceBot:
                            colLabels=table_headers,
                            cellLoc='center',
                            loc='center')
+            
+            # Добавляем копирайт к axes
+            chart_styles.add_copyright(ax)
             
             # Стилизуем таблицу
             table.auto_set_font_size(False)

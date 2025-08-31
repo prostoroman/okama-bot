@@ -222,55 +222,7 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error adding copyright: {e}")
     
-    def add_copyright_to_image(self, chart_data: bytes) -> bytes:
-        """Добавить копирайт к готовому изображению (bytes)"""
-        try:
-            import matplotlib.pyplot as plt
-            import io
-            from PIL import Image, ImageDraw, ImageFont
-            
-            # Конвертируем bytes в PIL Image
-            img = Image.open(io.BytesIO(chart_data))
-            
-            # Создаем объект для рисования
-            draw = ImageDraw.Draw(img)
-            
-            # Получаем размеры изображения
-            width, height = img.size
-            
-            # Добавляем копирайт в правом нижнем углу
-            copyright_text = self.copyright_config['text']
-            
-            # Используем шрифт по умолчанию
-            font = ImageFont.load_default()
-            
-            # Получаем размер текста
-            bbox = draw.textbbox((0, 0), copyright_text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            
-            # Позиция текста (правый нижний угол с отступом)
-            x = width - text_width - 10
-            y = height - text_height - 10
-            
-            # Рисуем фон для текста
-            draw.rectangle([x-5, y-5, x+text_width+5, y+text_height+5], 
-                         fill='white', outline='black', width=1)
-            
-            # Рисуем текст
-            draw.text((x, y), copyright_text, fill='black', font=font)
-            
-            # Конвертируем обратно в bytes
-            output = io.BytesIO()
-            img.save(output, format='PNG')
-            output.seek(0)
-            
-            return output.getvalue()
-            
-        except Exception as e:
-            logger.error(f"Error adding copyright to image: {e}")
-            # Возвращаем оригинальный график если не удалось добавить копирайт
-            return chart_data
+
 
     
     def smooth_line_data(self, x_data, y_data, n_points=None):
@@ -761,7 +713,7 @@ class ChartStyles:
         
         # Применяем стили
         title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
-        ylabel = f'Цена ({currency})'
+        ylabel = f'{currency}'
         
         self.apply_standard_chart_styling(
             ax, title=title, ylabel=ylabel,
