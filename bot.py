@@ -1078,10 +1078,16 @@ class OkamaFinanceBot:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
+            # Log saved portfolios for debugging
+            self.logger.info(f"User {user_id} has {len(saved_portfolios)} saved portfolios: {list(saved_portfolios.keys())}")
+            
             expanded_symbols = []
             portfolio_descriptions = []
             
             for symbol in symbols:
+                # Log symbol being processed for debugging
+                self.logger.info(f"Processing symbol: '{symbol}'")
+                
                 # Check if this is a saved portfolio symbol (various formats)
                 is_portfolio = (
                     (symbol.startswith('PORTFOLIO_') or 
@@ -1091,6 +1097,8 @@ class OkamaFinanceBot:
                      symbol.endswith('.pf')) and 
                     symbol in saved_portfolios
                 )
+                
+                self.logger.info(f"Symbol '{symbol}' is_portfolio: {is_portfolio}, in saved_portfolios: {symbol in saved_portfolios}")
                 
                 if is_portfolio:
                     # This is a saved portfolio, expand it

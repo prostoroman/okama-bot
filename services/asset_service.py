@@ -379,7 +379,7 @@ class AssetService:
                         
                         fig, ax = chart_styles.create_price_chart(
                             series_for_plot, symbol, getattr(asset, "currency", ""), 
-                            period='monthly', figsize=(10, 4)
+                            period='monthly'
                         )
                         
                         # Save to buffer
@@ -663,7 +663,7 @@ class AssetService:
                         
                         fig, ax = chart_styles.create_price_chart(
                             series_for_plot, symbol, getattr(asset, "currency", ""), 
-                            figsize=(10, 4)
+                            period=''
                         )
                         
                         buf = io.BytesIO()
@@ -1125,6 +1125,7 @@ class AssetService:
             
             # Try to generate a dividends chart from the historical series if available
             try:
+                from services.chart_styles import chart_styles
                 series_for_plot = None
                 try:
                     import pandas as pd  # type: ignore
@@ -1159,17 +1160,15 @@ class AssetService:
                             series_for_plot.index = series_for_plot.index.to_timestamp()
                     except Exception:
                         pass
-                    plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    ax.bar(series_for_plot.index, series_for_plot.values, color='#2ca02c')
-                    ax.set_title(f'Дивиденды: {symbol}', fontsize=12)
-                    ax.set_ylabel(f'Сумма ({getattr(asset, "currency", "")})')
-                    ax.grid(True, axis='y', linestyle='--', alpha=0.3)
-                    fig.autofmt_xdate()
-                    fig.tight_layout()
+                    # Create standardized dividends chart using chart_styles
+                    fig, ax = chart_styles.create_dividends_chart(
+                        data=series_for_plot, symbol=symbol, currency=getattr(asset, "currency", "")
+                    )
+                    
+                    # Save chart using standardized method
                     buf = io.BytesIO()
-                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-                    plt.close(fig)
+                    chart_styles.save_figure(fig, buf)
+                    chart_styles.cleanup_figure(fig)
                     info['chart'] = buf.getvalue()
             except Exception:
                 # Silently ignore plotting errors
