@@ -548,6 +548,201 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error applying standard chart styling: {e}")
     
+    def _create_standard_line_chart(self, data, symbols, currency, chart_type, ylabel_suffix='', 
+                                   legend=True, grid=True, **kwargs):
+        """
+        Базовый метод для создания стандартных линейных графиков
+        
+        Args:
+            data: данные для графика
+            symbols: список символов
+            currency: валюта
+            chart_type: тип графика (для заголовка)
+            ylabel_suffix: суффикс для подписи оси Y
+            legend: показывать ли легенду
+            grid: показывать ли сетку
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Рисуем данные с стандартной толщиной линии
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
+        
+        # Формируем заголовок и подписи осей
+        title = f'{chart_type}\n{", ".join(symbols)}'
+        ylabel = f'{chart_type} ({currency})' if currency else f'{chart_type}'
+        if ylabel_suffix:
+            ylabel += f' {ylabel_suffix}'
+        
+        # Применяем стандартные стили
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=grid, legend=legend, copyright=True
+        )
+        
+        return fig, ax
+    
+    def _create_standard_bar_chart(self, data, symbol, currency, chart_type, ylabel_suffix='', 
+                                  legend=False, grid=True, **kwargs):
+        """
+        Базовый метод для создания стандартных столбчатых графиков
+        
+        Args:
+            data: данные для графика
+            symbol: символ актива
+            currency: валюта
+            chart_type: тип графика (для заголовка)
+            ylabel_suffix: суффикс для подписи оси Y
+            legend: показывать ли легенду
+            grid: показывать ли сетку
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Рисуем столбчатую диаграмму
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, kind='bar', color=self.colors['success'], alpha=0.8)
+        else:
+            ax.bar(data.index, data.values, color=self.colors['success'], alpha=0.8)
+        
+        # Формируем заголовок и подписи осей
+        title = f'{chart_type} {symbol}'
+        ylabel = f'{chart_type} ({currency})' if currency else f'{chart_type}'
+        if ylabel_suffix:
+            ylabel += f' {ylabel_suffix}'
+        
+        # Применяем стандартные стили
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=grid, legend=legend, copyright=True
+        )
+        
+        # Настройка для столбчатого графика
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
+    
+    def _create_standard_table_chart(self, table_data, headers, title, **kwargs):
+        """
+        Базовый метод для создания стандартных табличных графиков
+        
+        Args:
+            table_data: данные для таблицы
+            headers: заголовки столбцов
+            title: заголовок графика
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax, table) - фигура, оси и таблица
+        """
+        fig, ax = self.create_standard_chart()
+        
+        ax.axis('tight')
+        ax.axis('off')
+        
+        # Создаем таблицу
+        table = ax.table(cellText=table_data,
+                       colLabels=headers,
+                       cellLoc='center',
+                       loc='center')
+        
+        # Базовые стили таблицы
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1.2, 1.5)
+        
+        # Применяем стили
+        self.apply_standard_chart_styling(
+            ax, title=title,
+            grid=False, legend=False, copyright=True
+        )
+        
+        return fig, ax, table
+    
+    def _create_special_chart(self, data, symbols, chart_type, ylabel, 
+                             style_method=None, **kwargs):
+        """
+        Базовый метод для создания специальных графиков (Monte Carlo, процентили)
+        
+        Args:
+            data: данные для графика
+            symbols: список символов
+            chart_type: тип графика (для заголовка)
+            ylabel: подпись оси Y
+            style_method: метод для применения специальных стилей
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, alpha=0.6)
+        
+        # Применяем специальные стили, если указан метод
+        if style_method:
+            style_method(ax)
+        
+        # Применяем стандартные стили
+        title = f'{chart_type}\n{", ".join(symbols)}'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
+    
+    def _create_single_asset_chart(self, data, symbol, currency, chart_type, period='', 
+                                  ylabel_suffix='', legend=False, grid=True, **kwargs):
+        """
+        Базовый метод для создания графиков с одним активом
+        
+        Args:
+            data: данные для графика
+            symbol: символ актива
+            currency: валюта
+            chart_type: тип графика (для заголовка)
+            period: период (daily, monthly)
+            ylabel_suffix: суффикс для подписи оси Y
+            legend: показывать ли легенду
+            grid: показывать ли сетку
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Рисуем данные с стандартной толщиной линии
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, color=self.colors['primary'], linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
+        else:
+            ax.plot(data.index, data.values, color=self.colors['primary'], linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
+        
+        # Формируем заголовок и подписи осей
+        title = f'{chart_type}: {symbol} ({period})' if period else f'{chart_type}: {symbol}'
+        ylabel = f'{currency}' if currency else f'{chart_type}'
+        if ylabel_suffix:
+            ylabel += f' {ylabel_suffix}'
+        
+        # Применяем стандартные стили
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=grid, legend=legend, copyright=True
+        )
+        
+        return fig, ax
+    
     def create_drawdowns_chart(self, data, symbols, currency, **kwargs):
         """
         Создать стандартный график drawdowns
@@ -561,22 +756,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'История Drawdowns\n{", ".join(symbols)}'
-        ylabel = f'Drawdown ({currency})'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='История Drawdowns', ylabel_suffix='', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_dividend_yield_chart(self, data, symbols, **kwargs):
         """
@@ -590,22 +774,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Дивидендная доходность\n{", ".join(symbols)}'
-        ylabel = 'Дивидендная доходность (%)'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=None, 
+            chart_type='Дивидендная доходность', ylabel_suffix='(%)', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_correlation_matrix_chart(self, correlation_matrix, **kwargs):
         """
@@ -668,22 +841,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Не рисуем данные здесь - они будут нарисованы в bot.py с правильными метками
-        # if hasattr(data, 'plot'):
-        #     data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем базовые стили без легенды (легенда будет добавлена позже)
-        title = f'Накопленная доходность портфеля\n{", ".join(symbols)}'
-        ylabel = f'Накопленная доходность ({currency})'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=False, copyright=True  # Легенда и копирайт будут добавлены позже
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Накопленная доходность портфеля', ylabel_suffix='', 
+            legend=False, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_price_chart(self, data, symbol, currency, period='', **kwargs):
         """
@@ -699,24 +861,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, color=self.colors['primary'], linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        else:
-            ax.plot(data.index, data.values, color=self.colors['primary'], linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
-        ylabel = f'{currency}'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=False, copyright=True
+        return self._create_single_asset_chart(
+            data=data, symbol=symbol, currency=currency, 
+            chart_type='Динамика цены', period=period, 
+            ylabel_suffix='', legend=False, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_dividends_chart(self, data, symbol, currency, **kwargs):
         """
@@ -731,27 +880,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, kind='bar', color=self.colors['success'], alpha=0.8)
-        else:
-            ax.bar(data.index, data.values, color=self.colors['success'], alpha=0.8)
-        
-        # Применяем стили
-        title = f'Дивиденды {symbol}'
-        ylabel = f'Сумма ({currency})'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=False, copyright=True
+        return self._create_standard_bar_chart(
+            data=data, symbol=symbol, currency=currency, 
+            chart_type='Дивиденды', ylabel_suffix='', 
+            legend=False, grid=True, **kwargs
         )
-        
-        # Настройка для столбчатого графика
-        ax.tick_params(axis='x', rotation=45)
-        
-        return fig, ax
     
     def create_monte_carlo_chart(self, data, symbols, **kwargs):
         """
@@ -765,25 +898,12 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, alpha=0.6)
-        
-        # Применяем специальные стили Монте-Карло
-        self.apply_monte_carlo_style(ax)
-        
-        # Применяем стандартные стили
-        title = f'Прогноз Монте-Карло\n{", ".join(symbols)}'
-        ylabel = 'Накопленная доходность'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_special_chart(
+            data=data, symbols=symbols, 
+            chart_type='Прогноз Монте-Карло', 
+            ylabel='Накопленная доходность',
+            style_method=self.apply_monte_carlo_style, **kwargs
         )
-        
-        return fig, ax
     
     def create_percentile_chart(self, data, symbols, **kwargs):
         """
@@ -797,25 +917,12 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax)
-        
-        # Применяем специальные стили процентилей
-        self.apply_percentile_style(ax)
-        
-        # Применяем стандартные стили
-        title = f'Прогноз с процентилями\n{", ".join(symbols)}'
-        ylabel = 'Накопленная доходность'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_special_chart(
+            data=data, symbols=symbols, 
+            chart_type='Прогноз с процентилями', 
+            ylabel='Накопленная доходность',
+            style_method=self.apply_percentile_style, **kwargs
         )
-        
-        return fig, ax
     
     def create_comparison_chart(self, data, symbols, currency, **kwargs):
         """
@@ -830,22 +937,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Накопленная доходность\n{", ".join(symbols)}'
-        ylabel = f'Накопленная доходность ({currency})'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Накопленная доходность', ylabel_suffix='', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_dividends_chart_enhanced(self, data, symbol, currency, **kwargs):
         """
@@ -907,29 +1003,10 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax, table) - фигура, оси и таблица
         """
-        fig, ax = self.create_standard_chart()
-        
-        ax.axis('tight')
-        ax.axis('off')
-        
-        # Создаем таблицу
-        table = ax.table(cellText=table_data,
-                       colLabels=headers,
-                       cellLoc='center',
-                       loc='center')
-        
-        # Базовые стили таблицы
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1.2, 1.5)
-        
-        # Применяем стили
-        self.apply_standard_chart_styling(
-            ax, title='История дивидендов',
-            grid=False, legend=False, copyright=True
+        return self._create_standard_table_chart(
+            table_data=table_data, headers=headers, 
+            title='История дивидендов', **kwargs
         )
-        
-        return fig, ax, table
     
     def create_portfolio_drawdowns_chart(self, data, symbols, currency, **kwargs):
         """
@@ -944,22 +1021,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Просадки портфеля\n{", ".join(symbols)}'
-        ylabel = 'Просадка (%)'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=False, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Просадки портфеля', ylabel_suffix='(%)', 
+            legend=False, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_portfolio_returns_chart(self, data, symbols, currency, **kwargs):
         """
@@ -974,22 +1040,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Доходность портфеля\n{", ".join(symbols)}'
-        ylabel = f'Доходность ({currency})'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Доходность портфеля', ylabel_suffix='', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_portfolio_volatility_chart(self, data, symbols, currency, **kwargs):
         """
@@ -1004,22 +1059,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Волатильность портфеля\n{", ".join(symbols)}'
-        ylabel = 'Волатильность (%)'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Волатильность портфеля', ylabel_suffix='(%)', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_portfolio_sharpe_chart(self, data, symbols, currency, **kwargs):
         """
@@ -1034,22 +1078,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Коэффициент Шарпа портфеля\n{", ".join(symbols)}'
-        ylabel = 'Коэффициент Шарпа'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Коэффициент Шарпа портфеля', ylabel_suffix='', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_portfolio_rolling_cagr_chart(self, data, symbols, currency, **kwargs):
         """
@@ -1064,22 +1097,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Скользящий CAGR портфеля\n{", ".join(symbols)}'
-        ylabel = 'CAGR (%)'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Скользящий CAGR портфеля', ylabel_suffix='(%)', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def create_portfolio_top30_excel_chart(self, data, symbols, currency, **kwargs):
         """
@@ -1094,22 +1116,11 @@ class ChartStyles:
         Returns:
             tuple: (fig, ax) - фигура и оси
         """
-        fig, ax = self.create_standard_chart()
-        
-        # Рисуем данные с стандартной толщиной линии
-        if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.line_config['linewidth'], alpha=self.line_config['alpha'])
-        
-        # Применяем стили
-        title = f'Top 30 Excel портфеля\n{", ".join(symbols)}'
-        ylabel = f'Доходность ({currency})'
-        
-        self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
-            grid=True, legend=True, copyright=True
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Top 30 Excel портфеля', ylabel_suffix='', 
+            legend=True, grid=True, **kwargs
         )
-        
-        return fig, ax
     
     def save_figure(self, fig, output_buffer, **kwargs):
         """Сохранить фигуру с настройками по умолчанию"""

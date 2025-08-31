@@ -996,7 +996,8 @@ class OkamaFinanceBot:
                     
                     help_text += "\n💡 Вы можете использовать символы портфелей в сравнении:\n"
                     help_text += "`/compare PF_1 SPY.US` - сравнить ваш портфель с S&P 500\n"
-                    help_text += "`/compare PF_1 PF_2` - сравнить два ваших портфеля\n\n"
+                    help_text += "`/compare PF_1 PF_2` - сравнить два ваших портфеля\n"
+                    help_text += "`/compare portfolio_123.PF SPY.US` - сравнить портфель с активом\n\n"
                     help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
                 
                 help_text += "Примеры:\n"
@@ -1071,7 +1072,17 @@ class OkamaFinanceBot:
             portfolio_descriptions = []
             
             for symbol in symbols:
-                if (symbol.startswith('PORTFOLIO_') or symbol.startswith('PF_')) and symbol in saved_portfolios:
+                # Check if this is a saved portfolio symbol (various formats)
+                is_portfolio = (
+                    (symbol.startswith('PORTFOLIO_') or 
+                     symbol.startswith('PF_') or 
+                     symbol.startswith('portfolio_') or
+                     symbol.endswith('.PF') or
+                     symbol.endswith('.pf')) and 
+                    symbol in saved_portfolios
+                )
+                
+                if is_portfolio:
                     # This is a saved portfolio, expand it
                     portfolio_info = saved_portfolios[symbol]
                     
@@ -1223,31 +1234,16 @@ class OkamaFinanceBot:
                                 asset_currency = currency
                                 if isinstance(expanded_symbols[0], pd.Series):
                                     # First item is a portfolio, use its currency
-                                    portfolio_info = saved_portfolios.get(symbols[0], {})
-                                    asset_currency = portfolio_info.get('currency', currency)
-                                
-                                asset = ok.Asset(symbol, ccy=asset_currency)
-                                wealth_data[symbols[i]] = asset.wealth_index
-                            except Exception as e:
-                                self.logger.error(f"Error getting wealth index for {symbol}: {e}")
-                                await self._send_message_safe(update, f"❌ Ошибка при получении данных для {symbol}: {str(e)}")
-                                return
-                    
-                    # Create custom wealth index DataFrame
-                    wealth_data = {}
-                    for i, symbol in enumerate(expanded_symbols):
-                        if isinstance(symbol, pd.Series):
-                            # Portfolio wealth index
-                            wealth_data[symbols[i]] = symbol
-                        else:
-                            # Regular asset, need to get its wealth index
-                            try:
-                                # Use the currency from the portfolio if available, otherwise use detected currency
-                                asset_currency = currency
-                                if isinstance(expanded_symbols[0], pd.Series):
-                                    # First item is a portfolio, use its currency
-                                    portfolio_info = saved_portfolios.get(symbols[0], {})
-                                    asset_currency = portfolio_info.get('currency', currency)
+                                    # Find the portfolio symbol in the original symbols list
+                                    portfolio_symbol = None
+                                    for j, orig_symbol in enumerate(symbols):
+                                        if isinstance(expanded_symbols[j], pd.Series):
+                                            portfolio_symbol = orig_symbol
+                                            break
+                                    
+                                    if portfolio_symbol and portfolio_symbol in saved_portfolios:
+                                        portfolio_info = saved_portfolios[portfolio_symbol]
+                                        asset_currency = portfolio_info.get('currency', currency)
                                 
                                 asset = ok.Asset(symbol, ccy=asset_currency)
                                 wealth_data[symbols[i]] = asset.wealth_index
@@ -1447,7 +1443,8 @@ class OkamaFinanceBot:
                 portfolio_list += "💡 **Использование в сравнении:**\n"
                 portfolio_list += "• `/compare PF_1 SPY.US` - сравнить портфель с активом\n"
                 portfolio_list += "• `/compare PF_1 PF_2` - сравнить два портфеля\n"
-                portfolio_list += "• `/compare PF_1 SPY.US QQQ.US` - смешанное сравнение\n\n"
+                portfolio_list += "• `/compare PF_1 SPY.US QQQ.US` - смешанное сравнение\n"
+                portfolio_list += "• `/compare portfolio_123.PF SPY.US` - сравнить портфель с активом\n\n"
                 
                 portfolio_list += "🔧 **Управление:**\n"
                 portfolio_list += "• Портфели автоматически сохраняются при создании\n"
