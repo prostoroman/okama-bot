@@ -1937,11 +1937,34 @@ class OkamaFinanceBot:
                     
                     # Portfolio performance metrics
                     if hasattr(portfolio, 'mean_return_annual'):
-                        portfolio_attributes['mean_return_annual'] = float(portfolio.mean_return_annual)
+                        try:
+                            value = portfolio.mean_return_annual
+                            if hasattr(value, 'to_timestamp'):
+                                value = value.to_timestamp()
+                            portfolio_attributes['mean_return_annual'] = float(value)
+                        except Exception as e:
+                            self.logger.warning(f"Could not convert mean_return_annual to float: {e}")
+                            portfolio_attributes['mean_return_annual'] = None
+                    
                     if hasattr(portfolio, 'volatility_annual'):
-                        portfolio_attributes['volatility_annual'] = float(portfolio.volatility_annual)
+                        try:
+                            value = portfolio.volatility_annual
+                            if hasattr(value, 'to_timestamp'):
+                                value = value.to_timestamp()
+                            portfolio_attributes['volatility_annual'] = float(value)
+                        except Exception as e:
+                            self.logger.warning(f"Could not convert volatility_annual to float: {e}")
+                            portfolio_attributes['volatility_annual'] = None
+                    
                     if hasattr(portfolio, 'sharpe_ratio'):
-                        portfolio_attributes['sharpe_ratio'] = float(portfolio.sharpe_ratio)
+                        try:
+                            value = portfolio.sharpe_ratio
+                            if hasattr(value, 'to_timestamp'):
+                                value = value.to_timestamp()
+                            portfolio_attributes['sharpe_ratio'] = float(value)
+                        except Exception as e:
+                            self.logger.warning(f"Could not convert sharpe_ratio to float: {e}")
+                            portfolio_attributes['sharpe_ratio'] = None
                     
                     # Portfolio dates
                     if hasattr(portfolio, 'first_date'):
