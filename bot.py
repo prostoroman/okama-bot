@@ -1891,12 +1891,16 @@ class OkamaFinanceBot:
                             else:
                                 final_value = str(final_value)
                     
+                    # Handle Timestamp objects and other datetime-like objects
+                    if hasattr(final_value, 'timestamp'):
+                        try:
+                            final_value = final_value.timestamp()
+                        except Exception:
+                            final_value = str(final_value)
+                    
                     # Convert to float safely
                     if isinstance(final_value, (int, float)):
                         final_value = float(final_value)
-                    elif hasattr(final_value, 'timestamp'):
-                        # If it's a datetime-like object with timestamp method
-                        final_value = float(final_value.timestamp())
                     else:
                         # Try to convert to string first, then to float
                         final_value_str = str(final_value)
