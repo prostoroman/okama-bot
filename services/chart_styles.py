@@ -546,7 +546,7 @@ class ChartStyles:
             return plt.subplots(figsize=figsize or self.style_config['figsize'])
     
     def apply_standard_chart_styling(self, ax, title=None, xlabel=None, ylabel=None, 
-                                   grid=True, legend=True, copyright=True, **kwargs):
+                                   grid=True, legend=True, copyright=True, show_xlabel=False, **kwargs):
         """
         Применить стандартные стили к графику
         
@@ -558,6 +558,7 @@ class ChartStyles:
             grid: показывать сетку
             legend: показывать легенду
             copyright: добавлять копирайт
+            show_xlabel: показывать подпись оси X (по умолчанию False)
             **kwargs: дополнительные параметры стилизации
         """
         try:
@@ -566,7 +567,7 @@ class ChartStyles:
                 ax.set_title(title, **self.title_config)
             
             # Подписи осей
-            if xlabel:
+            if xlabel and show_xlabel:
                 ax.set_xlabel(xlabel, **self.axis_config)
             if ylabel:
                 ax.set_ylabel(ylabel, **self.axis_config)
@@ -622,11 +623,10 @@ class ChartStyles:
         
         # Применяем стили
         title = f'История Drawdowns\n{", ".join(symbols)}'
-        xlabel = 'Дата'
         ylabel = f'Drawdown ({currency})'
         
         self.apply_standard_chart_styling(
-            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel,
             grid=True, legend=True, copyright=True
         )
         
@@ -653,11 +653,10 @@ class ChartStyles:
         
         # Применяем стили
         title = f'Дивидендная доходность\n{", ".join(symbols)}'
-        xlabel = 'Дата'
         ylabel = 'Дивидендная доходность (%)'
         
         self.apply_standard_chart_styling(
-            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel,
             grid=True, legend=True, copyright=True
         )
         
@@ -733,12 +732,11 @@ class ChartStyles:
             data.plot(ax=ax, linewidth=2.5, alpha=0.9)
         
         # Применяем стили
-        title = f'Накопленная доходность\n{", ".join(symbols)}'
-        xlabel = 'Дата'
+        title = f'Накопленная доходность портфеля\n{", ".join(symbols)}'
         ylabel = f'Накопленная доходность ({currency})'
         
         self.apply_standard_chart_styling(
-            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel,
             grid=True, legend=True, copyright=True
         )
         
@@ -769,11 +767,10 @@ class ChartStyles:
         
         # Применяем стили
         title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
-        xlabel = 'Дата'
         ylabel = f'Цена ({currency})'
         
         self.apply_standard_chart_styling(
-            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel,
             grid=True, legend=False, copyright=True
         )
         
@@ -803,11 +800,10 @@ class ChartStyles:
         
         # Применяем стили
         title = f'Дивиденды {symbol}'
-        xlabel = 'Дата'
         ylabel = f'Сумма ({currency})'
         
         self.apply_standard_chart_styling(
-            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel,
             grid=True, legend=False, copyright=True
         )
         
@@ -840,11 +836,10 @@ class ChartStyles:
         
         # Применяем стандартные стили
         title = f'Прогноз Монте-Карло\n{", ".join(symbols)}'
-        xlabel = 'Время'
         ylabel = 'Накопленная доходность'
         
         self.apply_standard_chart_styling(
-            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel,
             grid=True, legend=True, copyright=True
         )
         
@@ -874,11 +869,10 @@ class ChartStyles:
         
         # Применяем стандартные стили
         title = f'Прогноз с процентилями\n{", ".join(symbols)}'
-        xlabel = 'Время'
         ylabel = 'Накопленная доходность'
         
         self.apply_standard_chart_styling(
-            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel,
             grid=True, legend=True, copyright=True
         )
         
