@@ -86,11 +86,9 @@ class ChartStyles:
 
         # Оси
         self.axis_config = {
-            'label_fontsize': 12,
-            'label_fontweight': 'medium',
-            'label_color': self.colors['text'],
-            'tick_fontsize': 10,
-            'tick_color': '#475569'
+            'fontsize': 12,
+            'fontweight': 'medium',
+            'color': self.colors['text']
         }
 
         # Сетка
@@ -219,6 +217,61 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error adding copyright: {e}")
     
+    def add_copyright_to_image(self, chart_data: bytes) -> bytes:
+        """Добавить копирайт к готовому изображению (bytes)"""
+        try:
+            import matplotlib.pyplot as plt
+            import io
+            from PIL import Image, ImageDraw, ImageFont
+            
+            # Конвертируем bytes в PIL Image
+            img = Image.open(io.BytesIO(chart_data))
+            
+            # Создаем объект для рисования
+            draw = ImageDraw.Draw(img)
+            
+            # Получаем размеры изображения
+            width, height = img.size
+            
+            # Добавляем копирайт в правом нижнем углу
+            copyright_text = self.copyright_config['text']
+            
+            # Пытаемся использовать системный шрифт
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", self.copyright_config['fontsize'])
+            except:
+                try:
+                    font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", self.copyright_config['fontsize'])
+                except:
+                    font = ImageFont.load_default()
+            
+            # Получаем размер текста
+            bbox = draw.textbbox((0, 0), copyright_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            # Позиция текста (правый нижний угол с отступом)
+            x = width - text_width - 10
+            y = height - text_height - 10
+            
+            # Рисуем фон для текста
+            draw.rectangle([x-5, y-5, x+text_width+5, y+text_height+5], 
+                         fill='white', outline='black', width=1)
+            
+            # Рисуем текст
+            draw.text((x, y), copyright_text, fill='black', font=font)
+            
+            # Конвертируем обратно в bytes
+            output = io.BytesIO()
+            img.save(output, format='PNG')
+            output.seek(0)
+            
+            return output.getvalue()
+            
+        except Exception as e:
+            logger.error(f"Error adding copyright to image: {e}")
+            # Возвращаем оригинальный график если не удалось добавить копирайт
+            return chart_data
 
     
     def smooth_line_data(self, x_data, y_data, n_points=None):
@@ -481,6 +534,104 @@ class ChartStyles:
         """Получить цвет по индексу"""
         colors_list = list(self.colors.values())
         return colors_list[index % len(colors_list)]
+    
+    def create_price_chart(self, symbol: str, dates, values, currency: str, 
+                          chart_type: str = 'daily', title_suffix: str = '') -> bytes:
+        """
+        Создать график цен с унифицированными стилями
+        
+        Args:
+            symbol: символ актива
+            dates: даты
+            values: значения цен
+            currency: валюта
+            chart_type: тип графика ('daily' или 'monthly')
+            title_suffix: дополнительный текст в заголовке
+            
+        Returns:
+            bytes: изображение графика
+        """
+        try:
+            import matplotlib.pyplot as plt
+            import io
+            import matplotlib.dates as mdates
+            
+            # Создаем фигуру
+            fig, ax = self.create_figure(figsize=(12, 7))
+            
+            # Применяем базовый стиль
+            self.apply_base_style(fig, ax)
+            
+            # Выбираем цвет в зависимости от типа графика
+            line_color = self.colors['primary'] if chart_type == 'daily' else self.colors['secondary']
+            
+            # Рисуем линию
+            self.plot_smooth_line(ax, dates, values, 
+                                color=line_color,
+                                label=f'{symbol} ({currency})')
+            
+            # Настраиваем заголовок
+            title = f'{"Ежедневный" if chart_type == "daily" else "Месячный"} график: {symbol}'
+            if title_suffix:
+                title += f' {title_suffix}'
+            ax.set_title(title, **self.title_config)
+            
+            # Настраиваем оси
+            ax.set_xlabel('Дата', **self.axis_config)
+            ax.set_ylabel(f'Цена ({currency})', **self.axis_config)
+            
+            # Форматируем ось X для дат
+            if hasattr(dates, 'dtype') and dates.dtype.kind in ['M', 'O']:
+                if chart_type == 'daily':
+                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+                else:  # monthly
+                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+                    ax.xaxis.set_major_locator(mdates.YearLocator(2))
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            # Добавляем статистику
+            self._add_price_statistics(ax, values)
+            
+            # Добавляем копирайт
+            self.add_copyright(ax)
+            
+            # Сохраняем график
+            img_buffer = io.BytesIO()
+            self.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Очищаем память
+            self.cleanup_figure(fig)
+            
+            return img_buffer.getvalue()
+            
+        except Exception as e:
+            logger.error(f"Error creating price chart: {e}")
+            return None
+    
+    def _add_price_statistics(self, ax, values):
+        """Добавить статистику цен на график"""
+        try:
+            if len(values) > 0:
+                current_price = float(values[-1])
+                start_price = float(values[0])
+                min_price = float(min(values))
+                max_price = float(max(values))
+                
+                if start_price != 0:
+                    price_change = ((current_price - start_price) / start_price) * 100
+                    stats_text = f'Изменение: {price_change:+.2f}%\n'
+                    stats_text += f'Мин: {min_price:.2f}\n'
+                    stats_text += f'Макс: {max_price:.2f}'
+                    
+                    # Добавляем статистику в правый верхний угол
+                    ax.text(0.98, 0.98, stats_text, transform=ax.transAxes,
+                           fontsize=10, verticalalignment='top', horizontalalignment='right',
+                           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, 
+                                   edgecolor=self.colors['grid'], linewidth=0.8))
+        except Exception:
+            pass
 
 # Глобальный экземпляр для использования в других модулях
 def get_chart_styles():
