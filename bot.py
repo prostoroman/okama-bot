@@ -1456,7 +1456,13 @@ class OkamaFinanceBot:
                         for symbol in symbols:
                             if symbol in final_values:
                                 value = final_values[symbol]
-                                stats_text += f"• {symbol}: {value:.2f}\n"
+                                try:
+                                    # Safely convert value to float for formatting
+                                    value_float = self._safe_float_conversion(value)
+                                    stats_text += f"• {symbol}: {value_float:.2f}\n"
+                                except Exception as e:
+                                    self.logger.warning(f"Could not format value for {symbol}: {e}")
+                                    stats_text += f"• {symbol}: {value}\n"
                     except Exception as e:
                         self.logger.warning(f"Could not get portfolio statistics: {e}")
                         stats_text += "📅 Период: недоступен\n⏱️ Длительность: недоступна\n\n"
@@ -1479,7 +1485,13 @@ class OkamaFinanceBot:
                         for symbol in symbols:
                             if symbol in final_values:
                                 value = final_values[symbol]
-                                stats_text += f"• {symbol}: {value:.2f}\n"
+                                try:
+                                    # Safely convert value to float for formatting
+                                    value_float = self._safe_float_conversion(value)
+                                    stats_text += f"• {symbol}: {value_float:.2f}\n"
+                                except Exception as e:
+                                    self.logger.warning(f"Could not format value for {symbol}: {e}")
+                                    stats_text += f"• {symbol}: {value}\n"
                     except Exception as e:
                         self.logger.warning(f"Could not get final values: {e}")
                 
@@ -3220,7 +3232,7 @@ class OkamaFinanceBot:
                     risk_value = risk_annual.iloc[-1] if hasattr(risk_annual, 'iloc') else risk_annual
                 
                 if risk_value is not None:
-                    risk_pct = float(risk_value) * 100
+                    risk_pct = self._safe_float_conversion(risk_value) * 100
                     
                     if risk_pct <= 5:
                         risk_score += 0  # Очень низкий риск
@@ -3993,8 +4005,14 @@ class OkamaFinanceBot:
                 
                 # Add portfolio performance vs individual assets
                 portfolio_final = portfolio.wealth_index.iloc[-1]
-                caption += f"📈 Итоговые значения (накопленная доходность):\n"
-                caption += f"• Портфель: {portfolio_final:.2f}\n"
+                try:
+                    portfolio_final_float = self._safe_float_conversion(portfolio_final)
+                    caption += f"📈 Итоговые значения (накопленная доходность):\n"
+                    caption += f"• Портфель: {portfolio_final_float:.2f}\n"
+                except Exception as e:
+                    self.logger.warning(f"Could not format portfolio final value: {e}")
+                    caption += f"📈 Итоговые значения (накопленная доходность):\n"
+                    caption += f"• Портфель: {portfolio_final}\n"
                 
                 # Get individual asset final values
                 for symbol in symbols:
@@ -4022,7 +4040,12 @@ class OkamaFinanceBot:
                         import okama as ok
                         asset = ok.Asset(symbol, ccy=currency)
                         asset_final = asset.wealth_index.iloc[-1]
-                        caption += f"• {symbol}: {asset_final:.2f}\n"
+                        try:
+                            asset_final_float = self._safe_float_conversion(asset_final)
+                            caption += f"• {symbol}: {asset_final_float:.2f}\n"
+                        except Exception as e:
+                            self.logger.warning(f"Could not format asset final value for {symbol}: {e}")
+                            caption += f"• {symbol}: {asset_final}\n"
                     except Exception as e:
                         self.logger.warning(f"Could not get final value for {symbol}: {e}")
                         caption += f"• {symbol}: недоступно\n"
