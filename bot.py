@@ -1374,9 +1374,6 @@ class OkamaFinanceBot:
                     
                     portfolio_data.append((symbol, weight))
                     
-                    # Уведомляем пользователя об исправлении символа
-                    if original_symbol != symbol:
-                        await self._send_message_safe(update, f"⚠️ Исправлен формат символа: {original_symbol} → {symbol}")
                 else:
                     await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
                     return
@@ -1912,7 +1909,18 @@ class OkamaFinanceBot:
             if callback_data.startswith('drawdowns_'):
                 symbols = callback_data.replace('drawdowns_', '').split(',')
                 self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
-                await self._handle_drawdowns_button(update, context, symbols)
+                
+                # Check user context to determine which type of analysis this is
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                last_analysis_type = user_context.get('last_analysis_type')
+                
+                self.logger.info(f"Last analysis type: {last_analysis_type}")
+                
+                if last_analysis_type == 'portfolio':
+                    await self._handle_portfolio_drawdowns_button(update, context, symbols)
+                else:
+                    await self._handle_drawdowns_button(update, context, symbols)
             elif callback_data.startswith('dividends_') and ',' in callback_data:
                 # Для сравнения активов (dividends_AAA,BBB)
                 symbols = callback_data.replace('dividends_', '').split(',')
@@ -1949,12 +1957,7 @@ class OkamaFinanceBot:
                 self.logger.info(f"Callback data: {callback_data}")
                 self.logger.info(f"Extracted symbols: {symbols}")
                 await self._handle_forecast_button(update, context, symbols)
-            elif callback_data.startswith('drawdowns_'):
-                symbols = callback_data.replace('drawdowns_', '').split(',')
-                self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
-                self.logger.info(f"Callback data: {callback_data}")
-                self.logger.info(f"Extracted symbols: {symbols}")
-                await self._handle_portfolio_drawdowns_button(update, context, symbols)
+
             elif callback_data.startswith('returns_'):
                 symbols = callback_data.replace('returns_', '').split(',')
                 self.logger.info(f"Returns button clicked for symbols: {symbols}")
@@ -2849,6 +2852,11 @@ class OkamaFinanceBot:
             button_symbols = symbols
             final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
             self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            self.logger.info(f"Button symbols: {button_symbols}")
+            self.logger.info(f"Final symbols: {final_symbols}")
+            self.logger.info(f"Current symbols from context: {user_context.get('current_symbols')}")
+            self.logger.info(f"Last assets from context: {user_context.get('last_assets')}")
+            
             if not final_symbols:
                 self.logger.warning("No symbols provided by button and none found in context")
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
