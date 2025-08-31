@@ -8,6 +8,11 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 import io
 import pandas as pd
+
+# Configure matplotlib backend for headless environments (CI/CD)
+import matplotlib
+if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
+    matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 try:
     import tabulate

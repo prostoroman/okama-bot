@@ -57,13 +57,13 @@ class AssetService:
         try:
             raw = (identifier or '').strip()
             if not raw:
-                return { 'error': 'Пустой идентификатор актива' }
+                return {'error': 'Пустой идентификатор актива'}
 
             upper = raw.upper()
 
             # If already okama-style ticker like XXX.SUFFIX
             if '.' in upper and len(upper.split('.')) == 2 and all(part for part in upper.split('.')):
-                return { 'symbol': upper, 'type': 'ticker', 'source': 'input' }
+                return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
 
             # Detect ISIN: 2 letters + 9 alnum + 1 digit (simplified)
             def _looks_like_isin(val: str) -> bool:
@@ -80,7 +80,7 @@ class AssetService:
                 # Try resolve via MOEX ISS (works for instruments listed on MOEX)
                 moex_symbol = self._try_resolve_isin_via_moex(upper)
                 if moex_symbol:
-                    return { 'symbol': moex_symbol, 'type': 'isin', 'source': 'moex' }
+                    return {'symbol': moex_symbol, 'type': 'isin', 'source': 'moex'}
                 else:
                     return {
                         'error': (
@@ -93,12 +93,12 @@ class AssetService:
             # Plain ticker without suffix – try to guess the appropriate namespace
             guessed_symbol = self._guess_namespace(upper)
             if guessed_symbol:
-                return { 'symbol': guessed_symbol, 'type': 'ticker', 'source': 'guessed' }
+                return {'symbol': guessed_symbol, 'type': 'ticker', 'source': 'guessed'}
             else:
-                return { 'symbol': upper, 'type': 'ticker', 'source': 'plain' }
+                return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
 
         except Exception as e:
-            return { 'error': f"Ошибка при разборе идентификатора: {str(e)}" }
+            return {'error': f"Ошибка при разборе идентификатора: {str(e)}"}
 
     def _guess_namespace(self, ticker: str) -> Optional[str]:
         """
