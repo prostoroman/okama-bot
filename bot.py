@@ -1154,6 +1154,12 @@ class OkamaFinanceBot:
             self.logger.info(f"DEBUG: expanded_symbols types: {[type(s) for s in expanded_symbols]}")
             self.logger.info(f"DEBUG: expanded_symbols values: {expanded_symbols}")
             
+            # Additional debug: check for any problematic symbols
+            for i, desc in enumerate(portfolio_descriptions):
+                self.logger.info(f"DEBUG: portfolio_descriptions[{i}]: '{desc}'")
+            for i, exp_sym in enumerate(expanded_symbols):
+                self.logger.info(f"DEBUG: expanded_symbols[{i}]: '{exp_sym}' (type: {type(exp_sym)})")
+            
             await self._send_message_safe(update, f"🔄 Сравниваю активы: {', '.join(symbols)}...")
 
             # Create comparison using okama
@@ -1342,7 +1348,13 @@ class OkamaFinanceBot:
                                     return
                                 
                                 self.logger.info(f"DEBUG: Symbol validation passed, creating Asset with: '{symbol}'")
-                                asset = ok.Asset(symbol, ccy=asset_currency)
+                                self.logger.info(f"DEBUG: About to call ok.Asset('{symbol}', ccy='{asset_currency}')")
+                                try:
+                                    asset = ok.Asset(symbol, ccy=asset_currency)
+                                    self.logger.info(f"DEBUG: Successfully created Asset for '{symbol}'")
+                                except Exception as asset_error:
+                                    self.logger.error(f"DEBUG: Failed to create Asset for '{symbol}': {asset_error}")
+                                    raise asset_error
                                 wealth_data[symbols[i]] = asset.wealth_index
                             except Exception as e:
                                 self.logger.error(f"Error getting wealth index for {symbol}: {e}")
