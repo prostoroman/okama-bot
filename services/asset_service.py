@@ -944,9 +944,6 @@ class AssetService:
             # Create the price chart
             fig, ax = chart_styles.create_figure(figsize=(12, 6))
             
-            # Apply base style
-            chart_styles.apply_base_style(fig, ax)
-            
             # Plot price line with spline interpolation
             # Handle large numbers by converting to float64
             try:
@@ -1080,10 +1077,15 @@ class AssetService:
                        bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
                        fontsize=10, fontweight='bold')
             
-            # Customize chart
-            ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
-                       fontweight=chart_styles.title_config['fontweight'])
-            ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
+            # Apply standard chart styling with centralized style
+            chart_styles.apply_standard_chart_styling(
+                ax,
+                title=f'{chart_title}: {symbol} ({period})',
+                ylabel=f'Цена ({currency})',
+                grid=True,
+                legend=False,
+                copyright=True
+            )
             
             # Format x-axis dates properly
             import matplotlib.dates as mdates
@@ -1140,10 +1142,14 @@ class AssetService:
                         ax.clear()
                         ax.plot(series_for_plot.index, values, color='#1f77b4', linewidth=2, alpha=0.8)
                         # Reapply formatting
-                        ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
-                                   fontweight=chart_styles.title_config['fontweight'])
-                        ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
-                        ax.grid(True, alpha=0.3)
+                        chart_styles.apply_standard_chart_styling(
+                            ax,
+                            title=f'{chart_title}: {symbol} ({period})',
+                            ylabel=f'Цена ({currency})',
+                            grid=True,
+                            legend=False,
+                            copyright=True
+                        )
                     else:
                         # If no Period index, ensure we have a clean datetime index
                         self.logger.info("Ensuring clean datetime index for saving...")
@@ -1155,10 +1161,14 @@ class AssetService:
                             ax.clear()
                             ax.plot(series_for_plot.index, values, color='#1f77b4', linewidth=2, alpha=0.8)
                             # Reapply formatting
-                            ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
-                                       fontweight=chart_styles.title_config['fontweight'])
-                            ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
-                            ax.grid(True, alpha=0.3)
+                            chart_styles.apply_standard_chart_styling(
+                                ax,
+                                title=f'{chart_title}: {symbol} ({period})',
+                                ylabel=f'Цена ({currency})',
+                                grid=True,
+                                legend=False,
+                                copyright=True
+                            )
                         except Exception as clean_error:
                             self.logger.warning(f"Could not clean index: {clean_error}")
                 except Exception as index_error:

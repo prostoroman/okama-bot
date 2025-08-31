@@ -2865,22 +2865,19 @@ class OkamaFinanceBot:
             # Apply chart styles to the current figure
             if current_fig.axes:
                 ax = current_fig.axes[0]
-                chart_styles.apply_base_style(current_fig, ax)
                 
                 # Apply Monte Carlo specific styles to make lines thinner
                 chart_styles.apply_monte_carlo_style(ax)
-
-                # Customize the chart
-                ax.set_title(
-                    f'Прогноз Monte Carlo\n{", ".join(symbols)}',
-                    fontsize=chart_styles.title_config['fontsize'],
-                    fontweight=chart_styles.title_config['fontweight'],
-                    pad=chart_styles.title_config['pad'],
-                    color=chart_styles.title_config['color']
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Прогноз Monte Carlo\n{", ".join(symbols)}',
+                    ylabel='Накопленная доходность',
+                    grid=True,
+                    legend=True,
+                    copyright=True
                 )
-
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
             
             # Save the figure
             img_buffer = io.BytesIO()
@@ -2929,7 +2926,6 @@ class OkamaFinanceBot:
             # Apply chart styles to the current figure
             if current_fig.axes:
                 ax = current_fig.axes[0]  # Get the first (and usually only) axes
-                chart_styles.apply_base_style(current_fig, ax)
                 
                 # Apply percentile specific styles to ensure colors match legend
                 chart_styles.apply_percentile_style(ax)
@@ -2939,15 +2935,15 @@ class OkamaFinanceBot:
                     ax.get_legend().remove()
                 ax.legend(**chart_styles.legend_config)
                 
-                # Customize the chart
-                ax.set_title(f'Прогноз с процентилями\n{", ".join(symbols)}', 
-                           fontsize=chart_styles.title_config['fontsize'], 
-                           fontweight=chart_styles.title_config['fontweight'], 
-                           pad=chart_styles.title_config['pad'], 
-                           color=chart_styles.title_config['color'])
-                
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Прогноз с процентилями\n{", ".join(symbols)}',
+                    ylabel='Накопленная доходность',
+                    grid=True,
+                    legend=True,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
@@ -3034,19 +3030,16 @@ class OkamaFinanceBot:
             # Apply chart styles to the current figure
             if current_fig.axes:
                 ax = current_fig.axes[0]
-                chart_styles.apply_base_style(current_fig, ax)
                 
-                # Customize the chart
-                ax.set_title(
-                    f'Просадки портфеля\n{", ".join(symbols)}',
-                    fontsize=chart_styles.title_config['fontsize'],
-                    fontweight=chart_styles.title_config['fontweight'],
-                    pad=chart_styles.title_config['pad'],
-                    color=chart_styles.title_config['color']
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Просадки портфеля\n{", ".join(symbols)}',
+                    ylabel='Просадка (%)',
+                    grid=True,
+                    legend=False,
+                    copyright=True
                 )
-                
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
             
             # Save the figure
             img_buffer = io.BytesIO()
@@ -3160,19 +3153,16 @@ class OkamaFinanceBot:
             # Apply chart styles to the current figure
             if current_fig.axes:
                 ax = current_fig.axes[0]
-                chart_styles.apply_base_style(current_fig, ax)
                 
-                # Customize the chart
-                ax.set_title(
-                    f'Годовая доходность портфеля\n{", ".join(symbols)}',
-                    fontsize=chart_styles.title_config['fontsize'],
-                    fontweight=chart_styles.title_config['fontweight'],
-                    pad=chart_styles.title_config['pad'],
-                    color=chart_styles.title_config['color']
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Годовая доходность портфеля\n{", ".join(symbols)}',
+                    ylabel='Доходность (%)',
+                    grid=True,
+                    legend=False,
+                    copyright=True
                 )
-                
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
             
             # Save the figure
             img_buffer = io.BytesIO()
@@ -3291,22 +3281,16 @@ class OkamaFinanceBot:
             # Apply chart styles to the current figure
             if current_fig.axes:
                 ax = current_fig.axes[0]
-                chart_styles.apply_base_style(current_fig, ax)
                 
-                # Customize the chart
-                ax.set_title(
-                    f'Rolling CAGR \n{", ".join(symbols)}',
-                    fontsize=chart_styles.title_config['fontsize'],
-                    fontweight=chart_styles.title_config['fontweight'],
-                    pad=chart_styles.title_config['pad'],
-                    color=chart_styles.title_config['color']
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Rolling CAGR \n{", ".join(symbols)}',
+                    ylabel='CAGR (%)',
+                    grid=True,
+                    legend=False,
+                    copyright=True
                 )
-                
-                # Remove X-axis label
-                ax.set_xlabel('')
-                
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
             
             # Save the figure
             img_buffer = io.BytesIO()
@@ -3430,16 +3414,6 @@ class OkamaFinanceBot:
             # Apply chart styles to the current figure
             if current_fig.axes:
                 ax = current_fig.axes[0]
-                chart_styles.apply_base_style(current_fig, ax)
-                
-                # Customize the chart
-                ax.set_title(
-                    f'Портфель vs Активы\n{", ".join(symbols)}',
-                    fontsize=chart_styles.title_config['fontsize'],
-                    fontweight=chart_styles.title_config['fontweight'],
-                    pad=chart_styles.title_config['pad'],
-                    color=chart_styles.title_config['color']
-                )
                 
                 # Customize line styles: portfolio line thicker, asset lines thinner
                 lines = ax.get_lines()
@@ -3454,11 +3428,15 @@ class OkamaFinanceBot:
                         lines[i].set_linewidth(1.5)  # Asset lines thinner
                         lines[i].set_alpha(0.8)      # Slightly transparent
                 
-                # Apply legend with proper unpacking
-                ax.legend(**chart_styles.legend_config)
-                
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Портфель vs Активы\n{", ".join(symbols)}',
+                    ylabel='Накопленная доходность',
+                    grid=True,
+                    legend=True,
+                    copyright=True
+                )
             
             # Save the figure
             img_buffer = io.BytesIO()
