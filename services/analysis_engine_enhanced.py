@@ -244,7 +244,6 @@ class EnhancedAnalysisEngine:
         # Корреляции
         if 'correlation' in data:
             try:
-                import pandas as pd
                 if isinstance(data['correlation'], pd.DataFrame):
                     context_parts.append("Корреляции между активами:")
                     correlation_text = data['correlation'].round(3).to_string()

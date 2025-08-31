@@ -1,33 +1,39 @@
+# Standard library imports
 import sys
 import logging
 import os
 import json
 import threading
+import re
+import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-import io
-import pandas as pd
+from typing import Dict, List, Optional, Any
+
+# Third-party imports
+import matplotlib
 
 # Configure matplotlib backend for headless environments (CI/CD)
-import matplotlib
 if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
     matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+
+# Optional imports
 try:
     import tabulate
     TABULATE_AVAILABLE = True
 except ImportError:
     TABULATE_AVAILABLE = False
     print("Warning: tabulate library not available. Using simple text formatting.")
-from typing import Dict, List, Optional, Any
-from datetime import datetime
+
+# Telegram imports
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 # Check Python version compatibility
 if sys.version_info < (3, 7):
     print("ERROR: Python 3.7+ required. Current version:", sys.version)
     raise RuntimeError("Python 3.7+ required")
 
+# Local imports
 from config import Config
 from services.asset_service import AssetService
 from yandexgpt_service import YandexGPTService
@@ -55,7 +61,7 @@ def health_check():
     return True
 
 class OkamaFinanceBot:
-    """Simple Telegram bot class for financial analysis with Okama library"""
+    """Enhanced Telegram bot for financial analysis with Okama library"""
     
     def __init__(self):
         """Initialize the bot with required services"""
@@ -64,6 +70,7 @@ class OkamaFinanceBot:
         # Initialize logger
         self.logger = logging.getLogger(__name__)
         
+        # Initialize services
         self.asset_service = AssetService()
         self.yandexgpt_service = YandexGPTService()
         self.intent_parser = EnhancedIntentParser()
@@ -82,21 +89,45 @@ class OkamaFinanceBot:
         self.MAX_HISTORY_MESSAGES = 20
         self.MAX_TELEGRAM_CHUNK = 4000
         
+    async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation") -> None:
+        """Общая функция для обработки ошибок"""
+        error_msg = f"❌ Ошибка в {context}: {str(error)}"
+        self.logger.error(f"{error_msg} - {traceback.format_exc()}")
+        
+        try:
+            await self._send_message_safe(update, error_msg)
+        except Exception as send_error:
+            self.logger.error(f"Failed to send error message: {send_error}")
+            # Try to send a simple error message
+            try:
+                await update.message.reply_text("Произошла ошибка при обработке запроса")
+            except:
+                pass
+        
     def _parse_portfolio_data(self, portfolio_data_str: str) -> tuple[list, list]:
         """Parse portfolio data string with weights (symbol:weight,symbol:weight)"""
         try:
+            if not portfolio_data_str or not portfolio_data_str.strip():
+                return [], []
+                
             symbols = []
             weights = []
             
             for item in portfolio_data_str.split(','):
+                item = item.strip()
+                if not item:  # Skip empty items
+                    continue
+                    
                 if ':' in item:
                     symbol, weight_str = item.split(':', 1)
-                    symbols.append(symbol.strip())
-                    weights.append(float(weight_str.strip()))
+                    symbol = symbol.strip()
+                    if symbol:  # Only add non-empty symbols
+                        symbols.append(symbol)
+                        weights.append(float(weight_str.strip()))
                 else:
                     # Fallback: treat as symbol without weight
-                    symbols.append(item.strip())
-                    weights.append(1.0 / len(portfolio_data_str.split(',')))
+                    symbols.append(item)
+                    weights.append(1.0 / len([x for x in portfolio_data_str.split(',') if x.strip()]))
             
             return symbols, weights
         except Exception as e:
@@ -497,7 +528,6 @@ class OkamaFinanceBot:
     async def _show_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
         """Единый метод для показа символов в пространстве имен"""
         try:
-            import okama as ok
             symbols_df = ok.symbols_in_namespace(namespace)
             
             if symbols_df.empty:
@@ -824,7 +854,6 @@ class OkamaFinanceBot:
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /namespace command"""
         try:
-            import okama as ok
             
             if not context.args:
                 # Show available namespaces
@@ -1122,7 +1151,6 @@ class OkamaFinanceBot:
                         return
                     
                     # Create portfolio using okama
-                    import okama as ok
                     try:
                         portfolio = ok.Portfolio(portfolio_symbols, ccy=portfolio_currency, weights=portfolio_weights)
                         
@@ -1163,7 +1191,6 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"🔄 Сравниваю активы: {', '.join(symbols)}...")
 
             # Create comparison using okama
-            import okama as ok
             
             # Determine base currency from the first asset
             first_symbol = symbols[0]
@@ -1684,7 +1711,6 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"🔄 Создаю портфель: {', '.join(symbols)}...")
             
             # Create portfolio using okama
-            import okama as ok
             
             self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
             self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
@@ -1856,7 +1882,14 @@ class OkamaFinanceBot:
                     # Handle Period objects and other special types
                     if hasattr(final_value, 'to_timestamp'):
                         # If it's a Period object, convert to timestamp first
-                        final_value = final_value.to_timestamp()
+                        try:
+                            final_value = final_value.to_timestamp()
+                        except Exception:
+                            # If to_timestamp fails, try to convert to string first
+                            if hasattr(final_value, 'strftime'):
+                                final_value = str(final_value)
+                            else:
+                                final_value = str(final_value)
                     
                     # Convert to float safely
                     if isinstance(final_value, (int, float)):
@@ -1870,7 +1903,6 @@ class OkamaFinanceBot:
                         try:
                             final_value = float(final_value_str)
                         except (ValueError, TypeError):
-                            # If all else fails, try to extract numeric value
                             import re
                             numeric_match = re.search(r'[\d.]+', final_value_str)
                             if numeric_match:
@@ -1979,8 +2011,32 @@ class OkamaFinanceBot:
                     if hasattr(portfolio, 'mean_return_annual'):
                         try:
                             value = portfolio.mean_return_annual
+                            # Handle Period objects and other non-numeric types
                             if hasattr(value, 'to_timestamp'):
-                                value = value.to_timestamp()
+                                try:
+                                    value = value.to_timestamp()
+                                except Exception:
+                                    # If to_timestamp fails, try to convert to string first
+                                    if hasattr(value, 'strftime'):
+                                        value = str(value)
+                                    else:
+                                        value = str(value)
+                            
+                            # Handle Timestamp objects and other datetime-like objects
+                            if hasattr(value, 'timestamp'):
+                                try:
+                                    value = value.timestamp()
+                                except Exception:
+                                    value = str(value)
+                            elif not isinstance(value, (int, float)):
+                                # Try to convert non-numeric values
+                                value = str(value)
+                                import re
+                                match = re.search(r'[\d.-]+', value)
+                                if match:
+                                    value = float(match.group())
+                                else:
+                                    value = 0.0
                             portfolio_attributes['mean_return_annual'] = float(value)
                         except Exception as e:
                             self.logger.warning(f"Could not convert mean_return_annual to float: {e}")
@@ -1989,8 +2045,32 @@ class OkamaFinanceBot:
                     if hasattr(portfolio, 'volatility_annual'):
                         try:
                             value = portfolio.volatility_annual
+                            # Handle Period objects and other non-numeric types
                             if hasattr(value, 'to_timestamp'):
-                                value = value.to_timestamp()
+                                try:
+                                    value = value.to_timestamp()
+                                except Exception:
+                                    # If to_timestamp fails, try to convert to string first
+                                    if hasattr(value, 'strftime'):
+                                        value = str(value)
+                                    else:
+                                        value = str(value)
+                            
+                            # Handle Timestamp objects and other datetime-like objects
+                            if hasattr(value, 'timestamp'):
+                                try:
+                                    value = value.timestamp()
+                                except Exception:
+                                    value = str(value)
+                            elif not isinstance(value, (int, float)):
+                                # Try to convert non-numeric values
+                                value = str(value)
+                                import re
+                                match = re.search(r'[\d.-]+', value)
+                                if match:
+                                    value = float(match.group())
+                                else:
+                                    value = 0.0
                             portfolio_attributes['volatility_annual'] = float(value)
                         except Exception as e:
                             self.logger.warning(f"Could not convert volatility_annual to float: {e}")
@@ -1999,8 +2079,32 @@ class OkamaFinanceBot:
                     if hasattr(portfolio, 'sharpe_ratio'):
                         try:
                             value = portfolio.sharpe_ratio
+                            # Handle Period objects and other non-numeric types
                             if hasattr(value, 'to_timestamp'):
-                                value = value.to_timestamp()
+                                try:
+                                    value = value.to_timestamp()
+                                except Exception:
+                                    # If to_timestamp fails, try to convert to string first
+                                    if hasattr(value, 'strftime'):
+                                        value = str(value)
+                                    else:
+                                        value = str(value)
+                            
+                            # Handle Timestamp objects and other datetime-like objects
+                            if hasattr(value, 'timestamp'):
+                                try:
+                                    value = value.timestamp()
+                                except Exception:
+                                    value = str(value)
+                            elif not isinstance(value, (int, float)):
+                                # Try to convert non-numeric values
+                                value = str(value)
+                                import re
+                                match = re.search(r'[\d.-]+', value)
+                                if match:
+                                    value = float(match.group())
+                                else:
+                                    value = 0.0
                             portfolio_attributes['sharpe_ratio'] = float(value)
                         except Exception as e:
                             self.logger.warning(f"Could not convert sharpe_ratio to float: {e}")
@@ -2025,8 +2129,32 @@ class OkamaFinanceBot:
                             else:
                                 final_value = list(final_value)[0]
                         
+                        # Handle Period objects and other non-numeric types
                         if hasattr(final_value, 'to_timestamp'):
-                            final_value = final_value.to_timestamp()
+                            try:
+                                final_value = final_value.to_timestamp()
+                            except Exception:
+                                # If to_timestamp fails, try to convert to string first
+                                if hasattr(final_value, 'strftime'):
+                                    final_value = str(final_value)
+                                else:
+                                    final_value = str(final_value)
+                        
+                        # Handle Timestamp objects and other datetime-like objects
+                        if hasattr(final_value, 'timestamp'):
+                            try:
+                                final_value = final_value.timestamp()
+                            except Exception:
+                                final_value = str(final_value)
+                        elif not isinstance(final_value, (int, float)):
+                            # Try to convert non-numeric values
+                            final_value_str = str(final_value)
+                            import re
+                            match = re.search(r'[\d.-]+', final_value_str)
+                            if match:
+                                final_value = float(match.group())
+                            else:
+                                final_value = 0.0
                         
                         portfolio_attributes['final_value'] = float(final_value)
                     except Exception as e:
@@ -2386,7 +2514,6 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📉 Создаю график drawdowns...")
             
             # Create AssetList again
-            import okama as ok
             asset_list = ok.AssetList(symbols, ccy=currency)
             
             await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
@@ -2416,7 +2543,6 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности...")
             
             # Create AssetList again
-            import okama as ok
             asset_list = ok.AssetList(symbols, ccy=currency)
             
             await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
@@ -2446,7 +2572,6 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу...")
             
             # Create AssetList again
-            import okama as ok
             asset_list = ok.AssetList(symbols, ccy=currency)
             
             await self._create_correlation_matrix(update, context, asset_list, symbols)
@@ -2493,7 +2618,6 @@ class OkamaFinanceBot:
                 if dividends:
                     # Формируем краткую информацию о дивидендах + текст последних выплат
                     try:
-                        import pandas as pd
                         dividend_series = pd.Series(dividends)
                         recent = dividend_series.sort_index(ascending=False).head(10)
                         payouts_lines = []
@@ -2634,10 +2758,6 @@ class OkamaFinanceBot:
     def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
         """Создать график дивидендов"""
         try:
-            import matplotlib.pyplot as plt
-            import io
-            import pandas as pd
-            from datetime import datetime
             
             # Конвертируем дивиденды в pandas Series
             dividend_series = pd.Series(dividends)
@@ -2702,10 +2822,6 @@ class OkamaFinanceBot:
     def _create_dividend_table_image(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
         """Создать отдельное изображение с таблицей дивидендов"""
         try:
-            import matplotlib.pyplot as plt
-            import io
-            import pandas as pd
-            from datetime import datetime
             
             # Конвертируем дивиденды в pandas Series
             dividend_series = pd.Series(dividends)
@@ -2822,14 +2938,12 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
             
             # Create Portfolio again
-            import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
             await self._create_risk_metrics_report(update, context, portfolio, final_symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling risk metrics button: {e}")
-            import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
 
@@ -2871,14 +2985,12 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
             
             # Create Portfolio again
-            import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
             await self._create_monte_carlo_forecast(update, context, portfolio, final_symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling Monte Carlo button: {e}")
-            import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании прогноза Monte Carlo: {str(e)}")
 
@@ -2920,14 +3032,12 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📈 Создаю прогноз с процентилями...")
             
             # Create Portfolio again
-            import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
             await self._create_forecast_chart(update, context, portfolio, final_symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling forecast button: {e}")
-            import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании прогноза: {str(e)}")
 
@@ -3559,7 +3669,6 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📉 Создаю график просадок...")
             
             # Create Portfolio again
-            import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
@@ -3693,7 +3802,6 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "💰 Создаю график доходности...")
             
             # Create Portfolio again
-            import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
             await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency, weights)
@@ -3832,7 +3940,6 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
             
             # Create Portfolio again
-            import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
             await self._create_portfolio_rolling_cagr_chart(update, context, portfolio, final_symbols, currency, weights)
@@ -3959,14 +4066,12 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
             
             # Create Portfolio again
-            import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
             await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio compare assets button: {e}")
-            import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
 
@@ -4025,7 +4130,6 @@ class OkamaFinanceBot:
                             continue
                         
                         # Get individual asset
-                        import okama as ok
                         asset = ok.Asset(symbol, ccy=currency)
                         asset_final = asset.wealth_index.iloc[-1]
                         caption += f"• {symbol}: {asset_final:.2f}\n"
@@ -4064,7 +4168,6 @@ class OkamaFinanceBot:
     async def _handle_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle namespace button click - show symbols in specific namespace"""
         try:
-            import okama as ok
             
             self.logger.info(f"Handling namespace button for: {namespace}")
             
@@ -4115,7 +4218,6 @@ class OkamaFinanceBot:
     async def _handle_excel_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle Excel export button click for namespace"""
         try:
-            import okama as ok
             
             self.logger.info(f"Handling Excel export for namespace: {namespace}")
             
@@ -4269,6 +4371,5 @@ if __name__ == "__main__":
         logger.error(f"❌ Fatal error starting bot: {e}")
         logger.error(f"Python version: {sys.version}")
         logger.error(f"Python executable: {sys.executable}")
-        import traceback
         traceback.print_exc()
         sys.exit(1)

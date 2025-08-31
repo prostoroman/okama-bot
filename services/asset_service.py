@@ -893,8 +893,20 @@ class AssetService:
                         series_for_plot = series_for_plot / scale_factor
                         self.logger.info(f"Scaled down values by factor {scale_factor}")
                     else:
-                        series_for_plot = pd.Series([float(x) for x in series_for_plot.values], 
-                                                  index=series_for_plot.index)
+                        # Safely convert values to float, handling Period objects
+                        safe_values = []
+                        for x in series_for_plot.values:
+                            try:
+                                if hasattr(x, 'to_timestamp'):
+                                    try:
+                                        x = x.to_timestamp()
+                                    except Exception:
+                                        x = str(x)
+                                safe_values.append(float(x))
+                            except Exception:
+                                # Fallback to 0.0 if conversion fails
+                                safe_values.append(0.0)
+                        series_for_plot = pd.Series(safe_values, index=series_for_plot.index)
                 except Exception as scale_error:
                     self.logger.error(f"Failed to handle large numbers: {scale_error}")
                     return None

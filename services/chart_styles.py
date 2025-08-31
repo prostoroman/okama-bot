@@ -892,7 +892,6 @@ class ChartStyles:
                         else:
                             # Попытка привести через pandas
                             try:
-                                import pandas as pd
                                 ts = pd.to_datetime(x_val)
                                 x_numeric.append(float(ts.timestamp()))
                             except Exception:
