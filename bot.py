@@ -3612,19 +3612,34 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio returns chart for portfolio: {symbols}")
             
-            # Get annual returns data
-            returns_data = portfolio.annual_return_ts
+            # Generate annual returns chart using okama
+            # portfolio.annual_return_ts.plot(kind="bar")
+            returns_data = portfolio.annual_return_ts.plot(kind="bar")
             
-            # Create standardized returns chart using chart_styles
-            fig, ax = chart_styles.create_portfolio_returns_chart(
-                data=returns_data, symbols=symbols, currency=currency
-            )
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
             
-            # Save the figure using standardized method
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                
+                # Apply standard chart styling with centralized style
+                chart_styles.apply_standard_chart_styling(
+                    ax,
+                    title=f'Годовая доходность портфеля\n{", ".join(symbols)}',
+                    ylabel='Доходность (%)',
+                    grid=True,
+                    legend=False,
+                    copyright=True
+                )
+            
+            # Save the figure
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
-            chart_styles.cleanup_figure(fig)
+            chart_styles.save_figure(current_fig, img_buffer)
             img_buffer.seek(0)
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(current_fig)
             
             # Get returns statistics
             try:
@@ -3865,47 +3880,19 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio compare assets chart for portfolio: {symbols}")
             
-            # Generate wealth index with assets chart using okama
-            # portfolio.wealth_index_with_assets.plot()
-            compare_data = portfolio.wealth_index_with_assets.plot()
+            # Get wealth index with assets data
+            compare_data = portfolio.wealth_index_with_assets
             
-            # Get the current figure from matplotlib (created by okama)
-            current_fig = plt.gcf()
+            # Create standardized comparison chart using chart_styles
+            fig, ax = chart_styles.create_portfolio_compare_assets_chart(
+                data=compare_data, symbols=symbols, currency=currency
+            )
             
-            # Apply chart styles to the current figure
-            if current_fig.axes:
-                ax = current_fig.axes[0]
-                
-                # Customize line styles: portfolio line thicker, asset lines thinner
-                lines = ax.get_lines()
-                if len(lines) > 0:
-                    # First line is usually the portfolio (combined)
-                    if len(lines) >= 1:
-                        lines[0].set_linewidth(3.0)  # Portfolio line thicker
-                        lines[0].set_alpha(1.0)      # Full opacity
-                    
-                    # Asset lines are thinner
-                    for i in range(1, len(lines)):
-                        lines[i].set_linewidth(1.5)  # Asset lines thinner
-                        lines[i].set_alpha(0.8)      # Slightly transparent
-                
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
-                    ax,
-                    title=f'Портфель vs Активы\n{", ".join(symbols)}',
-                    ylabel='Накопленная доходность',
-                    grid=True,
-                    legend=True,
-                    copyright=True
-                )
-            
-            # Save the figure
+            # Save the figure using standardized method
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(current_fig, img_buffer)
+            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.cleanup_figure(fig)
             img_buffer.seek(0)
-            
-            # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(current_fig)
             
             # Get portfolio comparison statistics
             try:
