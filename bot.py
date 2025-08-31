@@ -1055,12 +1055,13 @@ class OkamaFinanceBot:
                     response += f"• Всего символов: {total_symbols}\n"
                     response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
                     
-                    # Prepare data for tabulate
-                    headers = ["Символ", "Название", "Страна", "Валюта"]
+                    # Prepare data for display - show top 30 or all if less than 30
+                    display_count = min(30, total_symbols)
+                    response += f"📋 Показываю топ-{display_count} символов:\n\n"
                     
-                    # Get first 10 rows
-                    first_10 = []
-                    for _, row in symbols_df.head(10).iterrows():
+                    # Get top symbols (first 30 or all if less than 30)
+                    top_symbols = []
+                    for _, row in symbols_df.head(display_count).iterrows():
                         symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                         name = row['name'] if pd.notna(row['name']) else 'N/A'
                         country = row['country'] if pd.notna(row['country']) else 'N/A'
@@ -1070,28 +1071,11 @@ class OkamaFinanceBot:
                         if len(name) > 40:
                             name = name[:37] + "..."
                         
-                        first_10.append([symbol, name, country, currency])
-                    
-                    # Get last 10 rows
-                    last_10 = []
-                    for _, row in symbols_df.tail(10).iterrows():
-                        symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
-                        name = row['name'] if pd.notna(row['name']) else 'N/A'
-                        country = row['country'] if pd.notna(row['country']) else 'N/A'
-                        currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
-                        
-                        # Truncate long names for readability
-                        if len(name) > 40:
-                            name = name[:37] + "..."
-                        
-                        last_10.append([symbol, name, country, currency])
+                        top_symbols.append([symbol, name, country, currency])
                     
                     # Создаем простую таблицу символов
-                    if first_10:
-                        response += "Первые 10 символов:\n\n"
-                        
-                        # Создаем простую таблицу
-                        for row in first_10:
+                    if top_symbols:
+                        for row in top_symbols:
                             symbol = row[0]
                             name = row[1]
                             country = row[2]
@@ -1099,48 +1083,20 @@ class OkamaFinanceBot:
                             
                             response += f"• {symbol} - {name} | {country} | {currency}\n"
                         
-                        # Отправляем основное сообщение с таблицей
-                        await self._send_message_safe(update, response)
+                        # Добавляем кнопку для выгрузки Excel
+                        keyboard = [[
+                            InlineKeyboardButton(
+                                f"📊 Полный список в Excel ({total_symbols} записей)", 
+                                callback_data=f"excel_namespace_{namespace}"
+                            )
+                        ]]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
                         
-                        # Если есть еще символы, показываем их отдельно
-                        if last_10 and total_symbols > 10:
-                            last_response = "Последние 10 символов:\n\n"
-                            
-                            # Создаем таблицу для последних символов
-                            for row in last_10:
-                                symbol = row[0]
-                                name = row[1]
-                                country = row[2]
-                                currency = row[3]
-                                
-                                last_response += f"• {symbol} - {name} | {country} | {currency}\n"
-                            
-                            await self._send_message_safe(update, last_response)
+                        # Отправляем основное сообщение с таблицей и кнопкой
+                        await self._send_message_safe(update, response, reply_markup=reply_markup)
                     else:
                         response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
                         await self._send_message_safe(update, response)
-                    
-                    # Send Excel file with full list of symbols
-                    try:
-                        await self._send_message_safe(update, "📊 Создаю Excel файл со всеми символами...")
-                        
-                        # Create Excel file in memory
-                        excel_buffer = io.BytesIO()
-                        symbols_df.to_excel(excel_buffer, index=False, sheet_name=f'{namespace}_Symbols')
-                        excel_buffer.seek(0)
-                        
-                        # Send Excel file
-                        await update.message.reply_document(
-                            document=excel_buffer,
-                            filename=f"{namespace}_symbols.xlsx",
-                            caption=self._truncate_caption(f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)")
-                        )
-                        
-                        excel_buffer.close()
-                        
-                    except Exception as excel_error:
-                        self.logger.error(f"Error creating Excel file for {namespace}: {excel_error}")
-                        await self._send_message_safe(update, f"⚠️ Не удалось создать Excel файл: {str(excel_error)}")
                     
                 except Exception as e:
                     await self._send_message_safe(update, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
@@ -2022,6 +1978,10 @@ class OkamaFinanceBot:
                 namespace = callback_data.replace('namespace_', '')
                 self.logger.info(f"Namespace button clicked for: {namespace}")
                 await self._handle_namespace_button(update, context, namespace)
+            elif callback_data.startswith('excel_namespace_'):
+                namespace = callback_data.replace('excel_namespace_', '')
+                self.logger.info(f"Excel namespace button clicked for: {namespace}")
+                await self._handle_excel_namespace_button(update, context, namespace)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -3605,12 +3565,13 @@ class OkamaFinanceBot:
                 response += f"• Всего символов: {total_symbols}\n"
                 response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
                 
-                # Prepare data for display
-                headers = ["Символ", "Название", "Страна", "Валюта"]
+                # Prepare data for display - show top 30 or all if less than 30
+                display_count = min(30, total_symbols)
+                response += f"📋 Показываю топ-{display_count} символов:\n\n"
                 
-                # Get first 10 rows
-                first_10 = []
-                for _, row in symbols_df.head(10).iterrows():
+                # Get top symbols (first 30 or all if less than 30)
+                top_symbols = []
+                for _, row in symbols_df.head(display_count).iterrows():
                     symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                     name = row['name'] if pd.notna(row['name']) else 'N/A'
                     country = row['country'] if pd.notna(row['country']) else 'N/A'
@@ -3620,28 +3581,11 @@ class OkamaFinanceBot:
                     if len(name) > 40:
                         name = name[:37] + "..."
                     
-                    first_10.append([symbol, name, country, currency])
-                
-                # Get last 10 rows
-                last_10 = []
-                for _, row in symbols_df.tail(10).iterrows():
-                    symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
-                    name = row['name'] if pd.notna(row['name']) else 'N/A'
-                    country = row['country'] if pd.notna(row['country']) else 'N/A'
-                    currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
-                    
-                    # Truncate long names for readability
-                    if len(name) > 40:
-                        name = name[:37] + "..."
-                    
-                    last_10.append([symbol, name, country, currency])
+                    top_symbols.append([symbol, name, country, currency])
                 
                 # Создаем простую таблицу символов
-                if first_10:
-                    response += "Первые 10 символов:\n\n"
-                    
-                    # Создаем простую таблицу
-                    for row in first_10:
+                if top_symbols:
+                    for row in top_symbols:
                         symbol = row[0]
                         name = row[1]
                         country = row[2]
@@ -3649,49 +3593,20 @@ class OkamaFinanceBot:
                         
                         response += f"• {symbol} - {name} | {country} | {currency}\n"
                     
-                    # Отправляем основное сообщение с таблицей
-                    await self._send_callback_message(update, context, response)
+                    # Добавляем кнопку для выгрузки Excel
+                    keyboard = [[
+                        InlineKeyboardButton(
+                            f"📊 Полный список в Excel ({total_symbols} записей)", 
+                            callback_data=f"excel_namespace_{namespace}"
+                        )
+                    ]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
                     
-                    # Если есть еще символы, показываем их отдельно
-                    if last_10 and total_symbols > 10:
-                        last_response = "Последние 10 символов:\n\n"
-                        
-                        # Создаем таблицу для последних символов
-                        for row in last_10:
-                            symbol = row[0]
-                            name = row[1]
-                            country = row[2]
-                            currency = row[3]
-                            
-                            last_response += f"• {symbol} - {name} | {country} | {currency}\n"
-                        
-                        await self._send_callback_message(update, context, last_response)
+                    # Отправляем основное сообщение с таблицей и кнопкой
+                    await self._send_callback_message(update, context, response, reply_markup=reply_markup)
                 else:
                     response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
                     await self._send_callback_message(update, context, response)
-                
-                # Send Excel file with full list of symbols
-                try:
-                    await self._send_callback_message(update, context, "📊 Создаю Excel файл со всеми символами...")
-                    
-                    # Create Excel file in memory
-                    excel_buffer = io.BytesIO()
-                    symbols_df.to_excel(excel_buffer, index=False, sheet_name=f'{namespace}_Symbols')
-                    excel_buffer.seek(0)
-                    
-                    # Send Excel file
-                    await context.bot.send_document(
-                        chat_id=update.effective_chat.id,
-                        document=excel_buffer,
-                        filename=f"{namespace}_symbols.xlsx",
-                        caption=self._truncate_caption(f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)")
-                    )
-                    
-                    excel_buffer.close()
-                    
-                except Exception as excel_error:
-                    self.logger.error(f"Error creating Excel file for {namespace}: {excel_error}")
-                    await self._send_callback_message(update, context, f"⚠️ Не удалось создать Excel файл: {str(excel_error)}")
                 
             except Exception as e:
                 await self._send_callback_message(update, context, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
@@ -3700,6 +3615,53 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
         except Exception as e:
             self.logger.error(f"Error in namespace button handler: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
+
+    async def _handle_excel_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+        """Handle Excel export button click for namespace"""
+        try:
+            import okama as ok
+            
+            self.logger.info(f"Handling Excel export for namespace: {namespace}")
+            
+            # Get symbols in namespace
+            try:
+                symbols_df = ok.symbols_in_namespace(namespace)
+                
+                # Check if DataFrame is empty
+                if symbols_df.empty:
+                    await self._send_callback_message(update, context, f"❌ Пространство имен '{namespace}' не найдено или пусто")
+                    return
+                
+                total_symbols = len(symbols_df)
+                
+                # Show progress message
+                await self._send_callback_message(update, context, f"📊 Создаю Excel файл со всеми {total_symbols} символами...")
+                
+                # Create Excel file in memory
+                excel_buffer = io.BytesIO()
+                symbols_df.to_excel(excel_buffer, index=False, sheet_name=f'{namespace}_Symbols')
+                excel_buffer.seek(0)
+                
+                # Send Excel file
+                await context.bot.send_document(
+                    chat_id=update.effective_chat.id,
+                    document=excel_buffer,
+                    filename=f"{namespace}_symbols.xlsx",
+                    caption=self._truncate_caption(f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)")
+                )
+                
+                excel_buffer.close()
+                
+                await self._send_callback_message(update, context, f"✅ Excel файл успешно создан и отправлен!")
+                
+            except Exception as e:
+                await self._send_callback_message(update, context, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
+                
+        except ImportError:
+            await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
+        except Exception as e:
+            self.logger.error(f"Error in Excel namespace button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     def run(self):
