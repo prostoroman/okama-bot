@@ -3942,6 +3942,25 @@ class OkamaFinanceBot:
                 # Get individual asset final values
                 for symbol in symbols:
                     try:
+                        # Validate symbol before creating Asset
+                        if not symbol or symbol.strip() == '':
+                            self.logger.warning(f"Empty symbol: '{symbol}'")
+                            caption += f"• {symbol}: недоступно\n"
+                            continue
+                        
+                        # Check for invalid characters
+                        invalid_chars = ['(', ')', ',']
+                        if any(char in symbol for char in invalid_chars):
+                            self.logger.warning(f"Invalid symbol contains brackets: '{symbol}'")
+                            caption += f"• {symbol}: недоступно\n"
+                            continue
+                        
+                        # Check for proper format
+                        if '.' not in symbol:
+                            self.logger.warning(f"Symbol missing namespace separator: '{symbol}'")
+                            caption += f"• {symbol}: недоступно\n"
+                            continue
+                        
                         # Get individual asset
                         import okama as ok
                         asset = ok.Asset(symbol, ccy=currency)
