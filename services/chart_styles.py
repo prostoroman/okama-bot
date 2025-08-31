@@ -1122,6 +1122,48 @@ class ChartStyles:
             legend=True, grid=True, **kwargs
         )
     
+    def create_portfolio_wealth_chart(self, data, symbols, currency, **kwargs):
+        """
+        Создать график накопленной доходности портфеля с поддержкой множественных серий
+        
+        Args:
+            data: данные накопленной доходности (может содержать портфель и инфляцию)
+            symbols: список символов
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Проверяем, есть ли множественные серии
+        if hasattr(data, 'ndim') and getattr(data, 'ndim', 1) == 2 and getattr(data, 'shape', (0, 0))[1] >= 2:
+            # Множественные серии: портфель и инфляция
+            x_data = data.index
+            # Первая серия: портфель
+            y_portfolio = data.iloc[:, 0].values
+            self.plot_smooth_line(ax, x_data, y_portfolio, color='#2E5BBA', label='Портфель')
+            # Вторая серия: инфляция
+            y_inflation = data.iloc[:, 1].values
+            self.plot_smooth_line(ax, x_data, y_inflation, color=self.get_color(1), label='Инфляция')
+        else:
+            # Одна серия: только портфель
+            x_data = data.index
+            y_portfolio = data.values if hasattr(data, 'values') else data
+            self.plot_smooth_line(ax, x_data, y_portfolio, color='#2E5BBA', label=f'Портфель ({", ".join(symbols)})')
+        
+        # Применяем стандартные стили
+        title = f'Накопленная доходность портфеля\n{", ".join(symbols)}'
+        ylabel = f'Накопленная доходность ({currency})'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
+    
     def save_figure(self, fig, output_buffer, **kwargs):
         """Сохранить фигуру с настройками по умолчанию"""
         save_kwargs = {
