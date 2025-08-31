@@ -969,7 +969,47 @@ class OkamaFinanceBot:
                 
                 response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
                 
-                await self._send_message_safe(update, response)
+                # Создаем кнопки для основных пространств имен
+                keyboard = []
+                
+                # Основные биржи
+                keyboard.append([
+                    InlineKeyboardButton("🇺🇸 US", callback_data="namespace_US"),
+                    InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX"),
+                    InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE")
+                ])
+                
+                # Европейские биржи
+                keyboard.append([
+                    InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR"),
+                    InlineKeyboardButton("🇫🇷 XFRA", callback_data="namespace_XFRA"),
+                    InlineKeyboardButton("🇳🇱 XAMS", callback_data="namespace_XAMS")
+                ])
+                
+                # Индексы и валюты
+                keyboard.append([
+                    InlineKeyboardButton("📊 INDX", callback_data="namespace_INDX"),
+                    InlineKeyboardButton("💱 FX", callback_data="namespace_FX"),
+                    InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
+                ])
+                
+                # Товары и криптовалюты
+                keyboard.append([
+                    InlineKeyboardButton("🛢️ COMM", callback_data="namespace_COMM"),
+                    InlineKeyboardButton("₿ CC", callback_data="namespace_CC"),
+                    InlineKeyboardButton("🏠 RE", callback_data="namespace_RE")
+                ])
+                
+                # Портфели и депозиты
+                keyboard.append([
+                    InlineKeyboardButton("💼 PF", callback_data="namespace_PF"),
+                    InlineKeyboardButton("💰 PIF", callback_data="namespace_PIF"),
+                    InlineKeyboardButton("🏦 RATE", callback_data="namespace_RATE")
+                ])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_message_safe(update, response, reply_markup=reply_markup)
                 
             else:
                 # Show symbols in specific namespace
@@ -1978,6 +2018,10 @@ class OkamaFinanceBot:
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
                 await self._handle_portfolio_compare_assets_button(update, context, symbols)
+            elif callback_data.startswith('namespace_'):
+                namespace = callback_data.replace('namespace_', '')
+                self.logger.info(f"Namespace button clicked for: {namespace}")
+                await self._handle_namespace_button(update, context, namespace)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -3514,6 +3558,149 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error creating portfolio compare assets chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
+
+    async def _handle_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+        """Handle namespace button click - show symbols in specific namespace"""
+        try:
+            import okama as ok
+            
+            self.logger.info(f"Handling namespace button for: {namespace}")
+            
+            # Show symbols in specific namespace (same logic as namespace_command)
+            try:
+                symbols_df = ok.symbols_in_namespace(namespace)
+                
+                # Check if DataFrame is empty
+                if symbols_df.empty:
+                    await self._send_callback_message(update, context, f"❌ Пространство имен '{namespace}' не найдено или пусто")
+                    return
+                
+                # Convert DataFrame to list of symbols
+                if 'symbol' in symbols_df.columns:
+                    # Extract ticker part (before the dot)
+                    symbols = []
+                    for full_symbol in symbols_df['symbol'].tolist():
+                        if pd.isna(full_symbol) or full_symbol is None:
+                            continue
+                        symbol_str = str(full_symbol).strip()
+                        if '.' in symbol_str:
+                            ticker = symbol_str.split('.')[0]
+                            symbols.append(ticker)
+                        else:
+                            symbols.append(symbol_str)
+                elif 'ticker' in symbols_df.columns:
+                    symbols = symbols_df['ticker'].tolist()
+                else:
+                    # If no clear column, try to get the first column
+                    symbols = symbols_df.iloc[:, 0].tolist()
+                
+                if not symbols:
+                    await self._send_callback_message(update, context, f"❌ Пространство имен '{namespace}' не содержит символов")
+                    return
+                
+                # Show statistics first
+                total_symbols = len(symbols_df)
+                response = f"📊 Пространство имен: {namespace}\n\n"
+                response += f"📈 Статистика:\n"
+                response += f"• Всего символов: {total_symbols}\n"
+                response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
+                
+                # Prepare data for display
+                headers = ["Символ", "Название", "Страна", "Валюта"]
+                
+                # Get first 10 rows
+                first_10 = []
+                for _, row in symbols_df.head(10).iterrows():
+                    symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                    name = row['name'] if pd.notna(row['name']) else 'N/A'
+                    country = row['country'] if pd.notna(row['country']) else 'N/A'
+                    currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
+                    
+                    # Truncate long names for readability
+                    if len(name) > 40:
+                        name = name[:37] + "..."
+                    
+                    first_10.append([symbol, name, country, currency])
+                
+                # Get last 10 rows
+                last_10 = []
+                for _, row in symbols_df.tail(10).iterrows():
+                    symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                    name = row['name'] if pd.notna(row['name']) else 'N/A'
+                    country = row['country'] if pd.notna(row['country']) else 'N/A'
+                    currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
+                    
+                    # Truncate long names for readability
+                    if len(name) > 40:
+                        name = name[:37] + "..."
+                    
+                    last_10.append([symbol, name, country, currency])
+                
+                # Создаем простую таблицу символов
+                if first_10:
+                    response += "Первые 10 символов:\n\n"
+                    
+                    # Создаем простую таблицу
+                    for row in first_10:
+                        symbol = row[0]
+                        name = row[1]
+                        country = row[2]
+                        currency = row[3]
+                        
+                        response += f"• {symbol} - {name} | {country} | {currency}\n"
+                    
+                    # Отправляем основное сообщение с таблицей
+                    await self._send_callback_message(update, context, response)
+                    
+                    # Если есть еще символы, показываем их отдельно
+                    if last_10 and total_symbols > 10:
+                        last_response = "Последние 10 символов:\n\n"
+                        
+                        # Создаем таблицу для последних символов
+                        for row in last_10:
+                            symbol = row[0]
+                            name = row[1]
+                            country = row[2]
+                            currency = row[3]
+                            
+                            last_response += f"• {symbol} - {name} | {country} | {currency}\n"
+                        
+                        await self._send_callback_message(update, context, last_response)
+                else:
+                    response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
+                    await self._send_callback_message(update, context, response)
+                
+                # Send Excel file with full list of symbols
+                try:
+                    await self._send_callback_message(update, context, "📊 Создаю Excel файл со всеми символами...")
+                    
+                    # Create Excel file in memory
+                    excel_buffer = io.BytesIO()
+                    symbols_df.to_excel(excel_buffer, index=False, sheet_name=f'{namespace}_Symbols')
+                    excel_buffer.seek(0)
+                    
+                    # Send Excel file
+                    await context.bot.send_document(
+                        chat_id=update.effective_chat.id,
+                        document=excel_buffer,
+                        filename=f"{namespace}_symbols.xlsx",
+                        caption=self._truncate_caption(f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)")
+                    )
+                    
+                    excel_buffer.close()
+                    
+                except Exception as excel_error:
+                    self.logger.error(f"Error creating Excel file for {namespace}: {excel_error}")
+                    await self._send_callback_message(update, context, f"⚠️ Не удалось создать Excel файл: {str(excel_error)}")
+                
+            except Exception as e:
+                await self._send_callback_message(update, context, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
+                
+        except ImportError:
+            await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
+        except Exception as e:
+            self.logger.error(f"Error in namespace button handler: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     def run(self):
         """Run the bot"""
