@@ -379,7 +379,8 @@ class AssetService:
                         
                         fig, ax = chart_styles.create_price_chart(
                             series_for_plot, symbol, getattr(asset, "currency", ""), 
-                            period='monthly'
+                            period='monthly',
+                            copyright=False
                         )
                         
                         # Save to buffer
@@ -663,7 +664,8 @@ class AssetService:
                         
                         fig, ax = chart_styles.create_price_chart(
                             series_for_plot, symbol, getattr(asset, "currency", ""), 
-                            period=''
+                            period='',
+                            copyright=False
                         )
                         
                         buf = io.BytesIO()
@@ -910,7 +912,8 @@ class AssetService:
                 data=series_for_plot,
                 symbol=symbol,
                 currency=currency,
-                period=period
+                period=period,
+                copyright=False
             )
             
             # Save chart to bytes using standardized method

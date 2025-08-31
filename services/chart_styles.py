@@ -328,7 +328,7 @@ class ChartStyles:
         
         # Применяем стандартные стили
         self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel=xlabel, show_xlabel=True,
+            ax, title=title, ylabel=ylabel, xlabel=xlabel, show_xlabel=False,
             grid=grid, legend=legend, copyright=copyright
         )
         
@@ -368,7 +368,7 @@ class ChartStyles:
         
         # Применяем стандартные стили
         self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel=xlabel, show_xlabel=True,
+            ax, title=title, ylabel=ylabel, xlabel=xlabel, show_xlabel=False,
             grid=grid, legend=legend, copyright=copyright
         )
         
@@ -412,7 +412,7 @@ class ChartStyles:
         
         # Применяем стандартные стили
         self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel=xlabel, show_xlabel=True,
+            ax, title=title, ylabel=ylabel, xlabel=xlabel, show_xlabel=False,
             grid=grid, legend=legend, copyright=copyright
         )
         
@@ -506,6 +506,7 @@ class ChartStyles:
             data=data,
             title=f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}',
             ylabel=f'Цена ({currency})' if currency else 'Цена',
+            copyright=False,
             **kwargs
         )
     
@@ -955,6 +956,152 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error in smooth_line_data: {e}")
             return x_data, y_data
+    
+    def create_comparison_chart(self, data, symbols, currency, **kwargs):
+        """
+        Создать график сравнения активов
+        
+        Args:
+            data: DataFrame с данными накопленной доходности
+            symbols: список символов активов
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(**kwargs)
+        
+        # Рисуем данные для каждого столбца
+        for i, column in enumerate(data.columns):
+            color = self.get_color(i)
+            ax.plot(data.index, data[column].values, 
+                   color=color, linewidth=self.line_config['linewidth'], 
+                   alpha=self.line_config['alpha'], label=column)
+        
+        # Применяем стандартные стили
+        title = f'Сравнение активов: {", ".join(symbols)}'
+        ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=False,
+            grid=True, legend=True, copyright=True
+        )
+        
+        # Настройка для временных рядов
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
+    
+    def create_correlation_matrix_chart(self, correlation_matrix, **kwargs):
+        """
+        Создать график корреляционной матрицы
+        
+        Args:
+            correlation_matrix: DataFrame с корреляционной матрицей
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(**kwargs)
+        
+        # Создаем тепловую карту корреляционной матрицы
+        im = ax.imshow(correlation_matrix.values, cmap='RdYlBu_r', vmin=-1, vmax=1, aspect='auto')
+        
+        # Настройка осей
+        ax.set_xticks(range(len(correlation_matrix.columns)))
+        ax.set_yticks(range(len(correlation_matrix.index)))
+        ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right')
+        ax.set_yticklabels(correlation_matrix.index)
+        
+        # Добавляем цветовую шкалу
+        cbar = fig.colorbar(im, ax=ax, shrink=0.8)
+        cbar.set_label('Корреляция', rotation=270, labelpad=15)
+        
+        # Добавляем значения в ячейки
+        for i in range(len(correlation_matrix.index)):
+            for j in range(len(correlation_matrix.columns)):
+                value = correlation_matrix.iloc[i, j]
+                text_color = 'white' if abs(value) > 0.5 else 'black'
+                ax.text(j, i, f'{value:.2f}', ha='center', va='center', 
+                       color=text_color, fontweight='bold', fontsize=10)
+        
+        # Применяем стандартные стили
+        title = f'Корреляционная матрица ({len(correlation_matrix.columns)} активов)'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel='', ylabel='', show_xlabel=False, show_ylabel=False,
+            grid=False, legend=False, copyright=True
+        )
+        
+        return fig, ax
+    
+    def create_dividends_chart_enhanced(self, data, symbol, currency, **kwargs):
+        """
+        Создать улучшенный график дивидендов
+        
+        Args:
+            data: Series с данными дивидендов
+            symbol: символ актива
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(**kwargs)
+        
+        # Рисуем столбчатую диаграмму
+        dates = [pd.to_datetime(date) for date in data.index]
+        amounts = data.values
+        
+        bars = ax.bar(dates, amounts, color=self.colors['success'], alpha=0.7, width=20)
+        
+        # Применяем стандартные стили
+        title = f'Дивиденды {symbol}'
+        ylabel = f'Сумма ({currency})'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=False,
+            grid=True, legend=False, copyright=True
+        )
+        
+        # Форматирование оси X
+        fig.autofmt_xdate()
+        
+        # Добавляем статистику в левом верхнем углу
+        total_dividends = data.sum()
+        avg_dividend = data.mean()
+        max_dividend = data.max()
+        
+        stats_text = f'Общая сумма: {total_dividends:.2f} {currency}\n'
+        stats_text += f'Средняя выплата: {avg_dividend:.2f} {currency}\n'
+        stats_text += f'Максимальная выплата: {max_dividend:.2f} {currency}'
+        
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+               verticalalignment='top', fontsize=10,
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+        
+        return fig, ax
+    
+    def apply_monte_carlo_style(self, ax):
+        """
+        Применить стили для графиков Monte Carlo
+        
+        Args:
+            ax: matplotlib axes
+        """
+        self._apply_monte_carlo_style(ax)
+    
+    def apply_percentile_style(self, ax):
+        """
+        Применить стили для графиков процентилей
+        
+        Args:
+            ax: matplotlib axes
+        """
+        self._apply_percentile_style(ax)
 
 # Глобальный экземпляр для использования в других модулях
 chart_styles = ChartStyles()
