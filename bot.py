@@ -312,8 +312,7 @@ class OkamaFinanceBot:
             ax.set_facecolor('#F8F9FA')
             
             # Enhanced legend
-            ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
-                     loc='upper left', bbox_to_anchor=(0.02, 0.98))
+            ax.legend(**chart_styles.legend_config)
             
             # Customize spines
             for spine in ax.spines.values():
@@ -551,18 +550,10 @@ class OkamaFinanceBot:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""🧠 Okama Financial Bot - Полная справка
-
-Привет, {user_name}! Я помогу с анализом рынков и портфелей.
-
-Что умею:
-• Анализ одного актива с графиками цен + AI-анализ каждого графика
-• Сравнение нескольких активов
-• Анализ портфеля (веса, риск/доходность, efficient frontier)
-• Макро/товары/валюты
-• Анализ инфляции
-• Объяснения и рекомендации
-• 🆕 AI-анализ изображений графиков - отправьте фото для анализа!
+        welcome_message = f"""
+• Анализ активов (акции, облигации, товары, индексы, валюты) с графиками цен
+• Сравнение нескольких активов с графиками накопленной доходности и учетом инфляции
+• Анализ портфеля (веса, риски, доходность, прогнозы)
 
 Основные команды:
 /start — эта справка
@@ -585,6 +576,7 @@ class OkamaFinanceBot:
 • `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых
 • `/compare GC.COMM CL.COMM` - сравнить золото и нефть
 • `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото
+
 • `/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации
 • `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель
 Базовая валюта опрелеляется по первому символу в списке.
@@ -778,37 +770,38 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график за 1 год с копирайтом"""
+        """Получить ежедневный график за 1 год с централизованными стилями и копирайтом"""
         try:
             # Получаем данные для ежедневного графика
             self.logger.info(f"Getting daily chart for {symbol}")
             price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
             
-            self.logger.info(f"Price history result for {symbol}: {type(price_history)}")
-            if isinstance(price_history, dict):
-                self.logger.info(f"Price history keys: {list(price_history.keys())}")
-                if 'charts' in price_history:
-                    self.logger.info(f"Charts keys: {list(price_history['charts'].keys()) if price_history['charts'] else 'No charts'}")
-            
             if 'error' in price_history:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
                 return None
             
-            # Ищем ежедневный график
+            # Получаем данные о ценах
+            if 'prices' in price_history and price_history['prices'] is not None:
+                prices = price_history['prices']
+                currency = price_history.get('currency', 'USD')
+                
+                # Создаем график с использованием централизованных стилей
+                return self._create_daily_chart_with_styles(symbol, prices, currency)
+            
+            # Fallback к старому методу если нет данных о ценах
             if 'charts' in price_history and price_history['charts']:
                 charts = price_history['charts']
-                # Приоритет: adj_close (ежедневные данные), затем fallback
                 if 'adj_close' in charts and charts['adj_close']:
                     self.logger.info(f"Found adj_close chart for {symbol}")
-                    return charts['adj_close']  # Копирайт уже добавлен в asset_service
+                    return charts['adj_close']
                 elif 'fallback' in charts and charts['fallback']:
                     self.logger.info(f"Found fallback chart for {symbol}")
-                    return charts['fallback']  # Копирайт уже добавлен в asset_service
-                # Если нет ежедневных, берем первый доступный
+                    return charts['fallback']
+                
                 for chart_type, chart_data in charts.items():
                     if chart_data:
                         self.logger.info(f"Using {chart_type} chart for {symbol}")
-                        return chart_data  # Копирайт уже добавлен в asset_service
+                        return chart_data
             
             self.logger.warning(f"No charts found for {symbol}")
             return None
@@ -904,6 +897,180 @@ class OkamaFinanceBot:
             self.logger.error(f"Error adding copyright to chart: {e}")
             # Возвращаем оригинальный график если не удалось добавить копирайт
             return chart_data
+
+    def _create_daily_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
+        """Создать ежедневный график с централизованными стилями"""
+        try:
+            import matplotlib.pyplot as plt
+            import io
+            import matplotlib.dates as mdates
+            
+            # Создаем фигуру с использованием chart_styles
+            fig, ax = chart_styles.create_figure(figsize=(12, 7))
+            
+            # Применяем базовый стиль
+            chart_styles.apply_base_style(fig, ax)
+            
+            # Подготавливаем данные для графика
+            if hasattr(prices, 'index') and hasattr(prices, 'values'):
+                dates = prices.index
+                values = prices.values
+            else:
+                # Fallback для других типов данных
+                dates = list(prices.keys()) if isinstance(prices, dict) else range(len(prices))
+                values = list(prices.values()) if isinstance(prices, dict) else list(prices)
+            
+            # Конвертируем даты если нужно
+            try:
+                if hasattr(dates, 'to_timestamp'):
+                    dates = dates.to_timestamp()
+                elif hasattr(dates, 'astype'):
+                    dates = dates.astype('datetime64[ns]')
+            except Exception:
+                pass
+            
+            # Рисуем линию с закругленными углами
+            line = chart_styles.plot_smooth_line(ax, dates, values, 
+                                               color=chart_styles.colors['primary'],
+                                               label=f'{symbol} ({currency})')
+            
+            # Настраиваем заголовок и оси
+            ax.set_title(f'Ежедневный график: {symbol} (1 год)', 
+                        **chart_styles.title_config)
+            ax.set_xlabel('Дата', **chart_styles.axis_config)
+            ax.set_ylabel(f'Цена ({currency})', **chart_styles.axis_config)
+            
+            # Форматируем ось X для дат
+            if hasattr(dates, 'dtype') and dates.dtype.kind in ['M', 'O']:
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            # Добавляем статистику на график
+            if len(values) > 0:
+                try:
+                    current_price = float(values[-1])
+                    start_price = float(values[0])
+                    min_price = float(min(values))
+                    max_price = float(max(values))
+                    
+                    if start_price != 0:
+                        price_change = ((current_price - start_price) / start_price) * 100
+                        stats_text = f'Изменение: {price_change:+.2f}%\n'
+                        stats_text += f'Мин: {min_price:.2f}\n'
+                        stats_text += f'Макс: {max_price:.2f}'
+                        
+                        # Добавляем статистику в правый верхний угол с закругленными углами
+                        ax.text(0.98, 0.98, stats_text, transform=ax.transAxes,
+                               fontsize=10, verticalalignment='top', horizontalalignment='right',
+                               bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, 
+                                       edgecolor=chart_styles.colors['grid'], linewidth=0.8))
+                except Exception:
+                    pass
+            
+            # Добавляем копирайт
+            chart_styles.add_copyright(ax)
+            
+            # Сохраняем график
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Очищаем память
+            chart_styles.cleanup_figure(fig)
+            
+            return img_buffer.getvalue()
+            
+        except Exception as e:
+            self.logger.error(f"Error creating daily chart with styles for {symbol}: {e}")
+            return None
+
+    def _create_monthly_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
+        """Создать месячный график с централизованными стилями"""
+        try:
+            import matplotlib.pyplot as plt
+            import io
+            import matplotlib.dates as mdates
+            
+            # Создаем фигуру с использованием chart_styles
+            fig, ax = chart_styles.create_figure(figsize=(12, 7))
+            
+            # Применяем базовый стиль
+            chart_styles.apply_base_style(fig, ax)
+            
+            # Подготавливаем данные для графика
+            if hasattr(prices, 'index') and hasattr(prices, 'values'):
+                dates = prices.index
+                values = prices.values
+            else:
+                # Fallback для других типов данных
+                dates = list(prices.keys()) if isinstance(prices, dict) else range(len(prices))
+                values = list(prices.values()) if isinstance(prices, dict) else list(prices)
+            
+            # Конвертируем даты если нужно
+            try:
+                if hasattr(dates, 'to_timestamp'):
+                    dates = dates.to_timestamp()
+                elif hasattr(dates, 'astype'):
+                    dates = dates.astype('datetime64[ns]')
+            except Exception:
+                pass
+            
+            # Рисуем линию с закругленными углами
+            line = chart_styles.plot_smooth_line(ax, dates, values, 
+                                               color=chart_styles.colors['secondary'],
+                                               label=f'{symbol} ({currency})')
+            
+            # Настраиваем заголовок и оси
+            ax.set_title(f'Месячный график: {symbol} (10 лет)', 
+                        **chart_styles.title_config)
+            ax.set_xlabel('Дата', **chart_styles.axis_config)
+            ax.set_ylabel(f'Цена ({currency})', **chart_styles.axis_config)
+            
+            # Форматируем ось X для дат
+            if hasattr(dates, 'dtype') and dates.dtype.kind in ['M', 'O']:
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+                ax.xaxis.set_major_locator(mdates.YearLocator(2))
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            # Добавляем статистику на график
+            if len(values) > 0:
+                try:
+                    current_price = float(values[-1])
+                    start_price = float(values[0])
+                    min_price = float(min(values))
+                    max_price = float(max(values))
+                    
+                    if start_price != 0:
+                        price_change = ((current_price - start_price) / start_price) * 100
+                        stats_text = f'Изменение: {price_change:+.2f}%\n'
+                        stats_text += f'Мин: {min_price:.2f}\n'
+                        stats_text += f'Макс: {max_price:.2f}'
+                        
+                        # Добавляем статистику в правый верхний угол с закругленными углами
+                        ax.text(0.98, 0.98, stats_text, transform=ax.transAxes,
+                               fontsize=10, verticalalignment='top', horizontalalignment='right',
+                               bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.9, 
+                                       edgecolor=chart_styles.colors['grid'], linewidth=0.8))
+                except Exception:
+                    pass
+            
+            # Добавляем копирайт
+            chart_styles.add_copyright(ax)
+            
+            # Сохраняем график
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Очищаем память
+            chart_styles.cleanup_figure(fig)
+            
+            return img_buffer.getvalue()
+            
+        except Exception as e:
+            self.logger.error(f"Error creating monthly chart with styles for {symbol}: {e}")
+            return None
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /namespace command"""
@@ -1249,8 +1416,7 @@ class OkamaFinanceBot:
                 ax.set_facecolor('#F8F9FA')
                 
                 # Enhanced legend
-                ax.legend(fontsize=11, frameon=True, fancybox=True, shadow=True, 
-                         loc='upper left', bbox_to_anchor=(0.02, 0.98))
+                ax.legend(**chart_styles.legend_config)
                 
                 # Customize spines
                 for spine in ax.spines.values():
@@ -2165,7 +2331,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить месячный график за 10 лет с копирайтом"""
+        """Получить месячный график за 10 лет с централизованными стилями и копирайтом"""
         try:
             # Получаем данные для месячного графика
             price_history = self.asset_service.get_asset_price_history(symbol, '10Y')
@@ -2174,32 +2340,26 @@ class OkamaFinanceBot:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
                 return None
             
-            # Ищем месячный график - charts это словарь, а не список
+            # Получаем данные о ценах
+            if 'prices' in price_history and price_history['prices'] is not None:
+                prices = price_history['prices']
+                currency = price_history.get('currency', 'USD')
+                
+                # Создаем график с использованием централизованных стилей
+                return self._create_monthly_chart_with_styles(symbol, prices, currency)
+            
+            # Fallback к старому методу если нет данных о ценах
             if 'charts' in price_history and price_history['charts']:
                 charts = price_history['charts']
-                self.logger.info(f"Available chart types for {symbol}: {list(charts.keys())}")
-                
-                # Ищем месячный график по ключу 'close_monthly'
                 if 'close_monthly' in charts and charts['close_monthly']:
                     chart_data = charts['close_monthly']
-                    self.logger.info(f"Found monthly chart for {symbol}, type: {type(chart_data)}, length: {len(chart_data) if hasattr(chart_data, '__len__') else 'N/A'}")
-                    
-                    # Проверяем, что данные действительно являются bytes
                     if isinstance(chart_data, bytes) and len(chart_data) > 0:
-                        # Добавляем копирайт на график
                         return self._add_copyright_to_chart(chart_data)
-                    else:
-                        self.logger.error(f"Invalid monthly chart data for {symbol}: type={type(chart_data)}, length={len(chart_data) if hasattr(chart_data, '__len__') else 'N/A'}")
-                        return None
                 
-                # Если месячного графика нет, попробуем любой доступный
                 for chart_key, chart_data in charts.items():
                     if chart_data and isinstance(chart_data, bytes) and len(chart_data) > 0:
                         self.logger.info(f"Using fallback chart: {chart_key} for {symbol}")
-                        # Добавляем копирайт на график
                         return self._add_copyright_to_chart(chart_data)
-                    else:
-                        self.logger.warning(f"Skipping invalid chart {chart_key} for {symbol}: type={type(chart_data)}, length={len(chart_data) if hasattr(chart_data, '__len__') else 'N/A'}")
             
             self.logger.warning(f"No valid charts found for {symbol}")
             return None
@@ -3065,7 +3225,7 @@ class OkamaFinanceBot:
                 # Force legend update to match the new colors
                 if ax.get_legend():
                     ax.get_legend().remove()
-                ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True)
+                ax.legend(**chart_styles.legend_config)
                 
                 # Customize the chart
                 ax.set_title(f'Прогноз с процентилями\n{", ".join(symbols)}', 
