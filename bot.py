@@ -3062,6 +3062,11 @@ class OkamaFinanceBot:
                 # Apply percentile specific styles to ensure colors match legend
                 chart_styles.apply_percentile_style(ax)
                 
+                # Force legend update to match the new colors
+                if ax.get_legend():
+                    ax.get_legend().remove()
+                ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True)
+                
                 # Customize the chart
                 ax.set_title(f'Прогноз с процентилями\n{", ".join(symbols)}', 
                            fontsize=chart_styles.title_config['fontsize'], 
