@@ -1606,7 +1606,15 @@ class OkamaFinanceBot:
                     original_symbol = symbol_part.strip()
                     # Преобразуем символ в верхний регистр
                     symbol = original_symbol.upper()
-                    weight = float(weight_part.strip())
+                    
+                    try:
+                        weight_str = weight_part.strip()
+                        self.logger.info(f"DEBUG: Converting weight '{weight_str}' to float for symbol '{symbol}'")
+                        weight = float(weight_str)
+                    except Exception as e:
+                        self.logger.error(f"Error converting weight '{weight_part.strip()}' to float: {e}")
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1")
+                        return
                     
                     if weight <= 0 or weight > 1:
                         await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: {weight}. Доля должна быть от 0 до 1")
