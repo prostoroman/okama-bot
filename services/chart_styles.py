@@ -241,14 +241,8 @@ class ChartStyles:
             # Добавляем копирайт в правом нижнем углу
             copyright_text = self.copyright_config['text']
             
-            # Пытаемся использовать системный шрифт
-            try:
-                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", self.copyright_config['fontsize'])
-            except:
-                try:
-                    font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", self.copyright_config['fontsize'])
-                except:
-                    font = ImageFont.load_default()
+            # Используем шрифт по умолчанию
+            font = ImageFont.load_default()
             
             # Получаем размер текста
             bbox = draw.textbbox((0, 0), copyright_text, font=font)

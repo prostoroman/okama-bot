@@ -595,7 +595,7 @@ class EnhancedReportBuilder:
             ax.plot(cpi_data.index, cpi_data.values, color=self.colors[0], linewidth=2)
             ax.set_title(f'{name} - Динамика CPI ({country})', fontsize=14, fontweight='bold')
             ax.set_ylabel(f'CPI ({currency})', fontsize=12)
-            ax.set_xlabel('Дата', fontsize=12)
+
             ax.grid(True, alpha=0.3)
             ax.tick_params(axis='x', rotation=45)
             
@@ -610,7 +610,7 @@ class EnhancedReportBuilder:
                 ax.plot(yearly_change.index, yearly_change.values, color=self.colors[1], linewidth=2)
                 ax.set_title(f'{name} - Годовое изменение CPI ({country})', fontsize=12)
                 ax.set_ylabel('Изменение CPI (%)', fontsize=10)
-                ax.set_xlabel('Дата', fontsize=10)
+
                 ax.grid(True, alpha=0.3)
                 ax.axhline(y=0, color='black', linestyle='-', alpha=0.3)
                 ax.tick_params(axis='x', rotation=45)

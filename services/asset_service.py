@@ -1083,7 +1083,6 @@ class AssetService:
             # Customize chart
             ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
                        fontweight=chart_styles.title_config['fontweight'])
-            ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'])
             ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
             
             # Format x-axis dates properly
@@ -1143,7 +1142,6 @@ class AssetService:
                         # Reapply formatting
                         ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
                                    fontweight=chart_styles.title_config['fontweight'])
-                        ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'])
                         ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
                         ax.grid(True, alpha=0.3)
                     else:
@@ -1159,7 +1157,6 @@ class AssetService:
                             # Reapply formatting
                             ax.set_title(f'{chart_title}: {symbol} ({period})', fontsize=chart_styles.title_config['fontsize'], 
                                        fontweight=chart_styles.title_config['fontweight'])
-                            ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'])
                             ax.set_ylabel(f'Цена ({currency})', fontsize=chart_styles.axis_config['label_fontsize'])
                             ax.grid(True, alpha=0.3)
                         except Exception as clean_error:
@@ -1430,7 +1427,6 @@ class AssetService:
                     fig, ax = plt.subplots(figsize=(10, 4))
                     ax.bar(series_for_plot.index, series_for_plot.values, color='#2ca02c')
                     ax.set_title(f'Дивиденды: {symbol}', fontsize=12)
-                    ax.set_xlabel('Дата')
                     ax.set_ylabel(f'Сумма ({getattr(asset, "currency", "")})')
                     ax.grid(True, axis='y', linestyle='--', alpha=0.3)
                     fig.autofmt_xdate()
