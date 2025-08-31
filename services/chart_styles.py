@@ -162,6 +162,9 @@ class ChartStyles:
                     # Применяем яркие контрастные цвета по кругу
                     line.set_color(test_colors[i % len(test_colors)])
             
+            # Применяем стандартную сетку для консистентности
+            ax.grid(True, **self.grid_config)
+            
             logger.info(f"Applied Monte Carlo styles: main line (thick), {len(ax.lines)-1} test lines (thin, bright)")
             
         except Exception as e:
@@ -202,6 +205,13 @@ class ChartStyles:
                     line.set_alpha(0.6)
                     # Убираем метку для дополнительных линий
                     line.set_label('')
+                
+                # Применяем стандартную сетку для консистентности
+                ax.grid(True, **self.grid_config)
+                
+                # Применяем стандартную легенду для консистентности
+                if ax.get_legend() is not None:
+                    ax.legend(**self.legend_config)
                 
                 logger.info(f"Applied percentile styles: 10% (red), 50% (blue), 90% (green)")
             
@@ -1168,6 +1178,71 @@ class ChartStyles:
             chart_type='Годовая доходность портфеля', ylabel_suffix='(%)', 
             legend=False, grid=True, **kwargs
         )
+    
+    def create_portfolio_drawdowns_chart(self, data, symbols, currency, **kwargs):
+        """
+        Создать стандартный график просадок портфеля
+        
+        Args:
+            data: данные просадок
+            symbols: список символов
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        return self._create_standard_line_chart(
+            data=data, symbols=symbols, currency=currency, 
+            chart_type='Просадки портфеля', ylabel_suffix='(%)', 
+            legend=False, grid=True, **kwargs
+        )
+    
+    def create_portfolio_compare_assets_chart(self, data, symbols, currency, **kwargs):
+        """
+        Создать стандартный график сравнения портфеля с активами
+        
+        Args:
+            data: данные сравнения (wealth_index_with_assets)
+            symbols: список символов
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart()
+        
+        # Рисуем данные с кастомными стилями линий
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, alpha=0.8)
+        
+        # Кастомизируем стили линий: портфель толще, активы тоньше
+        lines = ax.get_lines()
+        if len(lines) > 0:
+            # Первая линия - обычно портфель (комбинированный)
+            if len(lines) >= 1:
+                lines[0].set_linewidth(3.0)  # Линия портфеля толще
+                lines[0].set_alpha(1.0)      # Полная непрозрачность
+                lines[0].set_color(self.colors['primary'])  # Основной цвет для портфеля
+            
+            # Линии активов тоньше
+            for i in range(1, len(lines)):
+                lines[i].set_linewidth(1.5)  # Линии активов тоньше
+                lines[i].set_alpha(0.8)      # Слегка прозрачные
+                # Используем разные цвета для активов
+                lines[i].set_color(self.get_color(i-1))
+        
+        # Применяем стандартные стили
+        title = f'Портфель vs Активы\n{", ".join(symbols)}'
+        ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
     
     def save_figure(self, fig, output_buffer, **kwargs):
         """Сохранить фигуру с настройками по умолчанию"""
