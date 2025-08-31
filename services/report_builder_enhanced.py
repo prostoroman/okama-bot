@@ -20,17 +20,11 @@ import pandas as pd
 import numpy as np
 
 from yandexgpt_service import YandexGPTService
+from .chart_styles import chart_styles
 
 logger = logging.getLogger(__name__)
 
 class EnhancedReportBuilder:
-
-    def _add_copyright_signature(self, ax):
-        """Добавить копирайт подпись к графику"""
-        ax.text(0.02, -0.15, '________________________________________________________________________________________________________________',
-               transform=ax.transAxes, color='grey', alpha=0.7, fontsize=10)
-        ax.text(0.02, -0.25, '   ©Цбот                                                                               Source: okama   ',
-               transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
     """Улучшенный генератор отчетов для финансового анализа"""
     
     def __init__(self):

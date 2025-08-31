@@ -1662,11 +1662,11 @@ class OkamaFinanceBot:
                 
                 # Add risk metrics, Monte Carlo, forecast, and drawdowns buttons
                 keyboard = [
+                    [InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📉 Просадки", callback_data=f"drawdowns_{portfolio_data_str}")],
                     [InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{portfolio_data_str}")],
                     [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"monte_carlo_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📈 Прогноз по процентилям 10, 50, 90", callback_data=f"forecast_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📉 Просадки", callback_data=f"drawdowns_{portfolio_data_str}")],
-                    [InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"forecast_{portfolio_data_str}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"compare_assets_{portfolio_data_str}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
