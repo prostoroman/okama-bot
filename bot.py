@@ -1153,10 +1153,10 @@ class OkamaFinanceBot:
                 
                 if is_first_portfolio:
                     # First symbol is a portfolio, use its currency
-                    portfolio_info = saved_portfolios[first_symbol]
+                    portfolio_info = saved_portfolios[original_first_symbol]
                     currency = portfolio_info.get('currency', 'USD')
-                    currency_info = f"автоматически определена по портфелю ({first_symbol})"
-                    self.logger.info(f"Using portfolio currency for {first_symbol}: {currency}")
+                    currency_info = f"автоматически определена по портфелю ({original_first_symbol})"
+                    self.logger.info(f"Using portfolio currency for {original_first_symbol}: {currency}")
                 else:
                     # Try to get currency info for the first asset
                     if '.' in first_symbol:

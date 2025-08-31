@@ -99,10 +99,11 @@ class ChartStyles:
 
         # Сетка
         self.grid_config = {
-            'alpha': 0.15,
-            'linestyle': '--',
-            'linewidth': 0.8,
-            'color': self.colors['grid']
+            'alpha': 0.25,
+            'linestyle': '-',
+            'linewidth': 0.6,
+            'color': self.colors['grid'],
+            'zorder': 0
         }
 
         # Рамки
@@ -125,9 +126,6 @@ class ChartStyles:
         try:
             plt.style.use(self.style_config['style'])
             ax.set_facecolor(self.colors['neutral'])
-            
-            # Сетка
-            ax.grid(True, **self.grid_config)
             
             # Рамки — только снизу и слева (минимализм)
             for spine in ['top', 'right']:
