@@ -905,7 +905,7 @@ class ChartStyles:
             **kwargs: дополнительные параметры
             
         Returns:
-            tuple: (fig, ax) - фигура и оси
+            tuple: (fig, ax, table) - фигура, оси и таблица
         """
         fig, ax = self.create_standard_chart()
         
@@ -918,7 +918,7 @@ class ChartStyles:
                        cellLoc='center',
                        loc='center')
         
-        # Стилизуем таблицу
+        # Базовые стили таблицы
         table.auto_set_font_size(False)
         table.set_fontsize(10)
         table.scale(1.2, 1.5)
@@ -929,7 +929,7 @@ class ChartStyles:
             grid=False, legend=False, copyright=True
         )
         
-        return fig, ax
+        return fig, ax, table
     
     def create_portfolio_drawdowns_chart(self, data, symbols, currency, **kwargs):
         """
@@ -985,7 +985,7 @@ class ChartStyles:
         ylabel = f'Доходность ({currency})'
         
         self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel,
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=True,
             grid=True, legend=True, copyright=True
         )
         

@@ -297,9 +297,9 @@ class OkamaFinanceBot:
                 return
             
             # Create drawdowns chart using chart_styles
-                                            fig, ax = chart_styles.create_drawdowns_chart(
-                    asset_list.drawdowns, symbols, currency
-                )
+            fig, ax = chart_styles.create_drawdowns_chart(
+                asset_list.drawdowns, symbols, currency
+            )
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
@@ -331,7 +331,7 @@ class OkamaFinanceBot:
             
             # Create dividend yield chart using chart_styles
             fig, ax = chart_styles.create_dividend_yield_chart(
-                asset_list.dividend_yield, symbols, figsize=(14, 9)
+                asset_list.dividend_yield, symbols
             )
             
             # Save chart to bytes with memory optimization
@@ -387,7 +387,7 @@ class OkamaFinanceBot:
             
             # Create correlation matrix visualization using chart_styles
             fig, ax = chart_styles.create_correlation_matrix_chart(
-                correlation_matrix, figsize=(10, 8)
+                correlation_matrix
             )
             
             # Save chart to bytes with memory optimization
@@ -1259,63 +1259,33 @@ class OkamaFinanceBot:
                     # Create DataFrame from wealth data
                     wealth_df = pd.DataFrame(wealth_data)
                     
-                    # Generate beautiful comparison chart
-                    plt.style.use('fivethirtyeight')
-                    fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
-                    
-                    # Plot with enhanced styling
-                    wealth_df.plot(ax=ax, linewidth=2.5, alpha=0.9)
+                    # Generate beautiful comparison chart using chart_styles
+                    fig, ax = chart_styles.create_comparison_chart(
+                        data=wealth_df,
+                        symbols=symbols,
+                        currency=currency
+                    )
                     
                 else:
                     # Regular assets only, use AssetList
                     asset_list = ok.AssetList(symbols, ccy=currency)
                     self.logger.info("Created AssetList with full available period")
                     
-                    # Generate beautiful comparison chart
-                    plt.style.use('fivethirtyeight')
-                    fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
-                    
-                    # Plot with enhanced styling
-                    asset_list.wealth_indexes.plot(ax=ax, linewidth=2.5, alpha=0.9)
-                
-                # Enhanced chart customization
-                ax.set_title(f'Накопленная доходность\n{", ".join(symbols)}', 
-                           fontsize=16, fontweight='bold', pad=20, color='#2E3440')
-
-                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
-                
-                # Enhanced grid and background
-                ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
-                ax.set_facecolor('#F8F9FA')
-                
-                # Enhanced legend
-                ax.legend(**chart_styles.legend_config)
-                
-                # Customize spines
-                for spine in ax.spines.values():
-                    spine.set_color('#D1D5DB')
-                    spine.set_linewidth(0.8)
-                
-                # Enhance tick labels
-                ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
-                
-                # Add subtle background pattern
-                ax.set_alpha(0.95)
-                
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
+                    # Generate beautiful comparison chart using chart_styles
+                    fig, ax = chart_styles.create_comparison_chart(
+                        data=asset_list.wealth_indexes,
+                        symbols=symbols,
+                        currency=currency
+                    )
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
-                fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
-                           facecolor='white', edgecolor='none')
+                chart_styles.save_figure(fig, img_buffer)
                 img_buffer.seek(0)
                 img_bytes = img_buffer.getvalue()
                 
                 # Clear matplotlib cache to free memory
-                plt.close(fig)
-                plt.clf()
-                plt.cla()
+                chart_styles.cleanup_figure(fig)
                 
                 # Get basic statistics
                 stats_text = f"📊 Сравнение: {', '.join(symbols)}\n\n"
@@ -1641,7 +1611,7 @@ class OkamaFinanceBot:
                 
                 # Create portfolio chart with chart_styles
                 fig, ax = chart_styles.create_wealth_index_chart(
-                    wealth_index, symbols, currency, figsize=(12, 7)
+                    wealth_index, symbols, currency
                 )
                 
                 # Handle multiple series (portfolio and inflation) if present
@@ -2542,7 +2512,11 @@ class OkamaFinanceBot:
             
             # Создаем график с увеличенной высотой для таблицы
             plt.style.use('fivethirtyeight')
-            fig, ax = plt.subplots(figsize=(14, 10))
+            fig, ax = chart_styles.create_dividends_chart_enhanced(
+                data=dividend_series,
+                symbol=symbol,
+                currency=currency
+            )
             
             # Рисуем столбчатую диаграмму
             dates = [pd.to_datetime(date) for date in dividend_series.index]
@@ -2619,19 +2593,11 @@ class OkamaFinanceBot:
                     formatted_date = str(date)[:10]
                 table_data.append([formatted_date, f'{amount:.2f}'])
             
-            # Создаем фигуру для таблицы
-            fig, ax = plt.subplots(figsize=(10, 8))
-            ax.axis('tight')
-            ax.axis('off')
-            
-            # Создаем таблицу
-            table = ax.table(cellText=table_data,
-                           colLabels=table_headers,
-                           cellLoc='center',
-                           loc='center')
-            
-            # Добавляем копирайт к axes
-            chart_styles.add_copyright(ax)
+            # Создаем фигуру для таблицы используя chart_styles
+            fig, ax, table = chart_styles.create_dividend_table_chart(
+                table_data=table_data,
+                headers=table_headers
+            )
             
             # Стилизуем таблицу
             table.auto_set_font_size(False)
