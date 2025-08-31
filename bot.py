@@ -294,51 +294,19 @@ class OkamaFinanceBot:
                 await self._send_message_safe(update, "ℹ️ Данные о drawdowns недоступны для выбранных активов")
                 return
             
-            # Create drawdowns chart
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-            fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
-            
-            # Plot drawdowns
-            asset_list.drawdowns.plot(ax=ax, linewidth=2.5, alpha=0.9)
-            
-            # Enhanced chart customization
-            ax.set_title(f'История Drawdowns\n{", ".join(symbols)}', 
-                       fontsize=16, fontweight='bold', pad=20, color='#2E3440')
-            ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
-            ax.set_ylabel(f'Drawdown ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
-            
-            # Enhanced grid and background
-            ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
-            ax.set_facecolor('#F8F9FA')
-            
-            # Enhanced legend
-            ax.legend(**chart_styles.legend_config)
-            
-            # Customize spines
-            for spine in ax.spines.values():
-                spine.set_color('#D1D5DB')
-                spine.set_linewidth(0.8)
-            
-            # Enhance tick labels
-            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
-            
-            # Add subtle background pattern
-            ax.set_alpha(0.95)
-            
-            # Add copyright signature
-            chart_styles.add_copyright(ax)
+            # Create drawdowns chart using chart_styles
+            fig, ax = chart_styles.create_drawdowns_chart(
+                asset_list.drawdowns, symbols, currency, figsize=(14, 9)
+            )
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
-                       facecolor='white', edgecolor='none')
+            chart_styles.save_figure(fig, img_buffer)
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            plt.close(fig)
-            plt.clf()
-            plt.cla()
+            chart_styles.cleanup_figure(fig)
             
             # Send drawdowns chart
             await context.bot.send_photo(
@@ -346,8 +314,6 @@ class OkamaFinanceBot:
                 photo=io.BytesIO(img_bytes),
                 caption=self._truncate_caption(f"📉 График Drawdowns для {len(symbols)} активов\n\nПоказывает периоды падения активов и их восстановление")
             )
-            
-            plt.close(fig)
             
         except Exception as e:
             self.logger.error(f"Error creating drawdowns chart: {e}")
@@ -361,58 +327,19 @@ class OkamaFinanceBot:
                 await self._send_message_safe(update, "ℹ️ Данные о дивидендной доходности недоступны для выбранных активов")
                 return
             
-            # Create dividend yield chart
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-            fig, ax = plt.subplots(figsize=(14, 9), facecolor='white')
-            
-            # Plot dividend yield
-            asset_list.dividend_yield.plot(ax=ax, linewidth=2.5, alpha=0.9)
-            
-            # Enhanced chart customization
-            ax.set_title(f'Дивидендная доходность\n{", ".join(symbols)}', 
-                       fontsize=chart_styles.title_config['fontsize'], 
-                       fontweight=chart_styles.title_config['fontweight'], 
-                       pad=chart_styles.title_config['pad'], 
-                       color=chart_styles.title_config['color'])
-            ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'], 
-                         fontweight=chart_styles.axis_config['label_fontweight'], 
-                         color=chart_styles.axis_config['label_color'])
-            ax.set_ylabel(f'Дивидендная доходность (%)', fontsize=chart_styles.axis_config['label_fontsize'], 
-                          fontweight=chart_styles.axis_config['label_fontweight'], 
-                          color=chart_styles.axis_config['label_color'])
-            
-            # Enhanced grid and background
-            ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.8)
-            ax.set_facecolor('#F8F9FA')
-            
-            # Enhanced legend
-            ax.legend(**chart_styles.legend_config)
-            
-            # Customize spines
-            for spine in ax.spines.values():
-                spine.set_color('#D1D5DB')
-                spine.set_linewidth(0.8)
-            
-            # Enhance tick labels
-            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
-            
-            # Add subtle background pattern
-            ax.set_alpha(0.95)
-            
-            # Add copyright signature
-            chart_styles.add_copyright(ax)
+            # Create dividend yield chart using chart_styles
+            fig, ax = chart_styles.create_dividend_yield_chart(
+                asset_list.dividend_yield, symbols, figsize=(14, 9)
+            )
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
-                       facecolor='white', edgecolor='none')
+            chart_styles.save_figure(fig, img_buffer)
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            plt.close(fig)
-            plt.clf()
-            plt.cla()
+            chart_styles.cleanup_figure(fig)
             
             # Send dividend yield chart
             await context.bot.send_photo(
@@ -420,8 +347,6 @@ class OkamaFinanceBot:
                 photo=io.BytesIO(img_bytes),
                 caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
             )
-            
-            plt.close(fig)
             
         except Exception as e:
             self.logger.error(f"Error creating dividend yield chart: {e}")
@@ -458,74 +383,19 @@ class OkamaFinanceBot:
                 await self._send_message_safe(update, "ℹ️ Не удалось вычислить корреляционную матрицу")
                 return
             
-            # Create correlation matrix visualization
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-            # Use smaller figure size and lower DPI to save memory
-            fig, ax = plt.subplots(figsize=(10, 8), facecolor='white', dpi=150)
-            
-            # Create heatmap
-            im = ax.imshow(correlation_matrix.values, cmap='RdYlBu_r', aspect='auto', vmin=-1, vmax=1)
-            
-            # Set ticks and labels
-            ax.set_xticks(range(len(correlation_matrix.columns)))
-            ax.set_yticks(range(len(correlation_matrix.index)))
-            ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right')
-            ax.set_yticklabels(correlation_matrix.index)
-            
-            # Add colorbar
-            cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-            cbar.set_label('Корреляция', rotation=270, labelpad=15)
-            
-            # Add correlation values as text (only for smaller matrices to save memory)
-            if len(correlation_matrix) <= 8:  # Only add text for matrices with 8 or fewer assets
-                for i in range(len(correlation_matrix.index)):
-                    for j in range(len(correlation_matrix.columns)):
-                        value = correlation_matrix.iloc[i, j]
-                        # Color text based on correlation value
-                        if abs(value) > 0.7:
-                            text_color = 'white'
-                        else:
-                            text_color = 'black'
-                        
-                        ax.text(j, i, f'{value:.2f}', 
-                               ha='center', va='center', 
-                               color=text_color, fontsize=9, fontweight='bold')
-            
-            # Customize chart
-            ax.set_title('Корреляционная матрица активов', 
-                       fontsize=14, fontweight='bold', pad=15, color='#2E3440')
-            ax.set_xlabel('Активы', fontsize=11, fontweight='semibold', color='#4C566A')
-            ax.set_ylabel('Активы', fontsize=11, fontweight='semibold', color='#4C566A')
-            
-            # Enhanced grid
-            ax.grid(False)  # No grid for heatmap
-            ax.set_facecolor('#F8F9FA')
-            
-            # Customize spines
-            for spine in ax.spines.values():
-                spine.set_color('#D1D5DB')
-                spine.set_linewidth(0.8)
-            
-            # Enhance tick labels
-            ax.tick_params(axis='both', which='major', labelsize=10, colors='#4C566A')
-            
-            # Add subtle background pattern
-            ax.set_alpha(0.95)
-            
-            # Add copyright signature
-            chart_styles.add_copyright(ax)
+            # Create correlation matrix visualization using chart_styles
+            fig, ax = chart_styles.create_correlation_matrix_chart(
+                correlation_matrix, figsize=(10, 8)
+            )
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight', 
-                       facecolor='white', edgecolor='none')
+            chart_styles.save_figure(fig, img_buffer)
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            plt.close(fig)
-            plt.clf()
-            plt.cla()
+            chart_styles.cleanup_figure(fig)
             
             # Send correlation matrix
             self.logger.info("Sending correlation matrix image...")
@@ -1471,16 +1341,18 @@ class OkamaFinanceBot:
                 
                 self.logger.info(f"Created Portfolio with weights: {weights}, total: {sum(weights):.6f}")
                 
-                # Generate beautiful portfolio chart
-                fig, ax = chart_styles.create_figure()
-                
-                # Apply base style
-                chart_styles.apply_base_style(fig, ax)
-                
-                # Plot portfolio wealth index with spline interpolation
+                # Generate beautiful portfolio chart using chart_styles
                 wealth_index = portfolio.wealth_index
-                # If wealth_index contains multiple series (e.g., portfolio and inflation), label them explicitly
+                
+                # Create portfolio chart with chart_styles
+                fig, ax = chart_styles.create_wealth_index_chart(
+                    wealth_index, symbols, currency, figsize=(12, 7)
+                )
+                
+                # Handle multiple series (portfolio and inflation) if present
                 if hasattr(wealth_index, 'ndim') and getattr(wealth_index, 'ndim', 1) == 2 and getattr(wealth_index, 'shape', (0, 0))[1] >= 2:
+                    # Clear existing plot and add multiple series
+                    ax.clear()
                     x_data = wealth_index.index
                     # First series: portfolio
                     y_portfolio = wealth_index.iloc[:, 0].values
@@ -1488,29 +1360,15 @@ class OkamaFinanceBot:
                     # Second series: inflation
                     y_inflation = wealth_index.iloc[:, 1].values
                     chart_styles.plot_smooth_line(ax, x_data, y_inflation, color=chart_styles.get_color(1), label='Инфляция')
-                else:
-                    x_data = wealth_index.index
-                    y_data = wealth_index.values
-                    chart_styles.plot_smooth_line(ax, x_data, y_data, color='#2E5BBA', label='Портфель')
-                
-                # Enhanced chart customization
-                ax.set_title(f'Накопленная доходность портфеля\n{", ".join(symbols)}', 
-                           fontsize=chart_styles.title_config['fontsize'], 
-                           fontweight=chart_styles.title_config['fontweight'], 
-                           pad=chart_styles.title_config['pad'], 
-                           color=chart_styles.title_config['color'])
-                ax.set_xlabel('Дата', fontsize=chart_styles.axis_config['label_fontsize'], 
-                             fontweight=chart_styles.axis_config['label_fontweight'], 
-                             color=chart_styles.axis_config['label_color'])
-                ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=chart_styles.axis_config['label_fontsize'], 
-                              fontweight=chart_styles.axis_config['label_fontweight'], 
-                              color=chart_styles.axis_config['label_color'])
-                
-                # Enhanced legend
-                ax.legend(**chart_styles.legend_config)
-                
-                # Add copyright signature
-                chart_styles.add_copyright(ax)
+                    
+                    # Reapply styling for multiple series
+                    chart_styles.apply_standard_chart_styling(
+                        ax, 
+                        title=f'Накопленная доходность портфеля\n{", ".join(symbols)}',
+                        xlabel='Дата',
+                        ylabel=f'Накопленная доходность ({currency})',
+                        grid=True, legend=True, copyright=True
+                    )
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()

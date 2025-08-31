@@ -513,6 +513,377 @@ class ChartStyles:
         
         return plt.subplots(**fig_kwargs)
     
+    def create_standard_chart(self, figsize=None, style='default', **kwargs):
+        """
+        Создать стандартную фигуру с унифицированными настройками
+        
+        Args:
+            figsize: размер фигуры
+            style: стиль matplotlib ('default', 'fivethirtyeight', 'seaborn-v0_8-whitegrid')
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        try:
+            # Применяем стиль
+            if style == 'default':
+                plt.style.use(self.style_config['style'])
+            else:
+                plt.style.use(style)
+            
+            # Создаем фигуру
+            fig, ax = self.create_figure(figsize, **kwargs)
+            
+            # Применяем базовый стиль
+            self.apply_base_style(fig, ax)
+            
+            return fig, ax
+            
+        except Exception as e:
+            logger.error(f"Error creating standard chart: {e}")
+            # Fallback к простому созданию
+            return plt.subplots(figsize=figsize or self.style_config['figsize'])
+    
+    def apply_standard_chart_styling(self, ax, title=None, xlabel=None, ylabel=None, 
+                                   grid=True, legend=True, copyright=True, **kwargs):
+        """
+        Применить стандартные стили к графику
+        
+        Args:
+            ax: matplotlib axes
+            title: заголовок графика
+            xlabel: подпись оси X
+            ylabel: подпись оси Y
+            grid: показывать сетку
+            legend: показывать легенду
+            copyright: добавлять копирайт
+            **kwargs: дополнительные параметры стилизации
+        """
+        try:
+            # Заголовок
+            if title:
+                ax.set_title(title, **self.title_config)
+            
+            # Подписи осей
+            if xlabel:
+                ax.set_xlabel(xlabel, **self.axis_config)
+            if ylabel:
+                ax.set_ylabel(ylabel, **self.axis_config)
+            
+            # Сетка
+            if grid:
+                ax.grid(True, **self.grid_config)
+            
+            # Легенда
+            if legend and ax.get_legend() is not None:
+                ax.legend(**self.legend_config)
+            
+            # Копирайт
+            if copyright:
+                self.add_copyright(ax)
+            
+            # Дополнительные стили
+            if kwargs.get('spines', True):
+                for spine in ['top', 'right']:
+                    ax.spines[spine].set_visible(False)
+                for spine in ['left', 'bottom']:
+                    ax.spines[spine].set_color(self.spine_config['color'])
+                    ax.spines[spine].set_linewidth(self.spine_config['linewidth'])
+            
+            # Тики
+            if kwargs.get('ticks', True):
+                ax.tick_params(axis='both', which='major', 
+                               labelsize=self.axis_config['tick_fontsize'], 
+                               colors=self.axis_config['tick_color'])
+                
+        except Exception as e:
+            logger.error(f"Error applying standard chart styling: {e}")
+    
+    def create_drawdowns_chart(self, data, symbols, currency, figsize=(14, 9), **kwargs):
+        """
+        Создать стандартный график drawdowns
+        
+        Args:
+            data: данные drawdowns
+            symbols: список символов
+            currency: валюта
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, linewidth=2.5, alpha=0.9)
+        
+        # Применяем стили
+        title = f'История Drawdowns\n{", ".join(symbols)}'
+        xlabel = 'Дата'
+        ylabel = f'Drawdown ({currency})'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
+    
+    def create_dividend_yield_chart(self, data, symbols, figsize=(14, 9), **kwargs):
+        """
+        Создать стандартный график дивидендной доходности
+        
+        Args:
+            data: данные дивидендной доходности
+            symbols: список символов
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, linewidth=2.5, alpha=0.9)
+        
+        # Применяем стили
+        title = f'Дивидендная доходность\n{", ".join(symbols)}'
+        xlabel = 'Дата'
+        ylabel = 'Дивидендная доходность (%)'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
+    
+    def create_correlation_matrix_chart(self, correlation_matrix, figsize=(10, 8), **kwargs):
+        """
+        Создать стандартную корреляционную матрицу
+        
+        Args:
+            correlation_matrix: матрица корреляций
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Создаем heatmap
+        im = ax.imshow(correlation_matrix.values, cmap='RdYlBu_r', aspect='auto', vmin=-1, vmax=1)
+        
+        # Настраиваем тики и метки
+        ax.set_xticks(range(len(correlation_matrix.columns)))
+        ax.set_yticks(range(len(correlation_matrix.index)))
+        ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right')
+        ax.set_yticklabels(correlation_matrix.index)
+        
+        # Добавляем colorbar
+        cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+        cbar.set_label('Корреляция', rotation=270, labelpad=15)
+        
+        # Добавляем значения корреляции для небольших матриц
+        if len(correlation_matrix) <= 8:
+            for i in range(len(correlation_matrix.index)):
+                for j in range(len(correlation_matrix.columns)):
+                    value = correlation_matrix.iloc[i, j]
+                    text_color = 'white' if abs(value) > 0.7 else 'black'
+                    ax.text(j, i, f'{value:.2f}', 
+                           ha='center', va='center', 
+                           color=text_color, fontsize=9, fontweight='bold')
+        
+        # Применяем стили
+        title = 'Корреляционная матрица активов'
+        xlabel = 'Активы'
+        ylabel = 'Активы'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=False, legend=False, copyright=True
+        )
+        
+        return fig, ax
+    
+    def create_wealth_index_chart(self, data, symbols, currency, figsize=(14, 9), **kwargs):
+        """
+        Создать стандартный график накопленной доходности
+        
+        Args:
+            data: данные накопленной доходности
+            symbols: список символов
+            currency: валюта
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, linewidth=2.5, alpha=0.9)
+        
+        # Применяем стили
+        title = f'Накопленная доходность\n{", ".join(symbols)}'
+        xlabel = 'Дата'
+        ylabel = f'Накопленная доходность ({currency})'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
+    
+    def create_price_chart(self, data, symbol, currency, period='', figsize=(10, 4), **kwargs):
+        """
+        Создать стандартный график цен
+        
+        Args:
+            data: данные цен
+            symbol: символ актива
+            currency: валюта
+            period: период (daily, monthly)
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, color=self.colors['primary'], linewidth=2, alpha=0.8)
+        else:
+            ax.plot(data.index, data.values, color=self.colors['primary'], linewidth=2, alpha=0.8)
+        
+        # Применяем стили
+        title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
+        xlabel = 'Дата'
+        ylabel = f'Цена ({currency})'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=True, legend=False, copyright=True
+        )
+        
+        return fig, ax
+    
+    def create_dividends_chart(self, data, symbol, currency, figsize=(14, 10), **kwargs):
+        """
+        Создать стандартный график дивидендов
+        
+        Args:
+            data: данные дивидендов
+            symbol: символ актива
+            currency: валюта
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, kind='bar', color=self.colors['success'], alpha=0.8)
+        else:
+            ax.bar(data.index, data.values, color=self.colors['success'], alpha=0.8)
+        
+        # Применяем стили
+        title = f'Дивиденды {symbol}'
+        xlabel = 'Дата'
+        ylabel = f'Сумма ({currency})'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=True, legend=False, copyright=True
+        )
+        
+        # Настройка для столбчатого графика
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
+    
+    def create_monte_carlo_chart(self, data, symbols, figsize=(14, 9), **kwargs):
+        """
+        Создать стандартный график Монте-Карло
+        
+        Args:
+            data: данные Монте-Карло
+            symbols: список символов
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax, alpha=0.6)
+        
+        # Применяем специальные стили Монте-Карло
+        self.apply_monte_carlo_style(ax)
+        
+        # Применяем стандартные стили
+        title = f'Прогноз Монте-Карло\n{", ".join(symbols)}'
+        xlabel = 'Время'
+        ylabel = 'Накопленная доходность'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
+    
+    def create_percentile_chart(self, data, symbols, figsize=(14, 9), **kwargs):
+        """
+        Создать стандартный график с процентилями
+        
+        Args:
+            data: данные с процентилями
+            symbols: список символов
+            figsize: размер фигуры
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(figsize=figsize, style='fivethirtyeight')
+        
+        # Рисуем данные
+        if hasattr(data, 'plot'):
+            data.plot(ax=ax)
+        
+        # Применяем специальные стили процентилей
+        self.apply_percentile_style(ax)
+        
+        # Применяем стандартные стили
+        title = f'Прогноз с процентилями\n{", ".join(symbols)}'
+        xlabel = 'Время'
+        ylabel = 'Накопленная доходность'
+        
+        self.apply_standard_chart_styling(
+            ax, title=title, xlabel=xlabel, ylabel=ylabel,
+            grid=True, legend=True, copyright=True
+        )
+        
+        return fig, ax
+    
     def save_figure(self, fig, output_buffer, **kwargs):
         """Сохранить фигуру с настройками по умолчанию"""
         save_kwargs = {
@@ -539,81 +910,6 @@ class ChartStyles:
         """Получить цвет по индексу"""
         colors_list = list(self.colors.values())
         return colors_list[index % len(colors_list)]
-    
-    def create_price_chart(self, symbol: str, dates, values, currency: str, 
-                          chart_type: str = 'daily', title_suffix: str = '') -> bytes:
-        """
-        Создать график цен с унифицированными стилями
-        
-        Args:
-            symbol: символ актива
-            dates: даты
-            values: значения цен
-            currency: валюта
-            chart_type: тип графика ('daily' или 'monthly')
-            title_suffix: дополнительный текст в заголовке
-            
-        Returns:
-            bytes: изображение графика
-        """
-        try:
-            import matplotlib.pyplot as plt
-            import io
-            import matplotlib.dates as mdates
-            
-            # Создаем фигуру
-            fig, ax = self.create_figure(figsize=(12, 7))
-            
-            # Применяем базовый стиль
-            self.apply_base_style(fig, ax)
-            
-            # Выбираем цвет в зависимости от типа графика
-            line_color = self.colors['primary'] if chart_type == 'daily' else self.colors['secondary']
-            
-            # Рисуем линию
-            self.plot_smooth_line(ax, dates, values, 
-                                color=line_color,
-                                label=f'{symbol} ({currency})')
-            
-            # Настраиваем заголовок
-            title = f'{"Ежедневный" if chart_type == "daily" else "Месячный"} график: {symbol}'
-            if title_suffix:
-                title += f' {title_suffix}'
-            ax.set_title(title, **self.title_config)
-            
-            # Настраиваем оси
-            ax.set_xlabel('Дата', **self.axis_config)
-            ax.set_ylabel(f'Цена ({currency})', **self.axis_config)
-            
-            # Форматируем ось X для дат
-            if hasattr(dates, 'dtype') and dates.dtype.kind in ['M', 'O']:
-                if chart_type == 'daily':
-                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-                    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-                else:  # monthly
-                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-                    ax.xaxis.set_major_locator(mdates.YearLocator(2))
-                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-            
-            # Добавляем статистику
-            self._add_price_statistics(ax, values)
-            
-            # Добавляем копирайт
-            self.add_copyright(ax)
-            
-            # Сохраняем график
-            img_buffer = io.BytesIO()
-            self.save_figure(fig, img_buffer)
-            img_buffer.seek(0)
-            
-            # Очищаем память
-            self.cleanup_figure(fig)
-            
-            return img_buffer.getvalue()
-            
-        except Exception as e:
-            logger.error(f"Error creating price chart: {e}")
-            return None
     
     def _add_price_statistics(self, ax, values):
         """Добавить статистику цен на график"""

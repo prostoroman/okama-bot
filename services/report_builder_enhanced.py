@@ -165,32 +165,74 @@ class EnhancedReportBuilder:
         
         # 1. График изменения цен (если есть данные)
         if prices is not None and hasattr(prices, 'empty') and isinstance(prices, pd.Series) and not prices.empty:
-            plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-            
-            # График цены
-            ax1.plot(prices.index, prices.values, color=self.colors[0], linewidth=2)
-            ax1.set_title(f'Динамика цены: {name} ({ticker})', fontsize=14, fontweight='bold')
-            ax1.set_ylabel(f'Цена ({currency})', fontsize=12)
-            ax1.grid(True, alpha=0.3)
-            ax1.tick_params(axis='x', rotation=45)
-            
-            # График доходности
-            returns = prices.pct_change().dropna()
-            cumulative_returns = (1 + returns).cumprod()
-            ax2.plot(cumulative_returns.index, cumulative_returns.values, color=self.colors[1], linewidth=2)
-            ax2.set_title('Накопленная доходность', fontsize=14, fontweight='bold')
-            ax2.set_ylabel('Доходность (разы)', fontsize=12)
-            ax2.grid(True, alpha=0.3)
-            ax2.tick_params(axis='x', rotation=45)
-            
-            plt.tight_layout()
-            
-            # Создаем график с анализом
-            asset_info = {'ticker': ticker, 'name': name}
-            chart_bytes, analysis = self._fig_to_png_with_analysis(fig, "График динамики цен и доходности", asset_info)
-            charts.append(chart_bytes)
-            chart_analyses.append(analysis)
+            try:
+                from services.chart_styles import chart_styles
+                
+                # Создаем график с двумя подграфиками
+                fig, (ax1, ax2) = chart_styles.create_standard_chart(figsize=(10, 8), style='fivethirtyeight')
+                
+                # График цены
+                ax1.plot(prices.index, prices.values, color=self.colors[0], linewidth=2)
+                chart_styles.apply_standard_chart_styling(
+                    ax1, 
+                    title=f'Динамика цены: {name} ({ticker})',
+                    ylabel=f'Цена ({currency})',
+                    grid=True, legend=False, copyright=False
+                )
+                ax1.tick_params(axis='x', rotation=45)
+                
+                # График доходности
+                returns = prices.pct_change().dropna()
+                cumulative_returns = (1 + returns).cumprod()
+                ax2.plot(cumulative_returns.index, cumulative_returns.values, color=self.colors[1], linewidth=2)
+                chart_styles.apply_standard_chart_styling(
+                    ax2, 
+                    title='Накопленная доходность',
+                    ylabel='Доходность (разы)',
+                    grid=True, legend=False, copyright=False
+                )
+                ax2.tick_params(axis='x', rotation=45)
+                
+                # Добавляем копирайт к основному графику
+                chart_styles.add_copyright(ax1)
+                
+                plt.tight_layout()
+                
+                # Создаем график с анализом
+                asset_info = {'ticker': ticker, 'name': name}
+                chart_bytes, analysis = self._fig_to_png_with_analysis(fig, "График динамики цен и доходности", asset_info)
+                charts.append(chart_bytes)
+                chart_analyses.append(analysis)
+                
+            except Exception as e:
+                logger.error(f"Error creating price chart: {e}")
+                # Fallback к простому графику
+                plt.style.use('fivethirtyeight')
+                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+                
+                # График цены
+                ax1.plot(prices.index, prices.values, color=self.colors[0], linewidth=2)
+                ax1.set_title(f'Динамика цены: {name} ({ticker})', fontsize=14, fontweight='bold')
+                ax1.set_ylabel(f'Цена ({currency})', fontsize=12)
+                ax1.grid(True, alpha=0.3)
+                ax1.tick_params(axis='x', rotation=45)
+                
+                # График доходности
+                returns = prices.pct_change().dropna()
+                cumulative_returns = (1 + returns).cumprod()
+                ax2.plot(cumulative_returns.index, cumulative_returns.values, color=self.colors[1], linewidth=2)
+                ax2.set_title('Накопленная доходность', fontsize=14, fontweight='bold')
+                ax2.set_ylabel('Доходность (разы)', fontsize=12)
+                ax2.grid(True, alpha=0.3)
+                ax2.tick_params(axis='x', rotation=45)
+                
+                plt.tight_layout()
+                
+                # Создаем график с анализом
+                asset_info = {'ticker': ticker, 'name': name}
+                chart_bytes, analysis = self._fig_to_png_with_analysis(fig, "График динамики цен и доходности", asset_info)
+                charts.append(chart_bytes)
+                chart_analyses.append(analysis)
         
         # 2. График из asset_service (если есть)
         if data.get('chart'):
