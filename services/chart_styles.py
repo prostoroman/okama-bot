@@ -163,6 +163,35 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error applying Monte Carlo styles: {e}")
     
+    def apply_percentile_style(self, ax):
+        """Применить специальные стили для графика с процентилями"""
+        try:
+            if len(ax.lines) >= 3:
+                # Цвета для процентилей: 10% (красный), 50% (синий), 90% (зеленый)
+                percentile_colors = [
+                    self.colors['danger'],    # 10% - красный (пессимистичный)
+                    self.colors['primary'],   # 50% - синий (средний)
+                    self.colors['success']    # 90% - зеленый (оптимистичный)
+                ]
+                
+                # Применяем цвета к линиям процентилей
+                for i, line in enumerate(ax.lines[:3]):
+                    if i < len(percentile_colors):
+                        line.set_color(percentile_colors[i])
+                        line.set_linewidth(2.5)
+                        line.set_alpha(0.9)
+                
+                # Если есть дополнительные линии (например, текущее значение), делаем их менее заметными
+                for line in ax.lines[3:]:
+                    line.set_color(self.colors['neutral'])
+                    line.set_linewidth(1.5)
+                    line.set_alpha(0.6)
+                
+                logger.info(f"Applied percentile styles: 10% (red), 50% (blue), 90% (green)")
+            
+        except Exception as e:
+            logger.error(f"Error applying percentile styles: {e}")
+    
     def add_copyright(self, ax):
         """Добавить копирайт к графику"""
         try:
