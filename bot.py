@@ -1667,6 +1667,10 @@ class OkamaFinanceBot:
             # Create portfolio using okama
             import okama as ok
             
+            self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
+            self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
+            self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
+            
             # Determine base currency from the first asset
             first_symbol = symbols[0]
             currency_info = ""
@@ -1716,7 +1720,16 @@ class OkamaFinanceBot:
                     return
                 
                 # Create Portfolio with detected currency
-                portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+                try:
+                    self.logger.info(f"DEBUG: About to create ok.Portfolio with symbols={symbols}, ccy={currency}, weights={weights}")
+                    self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
+                    self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
+                    portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+                    self.logger.info(f"DEBUG: Successfully created portfolio")
+                except Exception as e:
+                    self.logger.error(f"DEBUG: Error creating portfolio: {e}")
+                    self.logger.error(f"DEBUG: Error type: {type(e)}")
+                    raise e
                 
                 self.logger.info(f"Created Portfolio with weights: {weights}, total: {sum(weights):.6f}")
                 
