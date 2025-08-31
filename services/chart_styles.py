@@ -174,18 +174,30 @@ class ChartStyles:
                     self.colors['success']    # 90% - зеленый (оптимистичный)
                 ]
                 
-                # Применяем цвета к линиям процентилей
+                # Метки для процентилей
+                percentile_labels = [
+                    '10% процентиль (пессимистичный)',
+                    '50% процентиль (средний)',
+                    '90% процентиль (оптимистичный)'
+                ]
+                
+                # Применяем цвета и метки к линиям процентилей
                 for i, line in enumerate(ax.lines[:3]):
                     if i < len(percentile_colors):
                         line.set_color(percentile_colors[i])
                         line.set_linewidth(2.5)
                         line.set_alpha(0.9)
+                        # Устанавливаем метку для легенды
+                        if i < len(percentile_labels):
+                            line.set_label(percentile_labels[i])
                 
                 # Если есть дополнительные линии (например, текущее значение), делаем их менее заметными
                 for line in ax.lines[3:]:
                     line.set_color(self.colors['neutral'])
                     line.set_linewidth(1.5)
                     line.set_alpha(0.6)
+                    # Убираем метку для дополнительных линий
+                    line.set_label('')
                 
                 logger.info(f"Applied percentile styles: 10% (red), 50% (blue), 90% (green)")
             
