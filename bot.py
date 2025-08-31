@@ -103,50 +103,6 @@ class OkamaFinanceBot:
             self.logger.error(f"Error parsing portfolio data: {e}")
             return [], []
 
-    def _safe_float_conversion(self, value) -> float:
-        """Safely convert value to float, handling Period objects and other special types"""
-        try:
-            # If it's already a number
-            if isinstance(value, (int, float)):
-                return float(value)
-            
-            # Handle datetime-like objects first (more specific)
-            if hasattr(value, 'timestamp') and not hasattr(value, 'to_timestamp'):
-                return float(value.timestamp())
-            
-            # Handle Period objects
-            elif hasattr(value, 'to_timestamp'):
-                try:
-                    # Try to convert Period to timestamp
-                    timestamp_obj = value.to_timestamp()
-                    if hasattr(timestamp_obj, 'timestamp'):
-                        return float(timestamp_obj.timestamp())
-                    else:
-                        return float(timestamp_obj)
-                except:
-                    # If timestamp fails, try converting to string then float
-                    str_value = str(value)
-                    # Check if it's a simple numeric string (allowing exponential notation)
-                    try:
-                        # Direct string to float conversion
-                        return float(str_value)
-                    except ValueError:
-                        # Try to extract numeric value using regex
-                        import re
-                        numeric_match = re.search(r'[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?', str_value)
-                        if numeric_match:
-                            return float(numeric_match.group())
-                        else:
-                            raise ValueError(f"Cannot extract numeric value from Period: {value}")
-            
-            # Try direct conversion
-            else:
-                return float(value)
-                
-        except Exception as e:
-            self.logger.warning(f"Could not convert value {value} (type: {type(value)}) to float: {e}")
-            raise ValueError(f"Cannot convert {value} to float")
-
     def _normalize_or_equalize_weights(self, symbols: list, weights: list) -> list:
         """Return valid weights for okama: normalize if close to 1, else equal weights.
 
@@ -1456,20 +1412,33 @@ class OkamaFinanceBot:
                         for symbol in symbols:
                             if symbol in final_values:
                                 value = final_values[symbol]
-                                try:
-                                    # Safely convert value to float for formatting
-                                    value_float = self._safe_float_conversion(value)
-                                    stats_text += f"• {symbol}: {value_float:.2f}\n"
-                                except Exception as e:
-                                    self.logger.warning(f"Could not format value for {symbol}: {e}")
-                                    stats_text += f"• {symbol}: {value}\n"
+                                stats_text += f"• {symbol}: {value:.2f}\n"
                     except Exception as e:
                         self.logger.warning(f"Could not get portfolio statistics: {e}")
                         stats_text += "📅 Период: недоступен\n⏱️ Длительность: недоступна\n\n"
                 else:
                     # Regular assets, use asset_list
                     stats_text += f"📅 Период: {asset_list.first_date} - {asset_list.last_date}\n"
-                    stats_text += f"⏱️ Длительность: {asset_list.period_length}\n\n"
+                    
+                    # Safely handle period_length which might be a Period object
+                    try:
+                        period_length = asset_list.period_length
+                        if hasattr(period_length, 'strftime'):
+                            # If it's a datetime-like object
+                            period_length_str = str(period_length)
+                        elif hasattr(period_length, 'days'):
+                            # If it's a timedelta-like object
+                            period_length_str = str(period_length)
+                        elif hasattr(period_length, 'to_timestamp'):
+                            # If it's a Period object
+                            period_length_str = str(period_length)
+                        else:
+                            # Try to convert to string directly
+                            period_length_str = str(period_length)
+                        stats_text += f"⏱️ Длительность: {period_length_str}\n\n"
+                    except Exception as e:
+                        self.logger.warning(f"Could not get period length: {e}")
+                        stats_text += "⏱️ Длительность: недоступна\n\n"
                     
                     # Get asset names
                     if hasattr(asset_list, 'names') and asset_list.names:
@@ -1485,13 +1454,7 @@ class OkamaFinanceBot:
                         for symbol in symbols:
                             if symbol in final_values:
                                 value = final_values[symbol]
-                                try:
-                                    # Safely convert value to float for formatting
-                                    value_float = self._safe_float_conversion(value)
-                                    stats_text += f"• {symbol}: {value_float:.2f}\n"
-                                except Exception as e:
-                                    self.logger.warning(f"Could not format value for {symbol}: {e}")
-                                    stats_text += f"• {symbol}: {value}\n"
+                                stats_text += f"• {symbol}: {value:.2f}\n"
                     except Exception as e:
                         self.logger.warning(f"Could not get final values: {e}")
                 
@@ -1890,8 +1853,30 @@ class OkamaFinanceBot:
                         else:
                             final_value = list(final_value)[0]
                     
-                    # Use safe float conversion
-                    final_value = self._safe_float_conversion(final_value)
+                    # Handle Period objects and other special types
+                    if hasattr(final_value, 'to_timestamp'):
+                        # If it's a Period object, convert to timestamp first
+                        final_value = final_value.to_timestamp()
+                    
+                    # Convert to float safely
+                    if isinstance(final_value, (int, float)):
+                        final_value = float(final_value)
+                    elif hasattr(final_value, 'timestamp'):
+                        # If it's a datetime-like object with timestamp method
+                        final_value = float(final_value.timestamp())
+                    else:
+                        # Try to convert to string first, then to float
+                        final_value_str = str(final_value)
+                        try:
+                            final_value = float(final_value_str)
+                        except (ValueError, TypeError):
+                            # If all else fails, try to extract numeric value
+                            import re
+                            numeric_match = re.search(r'[\d.]+', final_value_str)
+                            if numeric_match:
+                                final_value = float(numeric_match.group())
+                            else:
+                                raise ValueError(f"Cannot convert {final_value} to float")
                     
                     portfolio_text += f"\n📈 Накопленная доходность портфеля: {final_value:.2f} {currency}"
                 except Exception as e:
@@ -1994,7 +1979,9 @@ class OkamaFinanceBot:
                     if hasattr(portfolio, 'mean_return_annual'):
                         try:
                             value = portfolio.mean_return_annual
-                            portfolio_attributes['mean_return_annual'] = self._safe_float_conversion(value)
+                            if hasattr(value, 'to_timestamp'):
+                                value = value.to_timestamp()
+                            portfolio_attributes['mean_return_annual'] = float(value)
                         except Exception as e:
                             self.logger.warning(f"Could not convert mean_return_annual to float: {e}")
                             portfolio_attributes['mean_return_annual'] = None
@@ -2002,7 +1989,9 @@ class OkamaFinanceBot:
                     if hasattr(portfolio, 'volatility_annual'):
                         try:
                             value = portfolio.volatility_annual
-                            portfolio_attributes['volatility_annual'] = self._safe_float_conversion(value)
+                            if hasattr(value, 'to_timestamp'):
+                                value = value.to_timestamp()
+                            portfolio_attributes['volatility_annual'] = float(value)
                         except Exception as e:
                             self.logger.warning(f"Could not convert volatility_annual to float: {e}")
                             portfolio_attributes['volatility_annual'] = None
@@ -2010,7 +1999,9 @@ class OkamaFinanceBot:
                     if hasattr(portfolio, 'sharpe_ratio'):
                         try:
                             value = portfolio.sharpe_ratio
-                            portfolio_attributes['sharpe_ratio'] = self._safe_float_conversion(value)
+                            if hasattr(value, 'to_timestamp'):
+                                value = value.to_timestamp()
+                            portfolio_attributes['sharpe_ratio'] = float(value)
                         except Exception as e:
                             self.logger.warning(f"Could not convert sharpe_ratio to float: {e}")
                             portfolio_attributes['sharpe_ratio'] = None
@@ -2034,7 +2025,10 @@ class OkamaFinanceBot:
                             else:
                                 final_value = list(final_value)[0]
                         
-                        portfolio_attributes['final_value'] = self._safe_float_conversion(final_value)
+                        if hasattr(final_value, 'to_timestamp'):
+                            final_value = final_value.to_timestamp()
+                        
+                        portfolio_attributes['final_value'] = float(final_value)
                     except Exception as e:
                         self.logger.warning(f"Could not get final value for storage: {e}")
                         portfolio_attributes['final_value'] = None
@@ -2984,7 +2978,7 @@ class OkamaFinanceBot:
                     risk_value = risk_annual.iloc[-1] if hasattr(risk_annual, 'iloc') else risk_annual
                 
                 if risk_value is not None:
-                    risk_pct = self._safe_float_conversion(risk_value) * 100
+                    risk_pct = float(risk_value) * 100
                     # Определяем уровень волатильности
                     if risk_pct <= 5:
                         volatility_level = "Очень низкая"
@@ -3027,7 +3021,7 @@ class OkamaFinanceBot:
                     semidev_value = semidev
                 
                 if semidev_value is not None:
-                    semidev_pct = self._safe_float_conversion(semidev_value) * 100
+                    semidev_pct = float(semidev_value) * 100
                     # Сравниваем с общей волатильностью
                     if hasattr(portfolio, 'risk_annual'):
                         risk_annual = portfolio.risk_annual
@@ -3037,7 +3031,7 @@ class OkamaFinanceBot:
                             risk_value = risk_annual.iloc[-1] if hasattr(risk_annual, 'iloc') else risk_annual
                         
                         if risk_value is not None:
-                            risk_pct = self._safe_float_conversion(risk_value) * 100
+                            risk_pct = float(risk_value) * 100
                             ratio = semidev_pct / risk_pct if risk_pct > 0 else 1
                             
                             if ratio < 0.7:
@@ -3067,8 +3061,8 @@ class OkamaFinanceBot:
                 var_5 = portfolio.get_var_historic(level=5)
                 
                 if var_1 is not None and var_5 is not None:
-                    var_1_pct = self._safe_float_conversion(var_1) * 100
-                    var_5_pct = self._safe_float_conversion(var_5) * 100
+                    var_1_pct = float(var_1) * 100
+                    var_5_pct = float(var_5) * 100
                     
                     # Оценка риска по VaR
                     if abs(var_5_pct) <= 3:
@@ -3104,7 +3098,7 @@ class OkamaFinanceBot:
                 cvar_5 = portfolio.get_cvar_historic(level=5)
                 
                 if cvar_5 is not None:
-                    cvar_5_pct = self._safe_float_conversion(cvar_5) * 100
+                    cvar_5_pct = float(cvar_5) * 100
                     
                     # Оценка по CVaR
                     if abs(cvar_5_pct) <= 5:
@@ -3140,7 +3134,7 @@ class OkamaFinanceBot:
                 if hasattr(drawdowns, 'min'):
                     max_dd = drawdowns.min()
                     if max_dd is not None:
-                        max_dd_pct = self._safe_float_conversion(max_dd) * 100
+                        max_dd_pct = float(max_dd) * 100
                         
                         # Оценка просадки
                         if max_dd_pct <= 5:
@@ -3180,7 +3174,7 @@ class OkamaFinanceBot:
                 if hasattr(recovery, 'max'):
                     max_recovery = recovery.max()
                     if max_recovery is not None:
-                        recovery_years = self._safe_float_conversion(max_recovery) / 12  # в годах
+                        recovery_years = float(max_recovery) / 12  # в годах
                         
                         # Оценка периода восстановления
                         if recovery_years <= 0.5:
@@ -3232,7 +3226,7 @@ class OkamaFinanceBot:
                     risk_value = risk_annual.iloc[-1] if hasattr(risk_annual, 'iloc') else risk_annual
                 
                 if risk_value is not None:
-                    risk_pct = self._safe_float_conversion(risk_value) * 100
+                    risk_pct = float(risk_value) * 100
                     
                     if risk_pct <= 5:
                         risk_score += 0  # Очень низкий риск
@@ -3277,7 +3271,7 @@ class OkamaFinanceBot:
                 if hasattr(drawdowns, 'min'):
                     max_dd = drawdowns.min()
                     if max_dd is not None:
-                        max_dd_pct = abs(self._safe_float_conversion(max_dd) * 100)
+                        max_dd_pct = abs(float(max_dd) * 100)
                         
                         if max_dd_pct <= 5:
                             risk_score += 0  # Очень низкий риск
@@ -3309,7 +3303,7 @@ class OkamaFinanceBot:
             try:
                 var_5 = portfolio.get_var_historic(level=5)
                 if var_5 is not None:
-                    var_5_pct = abs(self._safe_float_conversion(var_5) * 100)
+                    var_5_pct = abs(float(var_5) * 100)
                     
                     if var_5_pct <= 3:
                         risk_score += 0  # Очень низкий риск
@@ -3328,7 +3322,7 @@ class OkamaFinanceBot:
             try:
                 cvar_5 = portfolio.get_cvar_historic(level=5)
                 if cvar_5 is not None:
-                    cvar_5_pct = abs(self._safe_float_conversion(cvar_5) * 100)
+                    cvar_5_pct = abs(float(cvar_5) * 100)
                     
                     if cvar_5_pct <= 5:
                         risk_score += 0  # Очень низкий риск
@@ -3374,7 +3368,7 @@ class OkamaFinanceBot:
                     risk_value = risk_annual.iloc[-1] if hasattr(risk_annual, 'iloc') else risk_annual
                 
                 if risk_value is not None:
-                    risk_pct = self._safe_float_conversion(risk_value) * 100
+                    risk_pct = float(risk_value) * 100
                     assessment += f"📊 **Ключевые показатели:**\n"
                     assessment += f"• Волатильность: {volatility_emoji} {volatility_assessment} ({risk_pct:.1f}%)\n"
                     
@@ -3383,7 +3377,7 @@ class OkamaFinanceBot:
                         if hasattr(drawdowns, 'min'):
                             max_dd = drawdowns.min()
                             if max_dd is not None:
-                                max_dd_pct = abs(self._safe_float_conversion(max_dd) * 100)
+                                max_dd_pct = abs(float(max_dd) * 100)
                                 assessment += f"• Макс. просадка: {dd_assessment} ({max_dd_pct:.1f}%)\n"
             
             assessment += f"\n📋 **Рекомендации:**\n"
@@ -4005,14 +3999,8 @@ class OkamaFinanceBot:
                 
                 # Add portfolio performance vs individual assets
                 portfolio_final = portfolio.wealth_index.iloc[-1]
-                try:
-                    portfolio_final_float = self._safe_float_conversion(portfolio_final)
-                    caption += f"📈 Итоговые значения (накопленная доходность):\n"
-                    caption += f"• Портфель: {portfolio_final_float:.2f}\n"
-                except Exception as e:
-                    self.logger.warning(f"Could not format portfolio final value: {e}")
-                    caption += f"📈 Итоговые значения (накопленная доходность):\n"
-                    caption += f"• Портфель: {portfolio_final}\n"
+                caption += f"📈 Итоговые значения (накопленная доходность):\n"
+                caption += f"• Портфель: {portfolio_final:.2f}\n"
                 
                 # Get individual asset final values
                 for symbol in symbols:
@@ -4040,12 +4028,7 @@ class OkamaFinanceBot:
                         import okama as ok
                         asset = ok.Asset(symbol, ccy=currency)
                         asset_final = asset.wealth_index.iloc[-1]
-                        try:
-                            asset_final_float = self._safe_float_conversion(asset_final)
-                            caption += f"• {symbol}: {asset_final_float:.2f}\n"
-                        except Exception as e:
-                            self.logger.warning(f"Could not format asset final value for {symbol}: {e}")
-                            caption += f"• {symbol}: {asset_final}\n"
+                        caption += f"• {symbol}: {asset_final:.2f}\n"
                     except Exception as e:
                         self.logger.warning(f"Could not get final value for {symbol}: {e}")
                         caption += f"• {symbol}: недоступно\n"

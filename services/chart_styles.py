@@ -874,8 +874,17 @@ class ChartStyles:
                 x_numeric = []
                 for x_val in x_valid:
                     try:
+                        # Handle Period objects specifically
                         if hasattr(x_val, 'to_timestamp'):
-                            x_val = x_val.to_timestamp()
+                            try:
+                                x_val = x_val.to_timestamp()
+                            except Exception:
+                                # If to_timestamp fails, try to convert Period to string first
+                                if hasattr(x_val, 'strftime'):
+                                    x_val = pd.to_datetime(str(x_val))
+                                else:
+                                    x_val = pd.to_datetime(x_val)
+                        
                         if hasattr(x_val, 'timestamp'):
                             x_numeric.append(float(x_val.timestamp()))
                         elif isinstance(x_val, np.datetime64):

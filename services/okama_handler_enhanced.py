@@ -98,20 +98,38 @@ class EnhancedOkamaHandler:
                 'success': False
             }
     
-    def _validate_request(self, assets: List[str], period: Optional[str]) -> None:
+    def _validate_request(self, assets: List[str], period) -> None:
         """Проверяет корректность запроса"""
         if len(assets) > self.max_assets:
             raise ValueError(f"Превышен лимит активов: {len(assets)} > {self.max_assets}")
         
         if period:
             # Проверяем период
-            period_years = self._parse_period(period)
-            if period_years > 20:
-                raise ValueError(f"Период слишком большой: {period_years} лет > 20 лет")
+            try:
+                period_years = self._parse_period(period)
+                if period_years > 20:
+                    raise ValueError(f"Период слишком большой: {period_years} лет > 20 лет")
+            except Exception as e:
+                logger.warning(f"Could not validate period {period}: {e}")
+                # Continue with default period
     
-    def _determine_period(self, period: Optional[str], since_date: Optional[str], to_date: Optional[str]) -> str:
+    def _determine_period(self, period, since_date: Optional[str], to_date: Optional[str]) -> str:
         """Определяет период для анализа"""
         if period:
+            # Handle Period objects and other non-string types
+            if not isinstance(period, str):
+                try:
+                    period_str = str(period)
+                    # Try to extract numeric value and convert to "XY" format
+                    import re
+                    match = re.search(r'(\d+(?:\.\d+)?)', period_str)
+                    if match:
+                        years = float(match.group(1))
+                        return f"{int(years)}Y"
+                    else:
+                        return self.default_period
+                except Exception:
+                    return self.default_period
             return period
         
         if since_date and to_date:
@@ -616,12 +634,27 @@ class EnhancedOkamaHandler:
             'total_return': total_return
         }
     
-    def _parse_period(self, period: str) -> float:
+    def _parse_period(self, period) -> float:
         """Парсит период в годах"""
         if not period:
             return 5.0
         
-        # Убираем 'Y' и конвертируем в число
+        # Handle Period objects and other non-string types
+        if not isinstance(period, str):
+            try:
+                # If it's a Period object or similar, try to convert to string first
+                period_str = str(period)
+                # Try to extract numeric value from string representation
+                import re
+                match = re.search(r'(\d+(?:\.\d+)?)', period_str)
+                if match:
+                    return float(match.group(1))
+                else:
+                    return 5.0
+            except Exception:
+                return 5.0
+        
+        # Handle string periods
         try:
             return float(period.replace('Y', ''))
         except ValueError:
