@@ -1655,7 +1655,7 @@ class OkamaFinanceBot:
                     ],
                     [
                         InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{','.join(symbols)}"),
-                        InlineKeyboardButton("📊 Сравнить с активами", callback_data=f"compare_assets_{','.join(symbols)}")
+                        InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"compare_assets_{','.join(symbols)}")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -3175,6 +3175,19 @@ class OkamaFinanceBot:
                     pad=chart_styles.title_config['pad'],
                     color=chart_styles.title_config['color']
                 )
+                
+                # Customize line styles: portfolio line thicker, asset lines thinner
+                lines = ax.get_lines()
+                if len(lines) > 0:
+                    # First line is usually the portfolio (combined)
+                    if len(lines) >= 1:
+                        lines[0].set_linewidth(3.0)  # Portfolio line thicker
+                        lines[0].set_alpha(1.0)      # Full opacity
+                    
+                    # Asset lines are thinner
+                    for i in range(1, len(lines)):
+                        lines[i].set_linewidth(1.5)  # Asset lines thinner
+                        lines[i].set_alpha(0.8)      # Slightly transparent
                 
                 # Apply legend with proper unpacking
                 ax.legend(**chart_styles.legend_config)
