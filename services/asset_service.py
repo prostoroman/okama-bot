@@ -373,21 +373,19 @@ class AssetService:
                     except Exception as resample_error:
                         self.logger.warning(f"Failed to resample for {symbol}: {resample_error}")
                     
-                    # Create the plot
+                    # Create the plot using chart_styles
                     try:
-                        plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-                        fig, ax = plt.subplots(figsize=(10, 4))
-                        ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
-                        ax.set_title(f'Динамика цены по месяцам: {symbol}', fontsize=12)
-                        ax.set_xlabel('Дата')
-                        ax.set_ylabel(f'Цена ({getattr(asset, "currency", "")})')
-                        ax.grid(True, linestyle='--', alpha=0.3)
-                        fig.tight_layout()
+                        from services.chart_styles import chart_styles
+                        
+                        fig, ax = chart_styles.create_price_chart(
+                            series_for_plot, symbol, getattr(asset, "currency", ""), 
+                            period='monthly', figsize=(10, 4)
+                        )
                         
                         # Save to buffer
                         buf = io.BytesIO()
-                        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-                        plt.close(fig)
+                        chart_styles.save_figure(fig, buf)
+                        chart_styles.cleanup_figure(fig)
                         
                         chart_bytes = buf.getvalue()
                         if chart_bytes and len(chart_bytes) > 1000:  # Ensure chart is not empty
@@ -658,18 +656,23 @@ class AssetService:
                             series_for_plot.index = series_for_plot.index.to_timestamp()
                     except Exception:
                         pass
-                    plt.style.use('fivethirtyeight')  # Use fivethirtyeight style
-                    fig, ax = plt.subplots(figsize=(10, 4))
-                    ax.plot(series_for_plot.index, series_for_plot.values, color='#1f77b4', linewidth=2)
-                    ax.set_title(f'Динамика цены: {symbol}', fontsize=12)
-                    ax.set_xlabel('Дата')
-                    ax.set_ylabel(f'Цена ({getattr(asset, "currency", "")})')
-                    ax.grid(True, linestyle='--', alpha=0.3)
-                    fig.tight_layout()
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-                    plt.close(fig)
-                    info['chart'] = buf.getvalue()
+                    
+                    # Create the plot using chart_styles
+                    try:
+                        from services.chart_styles import chart_styles
+                        
+                        fig, ax = chart_styles.create_price_chart(
+                            series_for_plot, symbol, getattr(asset, "currency", ""), 
+                            figsize=(10, 4)
+                        )
+                        
+                        buf = io.BytesIO()
+                        chart_styles.save_figure(fig, buf)
+                        chart_styles.cleanup_figure(fig)
+                        info['chart'] = buf.getvalue()
+                    except Exception:
+                        # Silently ignore plotting errors
+                        pass
             except Exception:
                 # Silently ignore plotting errors
                 pass
