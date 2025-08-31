@@ -3612,34 +3612,19 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio returns chart for portfolio: {symbols}")
             
-            # Generate annual returns chart using okama
-            # portfolio.annual_return_ts.plot(kind="bar")
-            returns_data = portfolio.annual_return_ts.plot(kind="bar")
+            # Get annual returns data
+            returns_data = portfolio.annual_return_ts
             
-            # Get the current figure from matplotlib (created by okama)
-            current_fig = plt.gcf()
+            # Create standardized returns chart using chart_styles
+            fig, ax = chart_styles.create_portfolio_returns_chart(
+                data=returns_data, symbols=symbols, currency=currency
+            )
             
-            # Apply chart styles to the current figure
-            if current_fig.axes:
-                ax = current_fig.axes[0]
-                
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
-                    ax,
-                    title=f'Годовая доходность портфеля\n{", ".join(symbols)}',
-                    ylabel='Доходность (%)',
-                    grid=True,
-                    legend=False,
-                    copyright=True
-                )
-            
-            # Save the figure
+            # Save the figure using standardized method
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(current_fig, img_buffer)
+            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.cleanup_figure(fig)
             img_buffer.seek(0)
-            
-            # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(current_fig)
             
             # Get returns statistics
             try:
