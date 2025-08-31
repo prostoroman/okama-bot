@@ -1654,7 +1654,8 @@ class OkamaFinanceBot:
                         InlineKeyboardButton("📉 Drawdowns", callback_data=f"drawdowns_{','.join(symbols)}")
                     ],
                     [
-                        InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{','.join(symbols)}")
+                        InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{','.join(symbols)}"),
+                        InlineKeyboardButton("📊 Сравнить с активами", callback_data=f"compare_assets_{','.join(symbols)}")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1964,6 +1965,12 @@ class OkamaFinanceBot:
                 self.logger.info(f"Callback data: {callback_data}")
                 self.logger.info(f"Extracted symbols: {symbols}")
                 await self._handle_portfolio_returns_button(update, context, symbols)
+            elif callback_data.startswith('compare_assets_'):
+                symbols = callback_data.replace('compare_assets_', '').split(',')
+                self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
+                self.logger.info(f"Callback data: {callback_data}")
+                self.logger.info(f"Extracted symbols: {symbols}")
+                await self._handle_portfolio_compare_assets_button(update, context, symbols)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -3100,6 +3107,141 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error creating portfolio returns chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика доходности: {str(e)}")
+
+    async def _handle_portfolio_compare_assets_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle portfolio compare assets button click"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio compare assets button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context content: {user_context}")
+            
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            self.logger.info(f"Button symbols: {button_symbols}")
+            self.logger.info(f"Final symbols: {final_symbols}")
+            self.logger.info(f"Current symbols from context: {user_context.get('current_symbols')}")
+            self.logger.info(f"Last assets from context: {user_context.get('last_assets')}")
+            
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            currency = user_context.get('current_currency', 'USD')
+            raw_weights = user_context.get('portfolio_weights', [])
+            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            
+            self.logger.info(f"Creating compare assets chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
+            await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
+            
+            # Create Portfolio again
+            import okama as ok
+            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            
+            await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio compare assets button: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
+
+    async def _create_portfolio_compare_assets_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+        """Create and send portfolio compare assets chart"""
+        try:
+            self.logger.info(f"Creating portfolio compare assets chart for portfolio: {symbols}")
+            
+            # Generate wealth index with assets chart using okama
+            # portfolio.wealth_index_with_assets.plot()
+            compare_data = portfolio.wealth_index_with_assets.plot()
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                chart_styles.apply_base_style(current_fig, ax)
+                
+                # Customize the chart
+                ax.set_title(
+                    f'Портфель vs Активы\n{", ".join(symbols)}',
+                    fontsize=chart_styles.title_config['fontsize'],
+                    fontweight=chart_styles.title_config['fontweight'],
+                    pad=chart_styles.title_config['pad'],
+                    color=chart_styles.title_config['color']
+                )
+                
+                # Apply legend with proper unpacking
+                ax.legend(**chart_styles.legend_config)
+                
+                # Add copyright signature
+                chart_styles.add_copyright(ax)
+            
+            # Save the figure
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(current_fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(current_fig)
+            
+            # Get portfolio comparison statistics
+            try:
+                # Build enhanced caption
+                caption = f"📊 Портфель vs Активы: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                
+                # Add portfolio performance vs individual assets
+                portfolio_final = portfolio.wealth_index.iloc[-1]
+                caption += f"📈 Итоговые значения (накопленная доходность):\n"
+                caption += f"• Портфель: {portfolio_final:.2f}\n"
+                
+                # Get individual asset final values
+                for symbol in symbols:
+                    try:
+                        # Get individual asset
+                        import okama as ok
+                        asset = ok.Asset(symbol, ccy=currency)
+                        asset_final = asset.wealth_index.iloc[-1]
+                        caption += f"• {symbol}: {asset_final:.2f}\n"
+                    except Exception as e:
+                        self.logger.warning(f"Could not get final value for {symbol}: {e}")
+                        caption += f"• {symbol}: недоступно\n"
+                
+                caption += f"\n💡 График показывает:\n"
+                caption += f"• Накопленную доходность портфеля vs отдельных активов\n"
+                caption += f"• Эффект диверсификации\n"
+                caption += f"• Сравнение рисков и доходности"
+                
+            except Exception as e:
+                self.logger.warning(f"Could not get comparison statistics: {e}")
+                # Fallback to basic caption
+                caption = f"📊 Портфель vs Активы: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"💡 График показывает:\n"
+                caption += f"• Накопленную доходность портфеля vs отдельных активов\n"
+                caption += f"• Эффект диверсификации\n"
+                caption += f"• Сравнение рисков и доходности"
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio compare assets chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
 
     def run(self):
         """Run the bot"""
