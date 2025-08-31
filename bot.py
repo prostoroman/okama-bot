@@ -1106,7 +1106,7 @@ class OkamaFinanceBot:
                 # Enhanced chart customization
                 ax.set_title(f'Накопленная доходность\n{", ".join(symbols)}', 
                            fontsize=16, fontweight='bold', pad=20, color='#2E3440')
-                ax.set_xlabel('Дата', fontsize=13, fontweight='semibold', color='#4C566A')
+
                 ax.set_ylabel(f'Накопленная доходность ({currency})', fontsize=13, fontweight='semibold', color='#4C566A')
                 
                 # Enhanced grid and background
@@ -2125,7 +2125,7 @@ class OkamaFinanceBot:
             return None
 
     def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
-        """Создать график дивидендов без встроенной таблицы выплат"""
+        """Создать график дивидендов"""
         try:
             import matplotlib.pyplot as plt
             import io
@@ -2150,7 +2150,7 @@ class OkamaFinanceBot:
             
             # Настройка графика
             ax.set_title(f'Дивиденды {symbol}', fontsize=16, fontweight='bold', pad=20)
-            ax.set_xlabel('Дата', fontsize=12)
+
             ax.set_ylabel(f'Сумма ({currency})', fontsize=12)
             ax.grid(True, linestyle='--', alpha=0.3)
             
