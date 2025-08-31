@@ -2883,13 +2883,13 @@ class OkamaFinanceBot:
             import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
-            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency)
+            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio drawdowns button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
 
-    async def _create_portfolio_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+    async def _create_portfolio_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
         """Create and send portfolio drawdowns chart"""
         try:
             self.logger.info(f"Creating portfolio drawdowns chart for portfolio: {symbols}")
@@ -2938,7 +2938,7 @@ class OkamaFinanceBot:
                 caption = f"📉 Просадки портфеля: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
                 
                 # Add largest drawdowns
                 caption += f"📉 5 самых больших просадок:\n"
@@ -2963,7 +2963,7 @@ class OkamaFinanceBot:
                 caption = f"📉 Просадки портфеля: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
                 caption += f"💡 График показывает:\n"
                 caption += f"• Максимальную просадку портфеля\n"
                 caption += f"• Периоды восстановления\n"
@@ -3009,13 +3009,13 @@ class OkamaFinanceBot:
             import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
-            await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency)
+            await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency, weights)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio returns button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика доходности: {str(e)}")
 
-    async def _create_portfolio_returns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+    async def _create_portfolio_returns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
         """Create and send portfolio returns chart"""
         try:
             self.logger.info(f"Creating portfolio returns chart for portfolio: {symbols}")
@@ -3075,7 +3075,7 @@ class OkamaFinanceBot:
                 caption = f"💰 Годовая доходность портфеля: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
                 
                 # Add returns statistics
                 caption += f"📈 Статистика доходности:\n"
@@ -3094,7 +3094,7 @@ class OkamaFinanceBot:
                 caption = f"💰 Годовая доходность портфеля: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
                 caption += f"💡 График показывает:\n"
                 caption += f"• Годовую доходность по годам\n"
                 caption += f"• Волатильность доходности\n"
@@ -3145,7 +3145,7 @@ class OkamaFinanceBot:
             import okama as ok
             portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
             
-            await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency)
+            await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio compare assets button: {e}")
@@ -3153,7 +3153,7 @@ class OkamaFinanceBot:
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
 
-    async def _create_portfolio_compare_assets_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
+    async def _create_portfolio_compare_assets_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
         """Create and send portfolio compare assets chart"""
         try:
             self.logger.info(f"Creating portfolio compare assets chart for portfolio: {symbols}")
@@ -3212,7 +3212,7 @@ class OkamaFinanceBot:
                 caption = f"📊 Портфель vs Активы: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
                 
                 # Add portfolio performance vs individual assets
                 portfolio_final = portfolio.wealth_index.iloc[-1]
@@ -3242,7 +3242,7 @@ class OkamaFinanceBot:
                 caption = f"📊 Портфель vs Активы: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in portfolio.weights])}\n\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
                 caption += f"💡 График показывает:\n"
                 caption += f"• Накопленную доходность портфеля vs отдельных активов\n"
                 caption += f"• Эффект диверсификации\n"
