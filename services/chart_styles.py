@@ -110,8 +110,10 @@ class ChartStyles:
         # Легенда
         self.legend_config = {
             'fontsize': 10,
-            'frameon': False,
-            'loc': 'upper right'
+            'frameon': True,
+            'fancybox': True,
+            'shadow': True,
+            'loc': 'upper left'
         }
 
     def apply_base_style(self, fig, ax):
