@@ -88,7 +88,12 @@ class ChartStyles:
         self.axis_config = {
             'fontsize': 12,
             'fontweight': 'medium',
-            'color': self.colors['text']
+            'color': self.colors['text'],
+            'label_fontsize': 12,
+            'label_fontweight': 'medium',
+            'label_color': self.colors['text'],
+            'tick_fontsize': 10,
+            'tick_color': self.colors['text']
         }
 
         # Сетка
