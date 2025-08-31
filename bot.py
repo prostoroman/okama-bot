@@ -191,7 +191,7 @@ class OkamaFinanceBot:
         for chunk in self._split_text(text):
             await update.message.reply_text(chunk)
     
-    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None, reply_markup = None):
+    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None, reply_markup=None):
         """Безопасная отправка сообщения с автоматическим разбиением на части"""
         try:
             # Проверяем, что text действительно является строкой
@@ -1098,7 +1098,7 @@ class OkamaFinanceBot:
                     "• `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых\n"
                     "• `/compare GC.COMM CL.COMM` - сравнить золото и нефть (в USD)\n"
                     "• `/compare VOO.US,BND.US,GC.COMM` - сравнить акции, облигации и золото (в USD)\n\n"
-                                                             "Что вы получите:\n"
+                    "Что вы получите:\n"
                     "✅ График накопленной доходности всех активов\n"
                     "✅ Кнопки для дополнительного анализа:\n"
                     "   📉 Drawdowns - график рисков и волатильности\n"
@@ -1277,7 +1277,7 @@ class OkamaFinanceBot:
                     self.logger.warning(f"Could not get final values: {e}")
                 
                 # Send text report
-                #await self.send_long_message(update, stats_text)
+                # await self.send_long_message(update, stats_text)
                 
                 # Send chart image with buttons
                 keyboard = [
@@ -3011,6 +3011,18 @@ class OkamaFinanceBot:
                 mean_return_annual = portfolio.mean_return_annual
                 cagr = portfolio.get_cagr()
                 
+                # Handle CAGR which might be a Series
+                if hasattr(cagr, '__iter__') and not isinstance(cagr, str):
+                    # If it's a Series or array-like, get the first value
+                    if hasattr(cagr, 'iloc'):
+                        cagr_value = cagr.iloc[0]
+                    elif hasattr(cagr, '__getitem__'):
+                        cagr_value = cagr[0]
+                    else:
+                        cagr_value = list(cagr)[0]
+                else:
+                    cagr_value = cagr
+                
                 # Build enhanced caption
                 caption = f"💰 Годовая доходность портфеля: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
@@ -3021,7 +3033,7 @@ class OkamaFinanceBot:
                 caption += f"📈 Статистика доходности:\n"
                 caption += f"• Средняя месячная доходность: {mean_return_monthly:.2%}\n"
                 caption += f"• Средняя годовая доходность: {mean_return_annual:.2%}\n"
-                caption += f"• CAGR (Compound Annual Growth Rate): {cagr:.2%}\n\n"
+                caption += f"• CAGR (Compound Annual Growth Rate): {cagr_value:.2%}\n\n"
                 
                 caption += f"💡 График показывает:\n"
                 caption += f"• Годовую доходность по годам\n"
