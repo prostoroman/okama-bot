@@ -3295,12 +3295,15 @@ class OkamaFinanceBot:
                 
                 # Customize the chart
                 ax.set_title(
-                    f'Rolling CAGR (MAX период) портфеля\n{", ".join(symbols)}',
+                    f'Rolling CAGR \n{", ".join(symbols)}',
                     fontsize=chart_styles.title_config['fontsize'],
                     fontweight=chart_styles.title_config['fontweight'],
                     pad=chart_styles.title_config['pad'],
                     color=chart_styles.title_config['color']
                 )
+                
+                # Remove X-axis label
+                ax.set_xlabel('')
                 
                 # Add copyright signature
                 chart_styles.add_copyright(ax)
@@ -3588,7 +3591,7 @@ class OkamaFinanceBot:
                 total_symbols = len(symbols_df)
                 
                 # Show progress message
-                await self._send_callback_message(update, context, f"📊 Создаю Excel файл со всеми {total_symbols} символами...")
+                await self._send_callback_message(update, context, f"📊 Создаю Excel файл...")
                 
                 # Create Excel file in memory
                 excel_buffer = io.BytesIO()
@@ -3600,12 +3603,10 @@ class OkamaFinanceBot:
                     chat_id=update.effective_chat.id,
                     document=excel_buffer,
                     filename=f"{namespace}_symbols.xlsx",
-                    caption=self._truncate_caption(f"📊 Полный список символов в пространстве {namespace} ({total_symbols} символов)")
+                    caption=self._truncate_caption(f"📊 Полный список символов в пространстве {namespace} ({total_symbols})")
                 )
                 
                 excel_buffer.close()
-                
-                await self._send_callback_message(update, context, f"✅ Excel файл успешно создан и отправлен!")
                 
             except Exception as e:
                 await self._send_callback_message(update, context, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
