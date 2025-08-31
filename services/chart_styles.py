@@ -634,8 +634,4 @@ class ChartStyles:
             pass
 
 # Глобальный экземпляр для использования в других модулях
-def get_chart_styles():
-    """Получить экземпляр стилей графиков"""
-    return ChartStyles()
-
-chart_styles = get_chart_styles()
+chart_styles = ChartStyles()
