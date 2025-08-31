@@ -18,17 +18,11 @@ import matplotlib
 matplotlib.use("Agg")  # Для работы в headless режиме
 import io
 from datetime import datetime, timedelta
+from .chart_styles import chart_styles
 
 logger = logging.getLogger(__name__)
 
 class EnhancedOkamaHandler:
-
-    def _add_copyright_signature(self, ax):
-        """Добавить копирайт подпись к графику"""
-        ax.text(0.02, -0.15, '________________________________________________________________________________________________________________',
-               transform=ax.transAxes, color='grey', alpha=0.7, fontsize=10)
-        ax.text(0.02, -0.25, '   ©Цбот                                                                               Source: okama   ',
-               transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
     """Улучшенный обработчик okama с расширенной функциональностью"""
     
     def __init__(self):

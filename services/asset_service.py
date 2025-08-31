@@ -19,13 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class AssetService:
-
-    def _add_copyright_signature(self, ax):
-        """Добавить копирайт подпись к графику"""
-        ax.text(0.02, -0.15, '________________________________________________________________________________________________________________',
-               transform=ax.transAxes, color='grey', alpha=0.7, fontsize=10)
-        ax.text(0.02, -0.25, '   ©Цбот                                                                               Source: okama   ',
-               transform=ax.transAxes, fontsize=12, color='grey', alpha=0.7)
     """Service for retrieving asset information using Okama library"""
     
     def __init__(self):

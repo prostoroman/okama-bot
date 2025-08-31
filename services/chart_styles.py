@@ -69,7 +69,7 @@ class ChartStyles:
 
         # Копирайт
         self.copyright_config = {
-            'text': '© Цбот Pro | Data source: okama',
+            'text': '© shans.ai | data source: okama',
             'fontsize': 10,
             'color': self.colors['text'],
             'alpha': 0.55,
@@ -175,6 +175,8 @@ class ChartStyles:
                    alpha=self.copyright_config['alpha'])
         except Exception as e:
             logger.error(f"Error adding copyright: {e}")
+    
+
     
     def smooth_line_data(self, x_data, y_data, n_points=None):
         """
