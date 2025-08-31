@@ -25,7 +25,7 @@ class Config:
     MAX_CAPTION_LENGTH = 1024
     
     # Chart Style Configuration
-    CHART_STYLE = os.getenv('CHART_STYLE', 'nordic_minimal')  # 'nordic_minimal', 'nordic', or 'constructivist'
+    CHART_STYLE = os.getenv('CHART_STYLE', 'nordic')  # 'nordic' (единственный доступный стиль)
     
     # Supported Commands
     SUPPORTED_COMMANDS = {
