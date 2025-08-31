@@ -28,14 +28,14 @@ Successfully implemented a "Rolling CAGR" button for the `/portfolio` command th
 ### 4. Chart Creation Function
 - **Function**: `_create_portfolio_rolling_cagr_chart`
 - **Core Functionality**: 
-  - Uses `portfolio.get_rolling_cagr(window=12 * 2).plot()`
-  - Window size: 24 months (2 years) as specified
+  - Uses `portfolio.get_rolling_cagr().plot()`
+  - Window size: MAX period (entire available data)
   - Applies consistent chart styling from `chart_styles`
   - Generates comprehensive statistics
 
 ### 5. Chart Features
-- **Title**: "Rolling CAGR (2 года) портфеля [symbols]"
-- **Window**: 24-month rolling window
+- **Title**: "Rolling CAGR (MAX период) портфеля [symbols]"
+- **Window**: MAX period rolling window (entire available data)
 - **Styling**: Consistent with other portfolio charts
 - **Copyright**: Added signature using chart styles
 
@@ -45,7 +45,7 @@ The chart caption includes comprehensive Rolling CAGR statistics:
 - Mean Rolling CAGR
 - Standard deviation
 - Minimum and maximum values
-- Portfolio parameters (currency, weights, window size)
+- Portfolio parameters (currency, weights, MAX period window)
 
 ### 7. Error Handling
 - Comprehensive try-catch blocks
@@ -57,10 +57,10 @@ The chart caption includes comprehensive Rolling CAGR statistics:
 
 ### Okama Method Used
 ```python
-portfolio.get_rolling_cagr(window=12 * 2).plot()
+portfolio.get_rolling_cagr().plot()
 ```
-- **Window**: 24 months (2 years)
-- **Purpose**: Rolling 2-year CAGR calculation
+- **Window**: MAX period (entire available data)
+- **Purpose**: Rolling CAGR calculation over the entire available period
 - **Output**: Matplotlib figure object
 
 ### Chart Styling
@@ -129,7 +129,7 @@ portfolio.get_rolling_cagr(window=12 * 2).plot()
 The Rolling CAGR button has been successfully implemented and integrated into the portfolio command system. The implementation follows the existing code patterns and provides users with valuable insights into the rolling performance characteristics of their portfolios over a 2-year window.
 
 The feature enhances the portfolio analysis capabilities by providing:
-- Dynamic CAGR analysis over time
+- Dynamic CAGR analysis over the entire available period
 - Professional chart visualization
 - Comprehensive statistical information
 - Consistent user experience with other portfolio features

@@ -552,7 +552,12 @@ class OkamaFinanceBot:
                 
                 # Отправляем сообщение с таблицей и кнопкой
                 if is_callback:
-                    await self._send_callback_message(update, context, response, reply_markup=reply_markup)
+                    # Для callback сообщений отправляем через context.bot с кнопками
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=response,
+                        reply_markup=reply_markup
+                    )
                 else:
                     await self._send_message_safe(update, response, reply_markup=reply_markup)
             else:
@@ -565,7 +570,11 @@ class OkamaFinanceBot:
         except Exception as e:
             error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
             if is_callback:
-                await self._send_callback_message(update, context, error_msg)
+                # Для callback сообщений отправляем через context.bot
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=error_msg
+                )
             else:
                 await self._send_message_safe(update, error_msg)
     
@@ -815,8 +824,7 @@ class OkamaFinanceBot:
                 namespaces = ok.namespaces
                 
                 response = "📚 Доступные пространства имен (namespaces):\n\n"
-                response += f"📈 Статистика:\n"
-                response += f"• Всего пространств имен: {len(namespaces)}\n\n"
+                response += f"• Всего: {len(namespaces)}\n\n"
                 
                 # Prepare data for tabulate
                 headers = ["Код", "Описание", "Категория"]
@@ -1361,11 +1369,18 @@ class OkamaFinanceBot:
                     y_inflation = wealth_index.iloc[:, 1].values
                     chart_styles.plot_smooth_line(ax, x_data, y_inflation, color=chart_styles.get_color(1), label='Инфляция')
                     
-                    # Reapply styling for multiple series
+                    # Reapply styling for multiple series with copyright
                     chart_styles.apply_standard_chart_styling(
                         ax, 
                         title=f'Накопленная доходность портфеля\n{", ".join(symbols)}',
-                        xlabel='Дата',
+                        ylabel=f'Накопленная доходность ({currency})',
+                        grid=True, legend=True, copyright=True
+                    )
+                else:
+                    # Ensure copyright is added for single series chart
+                    chart_styles.apply_standard_chart_styling(
+                        ax, 
+                        title=f'Накопленная доходность портфеля\n{", ".join(symbols)}',
                         ylabel=f'Накопленная доходность ({currency})',
                         grid=True, legend=True, copyright=True
                     )
@@ -1491,7 +1506,13 @@ class OkamaFinanceBot:
                     portfolio_text += f"\n📈 Накопленная доходность портфеля: {final_value:.2f} {currency}"
                 except Exception as e:
                     self.logger.warning(f"Could not get final portfolio value: {e}")
-                    portfolio_text += f"\n📈 Накопленная доходность портфеля: недоступна"
+                    # Try to get mean annual return instead
+                    try:
+                        mean_return_annual = portfolio.mean_return_annual
+                        portfolio_text += f"\n📈 Средняя годовая доходность: {mean_return_annual:.2%}"
+                    except Exception as e2:
+                        self.logger.warning(f"Could not get mean annual return: {e2}")
+                        portfolio_text += f"\n📈 Накопленная доходность портфеля: недоступна"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
@@ -3253,8 +3274,8 @@ class OkamaFinanceBot:
             self.logger.info(f"Creating portfolio rolling CAGR chart for portfolio: {symbols}")
             
             # Generate rolling CAGR chart using okama
-            # portfolio.get_rolling_cagr(window=12 * 2).plot()  # window size is in months. We have rolling 2 year CAGR here
-            rolling_cagr_data = portfolio.get_rolling_cagr(window=12 * 2).plot()  # 2 year rolling window
+            # portfolio.get_rolling_cagr().plot()  # Uses MAX period (entire available data)
+            rolling_cagr_data = portfolio.get_rolling_cagr().plot()  # MAX period rolling window
             
             # Get the current figure from matplotlib (created by okama)
             current_fig = plt.gcf()
@@ -3266,7 +3287,7 @@ class OkamaFinanceBot:
                 
                 # Customize the chart
                 ax.set_title(
-                    f'Rolling CAGR (2 года) портфеля\n{", ".join(symbols)}',
+                    f'Rolling CAGR (MAX период) портфеля\n{", ".join(symbols)}',
                     fontsize=chart_styles.title_config['fontsize'],
                     fontweight=chart_styles.title_config['fontweight'],
                     pad=chart_styles.title_config['pad'],
@@ -3287,7 +3308,7 @@ class OkamaFinanceBot:
             # Get rolling CAGR statistics
             try:
                 # Get rolling CAGR data for statistics
-                rolling_cagr_series = portfolio.get_rolling_cagr(window=12 * 2)
+                rolling_cagr_series = portfolio.get_rolling_cagr()
                 
                 # Calculate statistics
                 mean_rolling_cagr = rolling_cagr_series.mean()
@@ -3297,11 +3318,11 @@ class OkamaFinanceBot:
                 current_rolling_cagr = rolling_cagr_series.iloc[-1] if not rolling_cagr_series.empty else None
                 
                 # Build enhanced caption
-                caption = f"📈 Rolling CAGR (2 года) портфеля: {', '.join(symbols)}\n\n"
+                caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
-                caption += f"• Окно: 24 месяца (2 года)\n\n"
+                caption += f"• Окно: MAX период (весь доступный период)\n\n"
                 
                 # Add rolling CAGR statistics
                 caption += f"📈 Статистика Rolling CAGR:\n"
@@ -3313,20 +3334,20 @@ class OkamaFinanceBot:
                 caption += f"• Максимальный: {max_rolling_cagr:.2%}\n\n"
                 
                 caption += f"💡 График показывает:\n"
-                caption += f"• Rolling CAGR с окном в 2 года\n"
+                caption += f"• Rolling CAGR за весь доступный период\n"
                 caption += f"• Динамику изменения CAGR во времени\n"
                 caption += f"• Стабильность доходности портфеля"
                 
             except Exception as e:
                 self.logger.warning(f"Could not get rolling CAGR statistics: {e}")
                 # Fallback to basic caption
-                caption = f"📈 Rolling CAGR (2 года) портфеля: {', '.join(symbols)}\n\n"
+                caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
-                caption += f"• Окно: 24 месяца (2 года)\n\n"
+                caption += f"• Окно: MAX период (весь доступный период)\n\n"
                 caption += f"💡 График показывает:\n"
-                caption += f"• Rolling CAGR с окном в 2 года\n"
+                caption += f"• Rolling CAGR за весь доступный период\n"
                 caption += f"• Динамику изменения CAGR во времени\n"
                 caption += f"• Стабильность доходности портфеля"
             
