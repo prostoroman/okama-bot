@@ -501,7 +501,11 @@ class OkamaFinanceBot:
             if symbols_df.empty:
                 error_msg = f"❌ Пространство имен '{namespace}' не найдено или пусто"
                 if is_callback:
-                    await self._send_callback_message(update, context, error_msg)
+                    # Для callback сообщений отправляем через context.bot
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=error_msg
+                    )
                 else:
                     await self._send_message_safe(update, error_msg)
                 return
@@ -563,7 +567,11 @@ class OkamaFinanceBot:
             else:
                 response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
                 if is_callback:
-                    await self._send_callback_message(update, context, response)
+                    # Для callback сообщений отправляем через context.bot
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=response
+                    )
                 else:
                     await self._send_message_safe(update, response)
             
