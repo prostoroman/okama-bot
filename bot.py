@@ -1219,7 +1219,37 @@ class OkamaFinanceBot:
                         else:
                             # Regular asset, need to get its wealth index
                             try:
-                                asset = ok.Asset(symbol, ccy=currency)
+                                # Use the currency from the portfolio if available, otherwise use detected currency
+                                asset_currency = currency
+                                if isinstance(expanded_symbols[0], pd.Series):
+                                    # First item is a portfolio, use its currency
+                                    portfolio_info = saved_portfolios.get(symbols[0], {})
+                                    asset_currency = portfolio_info.get('currency', currency)
+                                
+                                asset = ok.Asset(symbol, ccy=asset_currency)
+                                wealth_data[symbols[i]] = asset.wealth_index
+                            except Exception as e:
+                                self.logger.error(f"Error getting wealth index for {symbol}: {e}")
+                                await self._send_message_safe(update, f"❌ Ошибка при получении данных для {symbol}: {str(e)}")
+                                return
+                    
+                    # Create custom wealth index DataFrame
+                    wealth_data = {}
+                    for i, symbol in enumerate(expanded_symbols):
+                        if isinstance(symbol, pd.Series):
+                            # Portfolio wealth index
+                            wealth_data[symbols[i]] = symbol
+                        else:
+                            # Regular asset, need to get its wealth index
+                            try:
+                                # Use the currency from the portfolio if available, otherwise use detected currency
+                                asset_currency = currency
+                                if isinstance(expanded_symbols[0], pd.Series):
+                                    # First item is a portfolio, use its currency
+                                    portfolio_info = saved_portfolios.get(symbols[0], {})
+                                    asset_currency = portfolio_info.get('currency', currency)
+                                
+                                asset = ok.Asset(symbol, ccy=asset_currency)
                                 wealth_data[symbols[i]] = asset.wealth_index
                             except Exception as e:
                                 self.logger.error(f"Error getting wealth index for {symbol}: {e}")
