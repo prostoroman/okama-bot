@@ -622,43 +622,48 @@ class OkamaFinanceBot:
         
         await self._send_message_safe(update, help_text)
     
-    async def show_namespace_symbols(self, update: Update, namespace: str):
-        """Показать символы в пространстве имен"""
+    async def _show_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
+        """Единый метод для показа символов в пространстве имен"""
         try:
             import okama as ok
             symbols_df = ok.symbols_in_namespace(namespace)
             
             if symbols_df.empty:
-                await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не найдено или пусто")
+                error_msg = f"❌ Пространство имен '{namespace}' не найдено или пусто"
+                if is_callback:
+                    await self._send_callback_message(update, context, error_msg)
+                else:
+                    await self._send_message_safe(update, error_msg)
                 return
             
-            # Показываем первые 10 символов
+            # Show statistics first
+            total_symbols = len(symbols_df)
             response = f"📊 Пространство имен: {namespace}\n\n"
-            response += f"• Всего символов: {len(symbols_df)}\n\n"
+            response += f"📈 Статистика:\n"
+            response += f"• Всего символов: {total_symbols}\n"
+            response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
             
-            # Подготавливаем данные для таблицы
-            headers = ["Символ", "Название", "Страна", "Валюта"]
+            # Prepare data for display - show top 30 or all if less than 30
+            display_count = min(30, total_symbols)
+            response += f"📋 Показываю топ-{display_count} символов:\n\n"
             
-            # Получаем первые 10 строк
-            first_10 = []
-            for _, row in symbols_df.head(10).iterrows():
+            # Get top symbols (first 30 or all if less than 30)
+            top_symbols = []
+            for _, row in symbols_df.head(display_count).iterrows():
                 symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                 name = row['name'] if pd.notna(row['name']) else 'N/A'
                 country = row['country'] if pd.notna(row['country']) else 'N/A'
                 currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
                 
-                # Обрезаем длинные названия для читаемости
+                # Truncate long names for readability
                 if len(name) > 40:
                     name = name[:37] + "..."
                 
-                first_10.append([symbol, name, country, currency])
+                top_symbols.append([symbol, name, country, currency])
             
             # Создаем простую таблицу символов
-            if first_10:
-                response += "Первые 10 символов:\n\n"
-                
-                # Создаем простую таблицу
-                for row in first_10:
+            if top_symbols:
+                for row in top_symbols:
                     symbol = row[0]
                     name = row[1]
                     country = row[2]
@@ -666,13 +671,33 @@ class OkamaFinanceBot:
                     
                     response += f"• {symbol} - {name} | {country} | {currency}\n"
                 
-                await self._send_message_safe(update, response)
+                # Добавляем кнопку для выгрузки Excel
+                keyboard = [[
+                    InlineKeyboardButton(
+                        f"📊 Полный список в Excel ({total_symbols})", 
+                        callback_data=f"excel_namespace_{namespace}"
+                    )
+                ]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Отправляем сообщение с таблицей и кнопкой
+                if is_callback:
+                    await self._send_callback_message(update, context, response, reply_markup=reply_markup)
+                else:
+                    await self._send_message_safe(update, response, reply_markup=reply_markup)
             else:
-                response += f"💡 Используйте `/namespace {namespace}` для полного списка символов"
-                await self._send_message_safe(update, response)
+                response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
+                if is_callback:
+                    await self._send_callback_message(update, context, response)
+                else:
+                    await self._send_message_safe(update, response)
             
         except Exception as e:
-            await self._send_message_safe(update, f"❌ Ошибка при получении данных для '{namespace}': {str(e)}")
+            error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
+            if is_callback:
+                await self._send_callback_message(update, context, error_msg)
+            else:
+                await self._send_message_safe(update, error_msg)
     
 
 
@@ -1048,55 +1073,8 @@ class OkamaFinanceBot:
                         await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не содержит символов")
                         return
                     
-                    # Show statistics first
-                    total_symbols = len(symbols_df)
-                    response = f"📊 Пространство имен: {namespace}\n\n"
-                    response += f"📈 Статистика:\n"
-                    response += f"• Всего символов: {total_symbols}\n"
-                    response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
-                    
-                    # Prepare data for display - show top 30 or all if less than 30
-                    display_count = min(30, total_symbols)
-                    response += f"📋 Показываю топ-{display_count} символов:\n\n"
-                    
-                    # Get top symbols (first 30 or all if less than 30)
-                    top_symbols = []
-                    for _, row in symbols_df.head(display_count).iterrows():
-                        symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
-                        name = row['name'] if pd.notna(row['name']) else 'N/A'
-                        country = row['country'] if pd.notna(row['country']) else 'N/A'
-                        currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
-                        
-                        # Truncate long names for readability
-                        if len(name) > 40:
-                            name = name[:37] + "..."
-                        
-                        top_symbols.append([symbol, name, country, currency])
-                    
-                    # Создаем простую таблицу символов
-                    if top_symbols:
-                        for row in top_symbols:
-                            symbol = row[0]
-                            name = row[1]
-                            country = row[2]
-                            currency = row[3]
-                            
-                            response += f"• {symbol} - {name} | {country} | {currency}\n"
-                        
-                        # Добавляем кнопку для выгрузки Excel
-                        keyboard = [[
-                            InlineKeyboardButton(
-                                f"📊 Полный список в Excel ({total_symbols})", 
-                                callback_data=f"excel_namespace_{namespace}"
-                            )
-                        ]]
-                        reply_markup = InlineKeyboardMarkup(keyboard)
-                        
-                        # Отправляем основное сообщение с таблицей и кнопкой
-                        await self._send_message_safe(update, response, reply_markup=reply_markup)
-                    else:
-                        response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
-                        await self._send_message_safe(update, response)
+                    # Используем единый метод для показа символов
+                    await self._show_namespace_symbols(update, context, namespace, is_callback=False)
                     
                 except Exception as e:
                     await self._send_message_safe(update, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
@@ -3692,55 +3670,8 @@ class OkamaFinanceBot:
                     await self._send_callback_message(update, context, f"❌ Пространство имен '{namespace}' не содержит символов")
                     return
                 
-                # Show statistics first
-                total_symbols = len(symbols_df)
-                response = f"📊 Пространство имен: {namespace}\n\n"
-                response += f"📈 Статистика:\n"
-                response += f"• Всего символов: {total_symbols}\n"
-                response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
-                
-                # Prepare data for display - show top 30 or all if less than 30
-                display_count = min(30, total_symbols)
-                response += f"📋 Показываю топ-{display_count} символов:\n\n"
-                
-                # Get top symbols (first 30 or all if less than 30)
-                top_symbols = []
-                for _, row in symbols_df.head(display_count).iterrows():
-                    symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
-                    name = row['name'] if pd.notna(row['name']) else 'N/A'
-                    country = row['country'] if pd.notna(row['country']) else 'N/A'
-                    currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
-                    
-                    # Truncate long names for readability
-                    if len(name) > 40:
-                        name = name[:37] + "..."
-                    
-                    top_symbols.append([symbol, name, country, currency])
-                
-                # Создаем простую таблицу символов
-                if top_symbols:
-                    for row in top_symbols:
-                        symbol = row[0]
-                        name = row[1]
-                        country = row[2]
-                        currency = row[3]
-                        
-                        response += f"• {symbol} - {name} | {country} | {currency}\n"
-                    
-                    # Добавляем кнопку для выгрузки Excel
-                    keyboard = [[
-                        InlineKeyboardButton(
-                            f"📊 Полный список в Excel ({total_symbols} записей)", 
-                            callback_data=f"excel_namespace_{namespace}"
-                        )
-                    ]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    
-                    # Отправляем основное сообщение с таблицей и кнопкой
-                    await self._send_callback_message(update, context, response, reply_markup=reply_markup)
-                else:
-                    response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
-                    await self._send_callback_message(update, context, response)
+                # Используем единый метод для показа символов
+                await self._show_namespace_symbols(update, context, namespace, is_callback=True)
                 
             except Exception as e:
                 await self._send_callback_message(update, context, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
