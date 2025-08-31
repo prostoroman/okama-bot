@@ -1288,6 +1288,15 @@ class OkamaFinanceBot:
                                     # No portfolios, use detected currency
                                     asset_currency = currency
                                 
+                                # Log the symbol being processed for debugging
+                                self.logger.info(f"Processing asset symbol: '{symbol}' with currency: {asset_currency}")
+                                
+                                # Validate symbol format before creating Asset
+                                if not symbol or symbol.strip() == '':
+                                    self.logger.error(f"Empty or invalid symbol: '{symbol}'")
+                                    await self._send_message_safe(update, f"❌ Ошибка: неверный символ актива '{symbol}'")
+                                    return
+                                
                                 asset = ok.Asset(symbol, ccy=asset_currency)
                                 wealth_data[symbols[i]] = asset.wealth_index
                             except Exception as e:
@@ -3651,34 +3660,19 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating portfolio rolling CAGR chart for portfolio: {symbols}")
             
-            # Generate rolling CAGR chart using okama
-            # portfolio.get_rolling_cagr().plot()  # Uses MAX period (entire available data)
-            rolling_cagr_data = portfolio.get_rolling_cagr().plot()  # MAX period rolling window
+            # Get rolling CAGR data
+            rolling_cagr_data = portfolio.get_rolling_cagr()
             
-            # Get the current figure from matplotlib (created by okama)
-            current_fig = plt.gcf()
+            # Create standardized rolling CAGR chart using chart_styles
+            fig, ax = chart_styles.create_portfolio_rolling_cagr_chart(
+                data=rolling_cagr_data, symbols=symbols, currency=currency
+            )
             
-            # Apply chart styles to the current figure
-            if current_fig.axes:
-                ax = current_fig.axes[0]
-                
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
-                    ax,
-                    title=f'Rolling CAGR \n{", ".join(symbols)}',
-                    ylabel='CAGR (%)',
-                    grid=True,
-                    legend=False,
-                    copyright=True
-                )
-            
-            # Save the figure
+            # Save the figure using standardized method
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(current_fig, img_buffer)
+            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.cleanup_figure(fig)
             img_buffer.seek(0)
-            
-            # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(current_fig)
             
             # Get rolling CAGR statistics
             try:
