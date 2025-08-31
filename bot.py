@@ -1111,10 +1111,10 @@ class OkamaFinanceBot:
                         # Add portfolio wealth index to expanded symbols
                         expanded_symbols.append(portfolio.wealth_index)
                         
-                        # Use the correct portfolio symbol from context for description
-                        portfolio_descriptions.append(f"{portfolio_symbol} ({', '.join(portfolio_symbols)})")
+                        # Use the original symbol for description to maintain consistency
+                        portfolio_descriptions.append(f"{symbol} ({', '.join(portfolio_symbols)})")
                         
-                        self.logger.info(f"Expanded portfolio {portfolio_symbol} with {len(portfolio_symbols)} assets")
+                        self.logger.info(f"Expanded portfolio {symbol} with {len(portfolio_symbols)} assets")
                         self.logger.info(f"Portfolio currency: {portfolio_currency}, weights: {portfolio_weights}")
                         
                     except Exception as e:
@@ -1138,14 +1138,17 @@ class OkamaFinanceBot:
             first_symbol = symbols[0]
             currency_info = ""
             try:
+                # Extract the original symbol from the description (remove the asset list part)
+                original_first_symbol = first_symbol.split(' (')[0] if ' (' in first_symbol else first_symbol
+                
                 # Check if first symbol is a portfolio symbol
                 is_first_portfolio = (
-                    (first_symbol.startswith('PORTFOLIO_') or 
-                     first_symbol.startswith('PF_') or 
-                     first_symbol.startswith('portfolio_') or
-                     first_symbol.endswith('.PF') or
-                     first_symbol.endswith('.pf')) and 
-                    first_symbol in saved_portfolios
+                    (original_first_symbol.startswith('PORTFOLIO_') or 
+                     original_first_symbol.startswith('PF_') or 
+                     original_first_symbol.startswith('portfolio_') or
+                     original_first_symbol.endswith('.PF') or
+                     original_first_symbol.endswith('.pf')) and 
+                    original_first_symbol in saved_portfolios
                 )
                 
                 if is_first_portfolio:
@@ -1258,7 +1261,9 @@ class OkamaFinanceBot:
                                     portfolio_symbol = None
                                     for j, orig_symbol in enumerate(symbols):
                                         if isinstance(expanded_symbols[j], pd.Series):
-                                            portfolio_symbol = orig_symbol
+                                            # Extract the original symbol from the description
+                                            original_symbol = orig_symbol.split(' (')[0] if ' (' in orig_symbol else orig_symbol
+                                            portfolio_symbol = original_symbol
                                             break
                                     
                                     if portfolio_symbol and portfolio_symbol in saved_portfolios:
@@ -1634,44 +1639,10 @@ class OkamaFinanceBot:
                 # Generate beautiful portfolio chart using chart_styles
                 wealth_index = portfolio.wealth_index
                 
-                # Create portfolio chart with chart_styles
-                fig, ax = chart_styles.create_wealth_index_chart(
-                    wealth_index, symbols, currency
+                # Create portfolio chart with chart_styles using optimized method
+                fig, ax = chart_styles.create_portfolio_wealth_chart(
+                    data=wealth_index, symbols=symbols, currency=currency
                 )
-                
-                # Handle multiple series (portfolio and inflation) if present
-                if hasattr(wealth_index, 'ndim') and getattr(wealth_index, 'ndim', 1) == 2 and getattr(wealth_index, 'shape', (0, 0))[1] >= 2:
-                    # Clear existing plot and add multiple series
-                    ax.clear()
-                    x_data = wealth_index.index
-                    # First series: portfolio
-                    y_portfolio = wealth_index.iloc[:, 0].values
-                    chart_styles.plot_smooth_line(ax, x_data, y_portfolio, color='#2E5BBA', label='Портфель')
-                    # Second series: inflation
-                    y_inflation = wealth_index.iloc[:, 1].values
-                    chart_styles.plot_smooth_line(ax, x_data, y_inflation, color=chart_styles.get_color(1), label='Инфляция')
-                    
-                    # Reapply styling for multiple series with copyright
-                    chart_styles.apply_standard_chart_styling(
-                        ax, 
-                        title=f'Накопленная доходность портфеля\n{", ".join(symbols)}',
-                        ylabel=f'Накопленная доходность ({currency})',
-                        grid=True, legend=True, copyright=True
-                    )
-                else:
-                    # Clear existing plot and add single series with proper legend
-                    ax.clear()
-                    x_data = wealth_index.index
-                    y_portfolio = wealth_index.values if hasattr(wealth_index, 'values') else wealth_index
-                    chart_styles.plot_smooth_line(ax, x_data, y_portfolio, color='#2E5BBA', label=f'Портфель ({", ".join(symbols)})')
-                    
-                    # Reapply styling for single series with copyright
-                    chart_styles.apply_standard_chart_styling(
-                        ax, 
-                        title=f'Накопленная доходность портфеля\n{", ".join(symbols)}',
-                        ylabel=f'Накопленная доходность ({currency})',
-                        grid=True, legend=True, copyright=True
-                    )
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
