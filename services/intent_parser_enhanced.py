@@ -324,7 +324,7 @@ class EnhancedIntentParser:
         
         # Ищем названия активов через алиасы
         text_lower = text.lower()
-        single_currency_symbols = {'USD.FX', 'EUR.FX', 'RUB.FX', 'CNY.FX', 'GBP.FX', 'JPY.FX'}
+        single_currency_symbols = {'USD.FX','EUR.FX','RUB.FX','CNY.FX','GBP.FX','JPY.FX'}
         for alias, symbol in self.asset_aliases.items():
             if alias in text_lower:
                 # Пропускаем одиночные валюты, они должны парситься как currency, а не актив
