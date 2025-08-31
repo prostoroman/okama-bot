@@ -1086,7 +1086,7 @@ class OkamaFinanceBot:
                         # Добавляем кнопку для выгрузки Excel
                         keyboard = [[
                             InlineKeyboardButton(
-                                f"📊 Полный список в Excel ({total_symbols} записей)", 
+                                f"📊 Полный список в Excel ({total_symbols})", 
                                 callback_data=f"excel_namespace_{namespace}"
                             )
                         ]]
@@ -1667,7 +1667,8 @@ class OkamaFinanceBot:
                     [InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{portfolio_data_str}")],
                     [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"monte_carlo_{portfolio_data_str}")],
                     [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"forecast_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"compare_assets_{portfolio_data_str}")]
+                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"compare_assets_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"rolling_cagr_{portfolio_data_str}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -1970,6 +1971,10 @@ class OkamaFinanceBot:
                 symbols = callback_data.replace('returns_', '').split(',')
                 self.logger.info(f"Returns button clicked for symbols: {symbols}")
                 await self._handle_portfolio_returns_button(update, context, symbols)
+            elif callback_data.startswith('rolling_cagr_'):
+                symbols = callback_data.replace('rolling_cagr_', '').split(',')
+                self.logger.info(f"Rolling CAGR button clicked for symbols: {symbols}")
+                await self._handle_portfolio_rolling_cagr_button(update, context, symbols)
             elif callback_data.startswith('compare_assets_'):
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
@@ -3370,6 +3375,135 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error creating portfolio returns chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика доходности: {str(e)}")
+
+    async def _handle_portfolio_rolling_cagr_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle portfolio rolling CAGR button click"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio rolling CAGR button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context content: {user_context}")
+            
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            currency = user_context.get('current_currency', 'USD')
+            raw_weights = user_context.get('portfolio_weights', [])
+            weights = self._normalize_or_equalize_weights(final_symbols, raw_weights)
+            
+            self.logger.info(f"Creating rolling CAGR chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
+            await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
+            
+            # Create Portfolio again
+            import okama as ok
+            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            
+            await self._create_portfolio_rolling_cagr_chart(update, context, portfolio, final_symbols, currency, weights)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio rolling CAGR button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика Rolling CAGR: {str(e)}")
+
+    async def _create_portfolio_rolling_cagr_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
+        """Create and send portfolio rolling CAGR chart"""
+        try:
+            self.logger.info(f"Creating portfolio rolling CAGR chart for portfolio: {symbols}")
+            
+            # Generate rolling CAGR chart using okama
+            # portfolio.get_rolling_cagr(window=12 * 2).plot()  # window size is in months. We have rolling 2 year CAGR here
+            rolling_cagr_data = portfolio.get_rolling_cagr(window=12 * 2).plot()  # 2 year rolling window
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                chart_styles.apply_base_style(current_fig, ax)
+                
+                # Customize the chart
+                ax.set_title(
+                    f'Rolling CAGR (2 года) портфеля\n{", ".join(symbols)}',
+                    fontsize=chart_styles.title_config['fontsize'],
+                    fontweight=chart_styles.title_config['fontweight'],
+                    pad=chart_styles.title_config['pad'],
+                    color=chart_styles.title_config['color']
+                )
+                
+                # Add copyright signature
+                chart_styles.add_copyright(ax)
+            
+            # Save the figure
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(current_fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(current_fig)
+            
+            # Get rolling CAGR statistics
+            try:
+                # Get rolling CAGR data for statistics
+                rolling_cagr_series = portfolio.get_rolling_cagr(window=12 * 2)
+                
+                # Calculate statistics
+                mean_rolling_cagr = rolling_cagr_series.mean()
+                std_rolling_cagr = rolling_cagr_series.std()
+                min_rolling_cagr = rolling_cagr_series.min()
+                max_rolling_cagr = rolling_cagr_series.max()
+                current_rolling_cagr = rolling_cagr_series.iloc[-1] if not rolling_cagr_series.empty else None
+                
+                # Build enhanced caption
+                caption = f"📈 Rolling CAGR (2 года) портфеля: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
+                caption += f"• Окно: 24 месяца (2 года)\n\n"
+                
+                # Add rolling CAGR statistics
+                caption += f"📈 Статистика Rolling CAGR:\n"
+                if current_rolling_cagr is not None:
+                    caption += f"• Текущий Rolling CAGR: {current_rolling_cagr:.2%}\n"
+                caption += f"• Средний Rolling CAGR: {mean_rolling_cagr:.2%}\n"
+                caption += f"• Стандартное отклонение: {std_rolling_cagr:.2%}\n"
+                caption += f"• Минимальный: {min_rolling_cagr:.2%}\n"
+                caption += f"• Максимальный: {max_rolling_cagr:.2%}\n\n"
+                
+                caption += f"💡 График показывает:\n"
+                caption += f"• Rolling CAGR с окном в 2 года\n"
+                caption += f"• Динамику изменения CAGR во времени\n"
+                caption += f"• Стабильность доходности портфеля"
+                
+            except Exception as e:
+                self.logger.warning(f"Could not get rolling CAGR statistics: {e}")
+                # Fallback to basic caption
+                caption = f"📈 Rolling CAGR (2 года) портфеля: {', '.join(symbols)}\n\n"
+                caption += f"📊 Параметры:\n"
+                caption += f"• Валюта: {currency}\n"
+                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
+                caption += f"• Окно: 24 месяца (2 года)\n\n"
+                caption += f"💡 График показывает:\n"
+                caption += f"• Rolling CAGR с окном в 2 года\n"
+                caption += f"• Динамику изменения CAGR во времени\n"
+                caption += f"• Стабильность доходности портфеля"
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio rolling CAGR chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика Rolling CAGR: {str(e)}")
 
     async def _handle_portfolio_compare_assets_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle portfolio compare assets button click"""
