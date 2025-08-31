@@ -297,9 +297,9 @@ class OkamaFinanceBot:
                 return
             
             # Create drawdowns chart using chart_styles
-            fig, ax = chart_styles.create_drawdowns_chart(
-                asset_list.drawdowns, symbols, currency, figsize=(14, 9)
-            )
+                                            fig, ax = chart_styles.create_drawdowns_chart(
+                    asset_list.drawdowns, symbols, currency
+                )
             
             # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
@@ -995,8 +995,8 @@ class OkamaFinanceBot:
                         help_text += f"• `{portfolio_symbol}` - {symbols_str}\n"
                     
                     help_text += "\n💡 Вы можете использовать символы портфелей в сравнении:\n"
-                    help_text += "`/compare PORTFOLIO_1 SPY.US` - сравнить ваш портфель с S&P 500\n"
-                    help_text += "`/compare PORTFOLIO_1 PORTFOLIO_2` - сравнить два ваших портфеля\n\n"
+                    help_text += "`/compare PF_1 SPY.US` - сравнить ваш портфель с S&P 500\n"
+                    help_text += "`/compare PF_1 PF_2` - сравнить два ваших портфеля\n\n"
                     help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
                 
                 help_text += "Примеры:\n"
@@ -1071,7 +1071,7 @@ class OkamaFinanceBot:
             portfolio_descriptions = []
             
             for symbol in symbols:
-                if symbol.startswith('PORTFOLIO_') and symbol in saved_portfolios:
+                if (symbol.startswith('PORTFOLIO_') or symbol.startswith('PF_')) and symbol in saved_portfolios:
                     # This is a saved portfolio, expand it
                     portfolio_info = saved_portfolios[symbol]
                     
@@ -1473,19 +1473,25 @@ class OkamaFinanceBot:
                 portfolio_list += f"🕐 Создан: {created_at}\n"
                 portfolio_list += "\n" + "─" * 40 + "\n\n"
             
-            # Add usage instructions
-            portfolio_list += "💡 **Использование в сравнении:**\n"
-            portfolio_list += "• `/compare PORTFOLIO_1 SPY.US` - сравнить портфель с активом\n"
-            portfolio_list += "• `/compare PORTFOLIO_1 PORTFOLIO_2` - сравнить два портфеля\n"
-            portfolio_list += "• `/compare PORTFOLIO_1 SPY.US QQQ.US` - смешанное сравнение\n\n"
-            
-            portfolio_list += "🔧 **Управление:**\n"
-            portfolio_list += "• Портфели автоматически сохраняются при создании\n"
-            portfolio_list += "• Используйте символы для сравнения и анализа\n"
-            portfolio_list += "• Все данные сохраняются в контексте сессии"
-            
-            # Send the portfolio list
-            await self._send_message_safe(update, portfolio_list, parse_mode='Markdown')
+                            # Add usage instructions
+                portfolio_list += "💡 **Использование в сравнении:**\n"
+                portfolio_list += "• `/compare PF_1 SPY.US` - сравнить портфель с активом\n"
+                portfolio_list += "• `/compare PF_1 PF_2` - сравнить два портфеля\n"
+                portfolio_list += "• `/compare PF_1 SPY.US QQQ.US` - смешанное сравнение\n\n"
+                
+                portfolio_list += "🔧 **Управление:**\n"
+                portfolio_list += "• Портфели автоматически сохраняются при создании\n"
+                portfolio_list += "• Используйте символы для сравнения и анализа\n"
+                portfolio_list += "• Все данные сохраняются в контексте сессии\n\n"
+                
+                # Create keyboard with clear portfolios button
+                keyboard = [
+                    [InlineKeyboardButton("🗑️ Очистить все портфели", callback_data="clear_all_portfolios")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Send the portfolio list with clear button
+                await self._send_message_safe(update, portfolio_list, parse_mode='Markdown', reply_markup=reply_markup)
             
         except Exception as e:
             self.logger.error(f"Error in my portfolios command: {e}")
@@ -1801,19 +1807,30 @@ class OkamaFinanceBot:
                         self.logger.warning(f"Could not get mean annual return: {e2}")
                         portfolio_text += f"\n📈 Накопленная доходность портфеля: недоступна"
                 
-                # Generate portfolio symbol (PORTFOLIO_1, PORTFOLIO_2, etc.)
+                # Generate portfolio symbol using PF namespace and okama's assigned symbol
                 user_id = update.effective_user.id
                 user_context = self._get_user_context(user_id)
                 
                 # Count existing portfolios for this user
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
-                portfolio_symbol = f"PORTFOLIO_{portfolio_count}"
+                
+                # Use PF namespace with okama's assigned symbol
+                try:
+                    # Get the portfolio symbol that okama assigned
+                    if hasattr(portfolio, 'symbol'):
+                        portfolio_symbol = portfolio.symbol
+                    else:
+                        # Fallback to custom symbol if okama doesn't provide one
+                        portfolio_symbol = f"PF_{portfolio_count}"
+                except Exception as e:
+                    self.logger.warning(f"Could not get okama portfolio symbol: {e}")
+                    portfolio_symbol = f"PF_{portfolio_count}"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
                 
                 # Add portfolio symbol display under the chart
-                portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}`\n"
+                portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
                 portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
                 
                 # Add risk metrics, Monte Carlo, forecast, and drawdowns buttons
@@ -2232,6 +2249,9 @@ class OkamaFinanceBot:
                 namespace = callback_data.replace('excel_namespace_', '')
                 self.logger.info(f"Excel namespace button clicked for: {namespace}")
                 await self._handle_excel_namespace_button(update, context, namespace)
+            elif callback_data == 'clear_all_portfolios':
+                self.logger.info("Clear all portfolios button clicked")
+                await self._handle_clear_all_portfolios_button(update, context)
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -3982,6 +4002,46 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error in Excel namespace button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
+
+    async def _handle_clear_all_portfolios_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle clear all portfolios button click"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling clear all portfolios button for user {user_id}")
+            
+            # Get user context
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            if not saved_portfolios:
+                await self._send_callback_message(update, context, "💼 У вас нет сохраненных портфелей для очистки")
+                return
+            
+            # Count portfolios before clearing
+            portfolio_count = len(saved_portfolios)
+            
+            # Clear all portfolios
+            user_context['saved_portfolios'] = {}
+            user_context['portfolio_count'] = 0
+            
+            # Update context
+            self._update_user_context(user_id, **user_context)
+            
+            # Send confirmation message
+            await self._send_callback_message(
+                update, 
+                context, 
+                f"🗑️ **Очистка завершена!**\n\n"
+                f"✅ Удалено портфелей: {portfolio_count}\n"
+                f"✅ Счетчик портфелей сброшен\n\n"
+                f"💡 Для создания новых портфелей используйте команду `/portfolio`"
+            )
+            
+            self.logger.info(f"Successfully cleared {portfolio_count} portfolios for user {user_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error in clear all portfolios button handler: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при очистке портфелей: {str(e)}")
 
     def run(self):
         """Run the bot"""
