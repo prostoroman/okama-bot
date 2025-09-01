@@ -94,6 +94,55 @@ class OkamaFinanceBot:
         self.MAX_HISTORY_MESSAGES = 20
         self.MAX_TELEGRAM_CHUNK = 4000
         
+    # --- Okama compatibility helpers ---
+    def _ok_asset(self, symbol: str, currency: str = None):
+        """Create okama Asset with backward-compatible signature.
+        Tries with ccy first, falls back to positional or no currency if unsupported.
+        """
+        import okama as ok
+        try:
+            if currency is not None:
+                return ok.Asset(symbol, ccy=currency)
+            return ok.Asset(symbol)
+        except TypeError as e:
+            # Fallback for versions without ccy keyword
+            if currency is not None:
+                try:
+                    return ok.Asset(symbol, currency)
+                except Exception:
+                    return ok.Asset(symbol)
+            return ok.Asset(symbol)
+
+    def _ok_asset_list(self, symbols: list, currency: str = None):
+        """Create okama AssetList with backward-compatible signature."""
+        import okama as ok
+        try:
+            if currency is not None:
+                return ok.AssetList(symbols, ccy=currency)
+            return ok.AssetList(symbols)
+        except TypeError:
+            if currency is not None:
+                try:
+                    return ok.AssetList(symbols, currency)
+                except Exception:
+                    return ok.AssetList(symbols)
+            return ok.AssetList(symbols)
+
+    def _ok_portfolio(self, symbols: list, weights: list, currency: str = None):
+        """Create okama Portfolio with backward-compatible signature."""
+        import okama as ok
+        try:
+            if currency is not None:
+                return ok.Portfolio(symbols, ccy=currency, weights=weights)
+            return ok.Portfolio(symbols, weights=weights)
+        except TypeError:
+            if currency is not None:
+                try:
+                    return ok.Portfolio(symbols, currency, weights=weights)
+                except Exception:
+                    return ok.Portfolio(symbols, weights=weights)
+            return ok.Portfolio(symbols, weights=weights)
+
     async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation") -> None:
         """Общая функция для обработки ошибок"""
         error_msg = f"❌ Ошибка в {context}: {str(error)}"
@@ -1175,7 +1224,7 @@ class OkamaFinanceBot:
                     
                     # Create portfolio using okama
                     try:
-                        portfolio = ok.Portfolio(portfolio_symbols, ccy=portfolio_currency, weights=portfolio_weights)
+                        portfolio = self._ok_portfolio(portfolio_symbols, weights=portfolio_weights, currency=portfolio_currency)
                         
                         # Add portfolio wealth index to expanded symbols
                         expanded_symbols.append(portfolio.wealth_index)
@@ -1412,9 +1461,9 @@ class OkamaFinanceBot:
                                     return
                                 
                                 self.logger.info(f"DEBUG: Symbol validation passed, creating Asset with: '{symbol}'")
-                                self.logger.info(f"DEBUG: About to call ok.Asset('{symbol}', ccy='{asset_currency}')")
+                                self.logger.info(f"DEBUG: About to call _ok_asset('{symbol}', currency='{asset_currency}')")
                                 try:
-                                    asset = ok.Asset(symbol, ccy=asset_currency)
+                                    asset = self._ok_asset(symbol, currency=asset_currency)
                                     self.logger.info(f"DEBUG: Successfully created Asset for '{symbol}'")
                                 except Exception as asset_error:
                                     self.logger.error(f"DEBUG: Failed to create Asset for '{symbol}': {asset_error}")
@@ -1438,7 +1487,7 @@ class OkamaFinanceBot:
                 else:
                     # Regular assets only, use AssetList
                     # Use raw parsed tickers (expanded_symbols) for okama, not display descriptions
-                    asset_list = ok.AssetList(expanded_symbols, ccy=currency)
+                    asset_list = self._ok_asset_list(expanded_symbols, currency=currency)
                     self.logger.info("Created AssetList with full available period")
                     
                     # Generate beautiful comparison chart using chart_styles
@@ -1807,7 +1856,7 @@ class OkamaFinanceBot:
                     self.logger.info(f"DEBUG: About to create ok.Portfolio with symbols={symbols}, ccy={currency}, weights={weights}")
                     self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
                     self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
-                    portfolio = ok.Portfolio(symbols, ccy=currency, weights=weights)
+                    portfolio = self._ok_portfolio(symbols, weights=weights, currency=currency)
                     self.logger.info(f"DEBUG: Successfully created portfolio")
                 except Exception as e:
                     self.logger.error(f"DEBUG: Error creating portfolio: {e}")
@@ -2568,7 +2617,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📉 Создаю график drawdowns...")
             
             # Create AssetList again
-            asset_list = ok.AssetList(symbols, ccy=currency)
+            asset_list = self._ok_asset_list(symbols, currency=currency)
             
             await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
             
@@ -2597,7 +2646,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности...")
             
             # Create AssetList again
-            asset_list = ok.AssetList(symbols, ccy=currency)
+            asset_list = self._ok_asset_list(symbols, currency=currency)
             
             await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
             
@@ -2626,7 +2675,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу...")
             
             # Create AssetList again
-            asset_list = ok.AssetList(symbols, ccy=currency)
+            asset_list = self._ok_asset_list(symbols, currency=currency)
             
             await self._create_correlation_matrix(update, context, asset_list, symbols)
             
@@ -2991,7 +3040,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
             
             # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
             
             await self._create_risk_metrics_report(update, context, portfolio, final_symbols, currency)
             
@@ -3038,7 +3087,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
             
             # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
             
             await self._create_monte_carlo_forecast(update, context, portfolio, final_symbols, currency)
             
@@ -3085,7 +3134,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📈 Создаю прогноз с процентилями...")
             
             # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
             
             await self._create_forecast_chart(update, context, portfolio, final_symbols, currency)
             
@@ -3722,7 +3771,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📉 Создаю график просадок...")
             
             # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
             
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -3855,7 +3904,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "💰 Создаю график доходности...")
             
             # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
             
             await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -3993,7 +4042,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
             
             # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
             
             await self._create_portfolio_rolling_cagr_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -4119,7 +4168,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
             
             # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, ccy=currency, weights=weights)
+            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
             
             await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -4183,7 +4232,7 @@ class OkamaFinanceBot:
                             continue
                         
                         # Get individual asset
-                        asset = ok.Asset(symbol, ccy=currency)
+                        asset = self._ok_asset(symbol, currency=currency)
                         asset_final = asset.wealth_index.iloc[-1]
                         caption += f"• {symbol}: {asset_final:.2f}\n"
                     except Exception as e:
