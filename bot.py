@@ -1233,9 +1233,9 @@ class OkamaFinanceBot:
                         # Use the original symbol for description to maintain consistency
                         portfolio_descriptions.append(f"{symbol} ({', '.join(portfolio_symbols)})")
                         
-                        # Store portfolio context for buttons
+                        # Store portfolio context for buttons - use clean portfolio symbol
                         portfolio_contexts.append({
-                            'symbol': symbol,
+                            'symbol': symbol,  # Clean portfolio symbol without asset list
                             'portfolio_symbols': portfolio_symbols,
                             'portfolio_weights': portfolio_weights,
                             'portfolio_currency': portfolio_currency,
@@ -1436,8 +1436,20 @@ class OkamaFinanceBot:
                     self.logger.info("Creating regular comparison without portfolios")
                     comparison = self._ok_asset_list(symbols, currency=currency)
                 
-                # Store context for buttons
-                user_context['current_symbols'] = symbols
+                # Store context for buttons - use clean portfolio symbols for current_symbols
+                clean_symbols = []
+                for i, symbol in enumerate(symbols):
+                    if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
+                        # This is a portfolio - use clean symbol from context
+                        if i < len(portfolio_contexts):
+                            clean_symbols.append(portfolio_contexts[i]['symbol'])
+                        else:
+                            clean_symbols.append(symbol)
+                    else:
+                        # This is a regular asset
+                        clean_symbols.append(symbol)
+                
+                user_context['current_symbols'] = clean_symbols
                 user_context['current_currency'] = currency
                 user_context['last_analysis_type'] = 'comparison'
                 user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
@@ -1464,14 +1476,14 @@ class OkamaFinanceBot:
                 caption += f"📅 Период: полный доступный период данных\n\n"
                 caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
                 
-                # Create keyboard with analysis buttons
+                # Create keyboard with analysis buttons - use proper callback data format
                 keyboard = [
                     [
-                        InlineKeyboardButton("📉 Drawdowns", callback_data=f"drawdowns_{','.join(symbols)}"),
-                        InlineKeyboardButton("💰 Dividends", callback_data=f"dividends_{','.join(symbols)}")
+                        InlineKeyboardButton("📉 Drawdowns", callback_data="drawdowns_compare"),
+                        InlineKeyboardButton("💰 Dividends", callback_data="dividends_compare")
                     ],
                     [
-                        InlineKeyboardButton("🔗 Correlation Matrix", callback_data=f"correlation_{','.join(symbols)}")
+                        InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
                     ]
                 ]
                 
@@ -1485,8 +1497,7 @@ class OkamaFinanceBot:
                     reply_markup=reply_markup
                 )
                 
-                # Send AI analysis
-                await self._send_ai_analysis(update, context, symbols, comparison, currency)
+                # Note: AI analysis is now handled by the button callbacks using context data
                 
             except Exception as e:
                 self.logger.error(f"Error creating comparison: {e}")
@@ -2392,11 +2403,10 @@ class OkamaFinanceBot:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
-            if callback_data.startswith('drawdowns_'):
-                symbols = callback_data.replace('drawdowns_', '').split(',')
-                self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
+            if callback_data == "drawdowns":
+                self.logger.info("Drawdowns button clicked")
                 
-                # Check user context to determine which type of analysis this is
+                # Get data from user context
                 user_id = update.effective_user.id
                 user_context = self._get_user_context(user_id)
                 last_analysis_type = user_context.get('last_analysis_type')
@@ -2404,17 +2414,26 @@ class OkamaFinanceBot:
                 self.logger.info(f"Last analysis type: {last_analysis_type}")
                 
                 if last_analysis_type == 'portfolio':
+                    symbols = user_context.get('current_symbols', [])
                     await self._handle_portfolio_drawdowns_button(update, context, symbols)
                 else:
+                    symbols = user_context.get('current_symbols', [])
                     await self._handle_drawdowns_button(update, context, symbols)
-            elif callback_data.startswith('dividends_') and ',' in callback_data:
-                # Для сравнения активов (dividends_AAA,BBB)
-                symbols = callback_data.replace('dividends_', '').split(',')
-                self.logger.info(f"Dividends button clicked for symbols: {symbols}")
+            elif callback_data == "dividends":
+                self.logger.info("Dividends button clicked")
+                
+                # Get data from user context
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('current_symbols', [])
                 await self._handle_dividends_button(update, context, symbols)
-            elif callback_data.startswith('correlation_'):
-                symbols = callback_data.replace('correlation_', '').split(',')
-                self.logger.info(f"Correlation button clicked for symbols: {symbols}")
+            elif callback_data == "correlation":
+                self.logger.info("Correlation button clicked")
+                
+                # Get data from user context
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('current_symbols', [])
                 await self._handle_correlation_button(update, context, symbols)
             elif callback_data.startswith('monthly_chart_'):
                 symbol = callback_data.replace('monthly_chart_', '')
