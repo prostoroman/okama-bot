@@ -2511,8 +2511,9 @@ class OkamaFinanceBot:
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
             last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
                 await self._send_callback_message(update, context, "📉 Создаю график drawdowns для смешанного сравнения...")
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
@@ -2660,8 +2661,9 @@ class OkamaFinanceBot:
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
             last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
                 await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...")
                 await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
@@ -2731,8 +2733,9 @@ class OkamaFinanceBot:
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
             last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
                 await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу для смешанного сравнения...")
                 await self._create_mixed_comparison_correlation_matrix(update, context, symbols, currency)
