@@ -631,6 +631,54 @@ class ChartStyles:
         
         return fig, ax
     
+    def create_drawdowns_chart(self, data, symbols, currency, **kwargs):
+        """
+        Создать график просадок для нескольких активов
+        
+        Args:
+            data: данные просадок (pandas DataFrame или Series)
+            symbols: список символов активов
+            currency: валюта
+            **kwargs: дополнительные параметры
+            
+        Returns:
+            tuple: (fig, ax) - фигура и оси
+        """
+        fig, ax = self.create_standard_chart(**kwargs)
+        
+        # Handle different data types
+        if isinstance(data, pd.Series):
+            # Single series - convert to DataFrame
+            data = pd.DataFrame({symbols[0] if symbols else 'Asset': data})
+        
+        # Ensure data is DataFrame
+        if not isinstance(data, pd.DataFrame):
+            self.logger.warning(f"Unexpected data type for drawdowns: {type(data)}")
+            return fig, ax
+        
+        # Plot each column
+        for i, column in enumerate(data.columns):
+            if column in data.columns and not data[column].empty:
+                color = self.get_color(i)
+                ax.plot(data.index, data[column].values * 100,  # Convert to percentage
+                       color=color, linewidth=self.line_config['linewidth'], 
+                       alpha=self.line_config['alpha'], label=column)
+        
+        # Apply standard styling
+        title = f'Просадки активов: {", ".join(symbols)}'
+        ylabel = f'Просадка (%)'
+        
+        self.apply_standard_chart_styling(
+            ax,
+            title=title,
+            ylabel=ylabel,
+            grid=True,
+            legend=True,
+            copyright=True
+        )
+        
+        return fig, ax
+    
     def create_drawdowns_history_chart(self, data, symbol, **kwargs):
         """Создать график истории просадок"""
         fig, ax = self.create_standard_chart(**kwargs)
