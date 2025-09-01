@@ -509,7 +509,7 @@ class AssetService:
                     pd = None
                 
                 # Guard empty
-                if len(price_data) == 0:
+                if not hasattr(price_data, '__len__') or len(price_data) == 0:
                     return _maybe_moex_fallback('No price data available')
                 
                 # If Series: take last valid non-NaN
