@@ -403,12 +403,52 @@ class ChartStyles:
         if line_config is None:
             line_config = self.line_config
         
+        # Подготовка безопасной оси X: конвертация Period/дато-подобных значений в datetime
+        x_index = data.index
+        x_values = []
+        try:
+            # Явная обработка PeriodIndex
+            if isinstance(x_index, pd.PeriodIndex):
+                x_values = x_index.to_timestamp().to_pydatetime()
+            else:
+                # Поштучная конвертация значений индекса
+                for idx, x_val in enumerate(list(x_index)):
+                    try:
+                        # Если это Period-подобный объект
+                        if hasattr(x_val, 'to_timestamp'):
+                            try:
+                                x_val = x_val.to_timestamp()
+                            except Exception:
+                                x_val = pd.to_datetime(str(x_val))
+                        # Универсальная конвертация к datetime
+                        dt = pd.to_datetime(x_val)
+                        # Преобразуем к native datetime для Matplotlib
+                        if hasattr(dt, 'to_pydatetime'):
+                            dt = dt.to_pydatetime()
+                        x_values.append(dt)
+                    except Exception:
+                        # Фоллбэк: помечаем как None, позже заменим
+                        x_values.append(None)
+                # Если все элементы не удалось сконвертировать — используем числовой индекс
+                if all(v is None for v in x_values):
+                    x_values = np.arange(len(x_index))
+                else:
+                    # Заменяем None на монотонно возрастающие даты-фоллбэки
+                    base = pd.to_datetime('1970-01-01')
+                    x_values = [
+                        (base + pd.to_timedelta(i, unit='D')).to_pydatetime() if v is None else v
+                        for i, v in enumerate(x_values)
+                    ]
+        except Exception:
+            # Любые неожиданные ошибки — фоллбэк к числовой оси
+            x_values = np.arange(len(x_index))
+
         # Рисуем данные для каждого столбца
         for i, column in enumerate(data.columns):
             color = self.get_color(i)
-            ax.plot(data.index, data[column].values, 
-                   color=color, linewidth=line_config['linewidth'], 
-                   alpha=line_config['alpha'], label=column)
+            ax.plot(x_values, data[column].values,
+                    color=color, linewidth=line_config['linewidth'],
+                    alpha=line_config['alpha'], label=column)
         
         # Применяем стандартные стили
         self.apply_standard_chart_styling(
