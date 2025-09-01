@@ -1381,9 +1381,50 @@ class OkamaFinanceBot:
                     for i, symbol in enumerate(expanded_symbols):
                         self.logger.info(f"DEBUG: Processing index {i}: symbol='{symbol}' (type: {type(symbol)})")
                         
-                        if isinstance(symbol, (pd.Series, pd.DataFrame)):
-                            # Portfolio wealth index (Series or single-column DataFrame)
-                            self.logger.info(f"DEBUG: Found portfolio pandas object at index {i}")
+                        # Check if this is a portfolio symbol (ends with .PF)
+                        if isinstance(symbol, str) and symbol.endswith('.PF'):
+                            # This is a portfolio symbol - we need to load the portfolio from context
+                            self.logger.info(f"DEBUG: Found portfolio symbol: {symbol}")
+                            
+                            # Get portfolio data from user context
+                            user_id = update.effective_user.id
+                            user_context = self._get_user_context(user_id)
+                            saved_portfolios = user_context.get('saved_portfolios', {})
+                            
+                            if symbol not in saved_portfolios:
+                                self.logger.error(f"Portfolio {symbol} not found in user context")
+                                await self._send_message_safe(update, f"❌ Портфель {symbol} не найден в контексте пользователя. Сначала создайте портфель командой /portfolio")
+                                return
+                            
+                            portfolio_info = saved_portfolios[symbol]
+                            portfolio_symbols = portfolio_info.get('symbols', [])
+                            portfolio_weights = portfolio_info.get('weights', [])
+                            portfolio_currency = portfolio_info.get('currency', 'USD')
+                            
+                            self.logger.info(f"Portfolio {symbol} symbols: {portfolio_symbols}, weights: {portfolio_weights}")
+                            
+                            # Create portfolio object
+                            try:
+                                portfolio = self._ok_portfolio(portfolio_symbols, portfolio_weights, currency=portfolio_currency)
+                                self.logger.info(f"Successfully created portfolio object for {symbol}")
+                                
+                                # Get portfolio wealth index
+                                wealth_index = portfolio.wealth_index
+                                wealth_data[symbols[i]] = wealth_index
+                                
+                                # Update global currency to use portfolio currency
+                                if currency == 'auto':
+                                    currency = portfolio_currency
+                                    self.logger.info(f"Updated global currency to portfolio currency: {currency}")
+                                
+                            except Exception as portfolio_error:
+                                self.logger.error(f"Error creating portfolio {symbol}: {portfolio_error}")
+                                await self._send_message_safe(update, f"❌ Ошибка при создании портфеля {symbol}: {str(portfolio_error)}")
+                                return
+                                
+                        elif isinstance(symbol, (pd.Series, pd.DataFrame)):
+                            # Portfolio wealth index (Series or single-column DataFrame) - this shouldn't happen in normal flow
+                            self.logger.info(f"DEBUG: Found portfolio pandas object at index {i} - unexpected")
                             try:
                                 if isinstance(symbol, pd.DataFrame):
                                     self.logger.info(f"DEBUG: Portfolio wealth index is DataFrame with shape {symbol.shape}")
@@ -1410,32 +1451,6 @@ class OkamaFinanceBot:
                                 
                                 # Use the currency from the portfolio if available, otherwise use detected currency
                                 asset_currency = currency
-                                
-                                # Check if we have any portfolios in the comparison
-                                has_portfolios_in_comparison = any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
-                                
-                                if has_portfolios_in_comparison:
-                                    # Find the first portfolio symbol to use its currency
-                                    portfolio_symbol = None
-                                    for j, orig_symbol in enumerate(symbols):
-                                        if isinstance(expanded_symbols[j], (pd.Series, pd.DataFrame)):
-                                            # Extract the original symbol from the description
-                                            original_symbol = orig_symbol.split(' (')[0] if ' (' in orig_symbol else orig_symbol
-                                            portfolio_symbol = original_symbol
-                                            self.logger.info(f"Found portfolio symbol: '{portfolio_symbol}' from description: '{orig_symbol}'")
-                                            break
-                                    
-                                    if portfolio_symbol and portfolio_symbol in saved_portfolios:
-                                        portfolio_info = saved_portfolios[portfolio_symbol]
-                                        asset_currency = portfolio_info.get('currency', currency)
-                                        self.logger.info(f"Using portfolio currency {asset_currency} for asset {symbol}")
-                                    else:
-                                        # Fallback to detected currency
-                                        asset_currency = currency
-                                        self.logger.info(f"Using detected currency {asset_currency} for asset {symbol}")
-                                else:
-                                    # No portfolios, use detected currency
-                                    asset_currency = currency
                                 
                                 # Log the symbol being processed for debugging
                                 self.logger.info(f"Processing asset symbol: '{symbol}' with currency: {asset_currency}")
@@ -1485,13 +1500,13 @@ class OkamaFinanceBot:
                                         # Create a simple time series with the price value
                                         dates = pd.date_range(start=datetime.now() - timedelta(days=365), end=datetime.now(), freq='D')
                                         wealth_index = pd.Series([price_data] * len(dates), index=dates)
-                                        wealth_data[symbols[i]] = wealth_index
+                                        wealth_data[symbol] = wealth_index
                                     elif hasattr(price_data, '__len__') and len(price_data) > 0:
                                         # Time series data - calculate cumulative returns
                                         self.logger.info(f"DEBUG: Time series data for {symbol}, length: {len(price_data)}")
                                         returns = price_data.pct_change().dropna()
                                         wealth_index = (1 + returns).cumprod()
-                                        wealth_data[symbols[i]] = wealth_index
+                                        wealth_data[symbol] = wealth_index
                                     else:
                                         raise ValueError(f"Invalid price data format for {symbol}: {type(price_data)}")
                                 except Exception as wealth_error:
