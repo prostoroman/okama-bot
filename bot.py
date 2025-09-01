@@ -1674,7 +1674,7 @@ class OkamaFinanceBot:
                     last_assets=symbols,
                     last_analysis_type='comparison',
                     last_period='MAX',
-                    current_symbols=symbols,
+                    current_symbols=expanded_symbols,  # Store actual asset symbols, not display descriptions
                     current_currency=currency,
                     current_currency_info=currency_info
                 )
@@ -2689,14 +2689,114 @@ class OkamaFinanceBot:
             self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}")
             await self._send_callback_message(update, context, "📉 Создаю график drawdowns...")
             
-            # Create AssetList again
-            asset_list = self._ok_asset_list(symbols, currency=currency)
+            # Check if this is a mixed comparison (portfolios + assets)
+            user_context = self._get_user_context(user_id)
+            last_analysis_type = user_context.get('last_analysis_type', 'comparison')
             
-            await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
-            
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+                # This is a mixed comparison, handle differently
+                await self._send_callback_message(update, context, "📉 Создаю график drawdowns для смешанного сравнения...")
+                await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
+            else:
+                # Regular comparison, create AssetList
+                asset_list = self._ok_asset_list(symbols, currency=currency)
+                await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
+        
         except Exception as e:
             self.logger.error(f"Error handling drawdowns button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика drawdowns: {str(e)}")
+
+    async def _create_mixed_comparison_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, currency: str):
+        """Create drawdowns chart for mixed comparison (portfolios + assets)"""
+        try:
+            self.logger.info(f"Creating mixed comparison drawdowns chart for symbols: {symbols}")
+            
+            # Separate portfolios and individual assets
+            portfolio_data = []
+            asset_symbols = []
+            
+            for symbol in symbols:
+                if isinstance(symbol, (pd.Series, pd.DataFrame)):
+                    # This is a portfolio wealth index
+                    portfolio_data.append(symbol)
+                else:
+                    # This is an individual asset symbol
+                    asset_symbols.append(symbol)
+            
+            # Create drawdowns data for portfolios
+            drawdowns_data = {}
+            
+            # Process portfolios
+            for i, portfolio_series in enumerate(portfolio_data):
+                if isinstance(portfolio_series, pd.Series):
+                    # Calculate drawdowns for portfolio
+                    returns = portfolio_series.pct_change().dropna()
+                    cumulative = (1 + returns).cumprod()
+                    running_max = cumulative.expanding().max()
+                    drawdowns = (cumulative - running_max) / running_max
+                    drawdowns_data[f'Portfolio_{i+1}'] = drawdowns
+            
+            # Process individual assets
+            if asset_symbols:
+                try:
+                    asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                    for symbol in asset_symbols:
+                        if symbol in asset_list.wealth_indexes.columns:
+                            # Calculate drawdowns for individual asset
+                            wealth_series = asset_list.wealth_indexes[symbol]
+                            returns = wealth_series.pct_change().dropna()
+                            cumulative = (1 + returns).cumprod()
+                            running_max = cumulative.expanding().max()
+                            drawdowns = (cumulative - running_max) / running_max
+                            drawdowns_data[symbol] = drawdowns
+                except Exception as asset_error:
+                    self.logger.warning(f"Could not process individual assets: {asset_error}")
+            
+            if not drawdowns_data:
+                await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика просадок")
+                return
+            
+            # Create drawdowns chart
+            fig, ax = chart_styles.create_drawdowns_chart(
+                data=pd.DataFrame(drawdowns_data),
+                symbols=list(drawdowns_data.keys()),
+                currency=currency
+            )
+            
+            # Save chart
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache
+            chart_styles.cleanup_figure(fig)
+            
+            # Create caption
+            portfolio_count = len(portfolio_data)
+            asset_count = len(asset_symbols)
+            
+            caption = f"📉 Просадки смешанного сравнения\n\n"
+            caption += f"📊 Состав:\n"
+            if portfolio_count > 0:
+                caption += f"• Портфели: {portfolio_count}\n"
+            if asset_count > 0:
+                caption += f"• Индивидуальные активы: {asset_count}\n"
+            caption += f"• Валюта: {currency}\n\n"
+            caption += f"💡 График показывает:\n"
+            caption += f"• Просадки портфелей и активов\n"
+            caption += f"• Сравнение рисков\n"
+            caption += f"• Периоды восстановления"
+            
+            # Send chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating mixed comparison drawdowns chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
 
     async def _handle_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle dividends button click"""
@@ -2718,13 +2818,55 @@ class OkamaFinanceBot:
             self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}")
             await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности...")
             
-            # Create AssetList again
-            asset_list = self._ok_asset_list(symbols, currency=currency)
+            # Check if this is a mixed comparison (portfolios + assets)
+            user_context = self._get_user_context(user_id)
+            last_analysis_type = user_context.get('last_analysis_type', 'comparison')
             
-            await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+                # This is a mixed comparison, handle differently
+                await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...")
+                await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
+            else:
+                # Regular comparison, create AssetList
+                asset_list = self._ok_asset_list(symbols, currency=currency)
+                await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling dividends button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика дивидендной доходности: {str(e)}")
+
+    async def _create_mixed_comparison_dividends_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, currency: str):
+        """Create dividends chart for mixed comparison (portfolios + assets)"""
+        try:
+            self.logger.info(f"Creating mixed comparison dividends chart for symbols: {symbols}")
+            
+            # Separate portfolios and individual assets
+            portfolio_data = []
+            asset_symbols = []
+            
+            for symbol in symbols:
+                if isinstance(symbol, (pd.Series, pd.DataFrame)):
+                    # This is a portfolio wealth index
+                    portfolio_data.append(symbol)
+                else:
+                    # This is an individual asset symbol
+                    asset_symbols.append(symbol)
+            
+            # For mixed comparisons, we'll focus on individual assets since portfolios don't have direct dividend data
+            if not asset_symbols:
+                await self._send_callback_message(update, context, "❌ Для портфелей дивидендная доходность рассчитывается по-другому. Используйте команду /portfolio для детального анализа.")
+                return
+            
+            # Create dividends chart for individual assets
+            try:
+                asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                await self._create_dividend_yield_chart(update, context, asset_list, asset_symbols, currency)
+            except Exception as asset_error:
+                self.logger.warning(f"Could not create dividends chart for assets: {asset_error}")
+                await self._send_callback_message(update, context, "❌ Не удалось создать график дивидендной доходности для активов")
+                
+        except Exception as e:
+            self.logger.error(f"Error creating mixed comparison dividends chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика дивидендной доходности: {str(e)}")
 
     async def _handle_correlation_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
@@ -2747,13 +2889,110 @@ class OkamaFinanceBot:
             self.logger.info(f"Creating correlation matrix for symbols: {symbols}, currency: {currency}")
             await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу...")
             
-            # Create AssetList again
-            asset_list = self._ok_asset_list(symbols, currency=currency)
+            # Check if this is a mixed comparison (portfolios + assets)
+            user_context = self._get_user_context(user_id)
+            last_analysis_type = user_context.get('last_analysis_type', 'comparison')
             
-            await self._create_correlation_matrix(update, context, asset_list, symbols)
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+                # This is a mixed comparison, handle differently
+                await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу для смешанного сравнения...")
+                await self._create_mixed_comparison_correlation_matrix(update, context, symbols, currency)
+            else:
+                # Regular comparison, create AssetList
+                asset_list = self._ok_asset_list(symbols, currency=currency)
+                await self._create_correlation_matrix(update, context, asset_list, symbols)
             
         except Exception as e:
             self.logger.error(f"Error handling correlation button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании корреляционной матрицы: {str(e)}")
+
+    async def _create_mixed_comparison_correlation_matrix(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, currency: str):
+        """Create correlation matrix for mixed comparison (portfolios + assets)"""
+        try:
+            self.logger.info(f"Creating mixed comparison correlation matrix for symbols: {symbols}")
+            
+            # Separate portfolios and individual assets
+            portfolio_data = []
+            asset_symbols = []
+            
+            for symbol in symbols:
+                if isinstance(symbol, (pd.Series, pd.DataFrame)):
+                    # This is a portfolio wealth index
+                    portfolio_data.append(symbol)
+                else:
+                    # This is an individual asset symbol
+                    asset_symbols.append(symbol)
+            
+            # Create correlation data
+            correlation_data = {}
+            
+            # Process portfolios
+            for i, portfolio_series in enumerate(portfolio_data):
+                if isinstance(portfolio_series, pd.Series):
+                    # Calculate returns for portfolio
+                    returns = portfolio_series.pct_change().dropna()
+                    correlation_data[f'Portfolio_{i+1}'] = returns
+            
+            # Process individual assets
+            if asset_symbols:
+                try:
+                    asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                    for symbol in asset_symbols:
+                        if symbol in asset_list.wealth_indexes.columns:
+                            # Calculate returns for individual asset
+                            wealth_series = asset_list.wealth_indexes[symbol]
+                            returns = wealth_series.pct_change().dropna()
+                            correlation_data[symbol] = returns
+                except Exception as asset_error:
+                    self.logger.warning(f"Could not process individual assets: {asset_error}")
+            
+            if len(correlation_data) < 2:
+                await self._send_callback_message(update, context, "❌ Недостаточно данных для создания корреляционной матрицы")
+                return
+            
+            # Create correlation matrix
+            returns_df = pd.DataFrame(correlation_data)
+            correlation_matrix = returns_df.corr()
+            
+            # Create correlation chart
+            fig, ax = chart_styles.create_correlation_matrix_chart(
+                correlation_matrix=correlation_matrix,
+                symbols=list(correlation_data.keys())
+            )
+            
+            # Save chart
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache
+            chart_styles.cleanup_figure(fig)
+            
+            # Create caption
+            portfolio_count = len(portfolio_data)
+            asset_count = len(asset_symbols)
+            
+            caption = f"🔗 Корреляционная матрица смешанного сравнения\n\n"
+            caption += f"📊 Состав:\n"
+            if portfolio_count > 0:
+                caption += f"• Портфели: {portfolio_count}\n"
+            if asset_count > 0:
+                caption += f"• Индивидуальные активы: {asset_count}\n"
+            caption += f"• Валюта: {currency}\n\n"
+            caption += f"💡 Матрица показывает:\n"
+            caption += f"• Корреляцию между портфелями и активами\n"
+            caption += f"• Степень диверсификации\n"
+            caption += f"• Риск-доходность портфелей"
+            
+            # Send chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating mixed comparison correlation matrix: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании корреляционной матрицы: {str(e)}")
 
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
