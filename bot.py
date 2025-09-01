@@ -1341,225 +1341,95 @@ class OkamaFinanceBot:
                 currency_info = "по умолчанию (USD)"
             
             try:
-                # Check if we have portfolios in the comparison (wealth indexes can be Series or single-column DataFrames)
+                # Check if we have portfolios in the comparison
                 has_portfolios = any(isinstance(symbol, (pd.Series, pd.DataFrame)) for symbol in expanded_symbols)
                 
                 if has_portfolios:
-                    # We have portfolios, need to create custom comparison
-                    self.logger.info("Creating custom comparison with portfolios")
+                    # We have portfolios, need to create proper comparison using ok.AssetList
+                    self.logger.info("Creating comparison with portfolios using ok.AssetList")
                     
-                    # Get the first regular asset to determine currency if no portfolios
-                    first_regular_symbol = None
-                    for symbol in expanded_symbols:
-                        if not isinstance(symbol, (pd.Series, pd.DataFrame)):
-                            first_regular_symbol = symbol
-                            break
+                    # Prepare assets list for ok.AssetList
+                    assets_for_comparison = []
                     
-                    # Determine currency from first regular asset or portfolio
-                    if first_regular_symbol:
-                        if '.' in first_regular_symbol:
-                            namespace = first_regular_symbol.split('.')[1]
-                            if namespace == 'MOEX':
-                                currency = "RUB"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'US':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'LSE':
-                                currency = "GBP"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'FX':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'COMM':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'INDX':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
+                    for i, symbol in enumerate(expanded_symbols):
+                        if isinstance(symbol, (pd.Series, pd.DataFrame)):
+                            # This is a portfolio wealth index - we need to create portfolio object
+                            portfolio_context = portfolio_contexts[i] if i < len(portfolio_contexts) else None
+                            
+                            if portfolio_context:
+                                try:
+                                    # Create portfolio object using okama
+                                    portfolio = self._ok_portfolio(
+                                        portfolio_context['portfolio_symbols'], 
+                                        portfolio_context['portfolio_weights'], 
+                                        currency=portfolio_context['portfolio_currency']
+                                    )
+                                    assets_for_comparison.append(portfolio)
+                                    self.logger.info(f"Added portfolio {portfolio_context['symbol']} to comparison")
+                                except Exception as portfolio_error:
+                                    self.logger.error(f"Error creating portfolio {portfolio_context['symbol']}: {portfolio_error}")
+                                    await self._send_message_safe(update, f"❌ Ошибка при создании портфеля {portfolio_context['symbol']}: {str(portfolio_error)}")
+                                    return
+                            else:
+                                self.logger.warning(f"No portfolio context found for index {i}, using generic portfolio")
+                                # Create a generic portfolio if context is missing
+                                try:
+                                    # Extract symbols from the description
+                                    desc = symbols[i]
+                                    if ' (' in desc:
+                                        portfolio_symbols = desc.split(' (')[1].rstrip(')').split(', ')
+                                        portfolio_weights = [1.0/len(portfolio_symbols)] * len(portfolio_symbols)
+                                        portfolio = self._ok_portfolio(portfolio_symbols, portfolio_weights, currency=currency)
+                                        assets_for_comparison.append(portfolio)
+                                        self.logger.info(f"Added generic portfolio to comparison")
+                                    else:
+                                        self.logger.error(f"Could not extract portfolio symbols from description: {desc}")
+                                        await self._send_message_safe(update, f"❌ Ошибка при обработке портфеля: {desc}")
+                                        return
+                                except Exception as e:
+                                    self.logger.error(f"Error creating generic portfolio: {e}")
+                                    await self._send_message_safe(update, f"❌ Ошибка при создании портфеля: {str(e)}")
+                                    return
+                        else:
+                            # Regular asset symbol
+                            assets_for_comparison.append(symbol)
+                            self.logger.info(f"Added asset {symbol} to comparison")
+                    
+                    # Determine currency from first asset or portfolio
+                    if assets_for_comparison:
+                        first_asset = assets_for_comparison[0]
+                        if hasattr(first_asset, 'currency'):
+                            currency = first_asset.currency
+                            currency_info = f"автоматически определена по первому активу/портфелю"
+                        else:
+                            # Try to determine from symbol
+                            if '.' in str(first_asset):
+                                namespace = str(first_asset).split('.')[1]
+                                if namespace == 'MOEX':
+                                    currency = "RUB"
+                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
+                                elif namespace == 'US':
+                                    currency = "USD"
+                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
+                                elif namespace == 'LSE':
+                                    currency = "GBP"
+                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
+                                else:
+                                    currency = "USD"
+                                    currency_info = "по умолчанию (USD)"
                             else:
                                 currency = "USD"
                                 currency_info = "по умолчанию (USD)"
-                        else:
-                            currency = "USD"
-                            currency_info = "по умолчанию (USD)"
-                    else:
-                        # All are portfolios, use USD as default
-                        currency = "USD"
-                        currency_info = "по умолчанию (USD)"
                     
-                    # Create custom wealth index DataFrame
-                    wealth_data = {}
-                    
-                    # Debug logging for expanded_symbols
-                    self.logger.info(f"DEBUG: Processing expanded_symbols: {expanded_symbols}")
-                    self.logger.info(f"DEBUG: expanded_symbols types: {[type(s) for s in expanded_symbols]}")
-                    
-                    for i, symbol in enumerate(expanded_symbols):
-                        self.logger.info(f"DEBUG: Processing index {i}: symbol='{symbol}' (type: {type(symbol)})")
-                        
-                        # Check if this is a portfolio symbol (ends with .PF)
-                        if isinstance(symbol, str) and symbol.endswith('.PF'):
-                            # This is a portfolio symbol - we need to load the portfolio from context
-                            self.logger.info(f"DEBUG: Found portfolio symbol: {symbol}")
-                            
-                            # Get portfolio data from user context
-                            user_id = update.effective_user.id
-                            user_context = self._get_user_context(user_id)
-                            saved_portfolios = user_context.get('saved_portfolios', {})
-                            
-                            if symbol not in saved_portfolios:
-                                self.logger.error(f"Portfolio {symbol} not found in user context")
-                                await self._send_message_safe(update, f"❌ Портфель {symbol} не найден в контексте пользователя. Сначала создайте портфель командой /portfolio")
-                                return
-                            
-                            portfolio_info = saved_portfolios[symbol]
-                            portfolio_symbols = portfolio_info.get('symbols', [])
-                            portfolio_weights = portfolio_info.get('weights', [])
-                            portfolio_currency = portfolio_info.get('currency', 'USD')
-                            
-                            self.logger.info(f"Portfolio {symbol} symbols: {portfolio_symbols}, weights: {portfolio_weights}")
-                            
-                            # Create portfolio object
-                            try:
-                                portfolio = self._ok_portfolio(portfolio_symbols, portfolio_weights, currency=portfolio_currency)
-                                self.logger.info(f"Successfully created portfolio object for {symbol}")
-                                
-                                # Get portfolio wealth index
-                                wealth_index = portfolio.wealth_index
-                                wealth_data[symbols[i]] = wealth_index
-                                
-                                # Update global currency to use portfolio currency
-                                if currency == 'auto':
-                                    currency = portfolio_currency
-                                    self.logger.info(f"Updated global currency to portfolio currency: {currency}")
-                                
-                            except Exception as portfolio_error:
-                                self.logger.error(f"Error creating portfolio {symbol}: {portfolio_error}")
-                                await self._send_message_safe(update, f"❌ Ошибка при создании портфеля {symbol}: {str(portfolio_error)}")
-                                return
-                                
-                        elif isinstance(symbol, (pd.Series, pd.DataFrame)):
-                            # Portfolio wealth index (Series or single-column DataFrame) - this shouldn't happen in normal flow
-                            self.logger.info(f"DEBUG: Found portfolio pandas object at index {i} - unexpected")
-                            try:
-                                if isinstance(symbol, pd.DataFrame):
-                                    self.logger.info(f"DEBUG: Portfolio wealth index is DataFrame with shape {symbol.shape}")
-                                    squeezed = symbol.squeeze()
-                                    if isinstance(squeezed, pd.DataFrame):
-                                        # Fallback: take the first column explicitly
-                                        squeezed = symbol.iloc[:, 0]
-                                    wealth_series = squeezed
-                                else:
-                                    wealth_series = symbol
-                                wealth_data[symbols[i]] = wealth_series
-                            except Exception as conv_err:
-                                self.logger.error(f"Failed to convert portfolio wealth index to Series: {conv_err}")
-                                await self._send_message_safe(update, f"❌ Ошибка при обработке портфеля {symbols[i]}: {str(conv_err)}")
-                                return
-                        else:
-                            # Regular asset, need to get its wealth index
-                            self.logger.info(f"DEBUG: Found regular asset at index {i}: '{symbol}'")
-                            try:
-                                # Log the current symbol being processed
-                                self.logger.info(f"Processing regular asset: '{symbol}' from symbols[{i}] = '{symbols[i]}'")
-                                self.logger.info(f"DEBUG: symbol type: {type(symbol)}, symbol value: '{symbol}'")
-                                self.logger.info(f"DEBUG: symbols[{i}] type: {type(symbols[i])}, symbols[{i}] value: '{symbols[i]}'")
-                                
-                                # Use the currency from the portfolio if available, otherwise use detected currency
-                                asset_currency = currency
-                                
-                                # Log the symbol being processed for debugging
-                                self.logger.info(f"Processing asset symbol: '{symbol}' with currency: {asset_currency}")
-                                self.logger.info(f"DEBUG: About to create Asset with symbol: '{symbol}'")
-                                
-                                # Validate symbol format before creating Asset
-                                if not symbol or symbol.strip() == '':
-                                    self.logger.error(f"Empty or invalid symbol: '{symbol}'")
-                                    await self._send_message_safe(update, f"❌ Ошибка: неверный символ актива '{symbol}'")
-                                    return
-                                
-                                # Check for invalid characters that indicate extraction error
-                                invalid_chars = ['(', ')', ',']
-                                if any(char in symbol for char in invalid_chars):
-                                    self.logger.error(f"Symbol contains invalid characters: '{symbol}' - extraction error detected")
-                                    await self._send_message_safe(update, f"❌ Ошибка: символ содержит недопустимые символы '{symbol}' - ошибка извлечения")
-                                    return
-                                
-                                # Check for proper symbol format (must contain namespace separator)
-                                if '.' not in symbol:
-                                    self.logger.error(f"Symbol missing namespace separator: '{symbol}'")
-                                    await self._send_message_safe(update, f"❌ Ошибка: символ не содержит разделитель пространства имен '{symbol}'")
-                                    return
-                                
-                                self.logger.info(f"DEBUG: Symbol validation passed, creating Asset with: '{symbol}'")
-                                self.logger.info(f"DEBUG: About to call _ok_asset('{symbol}', currency='{asset_currency}')")
-                                try:
-                                    asset = self._ok_asset(symbol, currency=asset_currency)
-                                    self.logger.info(f"DEBUG: Successfully created Asset for '{symbol}'")
-                                except Exception as asset_error:
-                                    self.logger.error(f"DEBUG: Failed to create Asset for '{symbol}': {asset_error}")
-                                    raise asset_error
-                                
-                                # Calculate wealth index from price data
-                                try:
-                                    price_data = asset.price
-                                    self.logger.info(f"DEBUG: Price data type for {symbol}: {type(price_data)}")
-                                    
-                                    # Handle different types of price data
-                                    if price_data is None:
-                                        raise ValueError(f"No price data available for {symbol}")
-                                    elif isinstance(price_data, (int, float)):
-                                        # Single price value - create a simple wealth index
-                                        self.logger.info(f"DEBUG: Single price value for {symbol}: {price_data}")
-                                        # For single values, we can't calculate returns, so create a constant series
-                                        from datetime import datetime, timedelta
-                                        # Create a simple time series with the price value
-                                        dates = pd.date_range(start='2020-01-01', end='2024-01-01', freq='D')
-                                        wealth_series = pd.Series(price_data, index=dates)
-                                        wealth_data[symbols[i]] = wealth_series
-                                    elif isinstance(price_data, pd.Series):
-                                        # Price series - calculate wealth index
-                                        self.logger.info(f"DEBUG: Price series for {symbol}, length: {len(price_data)}")
-                                        # Calculate returns and wealth index
-                                        returns = price_data.pct_change().dropna()
-                                        wealth_series = (1 + returns).cumprod()
-                                        wealth_data[symbols[i]] = wealth_series
-                                    elif isinstance(price_data, pd.DataFrame):
-                                        # Price DataFrame - take first column
-                                        self.logger.info(f"DEBUG: Price DataFrame for {symbol}, shape: {price_data.shape}")
-                                        first_column = price_data.iloc[:, 0]
-                                        returns = first_column.pct_change().dropna()
-                                        wealth_series = (1 + returns).cumprod()
-                                        wealth_data[symbols[i]] = wealth_series
-                                    else:
-                                        raise ValueError(f"Unexpected price data type for {symbol}: {type(price_data)}")
-                                        
-                                except Exception as price_error:
-                                    self.logger.error(f"Error processing price data for {symbol}: {price_error}")
-                                    await self._send_message_safe(update, f"❌ Ошибка при обработке данных о ценах для {symbol}: {str(price_error)}")
-                                    return
-                                
-                            except Exception as asset_error:
-                                self.logger.error(f"Error creating asset {symbol}: {asset_error}")
-                                await self._send_message_safe(update, f"❌ Ошибка при создании актива {symbol}: {str(asset_error)}")
-                                return
-                    
-                    # Create DataFrame from wealth data
-                    wealth_df = pd.DataFrame(wealth_data)
-                    
-                    # Create custom comparison object
-                    class CustomComparison:
-                        def __init__(self, wealth_indexes, symbols, currency):
-                            self.wealth_indexes = wealth_indexes
-                            self.symbols = symbols
-                            self.currency = currency
-                            # Add other attributes that might be needed
-                            self.assets_ror = None
-                            self.drawdowns = None
-                            self.dividend_yield = None
-                    
-                    comparison = CustomComparison(wealth_df, symbols, currency)
+                    # Create comparison using ok.AssetList (proper way to compare portfolios with assets)
+                    try:
+                        self.logger.info(f"Creating AssetList with {len(assets_for_comparison)} assets/portfolios")
+                        comparison = self._ok_asset_list(assets_for_comparison, currency=currency)
+                        self.logger.info("Successfully created AssetList comparison")
+                    except Exception as asset_list_error:
+                        self.logger.error(f"Error creating AssetList: {asset_list_error}")
+                        await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(asset_list_error)}")
+                        return
                     
                 else:
                     # Regular comparison without portfolios
