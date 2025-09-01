@@ -1101,8 +1101,8 @@ class ChartStyles:
         ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
         
         self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='© shans.ai | data source: okama', show_xlabel=True,
-            grid=True, legend=True, copyright=False
+            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=False,
+            grid=True, legend=True, copyright=True
         )
         
         # Настройка для временных рядов
