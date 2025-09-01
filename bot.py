@@ -2403,7 +2403,7 @@ class OkamaFinanceBot:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
-            if callback_data == "drawdowns":
+            if callback_data == "drawdowns" or callback_data == "drawdowns_compare":
                 self.logger.info("Drawdowns button clicked")
                 
                 # Get data from user context
@@ -2419,7 +2419,7 @@ class OkamaFinanceBot:
                 else:
                     symbols = user_context.get('current_symbols', [])
                     await self._handle_drawdowns_button(update, context, symbols)
-            elif callback_data == "dividends":
+            elif callback_data == "dividends" or callback_data == "dividends_compare":
                 self.logger.info("Dividends button clicked")
                 
                 # Get data from user context
@@ -2427,7 +2427,7 @@ class OkamaFinanceBot:
                 user_context = self._get_user_context(user_id)
                 symbols = user_context.get('current_symbols', [])
                 await self._handle_dividends_button(update, context, symbols)
-            elif callback_data == "correlation":
+            elif callback_data == "correlation" or callback_data == "correlation_compare":
                 self.logger.info("Correlation button clicked")
                 
                 # Get data from user context
