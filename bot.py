@@ -1505,6 +1505,27 @@ class OkamaFinanceBot:
                     # Create DataFrame from wealth data
                     wealth_df = pd.DataFrame(wealth_data)
                     
+                    # Safely handle Period objects in DataFrame index
+                    try:
+                        if hasattr(wealth_df, 'index') and hasattr(wealth_df.index, 'dtype'):
+                            if str(wealth_df.index.dtype).startswith('period') or any(hasattr(idx, 'to_timestamp') for idx in wealth_df.index[:min(3, len(wealth_df.index))]):
+                                if hasattr(wealth_df.index, 'to_timestamp'):
+                                    wealth_df.index = wealth_df.index.to_timestamp()
+                                else:
+                                    # Handle individual Period objects in index
+                                    new_index = []
+                                    for idx in wealth_df.index:
+                                        if hasattr(idx, 'to_timestamp'):
+                                            try:
+                                                new_index.append(idx.to_timestamp())
+                                            except Exception:
+                                                new_index.append(pd.to_datetime(str(idx)))
+                                        else:
+                                            new_index.append(idx)
+                                    wealth_df.index = pd.DatetimeIndex(new_index)
+                    except Exception as period_error:
+                        self.logger.warning(f"Could not convert Period objects in wealth DataFrame: {period_error}")
+                    
                     # Generate beautiful comparison chart using chart_styles
                     fig, ax = chart_styles.create_comparison_chart(
                         data=wealth_df,
@@ -1519,8 +1540,32 @@ class OkamaFinanceBot:
                     self.logger.info("Created AssetList with full available period")
                     
                     # Generate beautiful comparison chart using chart_styles
+                    # Safely handle Period objects in wealth_indexes
+                    wealth_data = asset_list.wealth_indexes
+                    try:
+                        # Check if index contains Period objects and convert them
+                        if hasattr(wealth_data, 'index') and hasattr(wealth_data.index, 'dtype'):
+                            if str(wealth_data.index.dtype).startswith('period') or any(hasattr(idx, 'to_timestamp') for idx in wealth_data.index[:min(3, len(wealth_data.index))]):
+                                wealth_data = wealth_data.copy()
+                                if hasattr(wealth_data.index, 'to_timestamp'):
+                                    wealth_data.index = wealth_data.index.to_timestamp()
+                                else:
+                                    # Handle individual Period objects in index
+                                    new_index = []
+                                    for idx in wealth_data.index:
+                                        if hasattr(idx, 'to_timestamp'):
+                                            try:
+                                                new_index.append(idx.to_timestamp())
+                                            except Exception:
+                                                new_index.append(pd.to_datetime(str(idx)))
+                                        else:
+                                            new_index.append(idx)
+                                    wealth_data.index = pd.DatetimeIndex(new_index)
+                    except Exception as period_error:
+                        self.logger.warning(f"Could not convert Period objects in wealth_indexes: {period_error}")
+                    
                     fig, ax = chart_styles.create_comparison_chart(
-                        data=asset_list.wealth_indexes,
+                        data=wealth_data,
                         symbols=symbols,
                         currency=currency
                     )
