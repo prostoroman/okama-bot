@@ -1481,7 +1481,6 @@ class OkamaFinanceBot:
                                         # Single price value - create a simple wealth index
                                         self.logger.info(f"DEBUG: Single price value for {symbol}: {price_data}")
                                         # For single values, we can't calculate returns, so create a constant series
-                                        import pandas as pd
                                         from datetime import datetime, timedelta
                                         # Create a simple time series with the price value
                                         dates = pd.date_range(start=datetime.now() - timedelta(days=365), end=datetime.now(), freq='D')
