@@ -2531,26 +2531,26 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating mixed comparison drawdowns chart for symbols: {symbols}")
             
-            # Separate portfolios and individual assets
-            portfolio_data = []
-            asset_symbols = []
-            
-            for symbol in symbols:
-                if isinstance(symbol, (pd.Series, pd.DataFrame)):
-                    # This is a portfolio wealth index
-                    portfolio_data.append(symbol)
-                else:
-                    # This is an individual asset symbol
-                    asset_symbols.append(symbol)
-            
-            # Create drawdowns data for portfolios
-            drawdowns_data = {}
-            
             # Get user context to restore portfolio information
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             portfolio_contexts = user_context.get('portfolio_contexts', [])
             expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
+            portfolio_data = []
+            asset_symbols = []
+            
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
+                    # This is a portfolio wealth index
+                    portfolio_data.append(expanded_symbol)
+                else:
+                    # This is an individual asset symbol
+                    asset_symbols.append(expanded_symbol)
+            
+            # Create drawdowns data for portfolios
+            drawdowns_data = {}
             
             # Process portfolios with proper names
             for i, portfolio_series in enumerate(portfolio_data):
@@ -2753,26 +2753,26 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating mixed comparison correlation matrix for symbols: {symbols}")
             
-            # Separate portfolios and individual assets
-            portfolio_data = []
-            asset_symbols = []
-            
-            for symbol in symbols:
-                if isinstance(symbol, (pd.Series, pd.DataFrame)):
-                    # This is a portfolio wealth index
-                    portfolio_data.append(symbol)
-                else:
-                    # This is an individual asset symbol
-                    asset_symbols.append(symbol)
-            
-            # Create correlation data
-            correlation_data = {}
-            
             # Get user context to restore portfolio information
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             portfolio_contexts = user_context.get('portfolio_contexts', [])
             expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
+            portfolio_data = []
+            asset_symbols = []
+            
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
+                    # This is a portfolio wealth index
+                    portfolio_data.append(expanded_symbol)
+                else:
+                    # This is an individual asset symbol
+                    asset_symbols.append(expanded_symbol)
+            
+            # Create correlation data
+            correlation_data = {}
             
             # Process portfolios with proper names
             for i, portfolio_series in enumerate(portfolio_data):
