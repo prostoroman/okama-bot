@@ -1184,6 +1184,7 @@ class OkamaFinanceBot:
             
             expanded_symbols = []
             portfolio_descriptions = []
+            portfolio_contexts = []  # Store portfolio context for buttons
             
             for symbol in symbols:
                 # Log symbol being processed for debugging
@@ -1232,6 +1233,15 @@ class OkamaFinanceBot:
                         # Use the original symbol for description to maintain consistency
                         portfolio_descriptions.append(f"{symbol} ({', '.join(portfolio_symbols)})")
                         
+                        # Store portfolio context for buttons
+                        portfolio_contexts.append({
+                            'symbol': symbol,
+                            'portfolio_symbols': portfolio_symbols,
+                            'portfolio_weights': portfolio_weights,
+                            'portfolio_currency': portfolio_currency,
+                            'portfolio_object': portfolio
+                        })
+                        
                         self.logger.info(f"Expanded portfolio {symbol} with {len(portfolio_symbols)} assets")
                         self.logger.info(f"Portfolio currency: {portfolio_currency}, weights: {portfolio_weights}")
                         self.logger.info(f"DEBUG: Added portfolio description: '{symbol} ({', '.join(portfolio_symbols)})'")
@@ -1244,6 +1254,13 @@ class OkamaFinanceBot:
                     # Regular asset symbol
                     expanded_symbols.append(symbol)
                     portfolio_descriptions.append(symbol)
+                    portfolio_contexts.append({
+                        'symbol': symbol,
+                        'portfolio_symbols': [symbol],
+                        'portfolio_weights': [1.0],
+                        'portfolio_currency': None,  # Will be determined later
+                        'portfolio_object': None
+                    })
             
             # Update symbols list with expanded portfolio descriptions
             symbols = portfolio_descriptions
@@ -1498,92 +1515,68 @@ class OkamaFinanceBot:
                                         # For single values, we can't calculate returns, so create a constant series
                                         from datetime import datetime, timedelta
                                         # Create a simple time series with the price value
-                                        dates = pd.date_range(start=datetime.now() - timedelta(days=365), end=datetime.now(), freq='D')
-                                        wealth_index = pd.Series([price_data] * len(dates), index=dates)
-                                        wealth_data[symbol] = wealth_index
-                                    elif hasattr(price_data, '__len__') and len(price_data) > 0:
-                                        # Time series data - calculate cumulative returns
-                                        self.logger.info(f"DEBUG: Time series data for {symbol}, length: {len(price_data)}")
+                                        dates = pd.date_range(start='2020-01-01', end='2024-01-01', freq='D')
+                                        wealth_series = pd.Series(price_data, index=dates)
+                                        wealth_data[symbols[i]] = wealth_series
+                                    elif isinstance(price_data, pd.Series):
+                                        # Price series - calculate wealth index
+                                        self.logger.info(f"DEBUG: Price series for {symbol}, length: {len(price_data)}")
+                                        # Calculate returns and wealth index
                                         returns = price_data.pct_change().dropna()
-                                        wealth_index = (1 + returns).cumprod()
-                                        wealth_data[symbol] = wealth_index
+                                        wealth_series = (1 + returns).cumprod()
+                                        wealth_data[symbols[i]] = wealth_series
+                                    elif isinstance(price_data, pd.DataFrame):
+                                        # Price DataFrame - take first column
+                                        self.logger.info(f"DEBUG: Price DataFrame for {symbol}, shape: {price_data.shape}")
+                                        first_column = price_data.iloc[:, 0]
+                                        returns = first_column.pct_change().dropna()
+                                        wealth_series = (1 + returns).cumprod()
+                                        wealth_data[symbols[i]] = wealth_series
                                     else:
-                                        raise ValueError(f"Invalid price data format for {symbol}: {type(price_data)}")
-                                except Exception as wealth_error:
-                                    self.logger.error(f"Error calculating wealth index for {symbol}: {wealth_error}")
-                                    raise wealth_error
-                            except Exception as e:
-                                self.logger.error(f"Error getting wealth index for {symbol}: {e}")
-                                await self._send_message_safe(update, f"❌ Ошибка при получении данных для {symbol}: {str(e)}")
+                                        raise ValueError(f"Unexpected price data type for {symbol}: {type(price_data)}")
+                                        
+                                except Exception as price_error:
+                                    self.logger.error(f"Error processing price data for {symbol}: {price_error}")
+                                    await self._send_message_safe(update, f"❌ Ошибка при обработке данных о ценах для {symbol}: {str(price_error)}")
+                                    return
+                                
+                            except Exception as asset_error:
+                                self.logger.error(f"Error creating asset {symbol}: {asset_error}")
+                                await self._send_message_safe(update, f"❌ Ошибка при создании актива {symbol}: {str(asset_error)}")
                                 return
                     
                     # Create DataFrame from wealth data
                     wealth_df = pd.DataFrame(wealth_data)
                     
-                    # Safely handle Period objects in DataFrame index
-                    try:
-                        if hasattr(wealth_df, 'index') and hasattr(wealth_df.index, 'dtype'):
-                            if str(wealth_df.index.dtype).startswith('period') or any(hasattr(idx, 'to_timestamp') for idx in wealth_df.index[:min(3, len(wealth_df.index))]):
-                                if hasattr(wealth_df.index, 'to_timestamp'):
-                                    wealth_df.index = wealth_df.index.to_timestamp()
-                                else:
-                                    # Handle individual Period objects in index
-                                    new_index = []
-                                    for idx in wealth_df.index:
-                                        if hasattr(idx, 'to_timestamp'):
-                                            try:
-                                                new_index.append(idx.to_timestamp())
-                                            except Exception:
-                                                new_index.append(pd.to_datetime(str(idx)))
-                                        else:
-                                            new_index.append(idx)
-                                    wealth_df.index = pd.DatetimeIndex(new_index)
-                    except Exception as period_error:
-                        self.logger.warning(f"Could not convert Period objects in wealth DataFrame: {period_error}")
+                    # Create custom comparison object
+                    class CustomComparison:
+                        def __init__(self, wealth_indexes, symbols, currency):
+                            self.wealth_indexes = wealth_indexes
+                            self.symbols = symbols
+                            self.currency = currency
+                            # Add other attributes that might be needed
+                            self.assets_ror = None
+                            self.drawdowns = None
+                            self.dividend_yield = None
                     
-                    # Generate beautiful comparison chart using chart_styles
-                    fig, ax = chart_styles.create_comparison_chart(
-                        data=wealth_df,
-                        symbols=symbols,
-                        currency=currency
-                    )
+                    comparison = CustomComparison(wealth_df, symbols, currency)
                     
                 else:
-                    # Regular assets only, use AssetList
-                    # Use raw parsed tickers (expanded_symbols) for okama, not display descriptions
-                    asset_list = self._ok_asset_list(expanded_symbols, currency=currency)
-                    self.logger.info("Created AssetList with full available period")
-                    
-                    # Generate beautiful comparison chart using chart_styles
-                    # Safely handle Period objects in wealth_indexes
-                    wealth_data = asset_list.wealth_indexes
-                    try:
-                        # Check if index contains Period objects and convert them
-                        if hasattr(wealth_data, 'index') and hasattr(wealth_data.index, 'dtype'):
-                            if str(wealth_data.index.dtype).startswith('period') or any(hasattr(idx, 'to_timestamp') for idx in wealth_data.index[:min(3, len(wealth_data.index))]):
-                                wealth_data = wealth_data.copy()
-                                if hasattr(wealth_data.index, 'to_timestamp'):
-                                    wealth_data.index = wealth_data.index.to_timestamp()
-                                else:
-                                    # Handle individual Period objects in index
-                                    new_index = []
-                                    for idx in wealth_data.index:
-                                        if hasattr(idx, 'to_timestamp'):
-                                            try:
-                                                new_index.append(idx.to_timestamp())
-                                            except Exception:
-                                                new_index.append(pd.to_datetime(str(idx)))
-                                        else:
-                                            new_index.append(idx)
-                                    wealth_data.index = pd.DatetimeIndex(new_index)
-                    except Exception as period_error:
-                        self.logger.warning(f"Could not convert Period objects in wealth_indexes: {period_error}")
-                    
-                    fig, ax = chart_styles.create_comparison_chart(
-                        data=wealth_data,
-                        symbols=symbols,
-                        currency=currency
-                    )
+                    # Regular comparison without portfolios
+                    self.logger.info("Creating regular comparison without portfolios")
+                    comparison = self._ok_asset_list(symbols, currency=currency)
+                
+                # Store context for buttons
+                user_context['current_symbols'] = symbols
+                user_context['current_currency'] = currency
+                user_context['last_analysis_type'] = 'comparison'
+                user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
+                user_context['expanded_symbols'] = expanded_symbols  # Store expanded symbols
+                
+                # Create comparison chart
+                fig, ax = chart_styles.create_comparison_chart(
+                    comparison.wealth_indexes, symbols, currency
+                )
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
@@ -1594,76 +1587,14 @@ class OkamaFinanceBot:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Get basic statistics
-                stats_text = f"📊 Сравнение: {', '.join(symbols)}\n\n"
-                stats_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
+                # Create caption
+                caption = f"📊 Сравнение активов\n\n"
+                caption += f"🔍 Сравниваемые активы: {', '.join(symbols)}\n"
+                caption += f"💰 Валюта: {currency} ({currency_info})\n"
+                caption += f"📅 Период: полный доступный период данных\n\n"
+                caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
                 
-                if has_portfolios:
-                    # Get statistics from wealth_df for portfolios
-                    try:
-                        first_date = wealth_df.index[0]
-                        last_date = wealth_df.index[-1]
-                        period_length = last_date - first_date
-                        
-                        stats_text += f"📅 Период: {first_date} - {last_date}\n"
-                        stats_text += f"⏱️ Длительность: {period_length}\n\n"
-                        
-                        # Calculate and show final returns
-                        final_values = wealth_df.iloc[-1]
-                        stats_text += f"📈 Накопленная доходность ({currency}):\n"
-                        for symbol in symbols:
-                            if symbol in final_values:
-                                value = final_values[symbol]
-                                stats_text += f"• {symbol}: {value:.2f}\n"
-                    except Exception as e:
-                        self.logger.warning(f"Could not get portfolio statistics: {e}")
-                        stats_text += "📅 Период: недоступен\n⏱️ Длительность: недоступна\n\n"
-                else:
-                    # Regular assets, use asset_list
-                    stats_text += f"📅 Период: {asset_list.first_date} - {asset_list.last_date}\n"
-                    
-                    # Safely handle period_length which might be a Period object
-                    try:
-                        period_length = asset_list.period_length
-                        if hasattr(period_length, 'strftime'):
-                            # If it's a datetime-like object
-                            period_length_str = str(period_length)
-                        elif hasattr(period_length, 'days'):
-                            # If it's a timedelta-like object
-                            period_length_str = str(period_length)
-                        elif hasattr(period_length, 'to_timestamp'):
-                            # If it's a Period object
-                            period_length_str = str(period_length)
-                        else:
-                            # Try to convert to string directly
-                            period_length_str = str(period_length)
-                        stats_text += f"⏱️ Длительность: {period_length_str}\n\n"
-                    except Exception as e:
-                        self.logger.warning(f"Could not get period length: {e}")
-                        stats_text += "⏱️ Длительность: недоступна\n\n"
-                    
-                    # Get asset names
-                    if hasattr(asset_list, 'names') and asset_list.names:
-                        stats_text += "📋 Названия активов:\n"
-                        for symbol, name in asset_list.names.items():
-                            stats_text += f"• {symbol} - {name}\n"
-                        stats_text += "\n"
-                    
-                    # Calculate and show final returns
-                    try:
-                        final_values = asset_list.wealth_indexes.iloc[-1]
-                        stats_text += f"📈 Накопленная доходность ({currency}):\n"
-                        for symbol in symbols:
-                            if symbol in final_values:
-                                value = final_values[symbol]
-                                stats_text += f"• {symbol}: {value:.2f}\n"
-                    except Exception as e:
-                        self.logger.warning(f"Could not get final values: {e}")
-                
-                # Send text report
-                # await self.send_long_message(update, stats_text)
-                
-                # Send chart image with buttons
+                # Create keyboard with analysis buttons
                 keyboard = [
                     [
                         InlineKeyboardButton("📉 Drawdowns", callback_data=f"drawdowns_{','.join(symbols)}"),
@@ -1673,43 +1604,27 @@ class OkamaFinanceBot:
                         InlineKeyboardButton("🔗 Correlation Matrix", callback_data=f"correlation_{','.join(symbols)}")
                     ]
                 ]
+                
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
+                # Send comparison chart with buttons
                 await context.bot.send_photo(
-                    chat_id=update.effective_chat.id, 
+                    chat_id=update.effective_chat.id,
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(stats_text),
+                    caption=self._truncate_caption(caption),
                     reply_markup=reply_markup
                 )
                 
-                # Store asset_list in context for button callbacks
-                user_id = update.effective_user.id
-                self._update_user_context(
-                    user_id, 
-                    last_assets=symbols,
-                    last_analysis_type='comparison',
-                    last_period='MAX',
-                    current_symbols=expanded_symbols,  # Store actual asset symbols, not display descriptions
-                    current_currency=currency,
-                    current_currency_info=currency_info
-                )
+                # Send AI analysis
+                await self._send_ai_analysis(update, context, symbols, comparison, currency)
                 
             except Exception as e:
                 self.logger.error(f"Error creating comparison: {e}")
-                await self._send_message_safe(update, 
-                    f"❌ Ошибка при создании сравнения: {str(e)}\n\n"
-                    "💡 Возможные причины:\n"
-                    "• Один из символов недоступен\n"
-                    "• Проблемы с данными MOEX\n"
-                    "• Неверный формат символа\n\n"
-                    "Проверьте:\n"
-                    "• Правильность написания символов\n"
-                    "• Доступность данных для указанных активов"
-                )
+                await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(e)}")
                 
         except Exception as e:
             self.logger.error(f"Error in compare command: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при выполнении команды сравнения: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка в команде сравнения: {str(e)}")
 
     async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /my command for displaying saved portfolios"""
@@ -2741,7 +2656,13 @@ class OkamaFinanceBot:
             # Create drawdowns data for portfolios
             drawdowns_data = {}
             
-            # Process portfolios
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Process portfolios with proper names
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
                     # Calculate drawdowns for portfolio
@@ -2749,7 +2670,13 @@ class OkamaFinanceBot:
                     cumulative = (1 + returns).cumprod()
                     running_max = cumulative.expanding().max()
                     drawdowns = (cumulative - running_max) / running_max
-                    drawdowns_data[f'Portfolio_{i+1}'] = drawdowns
+                    # Get portfolio name from context
+                    portfolio_name = None
+                    if i < len(portfolio_contexts):
+                        portfolio_name = portfolio_contexts[i]['symbol']
+                    else:
+                        portfolio_name = f'Portfolio_{i+1}'
+                    drawdowns_data[portfolio_name] = drawdowns
             
             # Process individual assets
             if asset_symbols:
@@ -2790,12 +2717,20 @@ class OkamaFinanceBot:
             portfolio_count = len(portfolio_data)
             asset_count = len(asset_symbols)
             
+            # Get portfolio names from context
+            portfolio_names = []
+            for i, portfolio_series in enumerate(portfolio_data):
+                if i < len(portfolio_contexts):
+                    portfolio_names.append(portfolio_contexts[i]['symbol'])
+                else:
+                    portfolio_names.append(f'Portfolio_{i+1}')
+            
             caption = f"📉 Просадки смешанного сравнения\n\n"
             caption += f"📊 Состав:\n"
             if portfolio_count > 0:
-                caption += f"• Портфели: {portfolio_count}\n"
+                caption += f"• Портфели: {', '.join(portfolio_names)}\n"
             if asset_count > 0:
-                caption += f"• Индивидуальные активы: {asset_count}\n"
+                caption += f"• Индивидуальные активы: {', '.join(asset_symbols)}\n"
             caption += f"• Валюта: {currency}\n\n"
             caption += f"💡 График показывает:\n"
             caption += f"• Просадки портфелей и активов\n"
@@ -2941,12 +2876,24 @@ class OkamaFinanceBot:
             # Create correlation data
             correlation_data = {}
             
-            # Process portfolios
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Process portfolios with proper names
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
                     # Calculate returns for portfolio
                     returns = portfolio_series.pct_change().dropna()
-                    correlation_data[f'Portfolio_{i+1}'] = returns
+                    # Get portfolio name from context
+                    portfolio_name = None
+                    if i < len(portfolio_contexts):
+                        portfolio_name = portfolio_contexts[i]['symbol']
+                    else:
+                        portfolio_name = f'Portfolio_{i+1}'
+                    correlation_data[portfolio_name] = returns
             
             # Process individual assets
             if asset_symbols:
@@ -2987,12 +2934,20 @@ class OkamaFinanceBot:
             portfolio_count = len(portfolio_data)
             asset_count = len(asset_symbols)
             
+            # Get portfolio names from context
+            portfolio_names = []
+            for i, portfolio_series in enumerate(portfolio_data):
+                if i < len(portfolio_contexts):
+                    portfolio_names.append(portfolio_contexts[i]['symbol'])
+                else:
+                    portfolio_names.append(f'Portfolio_{i+1}')
+            
             caption = f"🔗 Корреляционная матрица смешанного сравнения\n\n"
             caption += f"📊 Состав:\n"
             if portfolio_count > 0:
-                caption += f"• Портфели: {portfolio_count}\n"
+                caption += f"• Портфели: {', '.join(portfolio_names)}\n"
             if asset_count > 0:
-                caption += f"• Индивидуальные активы: {asset_count}\n"
+                caption += f"• Индивидуальные активы: {', '.join(asset_symbols)}\n"
             caption += f"• Валюта: {currency}\n\n"
             caption += f"💡 Матрица показывает:\n"
             caption += f"• Корреляцию между портфелями и активами\n"
