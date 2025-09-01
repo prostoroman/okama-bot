@@ -13,6 +13,7 @@ from datetime import datetime
 
 # Third-party imports
 import matplotlib
+import matplotlib.pyplot as plt
 import pandas as pd
 import okama as ok
 
@@ -2385,26 +2386,38 @@ class OkamaFinanceBot:
             )
 
     async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
-        """Отправить сообщение в callback query"""
+        """Отправить сообщение в callback query - исправлено для обработки None"""
         try:
-            if update.callback_query:
+            # Проверяем, что update и context не None
+            if update is None or context is None:
+                self.logger.error("Cannot send message: update or context is None")
+                return
+            
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
                 # Для callback query используем context.bot.send_message
-                await context.bot.send_message(
-                    chat_id=update.callback_query.message.chat_id,
-                    text=text,
-                    parse_mode=parse_mode
-                )
-            elif update.message:
+                try:
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=text,
+                        parse_mode=parse_mode
+                    )
+                except Exception as callback_error:
+                    self.logger.error(f"Error sending callback message: {callback_error}")
+                    # Fallback: попробуем отправить через _send_message_safe
+                    await self._send_message_safe(update, text, parse_mode)
+            elif hasattr(update, 'message') and update.message is not None:
                 # Для обычных сообщений используем _send_message_safe
                 await self._send_message_safe(update, text, parse_mode)
             else:
                 # Если ни то, ни другое - логируем ошибку
                 self.logger.error("Cannot send message: neither callback_query nor message available")
+                self.logger.error(f"Update type: {type(update)}")
+                self.logger.error(f"Update attributes: {dir(update) if update else 'None'}")
         except Exception as e:
             self.logger.error(f"Error sending callback message: {e}")
             # Fallback: попробуем отправить через context.bot
             try:
-                if update.callback_query:
+                if hasattr(update, 'callback_query') and update.callback_query is not None:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
                         text=f"❌ Ошибка отправки: {text[:500]}..."
@@ -2774,7 +2787,6 @@ class OkamaFinanceBot:
             dividend_series = dividend_series.sort_index()
             
             # Создаем график с увеличенной высотой для таблицы
-            plt.style.use('fivethirtyeight')
             fig, ax = chart_styles.create_dividends_chart_enhanced(
                 data=dividend_series,
                 symbol=symbol,
