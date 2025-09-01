@@ -1423,7 +1423,8 @@ class OkamaFinanceBot:
                     
                 else:
                     # Regular assets only, use AssetList
-                    asset_list = ok.AssetList(symbols, ccy=currency)
+                    # Use raw parsed tickers (expanded_symbols) for okama, not display descriptions
+                    asset_list = ok.AssetList(expanded_symbols, ccy=currency)
                     self.logger.info("Created AssetList with full available period")
                     
                     # Generate beautiful comparison chart using chart_styles
