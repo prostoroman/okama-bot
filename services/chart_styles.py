@@ -1111,7 +1111,10 @@ class ChartStyles:
         # Создаем легенду с правильным позиционированием
         handles, labels = ax.get_legend_handles_labels()
         if handles and labels:
-            ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.02, 0.98), **self.legend_config)
+            # Создаем копию конфигурации легенды без loc, чтобы избежать дублирования
+            legend_config_copy = self.legend_config.copy()
+            legend_config_copy.pop('loc', None)  # Удаляем loc из конфигурации
+            ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.02, 0.98), **legend_config_copy)
         
         return fig, ax
     
