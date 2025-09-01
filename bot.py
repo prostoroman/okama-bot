@@ -1472,13 +1472,29 @@ class OkamaFinanceBot:
                                 # Calculate wealth index from price data
                                 try:
                                     price_data = asset.price
-                                    if price_data is not None and len(price_data) > 0:
-                                        # Calculate cumulative returns (wealth index)
+                                    self.logger.info(f"DEBUG: Price data type for {symbol}: {type(price_data)}")
+                                    
+                                    # Handle different types of price data
+                                    if price_data is None:
+                                        raise ValueError(f"No price data available for {symbol}")
+                                    elif isinstance(price_data, (int, float)):
+                                        # Single price value - create a simple wealth index
+                                        self.logger.info(f"DEBUG: Single price value for {symbol}: {price_data}")
+                                        # For single values, we can't calculate returns, so create a constant series
+                                        import pandas as pd
+                                        from datetime import datetime, timedelta
+                                        # Create a simple time series with the price value
+                                        dates = pd.date_range(start=datetime.now() - timedelta(days=365), end=datetime.now(), freq='D')
+                                        wealth_index = pd.Series([price_data] * len(dates), index=dates)
+                                        wealth_data[symbols[i]] = wealth_index
+                                    elif hasattr(price_data, '__len__') and len(price_data) > 0:
+                                        # Time series data - calculate cumulative returns
+                                        self.logger.info(f"DEBUG: Time series data for {symbol}, length: {len(price_data)}")
                                         returns = price_data.pct_change().dropna()
                                         wealth_index = (1 + returns).cumprod()
                                         wealth_data[symbols[i]] = wealth_index
                                     else:
-                                        raise ValueError(f"No price data available for {symbol}")
+                                        raise ValueError(f"Invalid price data format for {symbol}: {type(price_data)}")
                                 except Exception as wealth_error:
                                     self.logger.error(f"Error calculating wealth index for {symbol}: {wealth_error}")
                                     raise wealth_error
@@ -4249,7 +4265,19 @@ class OkamaFinanceBot:
                         
                         # Calculate wealth index from price data
                         price_data = asset.price
-                        if price_data is not None and len(price_data) > 0:
+                        self.logger.info(f"DEBUG: Price data type for {symbol}: {type(price_data)}")
+                        
+                        # Handle different types of price data
+                        if price_data is None:
+                            caption += f"• {symbol}: недоступно\n"
+                        elif isinstance(price_data, (int, float)):
+                            # Single price value - use it directly
+                            self.logger.info(f"DEBUG: Single price value for {symbol}: {price_data}")
+                            asset_final = float(price_data)
+                            caption += f"• {symbol}: {asset_final:.2f}\n"
+                        elif hasattr(price_data, '__len__') and len(price_data) > 0:
+                            # Time series data - calculate cumulative returns
+                            self.logger.info(f"DEBUG: Time series data for {symbol}, length: {len(price_data)}")
                             returns = price_data.pct_change().dropna()
                             wealth_index = (1 + returns).cumprod()
                             asset_final = wealth_index.iloc[-1]

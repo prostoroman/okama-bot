@@ -36,11 +36,7 @@ class ChartStyles:
             'ytick.labelsize': 10,
             'legend.title_fontsize': 11,
             'legend.fontsize': 10,
-            'axes.edgecolor': '#2E3440',
-            'axes.linewidth': 1.1,
-            'grid.color': '#CBD5E1',
-            'grid.linewidth': 0.7,
-            'grid.alpha': 0.25,
+
         })
         # Цветовая палитра (Nordic Pro)
         self.colors = {
