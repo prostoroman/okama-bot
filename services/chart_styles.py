@@ -1102,15 +1102,16 @@ class ChartStyles:
         
         self.apply_standard_chart_styling(
             ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=False,
-            grid=True, legend=True, copyright=True
+            grid=True, legend=False, copyright=True
         )
         
         # Настройка для временных рядов
         ax.tick_params(axis='x', rotation=45)
         
-        # Убеждаемся, что легенда находится в левом верхнем углу
-        if ax.get_legend() is not None:
-            ax.legend(loc='upper left', bbox_to_anchor=(0.02, 0.98))
+        # Создаем легенду с правильным позиционированием
+        handles, labels = ax.get_legend_handles_labels()
+        if handles and labels:
+            ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.02, 0.98), **self.legend_config)
         
         return fig, ax
     
