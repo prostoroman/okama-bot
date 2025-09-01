@@ -8,6 +8,7 @@ import re
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any
+import io
 
 # Third-party imports
 import matplotlib
