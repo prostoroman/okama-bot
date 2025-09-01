@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Any
 
 # Third-party imports
 import matplotlib
+import pandas as pd
+import okama as ok
 
 # Configure matplotlib backend for headless environments (CI/CD)
 if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
