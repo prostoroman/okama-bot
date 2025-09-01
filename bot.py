@@ -105,9 +105,10 @@ class OkamaFinanceBot:
             self.logger.error(f"Failed to send error message: {send_error}")
             # Try to send a simple error message
             try:
-                await update.message.reply_text("Произошла ошибка при обработке запроса")
-            except:
-                pass
+                if hasattr(update, 'message') and update.message is not None:
+                    await update.message.reply_text("Произошла ошибка при обработке запроса")
+            except Exception as final_error:
+                self.logger.error(f"Final error message sending failed: {final_error}")
         
     def _parse_portfolio_data(self, portfolio_data_str: str) -> tuple[list, list]:
         """Parse portfolio data string with weights (symbol:weight,symbol:weight)"""
@@ -252,12 +253,22 @@ class OkamaFinanceBot:
     async def send_long_message(self, update: Update, text: str):
         if not text:
             text = "Пустой ответ."
-        for chunk in self._split_text(text):
-            await update.message.reply_text(chunk)
+        if hasattr(update, 'message') and update.message is not None:
+            for chunk in self._split_text(text):
+                await update.message.reply_text(chunk)
     
     async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None, reply_markup=None):
-        """Безопасная отправка сообщения с автоматическим разбиением на части"""
+        """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
         try:
+            # Проверяем, что update и message не None
+            if update is None:
+                self.logger.error("Cannot send message: update is None")
+                return
+            
+            if not hasattr(update, 'message') or update.message is None:
+                self.logger.error("Cannot send message: update.message is None")
+                return
+            
             # Проверяем, что text действительно является строкой
             if not isinstance(text, str):
                 self.logger.warning(f"_send_message_safe received non-string data: {type(text)}")
@@ -281,9 +292,15 @@ class OkamaFinanceBot:
             self.logger.error(f"Error in _send_message_safe: {e}")
             # Fallback: попробуем отправить как обычный текст
             try:
-                await update.message.reply_text(f"Ошибка форматирования: {str(text)[:1000]}...")
-            except:
-                await update.message.reply_text("Произошла ошибка при отправке сообщения")
+                if hasattr(update, 'message') and update.message is not None:
+                    await update.message.reply_text(f"Ошибка форматирования: {str(text)[:1000]}...")
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback message sending failed: {fallback_error}")
+                try:
+                    if hasattr(update, 'message') and update.message is not None:
+                        await update.message.reply_text("Произошла ошибка при отправке сообщения")
+                except Exception as final_error:
+                    self.logger.error(f"Final fallback message sending failed: {final_error}")
     
     def _truncate_caption(self, text: Any) -> str:
         """Обрезать подпись до допустимой длины Telegram.
@@ -702,10 +719,11 @@ class OkamaFinanceBot:
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
-                    await update.message.reply_text(
-                        "Выберите дополнительную информацию:",
-                        reply_markup=reply_markup
-                    )
+                    if hasattr(update, 'message') and update.message is not None:
+                        await update.message.reply_text(
+                            "Выберите дополнительную информацию:",
+                            reply_markup=reply_markup
+                        )
                     
                 else:
                     await self._send_message_safe(update, "❌ Не удалось получить ежедневный график")
