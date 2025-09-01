@@ -2555,18 +2555,32 @@ class OkamaFinanceBot:
             # Process portfolios with proper names
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
-                    # Calculate drawdowns for portfolio
-                    returns = portfolio_series.pct_change().dropna()
-                    cumulative = (1 + returns).cumprod()
-                    running_max = cumulative.expanding().max()
-                    drawdowns = (cumulative - running_max) / running_max
-                    # Get portfolio name from context
-                    portfolio_name = None
-                    if i < len(portfolio_contexts):
-                        portfolio_name = portfolio_contexts[i]['symbol']
-                    else:
-                        portfolio_name = f'Portfolio_{i+1}'
-                    drawdowns_data[portfolio_name] = drawdowns
+                    try:
+                        # Ensure we have numeric data
+                        if portfolio_series.dtype == 'object':
+                            # Try to convert to numeric
+                            portfolio_series = pd.to_numeric(portfolio_series, errors='coerce')
+                        
+                        # Remove any NaN values
+                        portfolio_series = portfolio_series.dropna()
+                        
+                        if len(portfolio_series) > 1:
+                            # Calculate drawdowns for portfolio
+                            returns = portfolio_series.pct_change().dropna()
+                            if len(returns) > 0:
+                                cumulative = (1 + returns).cumprod()
+                                running_max = cumulative.expanding().max()
+                                drawdowns = (cumulative - running_max) / running_max
+                                # Get portfolio name from context
+                                portfolio_name = None
+                                if i < len(portfolio_contexts):
+                                    portfolio_name = portfolio_contexts[i]['symbol']
+                                else:
+                                    portfolio_name = f'Portfolio_{i+1}'
+                                drawdowns_data[portfolio_name] = drawdowns
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
+                        continue
             
             # Process individual assets
             if asset_symbols:
@@ -2681,17 +2695,22 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating mixed comparison dividends chart for symbols: {symbols}")
             
-            # Separate portfolios and individual assets
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
             portfolio_data = []
             asset_symbols = []
             
-            for symbol in symbols:
-                if isinstance(symbol, (pd.Series, pd.DataFrame)):
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is a portfolio wealth index
-                    portfolio_data.append(symbol)
+                    portfolio_data.append(expanded_symbol)
                 else:
                     # This is an individual asset symbol
-                    asset_symbols.append(symbol)
+                    asset_symbols.append(expanded_symbol)
             
             # For mixed comparisons, we'll focus on individual assets since portfolios don't have direct dividend data
             if not asset_symbols:
@@ -2777,15 +2796,29 @@ class OkamaFinanceBot:
             # Process portfolios with proper names
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
-                    # Calculate returns for portfolio
-                    returns = portfolio_series.pct_change().dropna()
-                    # Get portfolio name from context
-                    portfolio_name = None
-                    if i < len(portfolio_contexts):
-                        portfolio_name = portfolio_contexts[i]['symbol']
-                    else:
-                        portfolio_name = f'Portfolio_{i+1}'
-                    correlation_data[portfolio_name] = returns
+                    try:
+                        # Ensure we have numeric data
+                        if portfolio_series.dtype == 'object':
+                            # Try to convert to numeric
+                            portfolio_series = pd.to_numeric(portfolio_series, errors='coerce')
+                        
+                        # Remove any NaN values
+                        portfolio_series = portfolio_series.dropna()
+                        
+                        if len(portfolio_series) > 1:
+                            # Calculate returns for portfolio
+                            returns = portfolio_series.pct_change().dropna()
+                            if len(returns) > 0:
+                                # Get portfolio name from context
+                                portfolio_name = None
+                                if i < len(portfolio_contexts):
+                                    portfolio_name = portfolio_contexts[i]['symbol']
+                                else:
+                                    portfolio_name = f'Portfolio_{i+1}'
+                                correlation_data[portfolio_name] = returns
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
+                        continue
             
             # Process individual assets
             if asset_symbols:
