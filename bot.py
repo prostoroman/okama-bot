@@ -2556,13 +2556,23 @@ class OkamaFinanceBot:
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
                     try:
-                        # Ensure we have numeric data and handle 'Period' values
+                        self.logger.info(f"Processing portfolio {i}, dtype: {portfolio_series.dtype}, length: {len(portfolio_series)}")
+                        
+                        # More aggressive data cleaning for 'Period' values
                         if portfolio_series.dtype == 'object':
-                            # Try to convert to numeric, but exclude non-numeric values
+                            # First, try to identify and remove 'Period' values
+                            portfolio_series = portfolio_series.astype(str)
+                            portfolio_series = portfolio_series[portfolio_series != 'Period']
+                            portfolio_series = portfolio_series[portfolio_series != 'period']
+                            portfolio_series = portfolio_series[portfolio_series != 'PERIOD']
+                            
+                            # Now convert to numeric
                             portfolio_series = pd.to_numeric(portfolio_series, errors='coerce')
                         
                         # Remove any NaN values and non-numeric data
                         portfolio_series = portfolio_series.dropna()
+                        
+                        self.logger.info(f"After cleaning - dtype: {portfolio_series.dtype}, length: {len(portfolio_series)}")
                         
                         # Additional check for numeric data
                         if not portfolio_series.empty and portfolio_series.dtype in ['float64', 'int64']:
@@ -2580,6 +2590,13 @@ class OkamaFinanceBot:
                                     else:
                                         portfolio_name = f'Portfolio_{i+1}'
                                     drawdowns_data[portfolio_name] = drawdowns
+                                    self.logger.info(f"Successfully created drawdowns for {portfolio_name}")
+                                else:
+                                    self.logger.warning(f"Portfolio {i}: No returns data after pct_change")
+                            else:
+                                self.logger.warning(f"Portfolio {i}: Not enough data points ({len(portfolio_series)})")
+                        else:
+                            self.logger.warning(f"Portfolio {i}: Invalid data after cleaning - dtype: {portfolio_series.dtype}, empty: {portfolio_series.empty}")
                     except Exception as portfolio_error:
                         self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
                         continue
@@ -2722,6 +2739,8 @@ class OkamaFinanceBot:
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
                     try:
+                        self.logger.info(f"Processing portfolio {i} for dividends")
+                        
                         # Get portfolio context for assets and weights
                         portfolio_context = None
                         if i < len(portfolio_contexts):
@@ -2731,6 +2750,8 @@ class OkamaFinanceBot:
                             # Calculate weighted dividend yield for portfolio
                             portfolio_assets = portfolio_context['assets']
                             portfolio_weights = portfolio_context['weights']
+                            
+                            self.logger.info(f"Portfolio {i} assets: {portfolio_assets}, weights: {portfolio_weights}")
                             
                             try:
                                 # Create AssetList for portfolio assets
@@ -2742,16 +2763,22 @@ class OkamaFinanceBot:
                                     if asset in portfolio_asset_list.dividend_yields.columns:
                                         dividend_yield = portfolio_asset_list.dividend_yields[asset].iloc[-1] if not portfolio_asset_list.dividend_yields[asset].empty else 0
                                         total_dividend_yield += dividend_yield * weight
+                                        self.logger.info(f"Asset {asset}: dividend_yield={dividend_yield}, weight={weight}")
+                                    else:
+                                        self.logger.warning(f"Asset {asset} not found in dividend_yields columns: {list(portfolio_asset_list.dividend_yields.columns)}")
                                 
                                 # Get portfolio name
                                 portfolio_name = portfolio_context['symbol']
                                 dividends_data[portfolio_name] = total_dividend_yield
+                                self.logger.info(f"Successfully calculated dividend yield for {portfolio_name}: {total_dividend_yield}")
                                 
                             except Exception as portfolio_asset_error:
                                 self.logger.warning(f"Could not calculate dividend yield for portfolio {i}: {portfolio_asset_error}")
                                 continue
+                        else:
+                            self.logger.warning(f"Portfolio {i} missing context data: assets={portfolio_context.get('assets', 'MISSING') if portfolio_context else 'NO_CONTEXT'}, weights={portfolio_context.get('weights', 'MISSING') if portfolio_context else 'NO_CONTEXT'}")
                     except Exception as portfolio_error:
-                        self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
+                        self.logger.warning(f"Could not process portfolio {i} for dividends: {portfolio_error}")
                         continue
             
             # Process individual assets
@@ -2881,13 +2908,23 @@ class OkamaFinanceBot:
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
                     try:
-                        # Ensure we have numeric data and handle 'Period' values
+                        self.logger.info(f"Processing portfolio {i} for correlation, dtype: {portfolio_series.dtype}, length: {len(portfolio_series)}")
+                        
+                        # More aggressive data cleaning for 'Period' values
                         if portfolio_series.dtype == 'object':
-                            # Try to convert to numeric, but exclude non-numeric values
+                            # First, try to identify and remove 'Period' values
+                            portfolio_series = portfolio_series.astype(str)
+                            portfolio_series = portfolio_series[portfolio_series != 'Period']
+                            portfolio_series = portfolio_series[portfolio_series != 'period']
+                            portfolio_series = portfolio_series[portfolio_series != 'PERIOD']
+                            
+                            # Now convert to numeric
                             portfolio_series = pd.to_numeric(portfolio_series, errors='coerce')
                         
                         # Remove any NaN values and non-numeric data
                         portfolio_series = portfolio_series.dropna()
+                        
+                        self.logger.info(f"After cleaning for correlation - dtype: {portfolio_series.dtype}, length: {len(portfolio_series)}")
                         
                         # Additional check for numeric data
                         if not portfolio_series.empty and portfolio_series.dtype in ['float64', 'int64']:
@@ -2902,8 +2939,15 @@ class OkamaFinanceBot:
                                     else:
                                         portfolio_name = f'Portfolio_{i+1}'
                                     correlation_data[portfolio_name] = returns
+                                    self.logger.info(f"Successfully created correlation data for {portfolio_name}")
+                                else:
+                                    self.logger.warning(f"Portfolio {i}: No returns data after pct_change for correlation")
+                            else:
+                                self.logger.warning(f"Portfolio {i}: Not enough data points for correlation ({len(portfolio_series)})")
+                        else:
+                            self.logger.warning(f"Portfolio {i}: Invalid data after cleaning for correlation - dtype: {portfolio_series.dtype}, empty: {portfolio_series.empty}")
                     except Exception as portfolio_error:
-                        self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
+                        self.logger.warning(f"Could not process portfolio {i} for correlation: {portfolio_error}")
                         continue
             
             # Process individual assets
