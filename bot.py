@@ -1275,8 +1275,8 @@ class OkamaFinanceBot:
                 currency_info = "по умолчанию (USD)"
             
             try:
-                # Check if we have portfolios in the comparison
-                has_portfolios = any(isinstance(symbol, pd.Series) for symbol in expanded_symbols)
+                # Check if we have portfolios in the comparison (wealth indexes can be Series or single-column DataFrames)
+                has_portfolios = any(isinstance(symbol, (pd.Series, pd.DataFrame)) for symbol in expanded_symbols)
                 
                 if has_portfolios:
                     # We have portfolios, need to create custom comparison
@@ -1285,7 +1285,7 @@ class OkamaFinanceBot:
                     # Get the first regular asset to determine currency if no portfolios
                     first_regular_symbol = None
                     for symbol in expanded_symbols:
-                        if not isinstance(symbol, pd.Series):
+                        if not isinstance(symbol, (pd.Series, pd.DataFrame)):
                             first_regular_symbol = symbol
                             break
                     
@@ -1332,10 +1332,24 @@ class OkamaFinanceBot:
                     for i, symbol in enumerate(expanded_symbols):
                         self.logger.info(f"DEBUG: Processing index {i}: symbol='{symbol}' (type: {type(symbol)})")
                         
-                        if isinstance(symbol, pd.Series):
-                            # Portfolio wealth index
-                            self.logger.info(f"DEBUG: Found portfolio Series at index {i}")
-                            wealth_data[symbols[i]] = symbol
+                        if isinstance(symbol, (pd.Series, pd.DataFrame)):
+                            # Portfolio wealth index (Series or single-column DataFrame)
+                            self.logger.info(f"DEBUG: Found portfolio pandas object at index {i}")
+                            try:
+                                if isinstance(symbol, pd.DataFrame):
+                                    self.logger.info(f"DEBUG: Portfolio wealth index is DataFrame with shape {symbol.shape}")
+                                    squeezed = symbol.squeeze()
+                                    if isinstance(squeezed, pd.DataFrame):
+                                        # Fallback: take the first column explicitly
+                                        squeezed = symbol.iloc[:, 0]
+                                    wealth_series = squeezed
+                                else:
+                                    wealth_series = symbol
+                                wealth_data[symbols[i]] = wealth_series
+                            except Exception as conv_err:
+                                self.logger.error(f"Failed to convert portfolio wealth index to Series: {conv_err}")
+                                await self._send_message_safe(update, f"❌ Ошибка при обработке портфеля {symbols[i]}: {str(conv_err)}")
+                                return
                         else:
                             # Regular asset, need to get its wealth index
                             self.logger.info(f"DEBUG: Found regular asset at index {i}: '{symbol}'")
@@ -1349,13 +1363,13 @@ class OkamaFinanceBot:
                                 asset_currency = currency
                                 
                                 # Check if we have any portfolios in the comparison
-                                has_portfolios_in_comparison = any(isinstance(s, pd.Series) for s in expanded_symbols)
+                                has_portfolios_in_comparison = any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
                                 
                                 if has_portfolios_in_comparison:
                                     # Find the first portfolio symbol to use its currency
                                     portfolio_symbol = None
                                     for j, orig_symbol in enumerate(symbols):
-                                        if isinstance(expanded_symbols[j], pd.Series):
+                                        if isinstance(expanded_symbols[j], (pd.Series, pd.DataFrame)):
                                             # Extract the original symbol from the description
                                             original_symbol = orig_symbol.split(' (')[0] if ' (' in orig_symbol else orig_symbol
                                             portfolio_symbol = original_symbol
