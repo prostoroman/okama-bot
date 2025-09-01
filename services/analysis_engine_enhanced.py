@@ -10,6 +10,7 @@ Enhanced Analysis Engine
 from __future__ import annotations
 from typing import Dict, Any, Optional
 import logging
+import pandas as pd
 
 from yandexgpt_service import YandexGPTService
 
