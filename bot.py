@@ -9,6 +9,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any
 import io
+from datetime import datetime
 
 # Third-party imports
 import matplotlib
