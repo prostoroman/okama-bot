@@ -2556,28 +2556,30 @@ class OkamaFinanceBot:
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
                     try:
-                        # Ensure we have numeric data
+                        # Ensure we have numeric data and handle 'Period' values
                         if portfolio_series.dtype == 'object':
-                            # Try to convert to numeric
+                            # Try to convert to numeric, but exclude non-numeric values
                             portfolio_series = pd.to_numeric(portfolio_series, errors='coerce')
                         
-                        # Remove any NaN values
+                        # Remove any NaN values and non-numeric data
                         portfolio_series = portfolio_series.dropna()
                         
-                        if len(portfolio_series) > 1:
-                            # Calculate drawdowns for portfolio
-                            returns = portfolio_series.pct_change().dropna()
-                            if len(returns) > 0:
-                                cumulative = (1 + returns).cumprod()
-                                running_max = cumulative.expanding().max()
-                                drawdowns = (cumulative - running_max) / running_max
-                                # Get portfolio name from context
-                                portfolio_name = None
-                                if i < len(portfolio_contexts):
-                                    portfolio_name = portfolio_contexts[i]['symbol']
-                                else:
-                                    portfolio_name = f'Portfolio_{i+1}'
-                                drawdowns_data[portfolio_name] = drawdowns
+                        # Additional check for numeric data
+                        if not portfolio_series.empty and portfolio_series.dtype in ['float64', 'int64']:
+                            if len(portfolio_series) > 1:
+                                # Calculate drawdowns for portfolio
+                                returns = portfolio_series.pct_change().dropna()
+                                if len(returns) > 0:
+                                    cumulative = (1 + returns).cumprod()
+                                    running_max = cumulative.expanding().max()
+                                    drawdowns = (cumulative - running_max) / running_max
+                                    # Get portfolio name from context
+                                    portfolio_name = None
+                                    if i < len(portfolio_contexts):
+                                        portfolio_name = portfolio_contexts[i]['symbol']
+                                    else:
+                                        portfolio_name = f'Portfolio_{i+1}'
+                                    drawdowns_data[portfolio_name] = drawdowns
                     except Exception as portfolio_error:
                         self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
                         continue
@@ -2698,6 +2700,7 @@ class OkamaFinanceBot:
             # Get user context to restore portfolio information
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
             expanded_symbols = user_context.get('expanded_symbols', [])
             
             # Separate portfolios and individual assets using expanded_symbols
@@ -2712,18 +2715,99 @@ class OkamaFinanceBot:
                     # This is an individual asset symbol
                     asset_symbols.append(expanded_symbol)
             
-            # For mixed comparisons, we'll focus on individual assets since portfolios don't have direct dividend data
-            if not asset_symbols:
-                await self._send_callback_message(update, context, "❌ Для портфелей дивидендная доходность рассчитывается по-другому. Используйте команду /portfolio для детального анализа.")
+            # Create dividends data for both portfolios and assets
+            dividends_data = {}
+            
+            # Process portfolios - calculate weighted dividend yield
+            for i, portfolio_series in enumerate(portfolio_data):
+                if isinstance(portfolio_series, pd.Series):
+                    try:
+                        # Get portfolio context for assets and weights
+                        portfolio_context = None
+                        if i < len(portfolio_contexts):
+                            portfolio_context = portfolio_contexts[i]
+                        
+                        if portfolio_context and 'assets' in portfolio_context and 'weights' in portfolio_context:
+                            # Calculate weighted dividend yield for portfolio
+                            portfolio_assets = portfolio_context['assets']
+                            portfolio_weights = portfolio_context['weights']
+                            
+                            try:
+                                # Create AssetList for portfolio assets
+                                portfolio_asset_list = self._ok_asset_list(portfolio_assets, currency=currency)
+                                
+                                # Calculate weighted dividend yield
+                                total_dividend_yield = 0
+                                for asset, weight in zip(portfolio_assets, portfolio_weights):
+                                    if asset in portfolio_asset_list.dividend_yields.columns:
+                                        dividend_yield = portfolio_asset_list.dividend_yields[asset].iloc[-1] if not portfolio_asset_list.dividend_yields[asset].empty else 0
+                                        total_dividend_yield += dividend_yield * weight
+                                
+                                # Get portfolio name
+                                portfolio_name = portfolio_context['symbol']
+                                dividends_data[portfolio_name] = total_dividend_yield
+                                
+                            except Exception as portfolio_asset_error:
+                                self.logger.warning(f"Could not calculate dividend yield for portfolio {i}: {portfolio_asset_error}")
+                                continue
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
+                        continue
+            
+            # Process individual assets
+            if asset_symbols:
+                try:
+                    asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                    for symbol in asset_symbols:
+                        if symbol in asset_list.dividend_yields.columns:
+                            dividend_yield = asset_list.dividend_yields[symbol].iloc[-1] if not asset_list.dividend_yields[symbol].empty else 0
+                            dividends_data[symbol] = dividend_yield
+                except Exception as asset_error:
+                    self.logger.warning(f"Could not process individual assets: {asset_error}")
+            
+            if not dividends_data:
+                await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика дивидендной доходности")
                 return
             
-            # Create dividends chart for individual assets
-            try:
-                asset_list = self._ok_asset_list(asset_symbols, currency=currency)
-                await self._create_dividend_yield_chart(update, context, asset_list, asset_symbols, currency)
-            except Exception as asset_error:
-                self.logger.warning(f"Could not create dividends chart for assets: {asset_error}")
-                await self._send_callback_message(update, context, "❌ Не удалось создать график дивидендной доходности для активов")
+            # Create dividends chart
+            fig, ax = chart_styles.create_dividends_chart_enhanced(
+                data=pd.Series(dividends_data),
+                symbol="Смешанное сравнение",
+                currency=currency
+            )
+            
+            # Save chart
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache
+            chart_styles.cleanup_figure(fig)
+            
+            # Create caption
+            portfolio_count = len([d for d in dividends_data.keys() if 'portfolio' in d.lower()])
+            asset_count = len([d for d in dividends_data.keys() if 'portfolio' not in d.lower()])
+            
+            caption = f"💰 Дивидендная доходность смешанного сравнения\n\n"
+            caption += f"📊 Состав:\n"
+            if portfolio_count > 0:
+                portfolio_names = [d for d in dividends_data.keys() if 'portfolio' in d.lower()]
+                caption += f"• Портфели: {', '.join(portfolio_names)}\n"
+            if asset_count > 0:
+                asset_names = [d for d in dividends_data.keys() if 'portfolio' not in d.lower()]
+                caption += f"• Индивидуальные активы: {', '.join(asset_names)}\n"
+            caption += f"• Валюта: {currency}\n\n"
+            caption += f"💡 График показывает:\n"
+            caption += f"• Дивидендную доходность портфелей (взвешенную)\n"
+            caption += f"• Дивидендную доходность отдельных активов\n"
+            
+            # Send chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=caption,
+                parse_mode='HTML'
+            )
                 
         except Exception as e:
             self.logger.error(f"Error creating mixed comparison dividends chart: {e}")
@@ -2797,25 +2881,27 @@ class OkamaFinanceBot:
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
                     try:
-                        # Ensure we have numeric data
+                        # Ensure we have numeric data and handle 'Period' values
                         if portfolio_series.dtype == 'object':
-                            # Try to convert to numeric
+                            # Try to convert to numeric, but exclude non-numeric values
                             portfolio_series = pd.to_numeric(portfolio_series, errors='coerce')
                         
-                        # Remove any NaN values
+                        # Remove any NaN values and non-numeric data
                         portfolio_series = portfolio_series.dropna()
                         
-                        if len(portfolio_series) > 1:
-                            # Calculate returns for portfolio
-                            returns = portfolio_series.pct_change().dropna()
-                            if len(returns) > 0:
-                                # Get portfolio name from context
-                                portfolio_name = None
-                                if i < len(portfolio_contexts):
-                                    portfolio_name = portfolio_contexts[i]['symbol']
-                                else:
-                                    portfolio_name = f'Portfolio_{i+1}'
-                                correlation_data[portfolio_name] = returns
+                        # Additional check for numeric data
+                        if not portfolio_series.empty and portfolio_series.dtype in ['float64', 'int64']:
+                            if len(portfolio_series) > 1:
+                                # Calculate returns for portfolio
+                                returns = portfolio_series.pct_change().dropna()
+                                if len(returns) > 0:
+                                    # Get portfolio name from context
+                                    portfolio_name = None
+                                    if i < len(portfolio_contexts):
+                                        portfolio_name = portfolio_contexts[i]['symbol']
+                                    else:
+                                        portfolio_name = f'Portfolio_{i+1}'
+                                    correlation_data[portfolio_name] = returns
                     except Exception as portfolio_error:
                         self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
                         continue
