@@ -1468,7 +1468,20 @@ class OkamaFinanceBot:
                                 except Exception as asset_error:
                                     self.logger.error(f"DEBUG: Failed to create Asset for '{symbol}': {asset_error}")
                                     raise asset_error
-                                wealth_data[symbols[i]] = asset.wealth_index
+                                
+                                # Calculate wealth index from price data
+                                try:
+                                    price_data = asset.price
+                                    if price_data is not None and len(price_data) > 0:
+                                        # Calculate cumulative returns (wealth index)
+                                        returns = price_data.pct_change().dropna()
+                                        wealth_index = (1 + returns).cumprod()
+                                        wealth_data[symbols[i]] = wealth_index
+                                    else:
+                                        raise ValueError(f"No price data available for {symbol}")
+                                except Exception as wealth_error:
+                                    self.logger.error(f"Error calculating wealth index for {symbol}: {wealth_error}")
+                                    raise wealth_error
                             except Exception as e:
                                 self.logger.error(f"Error getting wealth index for {symbol}: {e}")
                                 await self._send_message_safe(update, f"❌ Ошибка при получении данных для {symbol}: {str(e)}")
@@ -4233,8 +4246,16 @@ class OkamaFinanceBot:
                         
                         # Get individual asset
                         asset = self._ok_asset(symbol, currency=currency)
-                        asset_final = asset.wealth_index.iloc[-1]
-                        caption += f"• {symbol}: {asset_final:.2f}\n"
+                        
+                        # Calculate wealth index from price data
+                        price_data = asset.price
+                        if price_data is not None and len(price_data) > 0:
+                            returns = price_data.pct_change().dropna()
+                            wealth_index = (1 + returns).cumprod()
+                            asset_final = wealth_index.iloc[-1]
+                            caption += f"• {symbol}: {asset_final:.2f}\n"
+                        else:
+                            caption += f"• {symbol}: недоступно\n"
                     except Exception as e:
                         self.logger.warning(f"Could not get final value for {symbol}: {e}")
                         caption += f"• {symbol}: недоступно\n"
