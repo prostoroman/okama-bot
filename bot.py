@@ -2621,10 +2621,19 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика просадок")
                 return
             
+            # Clean drawdowns data to handle Period indices
+            cleaned_drawdowns_data = {}
+            for key, series in drawdowns_data.items():
+                if isinstance(series, pd.Series):
+                    # Convert Period index to datetime if needed
+                    if hasattr(series.index, 'dtype') and str(series.index.dtype).startswith('period'):
+                        series.index = series.index.to_timestamp()
+                    cleaned_drawdowns_data[key] = series
+            
             # Create drawdowns chart
             fig, ax = chart_styles.create_drawdowns_chart(
-                data=pd.DataFrame(drawdowns_data),
-                symbols=list(drawdowns_data.keys()),
+                data=pd.DataFrame(cleaned_drawdowns_data),
+                symbols=list(cleaned_drawdowns_data.keys()),
                 currency=currency
             )
             
@@ -2904,6 +2913,9 @@ class OkamaFinanceBot:
             # Create correlation data
             correlation_data = {}
             
+            # Clean correlation data to handle Period indices
+            cleaned_correlation_data = {}
+            
             # Process portfolios with proper names
             for i, portfolio_series in enumerate(portfolio_data):
                 if isinstance(portfolio_series, pd.Series):
@@ -2967,8 +2979,17 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Недостаточно данных для создания корреляционной матрицы")
                 return
             
+            # Clean correlation data to handle Period indices
+            cleaned_correlation_data = {}
+            for key, series in correlation_data.items():
+                if isinstance(series, pd.Series):
+                    # Convert Period index to datetime if needed
+                    if hasattr(series.index, 'dtype') and str(series.index.dtype).startswith('period'):
+                        series.index = series.index.to_timestamp()
+                    cleaned_correlation_data[key] = series
+            
             # Create correlation matrix
-            returns_df = pd.DataFrame(correlation_data)
+            returns_df = pd.DataFrame(cleaned_correlation_data)
             correlation_matrix = returns_df.corr()
             
             # Create correlation chart
