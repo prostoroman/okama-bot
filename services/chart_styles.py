@@ -979,6 +979,20 @@ class ChartStyles:
             tuple: (fig, ax) - фигура и оси
         """
         fig, ax = self.create_standard_chart(**kwargs)
+        # Безопасно обработаем PeriodIndex у данных
+        try:
+            if hasattr(data, 'index') and hasattr(data.index, 'dtype') and str(data.index.dtype).startswith('period'):
+                data = data.copy()
+                try:
+                    data.index = data.index.to_timestamp()
+                except Exception:
+                    # Fallback: привести к datetime через to_datetime строкового представления
+                    try:
+                        data.index = pd.to_datetime(data.index.astype(str))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         
         # Рисуем данные для каждого столбца
         for i, column in enumerate(data.columns):
