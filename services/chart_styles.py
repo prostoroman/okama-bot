@@ -111,9 +111,6 @@ class ChartStyles:
             'fontsize': 12,
             'fontweight': 'medium',
             'color': self.colors['text'],
-            'label_fontsize': 12,
-            'label_fontweight': 'medium',
-            'label_color': self.colors['text'],
             'tick_fontsize': 10,
             'tick_color': self.colors['text']
         }
@@ -247,11 +244,22 @@ class ChartStyles:
             if grid:
                 ax.grid(True, **self.grid_config)
             
-            # Легенда
-            if legend and ax.get_legend() is not None:
-                ax.legend(**self.legend_config)
+            # Легенда - исправлено: создаем легенду если есть данные
+            if legend:
+                handles, labels = ax.get_legend_handles_labels()
+                if handles and labels:
+                    # Если есть данные для легенды, создаем её
+                    ax.legend(**self.legend_config)
+                elif ax.get_legend() is not None:
+                    # Если легенда уже существует, применяем стили
+                    legend_obj = ax.get_legend()
+                    legend_obj.set_fontsize(self.legend_config['fontsize'])
+                    legend_obj.set_frame_on(self.legend_config['frameon'])
+                    legend_obj.set_fancybox(self.legend_config['fancybox'])
+                    legend_obj.set_shadow(self.legend_config['shadow'])
+                    legend_obj.set_loc(self.legend_config['loc'])
             
-            # Копирайт
+            # Копирайт - исправлено: улучшено позиционирование
             if copyright:
                 self.add_copyright(ax)
             
@@ -266,22 +274,25 @@ class ChartStyles:
             # Тики
             if kwargs.get('ticks', True):
                 ax.tick_params(axis='both', which='major', 
-                               labelsize=self.axis_config['tick_fontsize'], 
-                               colors=self.axis_config['tick_color'])
+                               labelsize=10, 
+                               colors=self.colors['text'])
                 
         except Exception as e:
             logger.error(f"Error applying standard chart styling: {e}")
     
     def add_copyright(self, ax):
-        """Добавить копирайт к графику"""
+        """Добавить копирайт к графику - исправлено позиционирование"""
         try:
-            ax.text(self.copyright_config['position'][0], 
-                   self.copyright_config['position'][1], 
+            # Улучшенное позиционирование копирайта
+            # Позиция: (x, y) где x=0.01 (1% от ширины), y=-0.02 (2% ниже графика)
+            ax.text(0.01, -0.02, 
                    self.copyright_config['text'],
                    transform=ax.transAxes, 
                    fontsize=self.copyright_config['fontsize'], 
                    color=self.copyright_config['color'], 
-                   alpha=self.copyright_config['alpha'])
+                   alpha=self.copyright_config['alpha'],
+                   ha='left',  # выравнивание по левому краю
+                   va='top')   # выравнивание по верхнему краю
         except Exception as e:
             logger.error(f"Error adding copyright: {e}")
     
@@ -329,7 +340,7 @@ class ChartStyles:
         # Применяем стандартные стили
         self.apply_standard_chart_styling(
             ax, title=title, ylabel=ylabel, xlabel=xlabel, show_xlabel=False,
-            grid=grid, legend=legend, copyright=copyright
+            grid=grid, legend=False, copyright=copyright  # Отключаем легенду для одиночных линий
         )
         
         return fig, ax
@@ -467,7 +478,7 @@ class ChartStyles:
     
     def create_portfolio_wealth_chart(self, data, symbols, currency, **kwargs):
         """Создать график накопленной доходности портфеля"""
-        return self.create_multi_line_chart(
+        return self.create_line_chart(
             data=data, 
             title=f'Накопленная доходность портфеля\n{", ".join(symbols)}',
             ylabel=f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность',
@@ -485,7 +496,7 @@ class ChartStyles:
     
     def create_portfolio_drawdowns_chart(self, data, symbols, currency, **kwargs):
         """Создать график просадок портфеля"""
-        return self.create_multi_line_chart(
+        return self.create_line_chart(
             data=data,
             title=f'Просадки портфеля\n{", ".join(symbols)}',
             ylabel=f'Просадка ({currency}) (%)',
@@ -494,7 +505,7 @@ class ChartStyles:
     
     def create_portfolio_rolling_cagr_chart(self, data, symbols, currency, **kwargs):
         """Создать график скользящего CAGR портфеля"""
-        return self.create_multi_line_chart(
+        return self.create_line_chart(
             data=data,
             title=f'Скользящий CAGR портфеля\n{", ".join(symbols)}',
             ylabel=f'CAGR ({currency}) (%)',
