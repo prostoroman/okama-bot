@@ -1101,12 +1101,16 @@ class ChartStyles:
         ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
         
         self.apply_standard_chart_styling(
-            ax, title=title, ylabel=ylabel, xlabel='', show_xlabel=False,
-            grid=True, legend=True, copyright=True
+            ax, title=title, ylabel=ylabel, xlabel='© shans.ai | data source: okama', show_xlabel=True,
+            grid=True, legend=True, copyright=False
         )
         
         # Настройка для временных рядов
         ax.tick_params(axis='x', rotation=45)
+        
+        # Убеждаемся, что легенда находится в левом верхнем углу
+        if ax.get_legend() is not None:
+            ax.legend(loc='upper left', bbox_to_anchor=(0.02, 0.98))
         
         return fig, ax
     
