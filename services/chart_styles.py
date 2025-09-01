@@ -656,11 +656,35 @@ class ChartStyles:
             self.logger.warning(f"Unexpected data type for drawdowns: {type(data)}")
             return fig, ax
         
+        # Clean data to handle Period values and indices
+        cleaned_data = data.copy()
+        
+        # Clean Period indices
+        if hasattr(cleaned_data.index, 'dtype') and str(cleaned_data.index.dtype).startswith('period'):
+            cleaned_data.index = cleaned_data.index.to_timestamp()
+        
+        # Clean Period values in data
+        for column in cleaned_data.columns:
+            if cleaned_data[column].dtype == 'object':
+                # Remove Period string values
+                cleaned_data[column] = cleaned_data[column].replace('Period', np.nan)
+                cleaned_data[column] = cleaned_data[column].replace('period', np.nan)
+                cleaned_data[column] = cleaned_data[column].replace('PERIOD', np.nan)
+                # Convert to numeric
+                cleaned_data[column] = pd.to_numeric(cleaned_data[column], errors='coerce')
+        
+        # Remove rows with all NaN values
+        cleaned_data = cleaned_data.dropna(how='all')
+        
+        if cleaned_data.empty:
+            self.logger.warning("No valid data after cleaning for drawdowns")
+            return fig, ax
+        
         # Plot each column
-        for i, column in enumerate(data.columns):
-            if column in data.columns and not data[column].empty:
+        for i, column in enumerate(cleaned_data.columns):
+            if column in cleaned_data.columns and not cleaned_data[column].empty:
                 color = self.get_color(i)
-                ax.plot(data.index, data[column].values * 100,  # Convert to percentage
+                ax.plot(cleaned_data.index, cleaned_data[column].values * 100,  # Convert to percentage
                        color=color, linewidth=self.line_config['linewidth'], 
                        alpha=self.line_config['alpha'], label=column)
         
@@ -979,6 +1003,11 @@ class ChartStyles:
                                     x_val = pd.to_datetime(str(x_val))
                                 else:
                                     x_val = pd.to_datetime(x_val)
+                        
+                        # Additional check for Period string values
+                        if isinstance(x_val, str) and x_val == 'Period':
+                            # Skip Period values
+                            continue
                         
                         if hasattr(x_val, 'timestamp'):
                             x_numeric.append(float(x_val.timestamp()))
