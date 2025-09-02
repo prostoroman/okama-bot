@@ -168,11 +168,11 @@ class EnhancedReportBuilder:
             try:
                 
                 # Создаем график с двумя подграфиками
-                fig, (ax1, ax2) = chart_styles.create_standard_chart(figsize=(10, 8), style='fivethirtyeight')
+                fig, (ax1, ax2) = chart_styles.create_chart(2, 1, figsize=(10, 8))
                 
                 # График цены
                 ax1.plot(prices.index, prices.values, color=self.colors[0], linewidth=2)
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax1, 
                     title=f'Динамика цены: {name} ({ticker})',
                     ylabel=f'Цена ({currency})',
@@ -184,7 +184,7 @@ class EnhancedReportBuilder:
                 returns = prices.pct_change().dropna()
                 cumulative_returns = (1 + returns).cumprod()
                 ax2.plot(cumulative_returns.index, cumulative_returns.values, color=self.colors[1], linewidth=2)
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax2, 
                     title='Накопленная доходность',
                     ylabel='Доходность (разы)',

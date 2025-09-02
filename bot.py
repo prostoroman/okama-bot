@@ -55,6 +55,7 @@ from services.report_builder_enhanced import EnhancedReportBuilder
 from services.analysis_engine_enhanced import EnhancedAnalysisEngine
 from services.financial_brain_enhanced import EnhancedOkamaFinancialBrain
 from services.chart_styles import chart_styles
+from services.context_store import JSONUserContextStore
 
 # Configure logging
 logging.basicConfig(
@@ -91,8 +92,10 @@ class OkamaFinanceBot:
         self.analysis_engine = EnhancedAnalysisEngine()
         self.financial_brain = EnhancedOkamaFinancialBrain()
         
-        # User session storage
+        # User session storage (in-memory for fast access)
         self.user_sessions = {}
+        # Persistent context store
+        self.context_store = JSONUserContextStore()
         
         # User history management
         self.user_history: Dict[int, List[dict]] = {}       # chat_id -> list[{"role": "...", "parts": [str]}]
@@ -238,36 +241,23 @@ class OkamaFinanceBot:
             return [1.0 / len(symbols)] * len(symbols) if symbols else []
 
     def _get_user_context(self, user_id: int) -> Dict[str, Any]:
-        """Получить контекст пользователя"""
-        if user_id not in self.user_sessions:
-            self.user_sessions[user_id] = {
-                'last_assets': [],  # Последние анализируемые активы
-                'last_analysis_type': None,  # Тип последнего анализа
-                'last_period': None,  # Последний период анализа
-                'conversation_history': [],  # История разговора
-                'preferences': {},  # Предпочтения пользователя
-                'portfolio_count': 0,  # Счетчик созданных портфелей
-                'saved_portfolios': {}  # Сохраненные портфели {symbol: {symbols, weights, currency, created_at, description}}
-            }
-        return self.user_sessions[user_id]
+        """Получить контекст пользователя (с поддержкой персистентности)."""
+        # Load from persistent store, and mirror into memory for hot path
+        ctx = self.context_store.get_user_context(user_id)
+        self.user_sessions[user_id] = ctx
+        return ctx
     
     def _update_user_context(self, user_id: int, **kwargs):
-        """Обновить контекст пользователя"""
-        context = self._get_user_context(user_id)
-        context.update(kwargs)
-        
-        # Ограничиваем историю разговора
-        if 'conversation_history' in context and len(context['conversation_history']) > 10:
-            context['conversation_history'] = context['conversation_history'][-10:]
+        """Обновить контекст пользователя (и сохранить)."""
+        # Update persistent store; keep in-memory mirror in sync
+        updated = self.context_store.update_user_context(user_id, **kwargs)
+        self.user_sessions[user_id] = updated
     
     def _add_to_conversation_history(self, user_id: int, message: str, response: str):
-        """Добавить сообщение в историю разговора"""
-        context = self._get_user_context(user_id)
-        context['conversation_history'].append({
-            'timestamp': datetime.now().isoformat(),
-            'message': message,
-            'response': response[:200]  # Ограничиваем длину ответа
-        })
+        """Добавить сообщение в историю разговора (с сохранением)."""
+        self.context_store.add_conversation_entry(user_id, message, response)
+        # Refresh in-memory cache
+        self.user_sessions[user_id] = self.context_store.get_user_context(user_id)
     
     def _get_context_summary(self, user_id: int) -> str:
         """Получить краткое резюме контекста пользователя"""
@@ -1190,6 +1180,7 @@ class OkamaFinanceBot:
             
             expanded_symbols = []
             portfolio_descriptions = []
+            portfolio_contexts = []  # Store portfolio context for buttons
             
             for symbol in symbols:
                 # Log symbol being processed for debugging
@@ -1238,6 +1229,15 @@ class OkamaFinanceBot:
                         # Use the original symbol for description to maintain consistency
                         portfolio_descriptions.append(f"{symbol} ({', '.join(portfolio_symbols)})")
                         
+                        # Store portfolio context for buttons - use clean portfolio symbol
+                        portfolio_contexts.append({
+                            'symbol': symbol,  # Clean portfolio symbol without asset list
+                            'portfolio_symbols': portfolio_symbols,
+                            'portfolio_weights': portfolio_weights,
+                            'portfolio_currency': portfolio_currency,
+                            'portfolio_object': portfolio
+                        })
+                        
                         self.logger.info(f"Expanded portfolio {symbol} with {len(portfolio_symbols)} assets")
                         self.logger.info(f"Portfolio currency: {portfolio_currency}, weights: {portfolio_weights}")
                         self.logger.info(f"DEBUG: Added portfolio description: '{symbol} ({', '.join(portfolio_symbols)})'")
@@ -1250,6 +1250,13 @@ class OkamaFinanceBot:
                     # Regular asset symbol
                     expanded_symbols.append(symbol)
                     portfolio_descriptions.append(symbol)
+                    portfolio_contexts.append({
+                        'symbol': symbol,
+                        'portfolio_symbols': [symbol],
+                        'portfolio_weights': [1.0],
+                        'portfolio_currency': None,  # Will be determined later
+                        'portfolio_object': None
+                    })
             
             # Update symbols list with expanded portfolio descriptions
             symbols = portfolio_descriptions
@@ -1330,266 +1337,124 @@ class OkamaFinanceBot:
                 currency_info = "по умолчанию (USD)"
             
             try:
-                # Check if we have portfolios in the comparison (wealth indexes can be Series or single-column DataFrames)
+                # Check if we have portfolios in the comparison
                 has_portfolios = any(isinstance(symbol, (pd.Series, pd.DataFrame)) for symbol in expanded_symbols)
                 
                 if has_portfolios:
-                    # We have portfolios, need to create custom comparison
-                    self.logger.info("Creating custom comparison with portfolios")
+                    # We have portfolios, need to create proper comparison using ok.AssetList
+                    self.logger.info("Creating comparison with portfolios using ok.AssetList")
                     
-                    # Get the first regular asset to determine currency if no portfolios
-                    first_regular_symbol = None
-                    for symbol in expanded_symbols:
-                        if not isinstance(symbol, (pd.Series, pd.DataFrame)):
-                            first_regular_symbol = symbol
-                            break
+                    # Prepare assets list for ok.AssetList
+                    assets_for_comparison = []
                     
-                    # Determine currency from first regular asset or portfolio
-                    if first_regular_symbol:
-                        if '.' in first_regular_symbol:
-                            namespace = first_regular_symbol.split('.')[1]
-                            if namespace == 'MOEX':
-                                currency = "RUB"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'US':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'LSE':
-                                currency = "GBP"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'FX':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'COMM':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
-                            elif namespace == 'INDX':
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_regular_symbol})"
+                    for i, symbol in enumerate(expanded_symbols):
+                        if isinstance(symbol, (pd.Series, pd.DataFrame)):
+                            # This is a portfolio wealth index - we need to create portfolio object
+                            portfolio_context = portfolio_contexts[i] if i < len(portfolio_contexts) else None
+                            
+                            if portfolio_context:
+                                try:
+                                    # Create portfolio object using okama
+                                    portfolio = self._ok_portfolio(
+                                        portfolio_context['portfolio_symbols'], 
+                                        portfolio_context['portfolio_weights'], 
+                                        currency=portfolio_context['portfolio_currency']
+                                    )
+                                    assets_for_comparison.append(portfolio)
+                                    self.logger.info(f"Added portfolio {portfolio_context['symbol']} to comparison")
+                                except Exception as portfolio_error:
+                                    self.logger.error(f"Error creating portfolio {portfolio_context['symbol']}: {portfolio_error}")
+                                    await self._send_message_safe(update, f"❌ Ошибка при создании портфеля {portfolio_context['symbol']}: {str(portfolio_error)}")
+                                    return
+                            else:
+                                self.logger.warning(f"No portfolio context found for index {i}, using generic portfolio")
+                                # Create a generic portfolio if context is missing
+                                try:
+                                    # Extract symbols from the description
+                                    desc = symbols[i]
+                                    if ' (' in desc:
+                                        portfolio_symbols = desc.split(' (')[1].rstrip(')').split(', ')
+                                        portfolio_weights = [1.0/len(portfolio_symbols)] * len(portfolio_symbols)
+                                        portfolio = self._ok_portfolio(portfolio_symbols, portfolio_weights, currency=currency)
+                                        assets_for_comparison.append(portfolio)
+                                        self.logger.info(f"Added generic portfolio to comparison")
+                                    else:
+                                        self.logger.error(f"Could not extract portfolio symbols from description: {desc}")
+                                        await self._send_message_safe(update, f"❌ Ошибка при обработке портфеля: {desc}")
+                                        return
+                                except Exception as e:
+                                    self.logger.error(f"Error creating generic portfolio: {e}")
+                                    await self._send_message_safe(update, f"❌ Ошибка при создании портфеля: {str(e)}")
+                                    return
+                        else:
+                            # Regular asset symbol
+                            assets_for_comparison.append(symbol)
+                            self.logger.info(f"Added asset {symbol} to comparison")
+                    
+                    # Determine currency from first asset or portfolio
+                    if assets_for_comparison:
+                        first_asset = assets_for_comparison[0]
+                        if hasattr(first_asset, 'currency'):
+                            currency = first_asset.currency
+                            currency_info = f"автоматически определена по первому активу/портфелю"
+                        else:
+                            # Try to determine from symbol
+                            if '.' in str(first_asset):
+                                namespace = str(first_asset).split('.')[1]
+                                if namespace == 'MOEX':
+                                    currency = "RUB"
+                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
+                                elif namespace == 'US':
+                                    currency = "USD"
+                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
+                                elif namespace == 'LSE':
+                                    currency = "GBP"
+                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
+                                else:
+                                    currency = "USD"
+                                    currency_info = "по умолчанию (USD)"
                             else:
                                 currency = "USD"
                                 currency_info = "по умолчанию (USD)"
-                        else:
-                            currency = "USD"
-                            currency_info = "по умолчанию (USD)"
-                    else:
-                        # All are portfolios, use USD as default
-                        currency = "USD"
-                        currency_info = "по умолчанию (USD)"
                     
-                    # Create custom wealth index DataFrame
-                    wealth_data = {}
-                    
-                    # Debug logging for expanded_symbols
-                    self.logger.info(f"DEBUG: Processing expanded_symbols: {expanded_symbols}")
-                    self.logger.info(f"DEBUG: expanded_symbols types: {[type(s) for s in expanded_symbols]}")
-                    
-                    for i, symbol in enumerate(expanded_symbols):
-                        self.logger.info(f"DEBUG: Processing index {i}: symbol='{symbol}' (type: {type(symbol)})")
-                        
-                        # Check if this is a portfolio symbol (ends with .PF)
-                        if isinstance(symbol, str) and symbol.endswith('.PF'):
-                            # This is a portfolio symbol - we need to load the portfolio from context
-                            self.logger.info(f"DEBUG: Found portfolio symbol: {symbol}")
-                            
-                            # Get portfolio data from user context
-                            user_id = update.effective_user.id
-                            user_context = self._get_user_context(user_id)
-                            saved_portfolios = user_context.get('saved_portfolios', {})
-                            
-                            if symbol not in saved_portfolios:
-                                self.logger.error(f"Portfolio {symbol} not found in user context")
-                                await self._send_message_safe(update, f"❌ Портфель {symbol} не найден в контексте пользователя. Сначала создайте портфель командой /portfolio")
-                                return
-                            
-                            portfolio_info = saved_portfolios[symbol]
-                            portfolio_symbols = portfolio_info.get('symbols', [])
-                            portfolio_weights = portfolio_info.get('weights', [])
-                            portfolio_currency = portfolio_info.get('currency', 'USD')
-                            
-                            self.logger.info(f"Portfolio {symbol} symbols: {portfolio_symbols}, weights: {portfolio_weights}")
-                            
-                            # Create portfolio object
-                            try:
-                                portfolio = self._ok_portfolio(portfolio_symbols, portfolio_weights, currency=portfolio_currency)
-                                self.logger.info(f"Successfully created portfolio object for {symbol}")
-                                
-                                # Get portfolio wealth index
-                                wealth_index = portfolio.wealth_index
-                                wealth_data[symbols[i]] = wealth_index
-                                
-                                # Update global currency to use portfolio currency
-                                if currency == 'auto':
-                                    currency = portfolio_currency
-                                    self.logger.info(f"Updated global currency to portfolio currency: {currency}")
-                                
-                            except Exception as portfolio_error:
-                                self.logger.error(f"Error creating portfolio {symbol}: {portfolio_error}")
-                                await self._send_message_safe(update, f"❌ Ошибка при создании портфеля {symbol}: {str(portfolio_error)}")
-                                return
-                                
-                        elif isinstance(symbol, (pd.Series, pd.DataFrame)):
-                            # Portfolio wealth index (Series or single-column DataFrame) - this shouldn't happen in normal flow
-                            self.logger.info(f"DEBUG: Found portfolio pandas object at index {i} - unexpected")
-                            try:
-                                if isinstance(symbol, pd.DataFrame):
-                                    self.logger.info(f"DEBUG: Portfolio wealth index is DataFrame with shape {symbol.shape}")
-                                    squeezed = symbol.squeeze()
-                                    if isinstance(squeezed, pd.DataFrame):
-                                        # Fallback: take the first column explicitly
-                                        squeezed = symbol.iloc[:, 0]
-                                    wealth_series = squeezed
-                                else:
-                                    wealth_series = symbol
-                                wealth_data[symbols[i]] = wealth_series
-                            except Exception as conv_err:
-                                self.logger.error(f"Failed to convert portfolio wealth index to Series: {conv_err}")
-                                await self._send_message_safe(update, f"❌ Ошибка при обработке портфеля {symbols[i]}: {str(conv_err)}")
-                                return
-                        else:
-                            # Regular asset, need to get its wealth index
-                            self.logger.info(f"DEBUG: Found regular asset at index {i}: '{symbol}'")
-                            try:
-                                # Log the current symbol being processed
-                                self.logger.info(f"Processing regular asset: '{symbol}' from symbols[{i}] = '{symbols[i]}'")
-                                self.logger.info(f"DEBUG: symbol type: {type(symbol)}, symbol value: '{symbol}'")
-                                self.logger.info(f"DEBUG: symbols[{i}] type: {type(symbols[i])}, symbols[{i}] value: '{symbols[i]}'")
-                                
-                                # Use the currency from the portfolio if available, otherwise use detected currency
-                                asset_currency = currency
-                                
-                                # Log the symbol being processed for debugging
-                                self.logger.info(f"Processing asset symbol: '{symbol}' with currency: {asset_currency}")
-                                self.logger.info(f"DEBUG: About to create Asset with symbol: '{symbol}'")
-                                
-                                # Validate symbol format before creating Asset
-                                if not symbol or symbol.strip() == '':
-                                    self.logger.error(f"Empty or invalid symbol: '{symbol}'")
-                                    await self._send_message_safe(update, f"❌ Ошибка: неверный символ актива '{symbol}'")
-                                    return
-                                
-                                # Check for invalid characters that indicate extraction error
-                                invalid_chars = ['(', ')', ',']
-                                if any(char in symbol for char in invalid_chars):
-                                    self.logger.error(f"Symbol contains invalid characters: '{symbol}' - extraction error detected")
-                                    await self._send_message_safe(update, f"❌ Ошибка: символ содержит недопустимые символы '{symbol}' - ошибка извлечения")
-                                    return
-                                
-                                # Check for proper symbol format (must contain namespace separator)
-                                if '.' not in symbol:
-                                    self.logger.error(f"Symbol missing namespace separator: '{symbol}'")
-                                    await self._send_message_safe(update, f"❌ Ошибка: символ не содержит разделитель пространства имен '{symbol}'")
-                                    return
-                                
-                                self.logger.info(f"DEBUG: Symbol validation passed, creating Asset with: '{symbol}'")
-                                self.logger.info(f"DEBUG: About to call _ok_asset('{symbol}', currency='{asset_currency}')")
-                                try:
-                                    asset = self._ok_asset(symbol, currency=asset_currency)
-                                    self.logger.info(f"DEBUG: Successfully created Asset for '{symbol}'")
-                                except Exception as asset_error:
-                                    self.logger.error(f"DEBUG: Failed to create Asset for '{symbol}': {asset_error}")
-                                    raise asset_error
-                                
-                                # Calculate wealth index from price data
-                                try:
-                                    price_data = asset.price
-                                    self.logger.info(f"DEBUG: Price data type for {symbol}: {type(price_data)}")
-                                    
-                                    # Handle different types of price data
-                                    if price_data is None:
-                                        raise ValueError(f"No price data available for {symbol}")
-                                    elif isinstance(price_data, (int, float)):
-                                        # Single price value - create a simple wealth index
-                                        self.logger.info(f"DEBUG: Single price value for {symbol}: {price_data}")
-                                        # For single values, we can't calculate returns, so create a constant series
-                                        from datetime import datetime, timedelta
-                                        # Create a simple time series with the price value
-                                        dates = pd.date_range(start=datetime.now() - timedelta(days=365), end=datetime.now(), freq='D')
-                                        wealth_index = pd.Series([price_data] * len(dates), index=dates)
-                                        wealth_data[symbol] = wealth_index
-                                    elif hasattr(price_data, '__len__') and len(price_data) > 0:
-                                        # Time series data - calculate cumulative returns
-                                        self.logger.info(f"DEBUG: Time series data for {symbol}, length: {len(price_data)}")
-                                        returns = price_data.pct_change().dropna()
-                                        wealth_index = (1 + returns).cumprod()
-                                        wealth_data[symbol] = wealth_index
-                                    else:
-                                        raise ValueError(f"Invalid price data format for {symbol}: {type(price_data)}")
-                                except Exception as wealth_error:
-                                    self.logger.error(f"Error calculating wealth index for {symbol}: {wealth_error}")
-                                    raise wealth_error
-                            except Exception as e:
-                                self.logger.error(f"Error getting wealth index for {symbol}: {e}")
-                                await self._send_message_safe(update, f"❌ Ошибка при получении данных для {symbol}: {str(e)}")
-                                return
-                    
-                    # Create DataFrame from wealth data
-                    wealth_df = pd.DataFrame(wealth_data)
-                    
-                    # Safely handle Period objects in DataFrame index
+                    # Create comparison using ok.AssetList (proper way to compare portfolios with assets)
                     try:
-                        if hasattr(wealth_df, 'index') and hasattr(wealth_df.index, 'dtype'):
-                            if str(wealth_df.index.dtype).startswith('period') or any(hasattr(idx, 'to_timestamp') for idx in wealth_df.index[:min(3, len(wealth_df.index))]):
-                                if hasattr(wealth_df.index, 'to_timestamp'):
-                                    wealth_df.index = wealth_df.index.to_timestamp()
-                                else:
-                                    # Handle individual Period objects in index
-                                    new_index = []
-                                    for idx in wealth_df.index:
-                                        if hasattr(idx, 'to_timestamp'):
-                                            try:
-                                                new_index.append(idx.to_timestamp())
-                                            except Exception:
-                                                new_index.append(pd.to_datetime(str(idx)))
-                                        else:
-                                            new_index.append(idx)
-                                    wealth_df.index = pd.DatetimeIndex(new_index)
-                    except Exception as period_error:
-                        self.logger.warning(f"Could not convert Period objects in wealth DataFrame: {period_error}")
-                    
-                    # Generate beautiful comparison chart using chart_styles
-                    fig, ax = chart_styles.create_comparison_chart(
-                        data=wealth_df,
-                        symbols=symbols,
-                        currency=currency
-                    )
+                        self.logger.info(f"Creating AssetList with {len(assets_for_comparison)} assets/portfolios")
+                        comparison = self._ok_asset_list(assets_for_comparison, currency=currency)
+                        self.logger.info("Successfully created AssetList comparison")
+                    except Exception as asset_list_error:
+                        self.logger.error(f"Error creating AssetList: {asset_list_error}")
+                        await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(asset_list_error)}")
+                        return
                     
                 else:
-                    # Regular assets only, use AssetList
-                    # Use raw parsed tickers (expanded_symbols) for okama, not display descriptions
-                    asset_list = self._ok_asset_list(expanded_symbols, currency=currency)
-                    self.logger.info("Created AssetList with full available period")
-                    
-                    # Generate beautiful comparison chart using chart_styles
-                    # Safely handle Period objects in wealth_indexes
-                    wealth_data = asset_list.wealth_indexes
-                    try:
-                        # Check if index contains Period objects and convert them
-                        if hasattr(wealth_data, 'index') and hasattr(wealth_data.index, 'dtype'):
-                            if str(wealth_data.index.dtype).startswith('period') or any(hasattr(idx, 'to_timestamp') for idx in wealth_data.index[:min(3, len(wealth_data.index))]):
-                                wealth_data = wealth_data.copy()
-                                if hasattr(wealth_data.index, 'to_timestamp'):
-                                    wealth_data.index = wealth_data.index.to_timestamp()
-                                else:
-                                    # Handle individual Period objects in index
-                                    new_index = []
-                                    for idx in wealth_data.index:
-                                        if hasattr(idx, 'to_timestamp'):
-                                            try:
-                                                new_index.append(idx.to_timestamp())
-                                            except Exception:
-                                                new_index.append(pd.to_datetime(str(idx)))
-                                        else:
-                                            new_index.append(idx)
-                                    wealth_data.index = pd.DatetimeIndex(new_index)
-                    except Exception as period_error:
-                        self.logger.warning(f"Could not convert Period objects in wealth_indexes: {period_error}")
-                    
-                    fig, ax = chart_styles.create_comparison_chart(
-                        data=wealth_data,
-                        symbols=symbols,
-                        currency=currency
-                    )
+                    # Regular comparison without portfolios
+                    self.logger.info("Creating regular comparison without portfolios")
+                    comparison = self._ok_asset_list(symbols, currency=currency)
+                
+                # Store context for buttons - use clean portfolio symbols for current_symbols
+                clean_symbols = []
+                for i, symbol in enumerate(symbols):
+                    if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
+                        # This is a portfolio - use clean symbol from context
+                        if i < len(portfolio_contexts):
+                            clean_symbols.append(portfolio_contexts[i]['symbol'])
+                        else:
+                            clean_symbols.append(symbol)
+                    else:
+                        # This is a regular asset
+                        clean_symbols.append(symbol)
+                
+                user_context['current_symbols'] = clean_symbols
+                user_context['current_currency'] = currency
+                user_context['last_analysis_type'] = 'comparison'
+                user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
+                user_context['expanded_symbols'] = expanded_symbols  # Store expanded symbols
+                
+                # Create comparison chart
+                fig, ax = chart_styles.create_comparison_chart(
+                    comparison.wealth_indexes, symbols, currency
+                )
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
@@ -1600,122 +1465,43 @@ class OkamaFinanceBot:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Get basic statistics
-                stats_text = f"📊 Сравнение: {', '.join(symbols)}\n\n"
-                stats_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
+                # Create caption
+                caption = f"📊 Сравнение активов\n\n"
+                caption += f"🔍 Сравниваемые активы: {', '.join(symbols)}\n"
+                caption += f"💰 Валюта: {currency} ({currency_info})\n"
+                caption += f"📅 Период: полный доступный период данных\n\n"
+                caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
                 
-                if has_portfolios:
-                    # Get statistics from wealth_df for portfolios
-                    try:
-                        first_date = wealth_df.index[0]
-                        last_date = wealth_df.index[-1]
-                        period_length = last_date - first_date
-                        
-                        stats_text += f"📅 Период: {first_date} - {last_date}\n"
-                        stats_text += f"⏱️ Длительность: {period_length}\n\n"
-                        
-                        # Calculate and show final returns
-                        final_values = wealth_df.iloc[-1]
-                        stats_text += f"📈 Накопленная доходность ({currency}):\n"
-                        for symbol in symbols:
-                            if symbol in final_values:
-                                value = final_values[symbol]
-                                stats_text += f"• {symbol}: {value:.2f}\n"
-                    except Exception as e:
-                        self.logger.warning(f"Could not get portfolio statistics: {e}")
-                        stats_text += "📅 Период: недоступен\n⏱️ Длительность: недоступна\n\n"
-                else:
-                    # Regular assets, use asset_list
-                    stats_text += f"📅 Период: {asset_list.first_date} - {asset_list.last_date}\n"
-                    
-                    # Safely handle period_length which might be a Period object
-                    try:
-                        period_length = asset_list.period_length
-                        if hasattr(period_length, 'strftime'):
-                            # If it's a datetime-like object
-                            period_length_str = str(period_length)
-                        elif hasattr(period_length, 'days'):
-                            # If it's a timedelta-like object
-                            period_length_str = str(period_length)
-                        elif hasattr(period_length, 'to_timestamp'):
-                            # If it's a Period object
-                            period_length_str = str(period_length)
-                        else:
-                            # Try to convert to string directly
-                            period_length_str = str(period_length)
-                        stats_text += f"⏱️ Длительность: {period_length_str}\n\n"
-                    except Exception as e:
-                        self.logger.warning(f"Could not get period length: {e}")
-                        stats_text += "⏱️ Длительность: недоступна\n\n"
-                    
-                    # Get asset names
-                    if hasattr(asset_list, 'names') and asset_list.names:
-                        stats_text += "📋 Названия активов:\n"
-                        for symbol, name in asset_list.names.items():
-                            stats_text += f"• {symbol} - {name}\n"
-                        stats_text += "\n"
-                    
-                    # Calculate and show final returns
-                    try:
-                        final_values = asset_list.wealth_indexes.iloc[-1]
-                        stats_text += f"📈 Накопленная доходность ({currency}):\n"
-                        for symbol in symbols:
-                            if symbol in final_values:
-                                value = final_values[symbol]
-                                stats_text += f"• {symbol}: {value:.2f}\n"
-                    except Exception as e:
-                        self.logger.warning(f"Could not get final values: {e}")
-                
-                # Send text report
-                # await self.send_long_message(update, stats_text)
-                
-                # Send chart image with buttons
+                # Create keyboard with analysis buttons - use proper callback data format
                 keyboard = [
                     [
-                        InlineKeyboardButton("📉 Drawdowns", callback_data=f"drawdowns_{','.join(symbols)}"),
-                        InlineKeyboardButton("💰 Dividends", callback_data=f"dividends_{','.join(symbols)}")
+                        InlineKeyboardButton("📉 Drawdowns", callback_data="drawdowns_compare"),
+                        InlineKeyboardButton("💰 Dividends", callback_data="dividends_compare")
                     ],
                     [
-                        InlineKeyboardButton("🔗 Correlation Matrix", callback_data=f"correlation_{','.join(symbols)}")
+                        InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
                     ]
                 ]
+                
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
+                # Send comparison chart with buttons
                 await context.bot.send_photo(
-                    chat_id=update.effective_chat.id, 
+                    chat_id=update.effective_chat.id,
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(stats_text),
+                    caption=self._truncate_caption(caption),
                     reply_markup=reply_markup
                 )
                 
-                # Store asset_list in context for button callbacks
-                user_id = update.effective_user.id
-                self._update_user_context(
-                    user_id, 
-                    last_assets=symbols,
-                    last_analysis_type='comparison',
-                    last_period='MAX',
-                    current_symbols=expanded_symbols,  # Store actual asset symbols, not display descriptions
-                    current_currency=currency,
-                    current_currency_info=currency_info
-                )
+                # Note: AI analysis is now handled by the button callbacks using context data
                 
             except Exception as e:
                 self.logger.error(f"Error creating comparison: {e}")
-                await self._send_message_safe(update, 
-                    f"❌ Ошибка при создании сравнения: {str(e)}\n\n"
-                    "💡 Возможные причины:\n"
-                    "• Один из символов недоступен\n"
-                    "• Проблемы с данными MOEX\n"
-                    "• Неверный формат символа\n\n"
-                    "Проверьте:\n"
-                    "• Правильность написания символов\n"
-                    "• Доступность данных для указанных активов"
-                )
+                await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(e)}")
                 
         except Exception as e:
             self.logger.error(f"Error in compare command: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при выполнении команды сравнения: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка в команде сравнения: {str(e)}")
 
     async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /my command for displaying saved portfolios"""
@@ -2613,11 +2399,10 @@ class OkamaFinanceBot:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
-            if callback_data.startswith('drawdowns_'):
-                symbols = callback_data.replace('drawdowns_', '').split(',')
-                self.logger.info(f"Drawdowns button clicked for symbols: {symbols}")
+            if callback_data == "drawdowns" or callback_data == "drawdowns_compare":
+                self.logger.info("Drawdowns button clicked")
                 
-                # Check user context to determine which type of analysis this is
+                # Get data from user context
                 user_id = update.effective_user.id
                 user_context = self._get_user_context(user_id)
                 last_analysis_type = user_context.get('last_analysis_type')
@@ -2625,17 +2410,26 @@ class OkamaFinanceBot:
                 self.logger.info(f"Last analysis type: {last_analysis_type}")
                 
                 if last_analysis_type == 'portfolio':
+                    symbols = user_context.get('current_symbols', [])
                     await self._handle_portfolio_drawdowns_button(update, context, symbols)
                 else:
+                    symbols = user_context.get('current_symbols', [])
                     await self._handle_drawdowns_button(update, context, symbols)
-            elif callback_data.startswith('dividends_') and ',' in callback_data:
-                # Для сравнения активов (dividends_AAA,BBB)
-                symbols = callback_data.replace('dividends_', '').split(',')
-                self.logger.info(f"Dividends button clicked for symbols: {symbols}")
+            elif callback_data == "dividends" or callback_data == "dividends_compare":
+                self.logger.info("Dividends button clicked")
+                
+                # Get data from user context
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('current_symbols', [])
                 await self._handle_dividends_button(update, context, symbols)
-            elif callback_data.startswith('correlation_'):
-                symbols = callback_data.replace('correlation_', '').split(',')
-                self.logger.info(f"Correlation button clicked for symbols: {symbols}")
+            elif callback_data == "correlation" or callback_data == "correlation_compare":
+                self.logger.info("Correlation button clicked")
+                
+                # Get data from user context
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('current_symbols', [])
                 await self._handle_correlation_button(update, context, symbols)
             elif callback_data.startswith('monthly_chart_'):
                 symbol = callback_data.replace('monthly_chart_', '')
@@ -2713,8 +2507,9 @@ class OkamaFinanceBot:
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
             last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
                 await self._send_callback_message(update, context, "📉 Создаю график drawdowns для смешанного сравнения...")
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
@@ -2732,55 +2527,159 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating mixed comparison drawdowns chart for symbols: {symbols}")
             
-            # Separate portfolios and individual assets
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
             portfolio_data = []
             asset_symbols = []
             
-            for symbol in symbols:
-                if isinstance(symbol, (pd.Series, pd.DataFrame)):
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is a portfolio wealth index
-                    portfolio_data.append(symbol)
+                    portfolio_data.append(expanded_symbol)
                 else:
                     # This is an individual asset symbol
-                    asset_symbols.append(symbol)
+                    asset_symbols.append(expanded_symbol)
             
-            # Create drawdowns data for portfolios
-            drawdowns_data = {}
+            # Create list for AssetList (portfolios + assets)
+            asset_list_items = []
             
-            # Process portfolios
-            for i, portfolio_series in enumerate(portfolio_data):
-                if isinstance(portfolio_series, pd.Series):
-                    # Calculate drawdowns for portfolio
-                    returns = portfolio_series.pct_change().dropna()
-                    cumulative = (1 + returns).cumprod()
-                    running_max = cumulative.expanding().max()
-                    drawdowns = (cumulative - running_max) / running_max
-                    drawdowns_data[f'Portfolio_{i+1}'] = drawdowns
+            # Recreate portfolios from context
+            for i, portfolio_context in enumerate(portfolio_contexts):
+                if i < len(portfolio_data):
+                    try:
+                        self.logger.info(f"Recreating portfolio {i} from context")
+                        
+                        # Get portfolio details from context
+                        assets = portfolio_context.get('assets', [])
+                        weights = portfolio_context.get('weights', [])
+                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        
+                        if assets and weights and len(assets) == len(weights):
+                            self.logger.info(f"Portfolio {i} assets: {assets}, weights: {weights}")
+                            
+                            # Create portfolio using ok.Portfolio
+                            import okama as ok
+                            portfolio = ok.Portfolio(
+                                assets=assets,
+                                weights=weights,
+                                rebalancing_strategy=ok.Rebalance(period="year"),
+                                symbol=symbol
+                            )
+                            
+                            asset_list_items.append(portfolio)
+                            self.logger.info(f"Successfully recreated portfolio {symbol}")
+                        else:
+                            self.logger.warning(f"Portfolio {i} missing valid assets/weights data")
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not recreate portfolio {i}: {portfolio_error}")
+                        continue
             
-            # Process individual assets
+            # Add individual assets
             if asset_symbols:
-                try:
-                    asset_list = self._ok_asset_list(asset_symbols, currency=currency)
-                    for symbol in asset_symbols:
-                        if symbol in asset_list.wealth_indexes.columns:
-                            # Calculate drawdowns for individual asset
-                            wealth_series = asset_list.wealth_indexes[symbol]
+                asset_list_items.extend(asset_symbols)
+            
+            if not asset_list_items:
+                await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика просадок")
+                return
+            
+            # Create AssetList for mixed comparison
+            try:
+                import okama as ok
+                self.logger.info(f"Creating AssetList with items: {asset_list_items}")
+                mixed_asset_list = ok.AssetList(asset_list_items)
+                self.logger.info(f"AssetList created successfully. Wealth indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
+                
+                # Calculate drawdowns for all items
+                drawdowns_data = {}
+                
+                # Process portfolios
+                for i, portfolio_context in enumerate(portfolio_contexts):
+                    if i < len(portfolio_data):
+                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        self.logger.info(f"Checking portfolio {symbol} in wealth_indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
+                        
+                        if symbol in mixed_asset_list.wealth_indexes.columns:
+                            # Calculate drawdowns for portfolio
+                            wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
                             returns = wealth_series.pct_change().dropna()
+                            if len(returns) > 0:
+                                cumulative = (1 + returns).cumprod()
+                                running_max = cumulative.expanding().max()
+                                drawdowns = (cumulative - running_max) / running_max
+                                drawdowns_data[symbol] = drawdowns
+                                self.logger.info(f"Successfully created drawdowns for {symbol}: {len(drawdowns)} points")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol}: No returns data after pct_change")
+                        else:
+                            self.logger.warning(f"Portfolio {symbol} not found in wealth_indexes columns")
+                            # Try to find portfolio by different name patterns
+                            available_columns = list(mixed_asset_list.wealth_indexes.columns)
+                            matching_columns = [col for col in available_columns if symbol.lower() in col.lower() or col.lower() in symbol.lower()]
+                            if matching_columns:
+                                self.logger.info(f"Found potential matches for {symbol}: {matching_columns}")
+                                # Use the first matching column
+                                actual_symbol = matching_columns[0]
+                                wealth_series = mixed_asset_list.wealth_indexes[actual_symbol]
+                                returns = wealth_series.pct_change().dropna()
+                                if len(returns) > 0:
+                                    cumulative = (1 + returns).cumprod()
+                                    running_max = cumulative.expanding().max()
+                                    drawdowns = (cumulative - running_max) / running_max
+                                    drawdowns_data[symbol] = drawdowns  # Use original symbol for display
+                                    self.logger.info(f"Successfully created drawdowns for {symbol} using {actual_symbol}: {len(drawdowns)} points")
+                            else:
+                                self.logger.error(f"Portfolio {symbol} not found and no matches available")
+                
+                # Process individual assets
+                for symbol in asset_symbols:
+                    self.logger.info(f"Checking asset {symbol} in wealth_indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
+                    
+                    if symbol in mixed_asset_list.wealth_indexes.columns:
+                        # Calculate drawdowns for individual asset
+                        wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                        self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                        
+                        returns = wealth_series.pct_change().dropna()
+                        if len(returns) > 0:
                             cumulative = (1 + returns).cumprod()
                             running_max = cumulative.expanding().max()
                             drawdowns = (cumulative - running_max) / running_max
                             drawdowns_data[symbol] = drawdowns
-                except Exception as asset_error:
-                    self.logger.warning(f"Could not process individual assets: {asset_error}")
+                            self.logger.info(f"Successfully created drawdowns for {symbol}: {len(drawdowns)} points")
+                        else:
+                            self.logger.warning(f"Asset {symbol}: No returns data after pct_change")
+                    else:
+                        self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
+                
+            except Exception as asset_list_error:
+                self.logger.error(f"Error creating AssetList for mixed comparison: {asset_list_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании смешанного сравнения: {str(asset_list_error)}")
+                return
             
             if not drawdowns_data:
                 await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика просадок")
                 return
             
+            # Clean drawdowns data to handle Period indices
+            cleaned_drawdowns_data = {}
+            for key, series in drawdowns_data.items():
+                if isinstance(series, pd.Series):
+                    # Convert Period index to datetime if needed
+                    if hasattr(series.index, 'dtype') and str(series.index.dtype).startswith('period'):
+                        series.index = series.index.to_timestamp()
+                    cleaned_drawdowns_data[key] = series
+            
             # Create drawdowns chart
             fig, ax = chart_styles.create_drawdowns_chart(
-                data=pd.DataFrame(drawdowns_data),
-                symbols=list(drawdowns_data.keys()),
+                data=pd.DataFrame(cleaned_drawdowns_data),
+                symbols=list(cleaned_drawdowns_data.keys()),
                 currency=currency
             )
             
@@ -2796,12 +2695,20 @@ class OkamaFinanceBot:
             portfolio_count = len(portfolio_data)
             asset_count = len(asset_symbols)
             
+            # Get portfolio names from context
+            portfolio_names = []
+            for i, portfolio_series in enumerate(portfolio_data):
+                if i < len(portfolio_contexts):
+                    portfolio_names.append(portfolio_contexts[i]['symbol'])
+                else:
+                    portfolio_names.append(f'Portfolio_{i+1}')
+            
             caption = f"📉 Просадки смешанного сравнения\n\n"
             caption += f"📊 Состав:\n"
             if portfolio_count > 0:
-                caption += f"• Портфели: {portfolio_count}\n"
+                caption += f"• Портфели: {', '.join(portfolio_names)}\n"
             if asset_count > 0:
-                caption += f"• Индивидуальные активы: {asset_count}\n"
+                caption += f"• Индивидуальные активы: {', '.join(asset_symbols)}\n"
             caption += f"• Валюта: {currency}\n\n"
             caption += f"💡 График показывает:\n"
             caption += f"• Просадки портфелей и активов\n"
@@ -2842,8 +2749,9 @@ class OkamaFinanceBot:
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
             last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
                 await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...")
                 await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
@@ -2861,30 +2769,229 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating mixed comparison dividends chart for symbols: {symbols}")
             
-            # Separate portfolios and individual assets
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
             portfolio_data = []
             asset_symbols = []
             
-            for symbol in symbols:
-                if isinstance(symbol, (pd.Series, pd.DataFrame)):
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is a portfolio wealth index
-                    portfolio_data.append(symbol)
+                    portfolio_data.append(expanded_symbol)
                 else:
                     # This is an individual asset symbol
-                    asset_symbols.append(symbol)
+                    asset_symbols.append(expanded_symbol)
             
-            # For mixed comparisons, we'll focus on individual assets since portfolios don't have direct dividend data
-            if not asset_symbols:
-                await self._send_callback_message(update, context, "❌ Для портфелей дивидендная доходность рассчитывается по-другому. Используйте команду /portfolio для детального анализа.")
+            # Create list for AssetList (portfolios + assets)
+            asset_list_items = []
+            
+            # Recreate portfolios from context
+            for i, portfolio_context in enumerate(portfolio_contexts):
+                if i < len(portfolio_data):
+                    try:
+                        self.logger.info(f"Recreating portfolio {i} from context for dividends")
+                        
+                        # Get portfolio details from context
+                        assets = portfolio_context.get('assets', [])
+                        weights = portfolio_context.get('weights', [])
+                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        
+                        if assets and weights and len(assets) == len(weights):
+                            self.logger.info(f"Portfolio {i} assets: {assets}, weights: {weights}")
+                            
+                            # Create portfolio using ok.Portfolio
+                            import okama as ok
+                            portfolio = ok.Portfolio(
+                                assets=assets,
+                                weights=weights,
+                                rebalancing_strategy=ok.Rebalance(period="year"),
+                                symbol=symbol
+                            )
+                            
+                            asset_list_items.append(portfolio)
+                            self.logger.info(f"Successfully recreated portfolio {symbol} for dividends")
+                        else:
+                            self.logger.warning(f"Portfolio {i} missing valid assets/weights data for dividends")
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not recreate portfolio {i} for dividends: {portfolio_error}")
+                        continue
+            
+            # Add individual assets
+            if asset_symbols:
+                asset_list_items.extend(asset_symbols)
+            
+            if not asset_list_items:
+                await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика дивидендной доходности")
                 return
             
-            # Create dividends chart for individual assets
+            # Create AssetList for mixed comparison
             try:
-                asset_list = self._ok_asset_list(asset_symbols, currency=currency)
-                await self._create_dividend_yield_chart(update, context, asset_list, asset_symbols, currency)
-            except Exception as asset_error:
-                self.logger.warning(f"Could not create dividends chart for assets: {asset_error}")
-                await self._send_callback_message(update, context, "❌ Не удалось создать график дивидендной доходности для активов")
+                import okama as ok
+                mixed_asset_list = ok.AssetList(asset_list_items)
+                
+                # Create dividends data for both portfolios and assets
+                dividends_data = {}
+                
+                # Check if dividend_yields attribute exists
+                if hasattr(mixed_asset_list, 'dividend_yields'):
+                    self.logger.info(f"AssetList has dividend_yields attribute. Columns: {list(mixed_asset_list.dividend_yields.columns)}")
+                    
+                    # Process portfolios
+                    for i, portfolio_context in enumerate(portfolio_contexts):
+                        if i < len(portfolio_data):
+                            symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                            if symbol in mixed_asset_list.dividend_yields.columns:
+                                # Get dividend yield for portfolio
+                                dividend_yield = mixed_asset_list.dividend_yields[symbol].iloc[-1] if not mixed_asset_list.dividend_yields[symbol].empty else 0
+                                dividends_data[symbol] = dividend_yield
+                                self.logger.info(f"Successfully got dividend yield for {symbol}: {dividend_yield}")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol} not found in dividend_yields columns")
+                    
+                    # Process individual assets
+                    for symbol in asset_symbols:
+                        if symbol in mixed_asset_list.dividend_yields.columns:
+                            # Get dividend yield for individual asset
+                            dividend_yield = mixed_asset_list.dividend_yields[symbol].iloc[-1] if not mixed_asset_list.dividend_yields[symbol].empty else 0
+                            dividends_data[symbol] = dividend_yield
+                            self.logger.info(f"Successfully got dividend yield for {symbol}: {dividend_yield}")
+                        else:
+                            self.logger.warning(f"Asset {symbol} not found in dividend_yields columns")
+                else:
+                    self.logger.warning("AssetList does not have dividend_yields attribute. Using alternative approach.")
+                    
+                    # Alternative approach: calculate weighted dividend yield for portfolios
+                    for i, portfolio_context in enumerate(portfolio_contexts):
+                        if i < len(portfolio_data):
+                            try:
+                                symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                                assets = portfolio_context.get('assets', [])
+                                weights = portfolio_context.get('weights', [])
+                                
+                                if assets and weights and len(assets) == len(weights):
+                                    # Create separate AssetList for portfolio assets
+                                    portfolio_asset_list = self._ok_asset_list(assets, currency=currency)
+                                    
+                                    if hasattr(portfolio_asset_list, 'dividend_yields'):
+                                        # Calculate weighted dividend yield
+                                        total_dividend_yield = 0
+                                        for asset, weight in zip(assets, weights):
+                                            if asset in portfolio_asset_list.dividend_yields.columns:
+                                                dividend_yield = portfolio_asset_list.dividend_yields[asset].iloc[-1] if not portfolio_asset_list.dividend_yields[asset].empty else 0
+                                                total_dividend_yield += dividend_yield * weight
+                                                self.logger.info(f"Asset {asset}: dividend_yield={dividend_yield}, weight={weight}")
+                                            else:
+                                                self.logger.warning(f"Asset {asset} not found in dividend_yields columns")
+                                        
+                                        dividends_data[symbol] = total_dividend_yield
+                                        self.logger.info(f"Successfully calculated weighted dividend yield for {symbol}: {total_dividend_yield}")
+                                    else:
+                                        self.logger.warning(f"Portfolio asset list does not have dividend_yields attribute for {symbol}")
+                                        dividends_data[symbol] = 0  # Default value
+                                else:
+                                    self.logger.warning(f"Portfolio {symbol} missing valid assets/weights data")
+                                    dividends_data[symbol] = 0  # Default value
+                            except Exception as portfolio_error:
+                                self.logger.warning(f"Could not calculate dividend yield for portfolio {symbol}: {portfolio_error}")
+                                dividends_data[symbol] = 0  # Default value
+                    
+                    # Process individual assets separately
+                    if asset_symbols:
+                        try:
+                            asset_asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                            
+                            if hasattr(asset_asset_list, 'dividend_yields'):
+                                for symbol in asset_symbols:
+                                    if symbol in asset_asset_list.dividend_yields.columns:
+                                        dividend_yield = asset_asset_list.dividend_yields[symbol].iloc[-1] if not asset_asset_list.dividend_yields[symbol].empty else 0
+                                        dividends_data[symbol] = dividend_yield
+                                        self.logger.info(f"Successfully got dividend yield for {symbol}: {dividend_yield}")
+                                    else:
+                                        self.logger.warning(f"Asset {symbol} not found in dividend_yields columns")
+                                        dividends_data[symbol] = 0  # Default value
+                            else:
+                                self.logger.warning("Asset list does not have dividend_yields attribute")
+                                for symbol in asset_symbols:
+                                    dividends_data[symbol] = 0  # Default value
+                        except Exception as asset_error:
+                            self.logger.warning(f"Could not process individual assets: {asset_error}")
+                            for symbol in asset_symbols:
+                                dividends_data[symbol] = 0  # Default value
+                
+            except Exception as asset_list_error:
+                self.logger.error(f"Error creating AssetList for mixed comparison dividends: {asset_list_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании смешанного сравнения: {str(asset_list_error)}")
+                return
+            
+            if not dividends_data:
+                await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика дивидендной доходности")
+                return
+            
+            # Validate dividends data before creating chart
+            validated_dividends_data = {}
+            for symbol, dividend_yield in dividends_data.items():
+                try:
+                    # Ensure dividend_yield is numeric
+                    if isinstance(dividend_yield, (int, float)) and dividend_yield >= 0:
+                        validated_dividends_data[symbol] = dividend_yield
+                        self.logger.info(f"Validated dividend yield for {symbol}: {dividend_yield}")
+                    else:
+                        self.logger.warning(f"Invalid dividend yield for {symbol}: {dividend_yield}, using 0")
+                        validated_dividends_data[symbol] = 0
+                except Exception as validation_error:
+                    self.logger.warning(f"Error validating dividend yield for {symbol}: {validation_error}, using 0")
+                    validated_dividends_data[symbol] = 0
+            
+            if not validated_dividends_data:
+                await self._send_callback_message(update, context, "❌ Не удалось создать валидные данные для графика дивидендной доходности")
+                return
+            
+            self.logger.info(f"Creating dividends chart with validated data: {validated_dividends_data}")
+            
+            # Create dividends chart
+            fig, ax = chart_styles.create_dividends_chart_enhanced(
+                data=pd.Series(validated_dividends_data),
+                symbol="Смешанное сравнение",
+                currency=currency
+            )
+            
+            # Save chart
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache
+            chart_styles.cleanup_figure(fig)
+            
+            # Create caption
+            portfolio_count = len([d for d in dividends_data.keys() if 'portfolio' in d.lower()])
+            asset_count = len([d for d in dividends_data.keys() if 'portfolio' not in d.lower()])
+            
+            caption = f"💰 Дивидендная доходность смешанного сравнения\n\n"
+            caption += f"📊 Состав:\n"
+            if portfolio_count > 0:
+                portfolio_names = [d for d in dividends_data.keys() if 'portfolio' in d.lower()]
+                caption += f"• Портфели: {', '.join(portfolio_names)}\n"
+            if asset_count > 0:
+                asset_names = [d for d in dividends_data.keys() if 'portfolio' not in d.lower()]
+                caption += f"• Индивидуальные активы: {', '.join(asset_names)}\n"
+            caption += f"• Валюта: {currency}\n\n"
+            caption += f"💡 График показывает:\n"
+            caption += f"• Дивидендную доходность портфелей (взвешенную)\n"
+            caption += f"• Дивидендную доходность отдельных активов\n"
+            
+            # Send chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=caption,
+                parse_mode='HTML'
+            )
                 
         except Exception as e:
             self.logger.error(f"Error creating mixed comparison dividends chart: {e}")
@@ -2913,8 +3020,9 @@ class OkamaFinanceBot:
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
             last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in symbols):
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
                 await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу для смешанного сравнения...")
                 await self._create_mixed_comparison_correlation_matrix(update, context, symbols, currency)
@@ -2932,47 +3040,152 @@ class OkamaFinanceBot:
         try:
             self.logger.info(f"Creating mixed comparison correlation matrix for symbols: {symbols}")
             
-            # Separate portfolios and individual assets
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
             portfolio_data = []
             asset_symbols = []
             
-            for symbol in symbols:
-                if isinstance(symbol, (pd.Series, pd.DataFrame)):
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is a portfolio wealth index
-                    portfolio_data.append(symbol)
+                    portfolio_data.append(expanded_symbol)
                 else:
                     # This is an individual asset symbol
-                    asset_symbols.append(symbol)
+                    asset_symbols.append(expanded_symbol)
             
-            # Create correlation data
-            correlation_data = {}
+            # Create list for AssetList (portfolios + assets)
+            asset_list_items = []
             
-            # Process portfolios
-            for i, portfolio_series in enumerate(portfolio_data):
-                if isinstance(portfolio_series, pd.Series):
-                    # Calculate returns for portfolio
-                    returns = portfolio_series.pct_change().dropna()
-                    correlation_data[f'Portfolio_{i+1}'] = returns
+            # Recreate portfolios from context
+            for i, portfolio_context in enumerate(portfolio_contexts):
+                if i < len(portfolio_data):
+                    try:
+                        self.logger.info(f"Recreating portfolio {i} from context for correlation")
+                        
+                        # Get portfolio details from context
+                        assets = portfolio_context.get('assets', [])
+                        weights = portfolio_context.get('weights', [])
+                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        
+                        if assets and weights and len(assets) == len(weights):
+                            self.logger.info(f"Portfolio {i} assets: {assets}, weights: {weights}")
+                            
+                            # Create portfolio using ok.Portfolio
+                            import okama as ok
+                            portfolio = ok.Portfolio(
+                                assets=assets,
+                                weights=weights,
+                                rebalancing_strategy=ok.Rebalance(period="year"),
+                                symbol=symbol
+                            )
+                            
+                            asset_list_items.append(portfolio)
+                            self.logger.info(f"Successfully recreated portfolio {symbol} for correlation")
+                        else:
+                            self.logger.warning(f"Portfolio {i} missing valid assets/weights data for correlation")
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not recreate portfolio {i} for correlation: {portfolio_error}")
+                        continue
             
-            # Process individual assets
+            # Add individual assets
             if asset_symbols:
-                try:
-                    asset_list = self._ok_asset_list(asset_symbols, currency=currency)
-                    for symbol in asset_symbols:
-                        if symbol in asset_list.wealth_indexes.columns:
-                            # Calculate returns for individual asset
-                            wealth_series = asset_list.wealth_indexes[symbol]
+                asset_list_items.extend(asset_symbols)
+            
+            if len(asset_list_items) < 2:
+                self.logger.warning(f"Not enough asset_list_items for correlation matrix: {len(asset_list_items)}")
+                await self._send_callback_message(update, context, "❌ Недостаточно данных для создания корреляционной матрицы")
+                return
+            
+            self.logger.info(f"Creating AssetList for correlation with {len(asset_list_items)} items: {asset_list_items}")
+            
+            # Create AssetList for mixed comparison
+            try:
+                import okama as ok
+                mixed_asset_list = ok.AssetList(asset_list_items)
+                self.logger.info(f"AssetList created successfully for correlation. Wealth indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
+                
+                # Calculate correlation data for all items
+                correlation_data = {}
+                
+                # Process portfolios
+                for i, portfolio_context in enumerate(portfolio_contexts):
+                    if i < len(portfolio_data):
+                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        self.logger.info(f"Processing portfolio {symbol} for correlation")
+                        
+                        if symbol in mixed_asset_list.wealth_indexes.columns:
+                            # Calculate returns for portfolio
+                            wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
                             returns = wealth_series.pct_change().dropna()
+                            if len(returns) > 0:
+                                correlation_data[symbol] = returns
+                                self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol}: No returns data after pct_change")
+                        else:
+                            self.logger.warning(f"Portfolio {symbol} not found in wealth_indexes columns")
+                            # Try to find portfolio by different name patterns
+                            available_columns = list(mixed_asset_list.wealth_indexes.columns)
+                            matching_columns = [col for col in available_columns if symbol.lower() in col.lower() or col.lower() in symbol.lower()]
+                            if matching_columns:
+                                self.logger.info(f"Found potential matches for {symbol}: {matching_columns}")
+                                # Use the first matching column
+                                actual_symbol = matching_columns[0]
+                                wealth_series = mixed_asset_list.wealth_indexes[actual_symbol]
+                                returns = wealth_series.pct_change().dropna()
+                                if len(returns) > 0:
+                                    correlation_data[symbol] = returns  # Use original symbol for display
+                                    self.logger.info(f"Successfully created correlation data for {symbol} using {actual_symbol}: {len(returns)} points")
+                                else:
+                                    self.logger.warning(f"Portfolio {symbol} using {actual_symbol}: No returns data after pct_change")
+                            else:
+                                self.logger.error(f"Portfolio {symbol} not found and no matches available")
+                
+                # Process individual assets
+                for symbol in asset_symbols:
+                    self.logger.info(f"Processing asset {symbol} for correlation")
+                    
+                    if symbol in mixed_asset_list.wealth_indexes.columns:
+                        # Calculate returns for individual asset
+                        wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                        self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                        
+                        returns = wealth_series.pct_change().dropna()
+                        if len(returns) > 0:
                             correlation_data[symbol] = returns
-                except Exception as asset_error:
-                    self.logger.warning(f"Could not process individual assets: {asset_error}")
+                            self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
+                        else:
+                            self.logger.warning(f"Asset {symbol}: No returns data after pct_change")
+                    else:
+                        self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
+                
+            except Exception as asset_list_error:
+                self.logger.error(f"Error creating AssetList for mixed comparison correlation: {asset_list_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании смешанного сравнения: {str(asset_list_error)}")
+                return
             
             if len(correlation_data) < 2:
                 await self._send_callback_message(update, context, "❌ Недостаточно данных для создания корреляционной матрицы")
                 return
             
+            # Clean correlation data to handle Period indices
+            cleaned_correlation_data = {}
+            for key, series in correlation_data.items():
+                if isinstance(series, pd.Series):
+                    # Convert Period index to datetime if needed
+                    if hasattr(series.index, 'dtype') and str(series.index.dtype).startswith('period'):
+                        series.index = series.index.to_timestamp()
+                    cleaned_correlation_data[key] = series
+            
             # Create correlation matrix
-            returns_df = pd.DataFrame(correlation_data)
+            returns_df = pd.DataFrame(cleaned_correlation_data)
             correlation_matrix = returns_df.corr()
             
             # Create correlation chart
@@ -2993,12 +3206,20 @@ class OkamaFinanceBot:
             portfolio_count = len(portfolio_data)
             asset_count = len(asset_symbols)
             
+            # Get portfolio names from context
+            portfolio_names = []
+            for i, portfolio_series in enumerate(portfolio_data):
+                if i < len(portfolio_contexts):
+                    portfolio_names.append(portfolio_contexts[i]['symbol'])
+                else:
+                    portfolio_names.append(f'Portfolio_{i+1}')
+            
             caption = f"🔗 Корреляционная матрица смешанного сравнения\n\n"
             caption += f"📊 Состав:\n"
             if portfolio_count > 0:
-                caption += f"• Портфели: {portfolio_count}\n"
+                caption += f"• Портфели: {', '.join(portfolio_names)}\n"
             if asset_count > 0:
-                caption += f"• Индивидуальные активы: {asset_count}\n"
+                caption += f"• Индивидуальные активы: {', '.join(asset_symbols)}\n"
             caption += f"• Валюта: {currency}\n\n"
             caption += f"💡 Матрица показывает:\n"
             caption += f"• Корреляцию между портфелями и активами\n"
@@ -3957,7 +4178,7 @@ class OkamaFinanceBot:
                 chart_styles.apply_monte_carlo_style(ax)
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Прогноз Monte Carlo\n{", ".join(symbols)}',
                     ylabel='Накопленная доходность',
@@ -4020,10 +4241,10 @@ class OkamaFinanceBot:
                 # Force legend update to match the new colors
                 if ax.get_legend():
                     ax.get_legend().remove()
-                ax.legend(**chart_styles.legend_config)
+                ax.legend(**chart_styles.legend)
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Прогноз с процентилями\n{", ".join(symbols)}',
                     ylabel='Накопленная доходность',
@@ -4129,7 +4350,7 @@ class OkamaFinanceBot:
                 ax = current_fig.axes[0]
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Просадки портфеля\n{", ".join(symbols)}',
                     ylabel='Просадка (%)',
@@ -4262,7 +4483,7 @@ class OkamaFinanceBot:
                 ax = current_fig.axes[0]
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Годовая доходность портфеля\n{", ".join(symbols)}',
                     ylabel='Доходность (%)',
