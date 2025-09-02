@@ -1392,15 +1392,31 @@ class OkamaFinanceBot:
                 # First check exact match, then check case-insensitive match
                 is_portfolio = symbol in saved_portfolios
                 
+                # Additional check: avoid treating asset symbols as portfolios
+                # If the symbol looks like an asset symbol (contains .), 
+                # and there's no explicit portfolio indicator, treat it as asset
+                if is_portfolio and ('.' in symbol and 
+                    not any(indicator in symbol.upper() for indicator in ['PORTFOLIO_', 'PF_', '.PF', '.pf'])):
+                    # This looks like an asset symbol, not a portfolio
+                    is_portfolio = False
+                
                 if not is_portfolio:
                     # Check case-insensitive match for portfolio symbols
+                    # But only for symbols that look like portfolio names (not asset symbols)
                     for portfolio_key in saved_portfolios.keys():
                         if (symbol.lower() == portfolio_key.lower() or
                             symbol.upper() == portfolio_key.upper()):
-                            # Use the exact key from saved_portfolios
-                            symbol = portfolio_key
-                            is_portfolio = True
-                            break
+                            # Additional check: avoid treating asset symbols as portfolios
+                            if ('.' in symbol and 
+                                not any(indicator in symbol.upper() for indicator in ['PORTFOLIO_', 'PF_', '.PF', '.pf'])):
+                                # This looks like an asset symbol, not a portfolio
+                                is_portfolio = False
+                                break
+                            else:
+                                # Use the exact key from saved_portfolios
+                                symbol = portfolio_key
+                                is_portfolio = True
+                                break
                 
                 self.logger.info(f"Symbol '{symbol}' is_portfolio: {is_portfolio}, in saved_portfolios: {symbol in saved_portfolios}")
                 
