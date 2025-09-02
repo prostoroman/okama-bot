@@ -2559,8 +2559,8 @@ class OkamaFinanceBot:
                         self.logger.info(f"Processing portfolio {i} for drawdowns")
                         
                         # Get portfolio details from context
-                        assets = portfolio_context.get('assets', [])
-                        weights = portfolio_context.get('weights', [])
+                        assets = portfolio_context.get('portfolio_symbols', [])
+                        weights = portfolio_context.get('portfolio_weights', [])
                         symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
                         
                         if assets and weights and len(assets) == len(weights):
@@ -2623,14 +2623,14 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика просадок")
                 return
             
-            # Create chart using chart_styles
-            try:
-                # Combine all drawdowns into a DataFrame
-                drawdowns_df = pd.DataFrame(drawdowns_data)
-                
-                fig, ax = chart_styles.create_drawdowns_chart(
-                    drawdowns_df, list(drawdowns_data.keys())
-                )
+                            # Create chart using chart_styles
+                try:
+                    # Combine all drawdowns into a DataFrame
+                    drawdowns_df = pd.DataFrame(drawdowns_data)
+                    
+                    fig, ax = chart_styles.create_drawdowns_chart(
+                        drawdowns_df, list(drawdowns_data.keys()), currency
+                    )
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
@@ -2790,8 +2790,8 @@ class OkamaFinanceBot:
                         self.logger.info(f"Processing portfolio {i} for dividends")
                         
                         # Get portfolio details from context
-                        assets = portfolio_context.get('assets', [])
-                        weights = portfolio_context.get('weights', [])
+                        assets = portfolio_context.get('portfolio_symbols', [])
+                        weights = portfolio_context.get('portfolio_weights', [])
                         symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
                         
                         if assets and weights and len(assets) == len(weights):
@@ -2870,8 +2870,10 @@ class OkamaFinanceBot:
             
             # Create chart using chart_styles
             try:
+                # Convert Series to DataFrame for chart creation
+                dividends_df = pd.DataFrame(valid_dividends_data, index=[0]).T
                 fig, ax = chart_styles.create_dividend_yield_chart(
-                    pd.Series(valid_dividends_data), list(valid_dividends_data.keys())
+                    dividends_df, list(valid_dividends_data.keys())
                 )
                 
                 # Save chart to bytes with memory optimization
@@ -2969,8 +2971,8 @@ class OkamaFinanceBot:
                         self.logger.info(f"Processing portfolio {i} for correlation")
                         
                         # Get portfolio details from context
-                        assets = portfolio_context.get('assets', [])
-                        weights = portfolio_context.get('weights', [])
+                        assets = portfolio_context.get('portfolio_symbols', [])
+                        weights = portfolio_context.get('portfolio_weights', [])
                         symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
                         
                         if assets and weights and len(assets) == len(weights):
