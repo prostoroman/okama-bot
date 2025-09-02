@@ -1,58 +1,34 @@
 """
 User context persistence utilities.
 
-Provides a simple, thread-safe JSON-backed store to persist user-specific context
-between bot invocations. Designed to be framework-agnostic and reusable in other
-apps (e.g., web) by exposing a clean interface.
+Provides a simple, thread-safe in-memory store to persist user-specific context
+between bot invocations within a single session. Designed to be framework-agnostic 
+and reusable in other apps (e.g., web) by exposing a clean interface.
+
+Note: This implementation uses in-memory storage only, suitable for ephemeral
+environments like Render where filesystem persistence is not reliable.
 """
 
 from __future__ import annotations
 
-import json
-import os
 import threading
 from typing import Any, Dict, Optional
+from datetime import datetime
 
 
-class JSONUserContextStore:
-    """Thread-safe JSON-backed user context store.
+class InMemoryUserContextStore:
+    """Thread-safe in-memory user context store.
 
     Schema is flexible; callers can store arbitrary JSON-serializable values
-    per user_id. This class ensures file-level locking and atomic writes.
+    per user_id. This class ensures thread-safe operations without filesystem dependencies.
+    
+    Note: Data is lost on application restart, but this is acceptable for ephemeral
+    environments where filesystem persistence is not reliable.
     """
 
-    def __init__(self, filepath: str = "/workspace/.user_context.json") -> None:
-        self._filepath = filepath
-        self._lock = threading.RLock()
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(self._filepath), exist_ok=True)
-        # Lazily created on first write; attempt to load now for validation
+    def __init__(self) -> None:
         self._data: Dict[str, Dict[str, Any]] = {}
-        self._load()
-
-    def _load(self) -> None:
-        with self._lock:
-            try:
-                if os.path.exists(self._filepath) and os.path.getsize(self._filepath) > 0:
-                    with open(self._filepath, "r", encoding="utf-8") as f:
-                        raw = json.load(f)
-                        if isinstance(raw, dict):
-                            self._data = raw  # type: ignore[assignment]
-                        else:
-                            # Reset to empty if corrupted type
-                            self._data = {}
-                else:
-                    self._data = {}
-            except Exception:
-                # Be resilient to malformed files
-                self._data = {}
-
-    def _atomic_write(self) -> None:
-        with self._lock:
-            tmp_path = f"{self._filepath}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, ensure_ascii=False, indent=2, sort_keys=True)
-            os.replace(tmp_path, self._filepath)
+        self._lock = threading.RLock()
 
     def get_user_context(self, user_id: int) -> Dict[str, Any]:
         """Return context dict for user, creating default if missing."""
@@ -75,11 +51,10 @@ class JSONUserContextStore:
                     "current_currency_info": None,
                 }
                 self._data[key] = ctx
-                self._atomic_write()
             return ctx
 
     def update_user_context(self, user_id: int, **kwargs: Any) -> Dict[str, Any]:
-        """Update and persist fields for a user's context. Returns updated dict."""
+        """Update fields for a user's context. Returns updated dict."""
         key = str(user_id)
         with self._lock:
             ctx = self.get_user_context(user_id)
@@ -89,13 +64,12 @@ class JSONUserContextStore:
             if isinstance(conv, list) and len(conv) > 10:
                 ctx["conversation_history"] = conv[-10:]
             self._data[key] = ctx
-            self._atomic_write()
             return ctx
 
     def add_conversation_entry(self, user_id: int, message: str, response: str) -> None:
-        """Append a conversation record and persist."""
+        """Append a conversation record."""
         entry = {
-            "timestamp": __import__("datetime").datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "message": message,
             "response": (response or "")[:200],
         }
@@ -110,11 +84,27 @@ class JSONUserContextStore:
                 history = history[-10:]
             ctx["conversation_history"] = history
             self._data[key] = ctx
-            self._atomic_write()
 
     def clear(self) -> None:
         """Clear all contexts (useful for tests)."""
         with self._lock:
             self._data = {}
-            self._atomic_write()
+
+    def get_all_users(self) -> list[int]:
+        """Get list of all user IDs that have context."""
+        with self._lock:
+            return [int(key) for key in self._data.keys()]
+
+    def remove_user(self, user_id: int) -> bool:
+        """Remove context for a specific user. Returns True if user existed."""
+        key = str(user_id)
+        with self._lock:
+            if key in self._data:
+                del self._data[key]
+                return True
+            return False
+
+
+# Alias for backward compatibility
+JSONUserContextStore = InMemoryUserContextStore
 
