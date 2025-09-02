@@ -2936,9 +2936,30 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика дивидендной доходности")
                 return
             
+            # Validate dividends data before creating chart
+            validated_dividends_data = {}
+            for symbol, dividend_yield in dividends_data.items():
+                try:
+                    # Ensure dividend_yield is numeric
+                    if isinstance(dividend_yield, (int, float)) and dividend_yield >= 0:
+                        validated_dividends_data[symbol] = dividend_yield
+                        self.logger.info(f"Validated dividend yield for {symbol}: {dividend_yield}")
+                    else:
+                        self.logger.warning(f"Invalid dividend yield for {symbol}: {dividend_yield}, using 0")
+                        validated_dividends_data[symbol] = 0
+                except Exception as validation_error:
+                    self.logger.warning(f"Error validating dividend yield for {symbol}: {validation_error}, using 0")
+                    validated_dividends_data[symbol] = 0
+            
+            if not validated_dividends_data:
+                await self._send_callback_message(update, context, "❌ Не удалось создать валидные данные для графика дивидендной доходности")
+                return
+            
+            self.logger.info(f"Creating dividends chart with validated data: {validated_dividends_data}")
+            
             # Create dividends chart
             fig, ax = chart_styles.create_dividends_chart_enhanced(
-                data=pd.Series(dividends_data),
+                data=pd.Series(validated_dividends_data),
                 symbol="Смешанное сравнение",
                 currency=currency
             )
@@ -3080,13 +3101,17 @@ class OkamaFinanceBot:
                 asset_list_items.extend(asset_symbols)
             
             if len(asset_list_items) < 2:
+                self.logger.warning(f"Not enough asset_list_items for correlation matrix: {len(asset_list_items)}")
                 await self._send_callback_message(update, context, "❌ Недостаточно данных для создания корреляционной матрицы")
                 return
+            
+            self.logger.info(f"Creating AssetList for correlation with {len(asset_list_items)} items: {asset_list_items}")
             
             # Create AssetList for mixed comparison
             try:
                 import okama as ok
                 mixed_asset_list = ok.AssetList(asset_list_items)
+                self.logger.info(f"AssetList created successfully for correlation. Wealth indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
                 
                 # Calculate correlation data for all items
                 correlation_data = {}
@@ -3095,23 +3120,55 @@ class OkamaFinanceBot:
                 for i, portfolio_context in enumerate(portfolio_contexts):
                     if i < len(portfolio_data):
                         symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        self.logger.info(f"Processing portfolio {symbol} for correlation")
+                        
                         if symbol in mixed_asset_list.wealth_indexes.columns:
                             # Calculate returns for portfolio
                             wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
                             returns = wealth_series.pct_change().dropna()
                             if len(returns) > 0:
                                 correlation_data[symbol] = returns
-                                self.logger.info(f"Successfully created correlation data for {symbol}")
+                                self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol}: No returns data after pct_change")
+                        else:
+                            self.logger.warning(f"Portfolio {symbol} not found in wealth_indexes columns")
+                            # Try to find portfolio by different name patterns
+                            available_columns = list(mixed_asset_list.wealth_indexes.columns)
+                            matching_columns = [col for col in available_columns if symbol.lower() in col.lower() or col.lower() in symbol.lower()]
+                            if matching_columns:
+                                self.logger.info(f"Found potential matches for {symbol}: {matching_columns}")
+                                # Use the first matching column
+                                actual_symbol = matching_columns[0]
+                                wealth_series = mixed_asset_list.wealth_indexes[actual_symbol]
+                                returns = wealth_series.pct_change().dropna()
+                                if len(returns) > 0:
+                                    correlation_data[symbol] = returns  # Use original symbol for display
+                                    self.logger.info(f"Successfully created correlation data for {symbol} using {actual_symbol}: {len(returns)} points")
+                                else:
+                                    self.logger.warning(f"Portfolio {symbol} using {actual_symbol}: No returns data after pct_change")
+                            else:
+                                self.logger.error(f"Portfolio {symbol} not found and no matches available")
                 
                 # Process individual assets
                 for symbol in asset_symbols:
+                    self.logger.info(f"Processing asset {symbol} for correlation")
+                    
                     if symbol in mixed_asset_list.wealth_indexes.columns:
                         # Calculate returns for individual asset
                         wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                        self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                        
                         returns = wealth_series.pct_change().dropna()
                         if len(returns) > 0:
                             correlation_data[symbol] = returns
-                            self.logger.info(f"Successfully created correlation data for {symbol}")
+                            self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
+                        else:
+                            self.logger.warning(f"Asset {symbol}: No returns data after pct_change")
+                    else:
+                        self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
                 
             except Exception as asset_list_error:
                 self.logger.error(f"Error creating AssetList for mixed comparison correlation: {asset_list_error}")
