@@ -166,6 +166,52 @@ class OkamaFinanceBot:
             except Exception as final_error:
                 self.logger.error(f"Final error message sending failed: {final_error}")
         
+    def _check_existing_portfolio(self, symbols: List[str], weights: List[float], saved_portfolios: Dict) -> Optional[str]:
+        """
+        Проверяет, существует ли портфель с такими же активами и пропорциями.
+        
+        Args:
+            symbols: Список символов активов
+            weights: Список весов активов
+            saved_portfolios: Словарь сохраненных портфелей
+            
+        Returns:
+            Символ существующего портфеля или None, если не найден
+        """
+        # Нормализуем веса для сравнения (сумма = 1.0)
+        total_weight = sum(weights)
+        normalized_weights = [w / total_weight for w in weights]
+        
+        for portfolio_symbol, portfolio_info in saved_portfolios.items():
+            existing_symbols = portfolio_info.get('symbols', [])
+            existing_weights = portfolio_info.get('weights', [])
+            
+            # Проверяем количество активов
+            if len(symbols) != len(existing_symbols):
+                continue
+                
+            # Проверяем, что все символы совпадают (с учетом регистра)
+            if set(symbol.upper() for symbol in symbols) != set(symbol.upper() for symbol in existing_symbols):
+                continue
+                
+            # Нормализуем существующие веса
+            existing_total = sum(existing_weights)
+            if existing_total == 0:
+                continue
+            normalized_existing_weights = [w / existing_total for w in existing_weights]
+            
+            # Проверяем, что веса совпадают с точностью до 0.001
+            weight_matches = True
+            for i, (new_weight, existing_weight) in enumerate(zip(normalized_weights, normalized_existing_weights)):
+                if abs(new_weight - existing_weight) > 0.001:
+                    weight_matches = False
+                    break
+                    
+            if weight_matches:
+                return portfolio_symbol
+                
+        return None
+
     def _parse_portfolio_data(self, portfolio_data_str: str) -> tuple[list, list]:
         """Parse portfolio data string with weights (symbol:weight,symbol:weight)"""
         try:
@@ -869,14 +915,26 @@ class OkamaFinanceBot:
                 pass
             
             # Используем универсальный метод создания графика
-            return chart_styles.create_price_chart(
+            # Создаем pandas Series с датами и значениями
+            import pandas as pd
+            import io
+            if not isinstance(prices, pd.Series):
+                prices = pd.Series(values, index=dates)
+            
+            # Создаем график
+            fig, ax = chart_styles.create_price_chart(
+                data=prices,
                 symbol=symbol,
-                dates=dates,
-                values=values,
                 currency=currency,
-                chart_type='daily',
-                title_suffix='(1 год)'
+                period='1Y'
             )
+            
+            # Сохраняем в bytes
+            buf = io.BytesIO()
+            chart_styles.save_figure(fig, buf)
+            chart_styles.cleanup_figure(fig)
+            buf.seek(0)
+            return buf.getvalue()
             
         except Exception as e:
             self.logger.error(f"Error creating daily chart with styles for {symbol}: {e}")
@@ -904,14 +962,26 @@ class OkamaFinanceBot:
                 pass
             
             # Используем универсальный метод создания графика
-            return chart_styles.create_price_chart(
+            # Создаем pandas Series с датами и значениями
+            import pandas as pd
+            import io
+            if not isinstance(prices, pd.Series):
+                prices = pd.Series(values, index=dates)
+            
+            # Создаем график
+            fig, ax = chart_styles.create_price_chart(
+                data=prices,
                 symbol=symbol,
-                dates=dates,
-                values=values,
                 currency=currency,
-                chart_type='monthly',
-                title_suffix='(10 лет)'
+                period='10Y'
             )
+            
+            # Сохраняем в bytes
+            buf = io.BytesIO()
+            chart_styles.save_figure(fig, buf)
+            chart_styles.cleanup_figure(fig)
+            buf.seek(0)
+            return buf.getvalue()
             
         except Exception as e:
             self.logger.error(f"Error creating monthly chart with styles for {symbol}: {e}")
@@ -1574,6 +1644,7 @@ class OkamaFinanceBot:
                 
                 portfolio_list += "🔧 **Управление:**\n"
                 portfolio_list += "• Портфели автоматически сохраняются при создании\n"
+                portfolio_list += "• Портфели с одинаковыми активами и пропорциями не дублируются\n"
                 portfolio_list += "• Используйте символы для сравнения и анализа\n"
                 portfolio_list += "• Все данные сохраняются в контексте сессии\n\n"
                 
@@ -1605,7 +1676,8 @@ class OkamaFinanceBot:
                     "💡 Важные моменты:\n"
                     "• Доли должны суммироваться в 1.0 (100%)\n"
                     "• Базовая валюта определяется по первому символу\n"
-                    "• Поддерживаются все типы активов: акции, облигации, товары, индексы\n\n"
+                    "• Поддерживаются все типы активов: акции, облигации, товары, индексы\n"
+                    "• Портфели с одинаковыми активами и пропорциями не дублируются\n\n"
                     "Что вы получите:\n"
                     "✅ График накопленной доходности портфеля\n"
                     "✅ Таблица активов с весами\n"
@@ -1679,7 +1751,7 @@ class OkamaFinanceBot:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_message_safe(update, f"🔄 Создаю портфель: {', '.join(symbols)}...")
+            await self._send_message_safe(update, f"�� Создаю портфель: {', '.join(symbols)}...")
             
             # Create portfolio using okama
             
@@ -1963,8 +2035,26 @@ class OkamaFinanceBot:
                     portfolio_count=portfolio_count
                 )
                 
-                # Get current saved portfolios and add the new portfolio
+                # Get current saved portfolios and check for existing portfolio
                 saved_portfolios = user_context.get('saved_portfolios', {})
+                
+                # Check if portfolio with same assets and proportions already exists
+                existing_portfolio_symbol = self._check_existing_portfolio(symbols, weights, saved_portfolios)
+                
+                if existing_portfolio_symbol:
+                    # Use existing portfolio symbol and update the message
+                    portfolio_symbol = existing_portfolio_symbol
+                    portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
+                    portfolio_text += f"✅ Портфель с такими же активами и пропорциями уже существует\n"
+                    portfolio_text += f"💾 Используется ранее сохраненный портфель"
+                    
+                    # Update portfolio count without incrementing
+                    portfolio_count = user_context.get('portfolio_count', 0)
+                else:
+                    # Increment portfolio count for new portfolio
+                    portfolio_count = user_context.get('portfolio_count', 0) + 1
+                    portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
+                    portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
                 
                 # Get additional portfolio attributes for comprehensive storage
                 portfolio_attributes = {}
@@ -2159,13 +2249,15 @@ class OkamaFinanceBot:
                         }, ensure_ascii=False)
                     }
                 
-                # Add the new portfolio to saved portfolios
-                saved_portfolios[portfolio_symbol] = portfolio_attributes
+                # Add the new portfolio to saved portfolios only if it doesn't exist
+                if not existing_portfolio_symbol:
+                    saved_portfolios[portfolio_symbol] = portfolio_attributes
                 
                 # Update saved portfolios in context (single update)
                 self._update_user_context(
                     user_id,
-                    saved_portfolios=saved_portfolios
+                    saved_portfolios=saved_portfolios,
+                    portfolio_count=portfolio_count
                 )
                 
                 # Verify context was saved
@@ -4839,6 +4931,52 @@ class OkamaFinanceBot:
         # Start the bot
         logger.info("Starting Okama Finance Bot...")
         application.run_polling()
+
+    def _check_existing_portfolio(self, symbols: List[str], weights: List[float], saved_portfolios: Dict) -> Optional[str]:
+        """
+        Проверяет, существует ли портфель с такими же активами и пропорциями.
+        
+        Args:
+            symbols: Список символов активов
+            weights: Список весов активов
+            saved_portfolios: Словарь сохраненных портфелей
+            
+        Returns:
+            Символ существующего портфеля или None, если не найден
+        """
+        # Нормализуем веса для сравнения (сумма = 1.0)
+        total_weight = sum(weights)
+        normalized_weights = [w / total_weight for w in weights]
+        
+        for portfolio_symbol, portfolio_info in saved_portfolios.items():
+            existing_symbols = portfolio_info.get('symbols', [])
+            existing_weights = portfolio_info.get('weights', [])
+            
+            # Проверяем количество активов
+            if len(symbols) != len(existing_symbols):
+                continue
+                
+            # Проверяем, что все символы совпадают (с учетом регистра)
+            if set(symbol.upper() for symbol in symbols) != set(symbol.upper() for symbol in existing_symbols):
+                continue
+                
+            # Нормализуем существующие веса
+            existing_total = sum(existing_weights)
+            if existing_total == 0:
+                continue
+            normalized_existing_weights = [w / existing_total for w in existing_weights]
+            
+            # Проверяем, что веса совпадают с точностью до 0.001
+            weight_matches = True
+            for i, (new_weight, existing_weight) in enumerate(zip(normalized_weights, normalized_existing_weights)):
+                if abs(new_weight - existing_weight) > 0.001:
+                    weight_matches = False
+                    break
+                    
+            if weight_matches:
+                return portfolio_symbol
+                
+        return None
 
 if __name__ == "__main__":
     try:
