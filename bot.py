@@ -2594,7 +2594,9 @@ class OkamaFinanceBot:
             # Create AssetList for mixed comparison
             try:
                 import okama as ok
+                self.logger.info(f"Creating AssetList with items: {asset_list_items}")
                 mixed_asset_list = ok.AssetList(asset_list_items)
+                self.logger.info(f"AssetList created successfully. Wealth indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
                 
                 # Calculate drawdowns for all items
                 drawdowns_data = {}
@@ -2603,29 +2605,62 @@ class OkamaFinanceBot:
                 for i, portfolio_context in enumerate(portfolio_contexts):
                     if i < len(portfolio_data):
                         symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        self.logger.info(f"Checking portfolio {symbol} in wealth_indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
+                        
                         if symbol in mixed_asset_list.wealth_indexes.columns:
                             # Calculate drawdowns for portfolio
                             wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
                             returns = wealth_series.pct_change().dropna()
                             if len(returns) > 0:
                                 cumulative = (1 + returns).cumprod()
                                 running_max = cumulative.expanding().max()
                                 drawdowns = (cumulative - running_max) / running_max
                                 drawdowns_data[symbol] = drawdowns
-                                self.logger.info(f"Successfully created drawdowns for {symbol}")
+                                self.logger.info(f"Successfully created drawdowns for {symbol}: {len(drawdowns)} points")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol}: No returns data after pct_change")
+                        else:
+                            self.logger.warning(f"Portfolio {symbol} not found in wealth_indexes columns")
+                            # Try to find portfolio by different name patterns
+                            available_columns = list(mixed_asset_list.wealth_indexes.columns)
+                            matching_columns = [col for col in available_columns if symbol.lower() in col.lower() or col.lower() in symbol.lower()]
+                            if matching_columns:
+                                self.logger.info(f"Found potential matches for {symbol}: {matching_columns}")
+                                # Use the first matching column
+                                actual_symbol = matching_columns[0]
+                                wealth_series = mixed_asset_list.wealth_indexes[actual_symbol]
+                                returns = wealth_series.pct_change().dropna()
+                                if len(returns) > 0:
+                                    cumulative = (1 + returns).cumprod()
+                                    running_max = cumulative.expanding().max()
+                                    drawdowns = (cumulative - running_max) / running_max
+                                    drawdowns_data[symbol] = drawdowns  # Use original symbol for display
+                                    self.logger.info(f"Successfully created drawdowns for {symbol} using {actual_symbol}: {len(drawdowns)} points")
+                            else:
+                                self.logger.error(f"Portfolio {symbol} not found and no matches available")
                 
                 # Process individual assets
                 for symbol in asset_symbols:
+                    self.logger.info(f"Checking asset {symbol} in wealth_indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
+                    
                     if symbol in mixed_asset_list.wealth_indexes.columns:
                         # Calculate drawdowns for individual asset
                         wealth_series = mixed_asset_list.wealth_indexes[symbol]
+                        self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                        
                         returns = wealth_series.pct_change().dropna()
                         if len(returns) > 0:
                             cumulative = (1 + returns).cumprod()
                             running_max = cumulative.expanding().max()
                             drawdowns = (cumulative - running_max) / running_max
                             drawdowns_data[symbol] = drawdowns
-                            self.logger.info(f"Successfully created drawdowns for {symbol}")
+                            self.logger.info(f"Successfully created drawdowns for {symbol}: {len(drawdowns)} points")
+                        else:
+                            self.logger.warning(f"Asset {symbol}: No returns data after pct_change")
+                    else:
+                        self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
                 
             except Exception as asset_list_error:
                 self.logger.error(f"Error creating AssetList for mixed comparison: {asset_list_error}")
