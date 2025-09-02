@@ -734,7 +734,12 @@ class AssetService:
             if hasattr(asset, 'close_monthly'):
                 monthly_data = asset.close_monthly
 
-            if adj_close_data is not None and len(adj_close_data) > 0:
+            if (
+                adj_close_data is not None
+                and hasattr(adj_close_data, 'iloc')
+                and hasattr(adj_close_data, 'index')
+                and len(adj_close_data) > 0
+            ):
                 # Daily data - always show 1 year for better detail
                 filtered_adj_close = self._filter_data_by_period(adj_close_data, '1Y')
                 adj_close_chart = self.create_price_chart(
@@ -755,7 +760,12 @@ class AssetService:
                         'max_price': float(filtered_adj_close.max())
                     }
             
-            if monthly_data is not None and len(monthly_data) > 0:
+            if (
+                monthly_data is not None
+                and hasattr(monthly_data, 'iloc')
+                and hasattr(monthly_data, 'index')
+                and len(monthly_data) > 0
+            ):
                 # Monthly data - always show 10 years for long-term trends
                 filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
                 monthly_chart = self.create_price_chart(
@@ -786,9 +796,17 @@ class AssetService:
                 
                 if hasattr(asset, 'price') and asset.price is not None:
                     fallback_data = asset.price
-                    if hasattr(fallback_data, '__len__') and len(fallback_data) > 5:
+                    if (
+                        not isinstance(fallback_data, (int, float))
+                        and hasattr(fallback_data, '__len__')
+                        and len(fallback_data) > 5
+                    ):
                         # If it's daily data, show 1 year
-                        if hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq):
+                        if (
+                            hasattr(fallback_data, 'index')
+                            and hasattr(fallback_data.index, 'freq')
+                            and 'M' not in str(fallback_data.index.freq)
+                        ):
                             fallback_period = '1Y'
                         else:
                             # If it's monthly data, show 10 years
@@ -852,22 +870,42 @@ class AssetService:
             }
             
             # Add actual price data for the bot to use
-            if adj_close_data is not None and len(adj_close_data) > 0:
+            if (
+                adj_close_data is not None
+                and hasattr(adj_close_data, 'iloc')
+                and hasattr(adj_close_data, 'index')
+                and len(adj_close_data) > 0
+            ):
                 # Use daily data for the bot's chart creation
                 filtered_adj_close = self._filter_data_by_period(adj_close_data, '1Y')
                 response_data['prices'] = filtered_adj_close
-            elif monthly_data is not None and len(monthly_data) > 0:
+            elif (
+                monthly_data is not None
+                and hasattr(monthly_data, 'iloc')
+                and hasattr(monthly_data, 'index')
+                and len(monthly_data) > 0
+            ):
                 # Fallback to monthly data if no daily data
                 filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
                 response_data['prices'] = filtered_monthly
-            elif moex_daily_series is not None and len(moex_daily_series) > 0:
+            elif (
+                moex_daily_series is not None
+                and hasattr(moex_daily_series, '__len__')
+                and len(moex_daily_series) > 0
+            ):
                 # Use MOEX daily series if available
                 response_data['prices'] = moex_daily_series
             elif 'fallback' in price_data_info:
                 # Use fallback data if available
                 fallback_data = asset.price
-                if hasattr(fallback_data, '__len__') and len(fallback_data) > 5:
-                    fallback_period = '1Y' if hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq) else '10Y'
+                if (
+                    not isinstance(fallback_data, (int, float))
+                    and hasattr(fallback_data, '__len__')
+                    and len(fallback_data) > 5
+                ):
+                    fallback_period = '1Y' if (
+                        hasattr(fallback_data, 'index') and hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq)
+                    ) else '10Y'
                     filtered_fallback = self._filter_data_by_period(fallback_data, fallback_period)
                     response_data['prices'] = filtered_fallback
             
