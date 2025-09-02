@@ -4116,7 +4116,7 @@ class OkamaFinanceBot:
                     title=f'Прогноз Monte Carlo\n{", ".join(symbols)}',
                     ylabel='Накопленная доходность',
                     grid=True,
-                    legend=True,
+                    legend=False,
                     copyright=True
                 )
             
