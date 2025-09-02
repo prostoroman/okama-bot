@@ -1546,16 +1546,34 @@ class OkamaFinanceBot:
                 caption += f"📅 Период: полный доступный период данных\n\n"
                 caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
                 
-                # Create keyboard with analysis buttons - use proper callback data format
-                keyboard = [
-                    [
+                # Create keyboard with analysis buttons conditionally
+                # Determine composition: portfolios vs assets
+                try:
+                    has_portfolios_only = all(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
+                    has_assets_only = all(not isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
+                    is_mixed_comparison = not (has_portfolios_only or has_assets_only)
+                except Exception:
+                    # Safe fallback
+                    has_portfolios_only = False
+                    is_mixed_comparison = False
+
+                keyboard = []
+
+                # Hide these buttons for mixed comparisons (portfolio + asset)
+                if not is_mixed_comparison:
+                    keyboard.append([
                         InlineKeyboardButton("📉 Drawdowns", callback_data="drawdowns_compare"),
                         InlineKeyboardButton("💰 Dividends", callback_data="dividends_compare")
-                    ],
-                    [
+                    ])
+                    keyboard.append([
                         InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
-                    ]
-                ]
+                    ])
+
+                # Add Risk / Return for portfolio-only comparisons
+                if has_portfolios_only:
+                    keyboard.append([
+                        InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
+                    ])
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -2561,6 +2579,9 @@ class OkamaFinanceBot:
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
                 await self._handle_portfolio_compare_assets_button(update, context, symbols)
+            elif callback_data == 'risk_return_compare':
+                self.logger.info("Risk / Return button clicked")
+                await self._handle_risk_return_compare_button(update, context)
             elif callback_data.startswith('namespace_'):
                 namespace = callback_data.replace('namespace_', '')
                 self.logger.info(f"Namespace button clicked for: {namespace}")
@@ -2579,6 +2600,112 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error in button callback: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_risk_return_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle Risk / Return (CAGR) button for portfolio-only comparisons"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            symbols = user_context.get('current_symbols', [])
+            currency = user_context.get('current_currency', 'USD')
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+
+            # Validate that comparison contains only portfolios
+            if not expanded_symbols or any(not isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
+                await self._send_callback_message(update, context, "ℹ️ Кнопка доступна только при сравнении портфелей")
+                return
+
+            await self._send_callback_message(update, context, "📊 Создаю график Risk / Return (CAGR) для портфелей…")
+
+            # Recreate portfolios from context
+            portfolios = []
+            portfolio_names = []
+            for pctx in portfolio_contexts:
+                try:
+                    p = self._ok_portfolio(
+                        pctx.get('portfolio_symbols', []),
+                        weights=pctx.get('portfolio_weights', []),
+                        currency=pctx.get('portfolio_currency') or currency,
+                    )
+                    portfolios.append(p)
+                    portfolio_names.append(pctx.get('symbol', 'Portfolio'))
+                except Exception as pe:
+                    self.logger.warning(f"Failed to recreate portfolio for Risk/Return: {pe}")
+
+            if not portfolios:
+                await self._send_callback_message(update, context, "❌ Не удалось восстановить портфели для построения графика")
+                return
+
+            # Try okama built-in plot first
+            img_buffer = None
+            try:
+                asset_list = self._ok_asset_list(portfolios, currency=currency)
+                # okama plotting
+                asset_list.plot_assets(kind="cagr")
+                current_fig = plt.gcf()
+                # Optional styling
+                if current_fig.axes:
+                    ax = current_fig.axes[0]
+                    chart_styles.apply_styling(
+                        ax,
+                        title=f"Risk / Return: CAGR\n{', '.join(portfolio_names)}",
+                        ylabel='CAGR (%)',
+                        grid=True,
+                        legend=False,
+                        copyright=True
+                    )
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(current_fig, img_buffer)
+                img_buffer.seek(0)
+                chart_styles.cleanup_figure(current_fig)
+            except Exception as plot_error:
+                # Fallback: compute CAGR manually and plot as bar chart
+                self.logger.warning(f"Risk/Return okama plot failed, falling back to manual bar: {plot_error}")
+                try:
+                    cagr_values = {}
+                    for p, name in zip(portfolios, portfolio_names):
+                        try:
+                            cagr = p.get_cagr()
+                            if hasattr(cagr, 'iloc'):
+                                cagr_val = float(cagr.iloc[0])
+                            elif hasattr(cagr, '__iter__') and not isinstance(cagr, str):
+                                cagr_val = float(list(cagr)[0])
+                            else:
+                                cagr_val = float(cagr)
+                        except Exception:
+                            # Manual CAGR from wealth index as last/first ^ (1/n) - 1
+                            wi = p.wealth_index.dropna()
+                            periods = len(wi)
+                            cagr_val = ((wi.iloc[-1] / wi.iloc[0]) ** (12.0 / max(periods, 1))) - 1 if periods > 1 else 0.0
+                        cagr_values[name] = cagr_val
+
+                    cagr_df = pd.DataFrame.from_dict(cagr_values, orient='index')
+                    cagr_df.columns = ['CAGR']
+                    fig, ax = chart_styles.create_bar_chart(
+                        cagr_df['CAGR'],
+                        title=f"Risk / Return: CAGR\n{', '.join(portfolio_names)}",
+                        ylabel='CAGR (%)'
+                    )
+                    img_buffer = io.BytesIO()
+                    chart_styles.save_figure(fig, img_buffer)
+                    img_buffer.seek(0)
+                    chart_styles.cleanup_figure(fig)
+                except Exception as fallback_error:
+                    self.logger.error(f"Risk/Return manual bar failed: {fallback_error}")
+                    await self._send_callback_message(update, context, "❌ Не удалось построить график Risk / Return (CAGR)")
+                    return
+
+            # Send image
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption("📊 Risk / Return (CAGR) для портфельного сравнения")
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error handling Risk / Return button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при построении Risk / Return: {str(e)}")
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
