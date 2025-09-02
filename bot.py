@@ -1001,6 +1001,79 @@ class OkamaFinanceBot:
             self.logger.error(f"Error creating daily chart with styles for {symbol}: {e}")
             return None
 
+    def _filter_data_by_period(self, data, period: str):
+        """
+        Filter data by specified period
+        
+        Args:
+            data: Pandas Series with price data
+            period: Time period (e.g., '1Y', '2Y', '5Y', 'MAX')
+            
+        Returns:
+            Filtered data series
+        """
+        try:
+            if period == 'MAX':
+                return data
+            
+            # Parse period
+            import re
+            match = re.match(r'(\d+)([YMD])', period.upper())
+            if not match:
+                # Default period depends on data type
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - default to 10 years
+                    return data.tail(120)  # Last 120 months (10 years)
+                else:
+                    # Daily data - default to 1 year
+                    return data.tail(365)  # Last 365 days (1 year)
+            
+            number, unit = match.groups()
+            number = int(number)
+            
+            # Calculate how many data points to take
+            if unit == 'Y':
+                # For monthly data, take last N*12 months
+                # For daily data, take last N*365 days
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data
+                    points_to_take = number * 12
+                else:
+                    # Daily data
+                    points_to_take = number * 365
+            elif unit == 'M':
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data
+                    points_to_take = number
+                else:
+                    # Daily data
+                    points_to_take = number * 30
+            elif unit == 'D':
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - take at least 1 month
+                    points_to_take = max(1, number // 30)
+                else:
+                    # Daily data
+                    points_to_take = number
+            else:
+                # Default depends on data type
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - default to 10 years
+                    points_to_take = 120
+                else:
+                    # Daily data - default to 1 year
+                    points_to_take = 365
+            
+            # Take last N points
+            if len(data) > points_to_take:
+                return data.tail(points_to_take)
+            else:
+                return data
+                
+        except Exception as e:
+            self.logger.warning(f"Error filtering data by period {period}: {e}")
+            return data
+
     def _create_monthly_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
         """Создать месячный график с централизованными стилями"""
         try:
@@ -3459,27 +3532,37 @@ class OkamaFinanceBot:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
                 return None
             
-            # Получаем данные о ценах
-            if 'prices' in price_history and price_history['prices'] is not None:
-                prices = price_history['prices']
-                currency = price_history.get('currency', 'USD')
-                
-                # Создаем график с использованием централизованных стилей
-                return self._create_monthly_chart_with_styles(symbol, prices, currency)
-            
-            # Fallback к старому методу если нет данных о ценах
+            # Сначала проверяем наличие готового месячного графика
             if 'charts' in price_history and price_history['charts']:
                 charts = price_history['charts']
                 if 'close_monthly' in charts and charts['close_monthly']:
                     chart_data = charts['close_monthly']
                     if isinstance(chart_data, bytes) and len(chart_data) > 0:
-                        # Копирайт уже добавлен в готовом изображении
+                        self.logger.info(f"Using existing monthly chart for {symbol}")
                         return chart_data
+            
+            # Если готового графика нет, создаем новый из месячных данных
+            if 'price_data' in price_history and 'close_monthly' in price_history['price_data']:
+                monthly_info = price_history['price_data']['close_monthly']
+                currency = price_history.get('currency', 'USD')
                 
+                # Получаем месячные данные из asset
+                try:
+                    asset = ok.Asset(symbol)
+                    monthly_data = asset.close_monthly
+                    if monthly_data is not None and len(monthly_data) > 0:
+                        # Фильтруем данные за 10 лет
+                        filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
+                        return self._create_monthly_chart_with_styles(symbol, filtered_monthly, currency)
+                except Exception as asset_error:
+                    self.logger.warning(f"Could not get monthly data from asset: {asset_error}")
+            
+            # Fallback к любому доступному графику
+            if 'charts' in price_history and price_history['charts']:
+                charts = price_history['charts']
                 for chart_key, chart_data in charts.items():
                     if chart_data and isinstance(chart_data, bytes) and len(chart_data) > 0:
                         self.logger.info(f"Using fallback chart: {chart_key} for {symbol}")
-                        # Копирайт уже добавлен в готовом изображении
                         return chart_data
             
             self.logger.warning(f"No valid charts found for {symbol}")
