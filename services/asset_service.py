@@ -825,6 +825,23 @@ class AssetService:
                 'price_data': price_data_info
             }
             
+            # Add actual price data for the bot to use
+            if adj_close_data is not None and len(adj_close_data) > 0:
+                # Use daily data for the bot's chart creation
+                filtered_adj_close = self._filter_data_by_period(adj_close_data, '1Y')
+                response_data['prices'] = filtered_adj_close
+            elif monthly_data is not None and len(monthly_data) > 0:
+                # Fallback to monthly data if no daily data
+                filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
+                response_data['prices'] = filtered_monthly
+            elif 'fallback' in price_data_info:
+                # Use fallback data if available
+                fallback_data = asset.price
+                if hasattr(fallback_data, '__len__') and len(fallback_data) > 5:
+                    fallback_period = '1Y' if hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq) else '10Y'
+                    filtered_fallback = self._filter_data_by_period(fallback_data, fallback_period)
+                    response_data['prices'] = filtered_fallback
+            
             return response_data
                 
         except Exception as e:
