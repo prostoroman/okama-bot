@@ -249,7 +249,9 @@ class ChartStyles:
         else:
             ax.plot(data.index, data.values, linewidth=self.lines['width'], alpha=self.lines['alpha'])
         
-        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, legend=False)
+        # Extract copyright parameter from kwargs and pass to apply_styling
+        copyright_param = kwargs.pop('copyright', True)
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, legend=False, copyright=copyright_param)
         return fig, ax
     
     def create_bar_chart(self, data, title, ylabel, xlabel='', bar_color=None, **kwargs):
@@ -302,7 +304,9 @@ class ChartStyles:
         """Создать график цен актива"""
         title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
         ylabel = f'Цена ({currency})' if currency else 'Цена'
-        return self.create_line_chart(data, title, ylabel, copyright=False, **kwargs)
+        # Pass copyright=False through kwargs to avoid duplicate parameter error
+        kwargs['copyright'] = False
+        return self.create_line_chart(data, title, ylabel, **kwargs)
     
     def create_dividends_chart(self, data, symbol, currency, **kwargs):
         """Создать график дивидендов"""
