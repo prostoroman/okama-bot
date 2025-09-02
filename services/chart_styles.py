@@ -15,13 +15,6 @@ from scipy.interpolate import make_interp_spline
 import logging
 from datetime import datetime
 import pandas as pd
-import tempfile
-import os
-
-# Set matplotlib cache directory to avoid permission issues
-matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
-os.makedirs(matplotlib_cache_dir, exist_ok=True)
-mpl.rcParams['cache_dir'] = matplotlib_cache_dir
 
 logger = logging.getLogger(__name__)
 
