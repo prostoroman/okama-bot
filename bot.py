@@ -1703,11 +1703,10 @@ class OkamaFinanceBot:
                         InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
                     ])
 
-                # Add Risk / Return for mixed comparisons (portfolios + assets)
-                if is_mixed_comparison:
-                    keyboard.append([
-                        InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
-                    ])
+                # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
+                keyboard.append([
+                    InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
+                ])
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -2736,7 +2735,7 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, f"❌ Ошибка при обработке кнопки: {str(e)}")
 
     async def _handle_risk_return_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle Risk / Return (CAGR) button for mixed comparisons"""
+        """Handle Risk / Return (CAGR) button for all comparison types"""
         try:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
@@ -2745,16 +2744,18 @@ class OkamaFinanceBot:
             expanded_symbols = user_context.get('expanded_symbols', [])
             portfolio_contexts = user_context.get('portfolio_contexts', [])
 
-            # Validate that this is a mixed comparison
-            if not expanded_symbols or not portfolio_contexts:
-                await self._send_callback_message(update, context, "ℹ️ Кнопка доступна только при смешанном сравнении (портфели + активы)")
+            # Validate that we have symbols to compare
+            if not expanded_symbols:
+                await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_callback_message(update, context, "📊 Создаю график Risk / Return (CAGR) для смешанного сравнения…")
+            await self._send_callback_message(update, context, "📊 Создаю график Risk / Return (CAGR)…")
 
-            # Recreate portfolios from context
-            portfolios = []
-            portfolio_names = []
+            # Prepare assets for comparison
+            asset_list_items = []
+            asset_names = []
+            
+            # Add portfolios from context
             for pctx in portfolio_contexts:
                 try:
                     p = self._ok_portfolio(
@@ -2762,20 +2763,25 @@ class OkamaFinanceBot:
                         weights=pctx.get('portfolio_weights', []),
                         currency=pctx.get('portfolio_currency') or currency,
                     )
-                    portfolios.append(p)
-                    portfolio_names.append(pctx.get('symbol', 'Portfolio'))
+                    asset_list_items.append(p)
+                    asset_names.append(pctx.get('symbol', 'Portfolio'))
                 except Exception as pe:
                     self.logger.warning(f"Failed to recreate portfolio for Risk/Return: {pe}")
+            
+            # Add individual assets
+            for symbol in symbols:
+                if symbol not in [pctx.get('symbol', '') for pctx in portfolio_contexts]:
+                    # This is an individual asset, not a portfolio
+                    asset_list_items.append(symbol)
+                    asset_names.append(symbol)
 
-            if not portfolios:
-                await self._send_callback_message(update, context, "❌ Не удалось восстановить портфели для построения графика")
+            if not asset_list_items:
+                await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для построения графика")
                 return
 
-            # Create AssetList with SP500TR.INDX and portfolios
+            # Create AssetList with selected assets/portfolios
             img_buffer = None
             try:
-                # Create list with SP500TR.INDX and portfolios
-                asset_list_items = ["SP500TR.INDX"] + portfolios
                 asset_list = self._ok_asset_list(asset_list_items, currency=currency)
                 
                 # okama plotting
@@ -2787,7 +2793,7 @@ class OkamaFinanceBot:
                     ax = current_fig.axes[0]
                     chart_styles.apply_styling(
                         ax,
-                        title=f"Risk / Return: CAGR\nSP500TR.INDX vs {', '.join(portfolio_names)}",
+                        title=f"Risk / Return: CAGR\n{', '.join(asset_names)}",
                         ylabel='CAGR (%)',
                         grid=True,
                         legend=True,
@@ -2803,25 +2809,18 @@ class OkamaFinanceBot:
                 try:
                     cagr_values = {}
                     
-                    # Add SP500TR.INDX CAGR
-                    try:
-                        sp500 = self._ok_asset("SP500TR.INDX")
-                        sp500_cagr = sp500.get_cagr()
-                        if hasattr(sp500_cagr, 'iloc'):
-                            sp500_val = float(sp500_cagr.iloc[0])
-                        elif hasattr(sp500_cagr, '__iter__') and not isinstance(sp500_cagr, str):
-                            sp500_val = float(list(sp500_cagr)[0])
-                        else:
-                            sp500_val = float(sp500_cagr)
-                        cagr_values["SP500TR.INDX"] = sp500_val
-                    except Exception as e:
-                        self.logger.warning(f"Failed to get SP500TR.INDX CAGR: {e}")
-                        cagr_values["SP500TR.INDX"] = 0.0
-                    
-                    # Add portfolio CAGRs
-                    for p, name in zip(portfolios, portfolio_names):
+                    # Calculate CAGR for each asset
+                    for i, asset in enumerate(asset_list_items):
+                        asset_name = asset_names[i]
                         try:
-                            cagr = p.get_cagr()
+                            if isinstance(asset, str):
+                                # Individual asset
+                                asset_obj = self._ok_asset(asset)
+                                cagr = asset_obj.get_cagr()
+                            else:
+                                # Portfolio
+                                cagr = asset.get_cagr()
+                            
                             if hasattr(cagr, 'iloc'):
                                 cagr_val = float(cagr.iloc[0])
                             elif hasattr(cagr, '__iter__') and not isinstance(cagr, str):
@@ -2829,17 +2828,27 @@ class OkamaFinanceBot:
                             else:
                                 cagr_val = float(cagr)
                         except Exception:
-                            # Manual CAGR from wealth index as last/first ^ (1/n) - 1
-                            wi = p.wealth_index.dropna()
-                            periods = len(wi)
-                            cagr_val = ((wi.iloc[-1] / wi.iloc[0]) ** (12.0 / max(periods, 1))) - 1 if periods > 1 else 0.0
-                        cagr_values[name] = cagr_val
+                            # Manual CAGR calculation
+                            try:
+                                if isinstance(asset, str):
+                                    asset_obj = self._ok_asset(asset)
+                                    wealth_index = asset_obj.wealth_index
+                                else:
+                                    wealth_index = asset.wealth_index
+                                
+                                wi = wealth_index.dropna()
+                                periods = len(wi)
+                                cagr_val = ((wi.iloc[-1] / wi.iloc[0]) ** (12.0 / max(periods, 1))) - 1 if periods > 1 else 0.0
+                            except Exception:
+                                cagr_val = 0.0
+                        
+                        cagr_values[asset_name] = cagr_val
 
                     cagr_df = pd.DataFrame.from_dict(cagr_values, orient='index')
                     cagr_df.columns = ['CAGR']
                     fig, ax = chart_styles.create_bar_chart(
                         cagr_df['CAGR'],
-                        title=f"Risk / Return: CAGR\nSP500TR.INDX vs {', '.join(portfolio_names)}",
+                        title=f"Risk / Return: CAGR\n{', '.join(asset_names)}",
                         ylabel='CAGR (%)'
                     )
                     img_buffer = io.BytesIO()
@@ -2855,7 +2864,7 @@ class OkamaFinanceBot:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption("📊 Risk / Return (CAGR) для смешанного сравнения: SP500TR.INDX vs портфели")
+                caption=self._truncate_caption(f"📊 Risk / Return (CAGR) для сравнения: {', '.join(asset_names)}")
             )
 
         except Exception as e:
