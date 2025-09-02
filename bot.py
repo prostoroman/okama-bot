@@ -2841,23 +2841,91 @@ class OkamaFinanceBot:
                 # Create dividends data for both portfolios and assets
                 dividends_data = {}
                 
-                # Process portfolios
-                for i, portfolio_context in enumerate(portfolio_contexts):
-                    if i < len(portfolio_data):
-                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                # Check if dividend_yields attribute exists
+                if hasattr(mixed_asset_list, 'dividend_yields'):
+                    self.logger.info(f"AssetList has dividend_yields attribute. Columns: {list(mixed_asset_list.dividend_yields.columns)}")
+                    
+                    # Process portfolios
+                    for i, portfolio_context in enumerate(portfolio_contexts):
+                        if i < len(portfolio_data):
+                            symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                            if symbol in mixed_asset_list.dividend_yields.columns:
+                                # Get dividend yield for portfolio
+                                dividend_yield = mixed_asset_list.dividend_yields[symbol].iloc[-1] if not mixed_asset_list.dividend_yields[symbol].empty else 0
+                                dividends_data[symbol] = dividend_yield
+                                self.logger.info(f"Successfully got dividend yield for {symbol}: {dividend_yield}")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol} not found in dividend_yields columns")
+                    
+                    # Process individual assets
+                    for symbol in asset_symbols:
                         if symbol in mixed_asset_list.dividend_yields.columns:
-                            # Get dividend yield for portfolio
+                            # Get dividend yield for individual asset
                             dividend_yield = mixed_asset_list.dividend_yields[symbol].iloc[-1] if not mixed_asset_list.dividend_yields[symbol].empty else 0
                             dividends_data[symbol] = dividend_yield
                             self.logger.info(f"Successfully got dividend yield for {symbol}: {dividend_yield}")
-                
-                # Process individual assets
-                for symbol in asset_symbols:
-                    if symbol in mixed_asset_list.dividend_yields.columns:
-                        # Get dividend yield for individual asset
-                        dividend_yield = mixed_asset_list.dividend_yields[symbol].iloc[-1] if not mixed_asset_list.dividend_yields[symbol].empty else 0
-                        dividends_data[symbol] = dividend_yield
-                        self.logger.info(f"Successfully got dividend yield for {symbol}: {dividend_yield}")
+                        else:
+                            self.logger.warning(f"Asset {symbol} not found in dividend_yields columns")
+                else:
+                    self.logger.warning("AssetList does not have dividend_yields attribute. Using alternative approach.")
+                    
+                    # Alternative approach: calculate weighted dividend yield for portfolios
+                    for i, portfolio_context in enumerate(portfolio_contexts):
+                        if i < len(portfolio_data):
+                            try:
+                                symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                                assets = portfolio_context.get('assets', [])
+                                weights = portfolio_context.get('weights', [])
+                                
+                                if assets and weights and len(assets) == len(weights):
+                                    # Create separate AssetList for portfolio assets
+                                    portfolio_asset_list = self._ok_asset_list(assets, currency=currency)
+                                    
+                                    if hasattr(portfolio_asset_list, 'dividend_yields'):
+                                        # Calculate weighted dividend yield
+                                        total_dividend_yield = 0
+                                        for asset, weight in zip(assets, weights):
+                                            if asset in portfolio_asset_list.dividend_yields.columns:
+                                                dividend_yield = portfolio_asset_list.dividend_yields[asset].iloc[-1] if not portfolio_asset_list.dividend_yields[asset].empty else 0
+                                                total_dividend_yield += dividend_yield * weight
+                                                self.logger.info(f"Asset {asset}: dividend_yield={dividend_yield}, weight={weight}")
+                                            else:
+                                                self.logger.warning(f"Asset {asset} not found in dividend_yields columns")
+                                        
+                                        dividends_data[symbol] = total_dividend_yield
+                                        self.logger.info(f"Successfully calculated weighted dividend yield for {symbol}: {total_dividend_yield}")
+                                    else:
+                                        self.logger.warning(f"Portfolio asset list does not have dividend_yields attribute for {symbol}")
+                                        dividends_data[symbol] = 0  # Default value
+                                else:
+                                    self.logger.warning(f"Portfolio {symbol} missing valid assets/weights data")
+                                    dividends_data[symbol] = 0  # Default value
+                            except Exception as portfolio_error:
+                                self.logger.warning(f"Could not calculate dividend yield for portfolio {symbol}: {portfolio_error}")
+                                dividends_data[symbol] = 0  # Default value
+                    
+                    # Process individual assets separately
+                    if asset_symbols:
+                        try:
+                            asset_asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                            
+                            if hasattr(asset_asset_list, 'dividend_yields'):
+                                for symbol in asset_symbols:
+                                    if symbol in asset_asset_list.dividend_yields.columns:
+                                        dividend_yield = asset_asset_list.dividend_yields[symbol].iloc[-1] if not asset_asset_list.dividend_yields[symbol].empty else 0
+                                        dividends_data[symbol] = dividend_yield
+                                        self.logger.info(f"Successfully got dividend yield for {symbol}: {dividend_yield}")
+                                    else:
+                                        self.logger.warning(f"Asset {symbol} not found in dividend_yields columns")
+                                        dividends_data[symbol] = 0  # Default value
+                            else:
+                                self.logger.warning("Asset list does not have dividend_yields attribute")
+                                for symbol in asset_symbols:
+                                    dividends_data[symbol] = 0  # Default value
+                        except Exception as asset_error:
+                            self.logger.warning(f"Could not process individual assets: {asset_error}")
+                            for symbol in asset_symbols:
+                                dividends_data[symbol] = 0  # Default value
                 
             except Exception as asset_list_error:
                 self.logger.error(f"Error creating AssetList for mixed comparison dividends: {asset_list_error}")
