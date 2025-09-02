@@ -2655,47 +2655,6 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error in mixed comparison drawdowns chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
-                            matching_columns = [col for col in available_columns if symbol.lower() in col.lower() or col.lower() in symbol.lower()]
-                            if matching_columns:
-                                self.logger.info(f"Found potential matches for {symbol}: {matching_columns}")
-                                # Use the first matching column
-                                actual_symbol = matching_columns[0]
-                                wealth_series = mixed_asset_list.wealth_indexes[actual_symbol]
-                                returns = wealth_series.pct_change().dropna()
-                                if len(returns) > 0:
-                                    cumulative = (1 + returns).cumprod()
-                                    running_max = cumulative.expanding().max()
-                                    drawdowns = (cumulative - running_max) / running_max
-                                    drawdowns_data[symbol] = drawdowns  # Use original symbol for display
-                                    self.logger.info(f"Successfully created drawdowns for {symbol} using {actual_symbol}: {len(drawdowns)} points")
-                            else:
-                                self.logger.error(f"Portfolio {symbol} not found and no matches available")
-                
-                # Process individual assets
-                for symbol in asset_symbols:
-                    self.logger.info(f"Checking asset {symbol} in wealth_indexes columns: {list(mixed_asset_list.wealth_indexes.columns)}")
-                    
-                    if symbol in mixed_asset_list.wealth_indexes.columns:
-                        # Calculate drawdowns for individual asset
-                        wealth_series = mixed_asset_list.wealth_indexes[symbol]
-                        self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
-                        
-                        returns = wealth_series.pct_change().dropna()
-                        if len(returns) > 0:
-                            cumulative = (1 + returns).cumprod()
-                            running_max = cumulative.expanding().max()
-                            drawdowns = (cumulative - running_max) / running_max
-                            drawdowns_data[symbol] = drawdowns
-                            self.logger.info(f"Successfully created drawdowns for {symbol}: {len(drawdowns)} points")
-                        else:
-                            self.logger.warning(f"Asset {symbol}: No returns data after pct_change")
-                    else:
-                        self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
-                
-            except Exception as asset_list_error:
-                self.logger.error(f"Error creating AssetList for mixed comparison: {asset_list_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при создании смешанного сравнения: {str(asset_list_error)}")
-                return
             
             if not drawdowns_data:
                 await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика просадок")
