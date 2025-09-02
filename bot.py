@@ -831,6 +831,13 @@ class OkamaFinanceBot:
             # Получаем данные для ежедневного графика
             self.logger.info(f"Getting daily chart for {symbol}")
             price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            try:
+                keys = list(price_history.keys()) if isinstance(price_history, dict) else type(price_history)
+                charts_keys = list(price_history.get('charts', {}).keys()) if isinstance(price_history, dict) and 'charts' in price_history else []
+                has_prices = isinstance(price_history, dict) and ('prices' in price_history and price_history['prices'] is not None)
+                self.logger.info(f"price_history keys: {keys}; charts: {charts_keys}; has_prices: {has_prices}")
+            except Exception:
+                pass
             
             if 'error' in price_history:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
@@ -850,6 +857,9 @@ class OkamaFinanceBot:
                 if 'adj_close' in charts and charts['adj_close']:
                     self.logger.info(f"Found adj_close chart for {symbol}")
                     return charts['adj_close']
+                elif 'moex_daily' in charts and charts['moex_daily']:
+                    self.logger.info(f"Found moex_daily chart for {symbol}")
+                    return charts['moex_daily']
                 elif 'fallback' in charts and charts['fallback']:
                     self.logger.info(f"Found fallback chart for {symbol}")
                     return charts['fallback']
