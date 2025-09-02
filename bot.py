@@ -12,10 +12,8 @@ import io
 from datetime import datetime
 import tempfile
 
-# Set matplotlib cache directory to avoid permission issues BEFORE importing matplotlib
-matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
-os.makedirs(matplotlib_cache_dir, exist_ok=True)
-os.environ['MPLCONFIGDIR'] = matplotlib_cache_dir
+# Configure matplotlib for headless environments without filesystem dependencies
+# Note: No filesystem configuration needed for in-memory operations
 
 # Third-party imports
 import matplotlib
