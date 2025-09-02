@@ -21,6 +21,12 @@ import okama as ok
 if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
     matplotlib.use('Agg')
 
+# Set matplotlib cache directory to avoid permission issues
+import tempfile
+matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
+os.makedirs(matplotlib_cache_dir, exist_ok=True)
+matplotlib.rcParams['cache_dir'] = matplotlib_cache_dir
+
 # Optional imports
 try:
     import tabulate
