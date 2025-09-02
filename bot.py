@@ -49,6 +49,7 @@ from services.report_builder_enhanced import EnhancedReportBuilder
 from services.analysis_engine_enhanced import EnhancedAnalysisEngine
 from services.financial_brain_enhanced import EnhancedOkamaFinancialBrain
 from services.chart_styles import chart_styles
+from services.context_store import JSONUserContextStore
 
 # Configure logging
 logging.basicConfig(
@@ -85,8 +86,10 @@ class OkamaFinanceBot:
         self.analysis_engine = EnhancedAnalysisEngine()
         self.financial_brain = EnhancedOkamaFinancialBrain()
         
-        # User session storage
+        # User session storage (in-memory for fast access)
         self.user_sessions = {}
+        # Persistent context store
+        self.context_store = JSONUserContextStore()
         
         # User history management
         self.user_history: Dict[int, List[dict]] = {}       # chat_id -> list[{"role": "...", "parts": [str]}]
@@ -232,36 +235,23 @@ class OkamaFinanceBot:
             return [1.0 / len(symbols)] * len(symbols) if symbols else []
 
     def _get_user_context(self, user_id: int) -> Dict[str, Any]:
-        """Получить контекст пользователя"""
-        if user_id not in self.user_sessions:
-            self.user_sessions[user_id] = {
-                'last_assets': [],  # Последние анализируемые активы
-                'last_analysis_type': None,  # Тип последнего анализа
-                'last_period': None,  # Последний период анализа
-                'conversation_history': [],  # История разговора
-                'preferences': {},  # Предпочтения пользователя
-                'portfolio_count': 0,  # Счетчик созданных портфелей
-                'saved_portfolios': {}  # Сохраненные портфели {symbol: {symbols, weights, currency, created_at, description}}
-            }
-        return self.user_sessions[user_id]
+        """Получить контекст пользователя (с поддержкой персистентности)."""
+        # Load from persistent store, and mirror into memory for hot path
+        ctx = self.context_store.get_user_context(user_id)
+        self.user_sessions[user_id] = ctx
+        return ctx
     
     def _update_user_context(self, user_id: int, **kwargs):
-        """Обновить контекст пользователя"""
-        context = self._get_user_context(user_id)
-        context.update(kwargs)
-        
-        # Ограничиваем историю разговора
-        if 'conversation_history' in context and len(context['conversation_history']) > 10:
-            context['conversation_history'] = context['conversation_history'][-10:]
+        """Обновить контекст пользователя (и сохранить)."""
+        # Update persistent store; keep in-memory mirror in sync
+        updated = self.context_store.update_user_context(user_id, **kwargs)
+        self.user_sessions[user_id] = updated
     
     def _add_to_conversation_history(self, user_id: int, message: str, response: str):
-        """Добавить сообщение в историю разговора"""
-        context = self._get_user_context(user_id)
-        context['conversation_history'].append({
-            'timestamp': datetime.now().isoformat(),
-            'message': message,
-            'response': response[:200]  # Ограничиваем длину ответа
-        })
+        """Добавить сообщение в историю разговора (с сохранением)."""
+        self.context_store.add_conversation_entry(user_id, message, response)
+        # Refresh in-memory cache
+        self.user_sessions[user_id] = self.context_store.get_user_context(user_id)
     
     def _get_context_summary(self, user_id: int) -> str:
         """Получить краткое резюме контекста пользователя"""
