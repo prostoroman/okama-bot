@@ -2623,14 +2623,14 @@ class OkamaFinanceBot:
                 await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика просадок")
                 return
             
-                            # Create chart using chart_styles
-                try:
-                    # Combine all drawdowns into a DataFrame
-                    drawdowns_df = pd.DataFrame(drawdowns_data)
-                    
-                    fig, ax = chart_styles.create_drawdowns_chart(
-                        drawdowns_df, list(drawdowns_data.keys()), currency
-                    )
+            # Create chart using chart_styles
+            try:
+                # Combine all drawdowns into a DataFrame
+                drawdowns_df = pd.DataFrame(drawdowns_data)
+                
+                fig, ax = chart_styles.create_drawdowns_chart(
+                    drawdowns_df, list(drawdowns_data.keys()), currency
+                )
                 
                 # Save chart to bytes with memory optimization
                 img_buffer = io.BytesIO()
