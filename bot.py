@@ -4182,7 +4182,7 @@ class OkamaFinanceBot:
                 chart_styles.apply_monte_carlo_style(ax)
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Прогноз Monte Carlo\n{", ".join(symbols)}',
                     ylabel='Накопленная доходность',
@@ -4245,10 +4245,10 @@ class OkamaFinanceBot:
                 # Force legend update to match the new colors
                 if ax.get_legend():
                     ax.get_legend().remove()
-                ax.legend(**chart_styles.legend_config)
+                ax.legend(**chart_styles.legend)
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Прогноз с процентилями\n{", ".join(symbols)}',
                     ylabel='Накопленная доходность',
@@ -4354,7 +4354,7 @@ class OkamaFinanceBot:
                 ax = current_fig.axes[0]
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Просадки портфеля\n{", ".join(symbols)}',
                     ylabel='Просадка (%)',
@@ -4487,7 +4487,7 @@ class OkamaFinanceBot:
                 ax = current_fig.axes[0]
                 
                 # Apply standard chart styling with centralized style
-                chart_styles.apply_standard_chart_styling(
+                chart_styles.apply_styling(
                     ax,
                     title=f'Годовая доходность портфеля\n{", ".join(symbols)}',
                     ylabel='Доходность (%)',
