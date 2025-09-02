@@ -764,6 +764,15 @@ class OkamaFinanceBot:
                 daily_chart = await self._get_daily_chart(symbol)
                 
                 self.logger.info(f"Daily chart result for {symbol}: {type(daily_chart)}")
+                # Создаем кнопки для дополнительных функций (всегда)
+                keyboard = [
+                    [
+                        InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
+                        InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 if daily_chart:
                     self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
                     # Формируем базовую информацию для подписи
@@ -799,23 +808,32 @@ class OkamaFinanceBot:
                         caption=self._truncate_caption(caption)
                     )
                     
-                    # Создаем кнопки для дополнительных функций
-                    keyboard = [
-                        [
-                            InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
-                            InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
-                        ]
-                    ]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    
-                    if hasattr(update, 'message') and update.message is not None:
-                        await update.message.reply_text(
-                            "Выберите дополнительную информацию:",
-                            reply_markup=reply_markup
-                        )
+                    # Отправляем кнопки после графика
+                    await update.message.reply_text(
+                        "Выберите дополнительную информацию:",
+                        reply_markup=reply_markup
+                    )
                     
                 else:
-                    await self._send_message_safe(update, "❌ Не удалось получить ежедневный график")
+                    # Если график не удался, отправляем информацию без графика
+                    info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                    info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                    info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                    info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                    info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
+                    
+                    if asset_info.get('current_price') is not None:
+                        info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                    
+                    if asset_info.get('annual_return') != 'N/A':
+                        info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                    
+                    if asset_info.get('volatility') != 'N/A':
+                        info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+                    
+                    info_text += "\n❌ Ежедневный график временно недоступен"
+                    
+                    await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                     
             except Exception as chart_error:
                 self.logger.error(f"Error creating daily chart for {symbol}: {chart_error}")
@@ -826,11 +844,23 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график за 1 год"""
+        """Получить ежедневный график за 1 год с таймаутом"""
         try:
-            # Получаем данные для ежедневного графика
+            # Получаем данные для ежедневного графика с таймаутом
             self.logger.info(f"Getting daily chart for {symbol}")
-            price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            
+            # Добавляем таймаут для предотвращения зависания
+            import asyncio
+            try:
+                # Запускаем получение данных с таймаутом 30 секунд
+                price_history = await asyncio.wait_for(
+                    asyncio.to_thread(self.asset_service.get_asset_price_history, symbol, '1Y'),
+                    timeout=30.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.error(f"Timeout getting price history for {symbol}")
+                return None
+            
             try:
                 keys = list(price_history.keys()) if isinstance(price_history, dict) else type(price_history)
                 charts_keys = list(price_history.get('charts', {}).keys()) if isinstance(price_history, dict) and 'charts' in price_history else []
@@ -848,8 +878,15 @@ class OkamaFinanceBot:
                 prices = price_history['prices']
                 currency = price_history.get('currency', 'USD')
                 
-                # Создаем график с использованием централизованных стилей
-                return self._create_daily_chart_with_styles(symbol, prices, currency)
+                # Создаем график с использованием централизованных стилей с таймаутом
+                try:
+                    return await asyncio.wait_for(
+                        asyncio.to_thread(self._create_daily_chart_with_styles, symbol, prices, currency),
+                        timeout=15.0
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.error(f"Timeout creating chart for {symbol}")
+                    return None
             
             # Fallback к старому методу если нет данных о ценах
             if 'charts' in price_history and price_history['charts']:
@@ -877,23 +914,37 @@ class OkamaFinanceBot:
             return None
 
     async def _get_ai_analysis(self, symbol: str) -> Optional[str]:
-        """Получить AI анализ актива без рекомендаций"""
+        """Получить AI анализ актива без рекомендаций с таймаутом"""
         try:
-            # Получаем базовые данные для анализа
-            price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            # Получаем базовые данные для анализа с таймаутом
+            import asyncio
+            try:
+                price_history = await asyncio.wait_for(
+                    asyncio.to_thread(self.asset_service.get_asset_price_history, symbol, '1Y'),
+                    timeout=20.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.error(f"Timeout getting price history for AI analysis of {symbol}")
+                return None
             
             if 'error' in price_history:
                 return None
             
-            # Получаем анализ
-            analysis = self.analysis_engine.analyze_asset(symbol, price_history, '1Y')
+            # Получаем анализ с таймаутом
+            try:
+                analysis = await asyncio.wait_for(
+                    asyncio.to_thread(self.analysis_engine.analyze_asset, symbol, price_history, '1Y'),
+                    timeout=15.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.error(f"Timeout getting AI analysis for {symbol}")
+                return None
             
             if 'error' in analysis:
                 return None
             
             # Модифицируем анализ, убирая рекомендации
             analysis_text = analysis['analysis']
-            
             
             return analysis_text
             
