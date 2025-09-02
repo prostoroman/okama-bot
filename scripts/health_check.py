@@ -27,9 +27,12 @@ def create_health_status():
     
     # Write status to a file that Render can monitor
     try:
-        with open('/tmp/bot_health.json', 'w') as f:
+        # Use tempfile to get a writable directory
+        import tempfile
+        health_file_path = os.path.join(tempfile.gettempdir(), 'bot_health.json')
+        with open(health_file_path, 'w') as f:
             json.dump(status, f, indent=2)
-        print("✅ Health status file created")
+        print(f"✅ Health status file created at {health_file_path}")
         return True
     except Exception as e:
         print(f"❌ Failed to create health status: {e}")
