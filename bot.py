@@ -10,6 +10,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any
 import io
 from datetime import datetime
+import tempfile
+
+# Set matplotlib cache directory to avoid permission issues BEFORE importing matplotlib
+matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
+os.makedirs(matplotlib_cache_dir, exist_ok=True)
+os.environ['MPLCONFIGDIR'] = matplotlib_cache_dir
 
 # Third-party imports
 import matplotlib
@@ -20,12 +26,6 @@ import okama as ok
 # Configure matplotlib backend for headless environments (CI/CD)
 if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
     matplotlib.use('Agg')
-
-# Set matplotlib cache directory to avoid permission issues
-import tempfile
-matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
-os.makedirs(matplotlib_cache_dir, exist_ok=True)
-matplotlib.rcParams['cache_dir'] = matplotlib_cache_dir
 
 # Optional imports
 try:

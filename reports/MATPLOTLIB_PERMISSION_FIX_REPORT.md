@@ -29,29 +29,17 @@ Added matplotlib cache directory configuration to redirect cache storage to a wr
 import tempfile
 matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
 os.makedirs(matplotlib_cache_dir, exist_ok=True)
-matplotlib.rcParams['cache_dir'] = matplotlib_cache_dir
+os.environ['MPLCONFIGDIR'] = matplotlib_cache_dir
 ```
 
 **services/asset_service.py**
 ```python
-import tempfile
-import os
-
-# Set matplotlib cache directory to avoid permission issues
-matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
-os.makedirs(matplotlib_cache_dir, exist_ok=True)
-matplotlib.rcParams['cache_dir'] = matplotlib_cache_dir
+# No additional configuration needed - handled in main bot.py
 ```
 
 **services/chart_styles.py**
 ```python
-import tempfile
-import os
-
-# Set matplotlib cache directory to avoid permission issues
-matplotlib_cache_dir = os.path.join(tempfile.gettempdir(), 'matplotlib_cache')
-os.makedirs(matplotlib_cache_dir, exist_ok=True)
-mpl.rcParams['cache_dir'] = matplotlib_cache_dir
+# No additional configuration needed - handled in main bot.py
 ```
 
 **scripts/health_check.py**
@@ -65,9 +53,11 @@ with open(health_file_path, 'w') as f:
 
 ### 2. Implementation Details
 
+- **Centralized Configuration:** Setting the environment variable in the main bot.py file before any matplotlib imports
 - **Temporary Directory Usage:** Using `tempfile.gettempdir()` to get the system's temporary directory which is guaranteed to be writable
 - **Directory Creation:** Using `os.makedirs()` with `exist_ok=True` to ensure the cache directory exists
-- **Configuration:** Setting `matplotlib.rcParams['cache_dir']` to redirect matplotlib's cache location
+- **Configuration:** Setting `os.environ['MPLCONFIGDIR']` to redirect matplotlib's configuration directory
+- **Import Order:** Ensuring the environment variable is set before any matplotlib imports occur
 
 ### 3. Benefits
 
@@ -92,8 +82,8 @@ python bot.py
 ### 3. Cache Verification
 ```python
 # Verify cache directory is set correctly
-import matplotlib
-print(f"Matplotlib cache directory: {matplotlib.rcParams['cache_dir']}")
+import os
+print(f"Matplotlib config directory: {os.environ.get('MPLCONFIGDIR')}")
 ```
 
 ### 4. Automated Testing
@@ -121,11 +111,10 @@ python scripts/test_matplotlib_config.py
 
 ## Files Affected
 
-1. **bot.py** - Main bot file with matplotlib configuration
-2. **services/asset_service.py** - Asset service with chart generation
-3. **services/chart_styles.py** - Chart styling module
-4. **scripts/health_check.py** - Health check script with file write operations
-5. **scripts/test_matplotlib_config.py** - Test script for verification (new)
+1. **bot.py** - Main bot file with matplotlib configuration (primary fix)
+2. **scripts/health_check.py** - Health check script with file write operations
+3. **scripts/test_matplotlib_config.py** - Test script for verification (new)
+4. **scripts/test_env_setting.py** - Environment variable test script (new)
 
 ## Deployment Notes
 
