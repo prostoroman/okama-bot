@@ -62,18 +62,7 @@ class AssetService:
             if '.' in upper and len(upper.split('.')) == 2 and all(part for part in upper.split('.')):
                 return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
 
-            # Detect ISIN: 2 letters + 9 alnum + 1 digit (simplified)
-            def _looks_like_isin(val: str) -> bool:
-                if len(val) != 12:
-                    return False
-                if not (val[0:2].isalpha() and val[0:2].isupper()):
-                    return False
-                if not val[-1].isdigit():
-                    return False
-                mid = val[2:11]
-                return mid.isalnum()
-
-            if _looks_like_isin(upper):
+            if self._looks_like_isin(upper):
                 # First try to resolve via okama.Asset.search
                 okama_symbol = self.search_by_isin(upper)
                 if okama_symbol:
@@ -100,6 +89,25 @@ class AssetService:
 
         except Exception as e:
             return {'error': f"Ошибка при разборе идентификатора: {str(e)}"}
+
+    def _looks_like_isin(self, val: str) -> bool:
+        """
+        Check if string looks like an ISIN code
+        
+        Args:
+            val: String to check
+            
+        Returns:
+            True if string matches ISIN format
+        """
+        if len(val) != 12:
+            return False
+        if not (val[0:2].isalpha() and val[0:2].isupper()):
+            return False
+        if not val[-1].isdigit():
+            return False
+        mid = val[2:11]
+        return mid.isalnum()
 
     def _guess_namespace(self, ticker: str) -> Optional[str]:
         """
@@ -1597,12 +1605,9 @@ class AssetService:
             if len(text) >= 2 and len(text) <= 6 and text.isalpha():
                 return True
             
-            # Check if it looks like an ISIN (12 characters, alphanumeric)
-            # ISIN format: 2 letters + 9 alphanumeric + 1 digit
-            if len(text) == 12:
-                if (text[0:2].isalpha() and text[0:2].isupper() and 
-                    text[2:11].isalnum() and text[-1].isdigit()):
-                    return True
+            # Check if it looks like an ISIN using the dedicated method
+            if self._looks_like_isin(text):
+                return True
             
             return False
         except Exception as e:
