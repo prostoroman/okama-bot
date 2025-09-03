@@ -63,8 +63,20 @@ class AssetService:
                 return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
 
             if self._looks_like_isin(upper):
-                # For ISIN, return the ISIN itself as symbol for direct Asset creation
-                return {'symbol': upper, 'type': 'isin', 'source': 'direct_isin'}
+                # For ISIN, search for the corresponding symbol
+                try:
+                    import okama as ok
+                    search_result = ok.search(upper)
+                    if len(search_result) > 0:
+                        # Found the asset, use its symbol
+                        symbol = search_result.iloc[0]['symbol']
+                        return {'symbol': symbol, 'type': 'isin', 'source': 'okama_search'}
+                    else:
+                        # ISIN not found, return error
+                        return {'error': f'ISIN {upper} не найден в базе данных okama'}
+                except Exception as e:
+                    # Search failed, return error
+                    return {'error': f'Ошибка поиска ISIN {upper}: {str(e)}'}
 
             # Plain ticker without suffix – try to guess the appropriate namespace
             guessed_symbol = self._guess_namespace(upper)
@@ -289,20 +301,11 @@ class AssetService:
             symbol = resolved['symbol']
             self.logger.info(f"Getting asset info for {symbol}")
             
-            # Create asset object - try direct ISIN creation first
+            # Create asset object
             try:
-                if self._looks_like_isin(symbol):
-                    # Try to create asset directly with ISIN
-                    asset = ok.Asset(isin=symbol)
-                else:
-                    # Use regular symbol
-                    asset = ok.Asset(symbol)
+                asset = ok.Asset(symbol)
             except Exception as e:
-                # Fallback to regular symbol creation
-                try:
-                    asset = ok.Asset(symbol)
-                except Exception as fallback_error:
-                    return {'error': f"Не удалось создать актив {symbol}: {str(fallback_error)}"}
+                return {'error': f"Не удалось создать актив {symbol}: {str(e)}"}
             
             # Get basic info
             info = {
@@ -317,22 +320,9 @@ class AssetService:
                 'period_length': 'N/A'
             }
             
-            # For ISIN assets, add all available attributes
-            if self._looks_like_isin(symbol):
-                # Get all attributes of the asset object
-                asset_attributes = {}
-                for attr in dir(asset):
-                    if not attr.startswith('_') and not callable(getattr(asset, attr)):
-                        try:
-                            value = getattr(asset, attr)
-                            # Convert to string if it's not a basic type
-                            if not isinstance(value, (str, int, float, bool, type(None))):
-                                value = str(value)
-                            asset_attributes[attr] = value
-                        except Exception:
-                            asset_attributes[attr] = 'Error getting attribute'
-                
-                info['asset_attributes'] = asset_attributes
+            # Add ISIN information if available
+            if hasattr(asset, 'isin') and asset.isin:
+                info['isin'] = asset.isin
             
             # Calculate period length if dates are available
             if info['first_date'] != 'N/A' and info['last_date'] != 'N/A':
@@ -519,20 +509,11 @@ class AssetService:
             symbol = resolved['symbol']
             self.logger.info(f"Getting asset price for {symbol}")
             
-            # Create asset object - try direct ISIN creation first
+            # Create asset object
             try:
-                if self._looks_like_isin(symbol):
-                    # Try to create asset directly with ISIN
-                    asset = ok.Asset(isin=symbol)
-                else:
-                    # Use regular symbol
-                    asset = ok.Asset(symbol)
+                asset = ok.Asset(symbol)
             except Exception as e:
-                # Fallback to regular symbol creation
-                try:
-                    asset = ok.Asset(symbol)
-                except Exception as fallback_error:
-                    return {'error': f"Не удалось создать актив {symbol}: {str(fallback_error)}"}
+                return {'error': f"Не удалось создать актив {symbol}: {str(e)}"}
             
             # Get price data
             price_data = asset.price
@@ -805,7 +786,10 @@ class AssetService:
             self.logger.info(f"Getting asset price history for {symbol} for period {period}")
             
             # Create asset object
-            asset = ok.Asset(symbol)
+            try:
+                asset = ok.Asset(symbol)
+            except Exception as e:
+                return {'error': f"Не удалось создать актив {symbol}: {str(e)}"}
             
             # Get currency from asset
             currency = getattr(asset, 'currency', '')
@@ -1346,7 +1330,10 @@ class AssetService:
             self.logger.info(f"Getting asset dividends for {symbol}")
             
             # Create asset object
-            asset = ok.Asset(symbol)
+            try:
+                asset = ok.Asset(symbol)
+            except Exception as e:
+                return {'error': f"Не удалось создать актив {symbol}: {str(e)}"}
             
             # Get dividend data
             dividend_data = asset.dividends
