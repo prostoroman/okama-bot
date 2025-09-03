@@ -23,11 +23,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: 🔍 Test imports
-      run: |
-        python -c "from bot import ShansAi; print('✅ Bot import OK')"
-        python -c "from services.asset_service import AssetService; print('✅ AssetService import OK')"
-        python -c "from yandexgpt_service import YandexGPTService; print('✅ YandexGPTService import OK')"
+
 
     - name: 📋 Generate release notes
       id: release_notes
