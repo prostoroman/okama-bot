@@ -155,7 +155,7 @@ class AssetService:
 
     def search_by_isin(self, isin: str) -> Optional[str]:
         """
-        Search for asset by ISIN using okama.Asset.search("")
+        Search for asset by ISIN using okama.Asset.search("") or direct creation
         
         Args:
             isin: ISIN code to search for
@@ -164,7 +164,15 @@ class AssetService:
             Okama ticker if found, None otherwise
         """
         try:
-            # Use okama.Asset.search to find assets by ISIN
+            # First try to create asset directly with ISIN
+            try:
+                asset = ok.Asset(isin=isin)
+                # If successful, return the ISIN as the symbol
+                return isin
+            except Exception as direct_error:
+                self.logger.debug(f"Direct ISIN creation failed for {isin}: {direct_error}")
+            
+            # Fallback to search method
             search_results = ok.Asset.search(isin)
             
             if not search_results or len(search_results) == 0:
@@ -287,8 +295,20 @@ class AssetService:
             symbol = resolved['symbol']
             self.logger.info(f"Getting asset info for {symbol}")
             
-            # Create asset object
-            asset = ok.Asset(symbol)
+            # Create asset object - try direct ISIN creation first
+            try:
+                if self._looks_like_isin(symbol):
+                    # Try to create asset directly with ISIN
+                    asset = ok.Asset(isin=symbol)
+                else:
+                    # Use regular symbol
+                    asset = ok.Asset(symbol)
+            except Exception as e:
+                # Fallback to regular symbol creation
+                try:
+                    asset = ok.Asset(symbol)
+                except Exception as fallback_error:
+                    return {'error': f"Не удалось создать актив {symbol}: {str(fallback_error)}"}
             
             # Get basic info
             info = {
@@ -488,8 +508,20 @@ class AssetService:
             symbol = resolved['symbol']
             self.logger.info(f"Getting asset price for {symbol}")
             
-            # Create asset object
-            asset = ok.Asset(symbol)
+            # Create asset object - try direct ISIN creation first
+            try:
+                if self._looks_like_isin(symbol):
+                    # Try to create asset directly with ISIN
+                    asset = ok.Asset(isin=symbol)
+                else:
+                    # Use regular symbol
+                    asset = ok.Asset(symbol)
+            except Exception as e:
+                # Fallback to regular symbol creation
+                try:
+                    asset = ok.Asset(symbol)
+                except Exception as fallback_error:
+                    return {'error': f"Не удалось создать актив {symbol}: {str(fallback_error)}"}
             
             # Get price data
             price_data = asset.price
