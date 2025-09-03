@@ -74,7 +74,12 @@ class AssetService:
                 return mid.isalnum()
 
             if _looks_like_isin(upper):
-                # Try resolve via MOEX ISS (works for instruments listed on MOEX)
+                # First try to resolve via okama.Asset.search
+                okama_symbol = self.search_by_isin(upper)
+                if okama_symbol:
+                    return {'symbol': okama_symbol, 'type': 'isin', 'source': 'okama_search'}
+                
+                # Fallback to MOEX ISS (works for instruments listed on MOEX)
                 moex_symbol = self._try_resolve_isin_via_moex(upper)
                 if moex_symbol:
                     return {'symbol': moex_symbol, 'type': 'isin', 'source': 'moex'}
@@ -82,7 +87,6 @@ class AssetService:
                     return {
                         'error': (
                             f"Не удалось определить тикер по ISIN {upper}. "
-                            "Поддерживается разрешение ISIN только для бумаг, торгующихся на MOEX. "
                             "Попробуйте указать тикер в формате AAPL.US или SBER.MOEX."
                         )
                     }
@@ -148,6 +152,45 @@ class AssetService:
         
         # If no match found, return None (will use plain ticker)
         return None
+
+    def search_by_isin(self, isin: str) -> Optional[str]:
+        """
+        Search for asset by ISIN using okama.Asset.search("")
+        
+        Args:
+            isin: ISIN code to search for
+            
+        Returns:
+            Okama ticker if found, None otherwise
+        """
+        try:
+            # Use okama.Asset.search to find assets by ISIN
+            search_results = ok.Asset.search(isin)
+            
+            if not search_results or len(search_results) == 0:
+                return None
+            
+            # Look for exact ISIN match first
+            for result in search_results:
+                if hasattr(result, 'isin') and result.isin and result.isin.upper() == isin.upper():
+                    # Return the ticker in okama format
+                    if hasattr(result, 'ticker'):
+                        return result.ticker
+                    elif hasattr(result, 'symbol'):
+                        return result.symbol
+            
+            # If no exact match, return the first result
+            first_result = search_results[0]
+            if hasattr(first_result, 'ticker'):
+                return first_result.ticker
+            elif hasattr(first_result, 'symbol'):
+                return first_result.symbol
+            
+            return None
+            
+        except Exception as e:
+            self.logger.warning(f"Error searching ISIN {isin} via okama.Asset.search: {e}")
+            return None
 
     def _try_resolve_isin_via_moex(self, isin: str) -> Optional[str]:
         """
@@ -1523,8 +1566,11 @@ class AssetService:
                 return True
             
             # Check if it looks like an ISIN (12 characters, alphanumeric)
-            if len(text) == 12 and text.isalnum():
-                return True
+            # ISIN format: 2 letters + 9 alphanumeric + 1 digit
+            if len(text) == 12:
+                if (text[0:2].isalpha() and text[0:2].isupper() and 
+                    text[2:11].isalnum() and text[-1].isdigit()):
+                    return True
             
             return False
         except Exception as e:
