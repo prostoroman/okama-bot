@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bot import OkamaFinanceBot
+from bot import ShansAi
 from unittest.mock import Mock, patch
 
 def debug_compare_issue():
@@ -16,7 +16,7 @@ def debug_compare_issue():
     # Мокаем конфигурацию
     with patch('bot.Config') as mock_config:
         mock_config.validate.return_value = None
-        bot = OkamaFinanceBot()
+        bot = ShansAi()
     
     # Симулируем команду /compare sber.moex oblg.moex
     symbols = ['sber.moex', 'oblg.moex']

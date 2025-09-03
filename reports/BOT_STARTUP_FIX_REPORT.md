@@ -10,12 +10,12 @@
 
 ### Ошибка запуска
 ```
-2025-09-03 13:23:33,863 - ERROR - ❌ Fatal error starting bot: 'OkamaFinanceBot' object has no attribute 'handle_message'
+2025-09-03 13:23:33,863 - ERROR - ❌ Fatal error starting bot: 'ShansAi' object has no attribute 'handle_message'
 2025-09-03 13:23:33,863 - ERROR - Python executable: /opt/render/project/src/.venv/bin/python
 ```
 
 ### Причина ошибки
-После удаления методов `handle_message` и `handle_photo` из класса `OkamaFinanceBot`, в коде инициализации бота остались ссылки на эти удаленные методы.
+После удаления методов `handle_message` и `handle_photo` из класса `ShansAi`, в коде инициализации бота остались ссылки на эти удаленные методы.
 
 ### Локализация проблемы
 **Файл**: `bot.py`  
@@ -45,7 +45,7 @@ application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
 
 ### Тест импорта ✅
 ```bash
-python3 -c "from bot import OkamaFinanceBot; print('✅ Bot import successful')"
+python3 -c "from bot import ShansAi; print('✅ Bot import successful')"
 ✅ Bot import successful
 ```
 

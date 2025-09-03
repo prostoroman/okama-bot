@@ -47,7 +47,7 @@ python bot.py
 ### Быстрая проверка
 ```bash
 python -c "from services.okama_service import OkamaServiceV2; print('✅ OK')"
-python -c "from bot import OkamaFinanceBotV2; print('✅ OK')"
+python -c "from bot import ShansAi; print('✅ OK')"
 ```
 
 ### Полное тестирование

@@ -10,7 +10,7 @@ Asset.__init__() got an unexpected keyword argument 'ccy'
 Это происходило при создании объектов `ok.Asset` с аргументом `ccy` в окружениях, где установленная версия `okama` не принимает этот именованный аргумент.
 
 ### Changes
-- Добавлены обертки в `OkamaFinanceBot` для безопасного создания `Asset`, `AssetList`, `Portfolio` с обратной совместимостью:
+- Добавлены обертки в `ShansAi` для безопасного создания `Asset`, `AssetList`, `Portfolio` с обратной совместимостью:
   - `_ok_asset(symbol, currency)`
   - `_ok_asset_list(symbols, currency)`
   - `_ok_portfolio(symbols, weights, currency)`

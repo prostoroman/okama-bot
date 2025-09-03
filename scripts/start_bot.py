@@ -11,7 +11,7 @@ import signal
 import threading
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from bot import OkamaFinanceBotV2
+from bot import ShansAi
 
 def signal_handler(signum, frame):
     """Handle shutdown signals gracefully"""
@@ -24,7 +24,7 @@ def start_bot():
         print("🤖 Starting Okama Finance Bot v2.0...")
         
         # Create and start bot
-        bot = OkamaFinanceBotV2()
+        bot = ShansAi()
         bot.run()
         
     except KeyboardInterrupt:

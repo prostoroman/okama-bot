@@ -55,7 +55,7 @@ MPLBACKEND=Agg python3 -m unittest discover tests/ -v
 
 ### Импорты с тестовыми переменными ✅
 ```bash
-TELEGRAM_BOT_TOKEN=test_bot_token_123456789 YANDEX_API_KEY=test_yandex_api_key_123456789 YANDEX_FOLDER_ID=test_folder_id_123456789 python3 -c "from bot import OkamaFinanceBot; print('✅ Bot import OK')"
+TELEGRAM_BOT_TOKEN=test_bot_token_123456789 YANDEX_API_KEY=test_yandex_api_key_123456789 YANDEX_FOLDER_ID=test_folder_id_123456789 python3 -c "from bot import ShansAi; print('✅ Bot import OK')"
 # Импорт успешен
 ```
 

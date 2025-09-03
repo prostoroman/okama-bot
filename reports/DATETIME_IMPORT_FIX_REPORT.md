@@ -61,7 +61,7 @@ portfolio_attributes.update({
 
 ### 1. Базовый тест импорта
 ```python
-python3 -c "from bot import OkamaFinanceBot; print('✅ Import successful')"
+python3 -c "from bot import ShansAi; print('✅ Import successful')"
 ```
 **Результат**: ✅ Import successful
 

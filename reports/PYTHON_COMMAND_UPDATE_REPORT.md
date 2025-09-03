@@ -19,7 +19,7 @@ This report documents the current usage of Python commands in the okama-bot proj
 
 - **`.github/workflows/release.yml`**: Uses `python` for all commands
   - `python -m pip install --upgrade pip`
-  - `python -c "from bot import OkamaFinanceBotV2..."`
+  - `python -c "from bot import ShansAi..."`
 
 #### 2. Configuration Files
 - **`config_files/render.yaml`**: Uses `python` in start command

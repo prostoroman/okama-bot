@@ -25,7 +25,7 @@ jobs:
 
     - name: 🔍 Test imports
       run: |
-        python -c "from bot import OkamaFinanceBotV2; print('✅ Bot import OK')"
+        python -c "from bot import ShansAi; print('✅ Bot import OK')"
         python -c "from services.asset_service import AssetService; print('✅ AssetService import OK')"
         python -c "from yandexgpt_service import YandexGPTService; print('✅ YandexGPTService import OK')"
 

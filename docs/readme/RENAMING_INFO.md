@@ -22,7 +22,7 @@
 python -c "from okama_service import OkamaServiceV2; print('✅ OK')"
 
 # Тест бота
-python -c "from bot import OkamaFinanceBotV2; print('✅ OK')"
+python -c "from bot import ShansAi; print('✅ OK')"
 ```
 
 ### Полное тестирование
