@@ -110,8 +110,9 @@ class ShansAi:
         - Ticker in okama format (e.g., 'AAPL.US', 'SBER.MOEX')
         - Plain ticker (e.g., 'AAPL') – automatically adds appropriate namespace
         - ISIN (e.g., 'US0378331005') – tries to resolve via okama search
+        - Company names (e.g., 'Apple', 'Tesla') – searches via okama search
 
-        Returns dict: { 'symbol': str, 'type': 'ticker'|'isin', 'source': str }
+        Returns dict: { 'symbol': str, 'type': 'ticker'|'isin'|'company_name', 'source': str }
         or { 'error': str } on failure.
         """
         try:
@@ -141,8 +142,39 @@ class ShansAi:
                     # Search failed, return error
                     return {'error': f'Ошибка поиска ISIN {upper}: {str(e)}'}
 
-            # Plain ticker without suffix – return as is
-            return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
+            # Try to search for company name or plain ticker
+            try:
+                import okama as ok
+                search_result = ok.search(raw)  # Use original case for better search
+                if len(search_result) > 0:
+                    # Found the asset, select the best result
+                    symbol = self._select_best_search_result(search_result, raw)
+                    name = search_result.iloc[0].get('name', '')
+                    
+                    # Determine type based on input
+                    if self._looks_like_ticker(raw):
+                        input_type = 'ticker'
+                    else:
+                        input_type = 'company_name'
+                    
+                    return {
+                        'symbol': symbol, 
+                        'type': input_type, 
+                        'source': 'okama_search',
+                        'name': name
+                    }
+                else:
+                    # Not found, try as plain ticker
+                    if self._looks_like_ticker(raw):
+                        return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
+                    else:
+                        return {'error': f'"{raw}" не найден в базе данных okama'}
+            except Exception as e:
+                # Search failed, try as plain ticker
+                if self._looks_like_ticker(raw):
+                    return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
+                else:
+                    return {'error': f'Ошибка поиска "{raw}": {str(e)}'}
 
         except Exception as e:
             return {'error': f"Ошибка при разборе идентификатора: {str(e)}"}
@@ -165,6 +197,78 @@ class ShansAi:
             return False
         mid = val[2:11]
         return mid.isalnum()
+
+    def _looks_like_ticker(self, val: str) -> bool:
+        """
+        Check if string looks like a ticker symbol
+        
+        Args:
+            val: String to check
+            
+        Returns:
+            True if string looks like a ticker
+        """
+        if not val or len(val) < 1:
+            return False
+        
+        # Ticker should be mostly alphanumeric, 1-5 characters
+        if len(val) > 5:
+            return False
+        
+        # Should be mostly uppercase letters and numbers
+        if not val.isalnum():
+            return False
+        
+        # Should start with a letter
+        if not val[0].isalpha():
+            return False
+        
+        return True
+
+    def _select_best_search_result(self, search_result, original_input: str) -> str:
+        """
+        Select the best symbol from search results based on priority and relevance
+        
+        Args:
+            search_result: DataFrame with search results
+            original_input: Original user input
+            
+        Returns:
+            Best symbol string
+        """
+        # Priority order for exchanges
+        priority_exchanges = ['US', 'MOEX', 'LSE', 'XETR', 'XFRA', 'XAMS']
+        
+        # First, try to find exact match with priority exchanges
+        for _, row in search_result.iterrows():
+            symbol = row['symbol']
+            name = row.get('name', '').lower()
+            
+            # Check if symbol matches original input exactly (case-insensitive)
+            if symbol.split('.')[0].upper() == original_input.upper():
+                if '.' in symbol and symbol.split('.')[-1] in priority_exchanges:
+                    return symbol
+        
+        # Second, try to find name match with priority exchanges
+        original_lower = original_input.lower()
+        for _, row in search_result.iterrows():
+            symbol = row['symbol']
+            name = row.get('name', '').lower()
+            
+            # Check if name contains original input or vice versa
+            if (original_lower in name or name in original_lower) and len(name) > 3:
+                if '.' in symbol and symbol.split('.')[-1] in priority_exchanges:
+                    return symbol
+        
+        # Third, try to find any result with priority exchanges
+        for exchange in priority_exchanges:
+            for _, row in search_result.iterrows():
+                symbol = row['symbol']
+                if '.' in symbol and symbol.split('.')[-1] == exchange:
+                    return symbol
+        
+        # If no priority exchange found, return the first result
+        return search_result.iloc[0]['symbol']
 
 
 
@@ -873,7 +977,7 @@ class ShansAi:
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
-                fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight')
                 output.seek(0)
                 
                 # Очистка
@@ -3237,7 +3341,7 @@ class ShansAi:
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
-                fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight')
                 output.seek(0)
                 
                 # Очистка
@@ -3368,7 +3472,7 @@ class ShansAi:
             
             # Сохраняем в bytes
             output = io.BytesIO()
-            fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+            fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight')
             output.seek(0)
             plt.close(fig)
             
@@ -3449,7 +3553,7 @@ class ShansAi:
             
             # Сохраняем в bytes
             output = io.BytesIO()
-            fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight', facecolor='white')
+            fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight', facecolor='white')
             output.seek(0)
             plt.close(fig)
             
@@ -4092,7 +4196,7 @@ class ShansAi:
             
             # Save the figure
             img_buffer = io.BytesIO()
-            current_fig.savefig(img_buffer, format='PNG', dpi=300, bbox_inches='tight')
+            current_fig.savefig(img_buffer, format='PNG', dpi=96, bbox_inches='tight')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
@@ -4158,7 +4262,7 @@ class ShansAi:
             
             # Save the figure
             img_buffer = io.BytesIO()
-            current_fig.savefig(img_buffer, format='PNG', dpi=300, bbox_inches='tight')
+            current_fig.savefig(img_buffer, format='PNG', dpi=96, bbox_inches='tight')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             

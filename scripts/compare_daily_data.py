@@ -67,7 +67,7 @@ def compare_daily_data(symbol: str = 'VOO.US'):
         
         plt.tight_layout()
         plt.savefig(f'daily_comparison_{symbol.replace(".", "_")}.png', 
-                   format='PNG', dpi=300, bbox_inches='tight')
+                   format='PNG', dpi=96, bbox_inches='tight')
         plt.close()
         
         print(f"\n✓ Comparison chart saved: daily_comparison_{symbol.replace('.', '_')}.png")
