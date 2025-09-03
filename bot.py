@@ -7,7 +7,7 @@ import threading
 import re
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 import io
 from datetime import datetime
 import tempfile
@@ -44,7 +44,6 @@ if sys.version_info < (3, 7):
 
 # Local imports
 from config import Config
-from services.asset_service import AssetService
 from services.yandexgpt_service import YandexGPTService
 
 from services.chart_styles import chart_styles
@@ -76,8 +75,17 @@ class ShansAi:
         self.logger = logging.getLogger(__name__)
         
         # Initialize services
-        self.asset_service = AssetService()
         self.yandexgpt_service = YandexGPTService()
+        
+        # Known working asset symbols for suggestions
+        self.known_assets = {
+            'US': ['VOO.US', 'SPY.US', 'QQQ.US', 'AGG.US', 'AAPL.US', 'TSLA.US', 'MSFT.US'],
+            'INDX': ['RGBITR.INDX', 'MCFTR.INDX', 'SPX.INDX', 'IXIC.INDX'],
+            'COMM': ['GC.COMM', 'SI.COMM', 'CL.COMM', 'BRENT.COMM'],
+            'FX': ['EURUSD.FX', 'GBPUSD.FX', 'USDJPY.FX'],
+            'MOEX': ['SBER.MOEX', 'GAZP.MOEX', 'LKOH.MOEX'],
+            'LSE': ['VOD.LSE', 'HSBA.LSE', 'BP.LSE']
+        }
         
         # User session storage (in-memory for fast access)
         self.user_sessions = {}
@@ -137,7 +145,103 @@ class ShansAi:
                     return ok.Portfolio(symbols, currency, weights=weights)
                 except Exception:
                     return ok.Portfolio(symbols, weights=weights)
-            return ok.Portfolio(symbols, weights=weights)
+
+    # --- Asset Service Methods ---
+    
+    def resolve_symbol_or_isin(self, identifier: str) -> Dict[str, Union[str, Any]]:
+        """
+        Resolve user-provided identifier to an okama-compatible ticker.
+
+        Supports:
+        - Ticker in okama format (e.g., 'AAPL.US', 'SBER.MOEX')
+        - Plain ticker (e.g., 'AAPL') – automatically adds appropriate namespace
+        - ISIN (e.g., 'US0378331005') – tries to resolve via okama search
+
+        Returns dict: { 'symbol': str, 'type': 'ticker'|'isin', 'source': str }
+        or { 'error': str } on failure.
+        """
+        try:
+            raw = (identifier or '').strip()
+            if not raw:
+                return {'error': 'Пустой идентификатор актива'}
+
+            upper = raw.upper()
+
+            # If already okama-style ticker like XXX.SUFFIX
+            if '.' in upper and len(upper.split('.')) == 2 and all(part for part in upper.split('.')):
+                return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
+
+            if self._looks_like_isin(upper):
+                # For ISIN, search for the corresponding symbol
+                try:
+                    import okama as ok
+                    search_result = ok.search(upper)
+                    if len(search_result) > 0:
+                        # Found the asset, prioritize US and major exchanges
+                        symbol = self._select_best_symbol(search_result)
+                        return {'symbol': symbol, 'type': 'isin', 'source': 'okama_search'}
+                    else:
+                        # ISIN not found, return error
+                        return {'error': f'ISIN {upper} не найден в базе данных okama'}
+                except Exception as e:
+                    # Search failed, return error
+                    return {'error': f'Ошибка поиска ISIN {upper}: {str(e)}'}
+
+            # Plain ticker without suffix – return as is
+            return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
+
+        except Exception as e:
+            return {'error': f"Ошибка при разборе идентификатора: {str(e)}"}
+
+    def _looks_like_isin(self, val: str) -> bool:
+        """
+        Check if string looks like an ISIN code
+        
+        Args:
+            val: String to check
+            
+        Returns:
+            True if string matches ISIN format
+        """
+        if len(val) != 12:
+            return False
+        if not (val[0:2].isalpha() and val[0:2].isupper()):
+            return False
+        if not val[-1].isdigit():
+            return False
+        mid = val[2:11]
+        return mid.isalnum()
+
+    def _select_best_symbol(self, search_result) -> str:
+        """
+        Select the best symbol from search results, prioritizing US and major exchanges
+        
+        Args:
+            search_result: DataFrame with search results
+            
+        Returns:
+            Best symbol string
+        """
+        # Priority order for exchanges
+        priority_exchanges = ['US', 'MOEX', 'LSE', 'XETR', 'XFRA', 'XAMS']
+        
+        # First, try to find symbols with priority exchanges
+        for exchange in priority_exchanges:
+            for _, row in search_result.iterrows():
+                symbol = row['symbol']
+                if '.' in symbol and symbol.split('.')[-1] == exchange:
+                    return symbol
+        
+        # If no priority exchange found, return the first result
+        return search_result.iloc[0]['symbol']
+
+    def get_random_examples(self, count: int = 3) -> list:
+        """Get random examples from known assets"""
+        import random
+        all_assets = []
+        for assets in self.known_assets.values():
+            all_assets.extend(assets)
+        return random.sample(all_assets, min(count, len(all_assets)))
 
     async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation") -> None:
         """Общая функция для обработки ошибок"""
@@ -716,7 +820,7 @@ class ShansAi:
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
         if not context.args:
             # Get random examples for user
-            examples = self.asset_service.get_random_examples(3)
+            examples = self.get_random_examples(3)
             examples_text = ", ".join(examples)
             
             await self._send_message_safe(update, 
@@ -735,15 +839,8 @@ class ShansAi:
         await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
         
         try:
-            # Получаем базовую информацию об активе
-            asset_info = self.asset_service.get_asset_info(symbol)
-            
-            if 'error' in asset_info:
-                await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
-                return
-            
             # Get the resolved symbol from asset service
-            resolved = self.asset_service.resolve_symbol_or_isin(symbol)
+            resolved = self.resolve_symbol_or_isin(symbol)
             if 'error' in resolved:
                 await self._send_message_safe(update, f"❌ Ошибка: {resolved['error']}")
                 return
@@ -796,15 +893,8 @@ class ShansAi:
         await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
         
         try:
-            # Получаем базовую информацию об активе
-            asset_info = self.asset_service.get_asset_info(symbol)
-            
-            if 'error' in asset_info:
-                await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
-                return
-            
             # Get the resolved symbol from asset service
-            resolved = self.asset_service.resolve_symbol_or_isin(symbol)
+            resolved = self.resolve_symbol_or_isin(symbol)
             if 'error' in resolved:
                 await self._send_message_safe(update, f"❌ Ошибка: {resolved['error']}")
                 return
@@ -851,20 +941,15 @@ class ShansAi:
                 plt.close('all')
                 plt.cla()
                 
-                # Используем asset_service для получения данных
-                asset_info = self.asset_service.get_asset_price_history(symbol, '1Y')
-                
-                if 'error' in asset_info:
-                    self.logger.error(f"Error getting asset info: {asset_info['error']}")
-                    return None
+
                 
                 # Создаем актив напрямую для получения данных
                 asset = ok.Asset(symbol)
                 currency = getattr(asset, 'currency', '')
                 
-                # Используем adj_close для дневных данных (как в asset_service)
-                if hasattr(asset, 'adj_close') and asset.adj_close is not None:
-                    daily_data = asset.adj_close
+                # Используем close_daily для дневных данных
+                if hasattr(asset, 'close_daily') and asset.close_daily is not None:
+                    daily_data = asset.close_daily
                     
                     # Фильтруем данные на 1 год
                     if len(daily_data) > 365:
@@ -932,80 +1017,6 @@ class ShansAi:
 
 
 
-
-
-    def _filter_data_by_period(self, data, period: str):
-        """
-        Filter data by specified period
-        
-        Args:
-            data: Pandas Series with price data
-            period: Time period (e.g., '1Y', '2Y', '5Y', 'MAX')
-            
-        Returns:
-            Filtered data series
-        """
-        try:
-            if period == 'MAX':
-                return data
-            
-            # Parse period
-            import re
-            match = re.match(r'(\d+)([YMD])', period.upper())
-            if not match:
-                # Default period depends on data type
-                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
-                    # Monthly data - default to 10 years
-                    return data.tail(120)  # Last 120 months (10 years)
-                else:
-                    # Daily data - default to 1 year
-                    return data.tail(365)  # Last 365 days (1 year)
-            
-            number, unit = match.groups()
-            number = int(number)
-            
-            # Calculate how many data points to take
-            if unit == 'Y':
-                # For monthly data, take last N*12 months
-                # For daily data, take last N*365 days
-                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
-                    # Monthly data
-                    points_to_take = number * 12
-                else:
-                    # Daily data
-                    points_to_take = number * 365
-            elif unit == 'M':
-                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
-                    # Monthly data
-                    points_to_take = number
-                else:
-                    # Daily data
-                    points_to_take = number * 30
-            elif unit == 'D':
-                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
-                    # Monthly data - take at least 1 month
-                    points_to_take = max(1, number // 30)
-                else:
-                    # Daily data
-                    points_to_take = number
-            else:
-                # Default depends on data type
-                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
-                    # Monthly data - default to 10 years
-                    points_to_take = 120
-                else:
-                    # Daily data - default to 1 year
-                    points_to_take = 365
-            
-            # Take last N points
-            if len(data) > points_to_take:
-                return data.tail(points_to_take)
-            else:
-                return data
-                
-        except Exception as e:
-            self.logger.warning(f"Error filtering data by period {period}: {e}")
-            return data
 
 
 
@@ -3264,7 +3275,14 @@ class ShansAi:
             await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
             
             # Получаем информацию о дивидендах
-            dividend_info = self.asset_service.get_asset_dividends(symbol)
+            try:
+                asset = ok.Asset(symbol)
+                if hasattr(asset, 'dividends') and asset.dividends is not None:
+                    dividend_info = {'dividends': asset.dividends, 'currency': getattr(asset, 'currency', '')}
+                else:
+                    dividend_info = {'error': 'No dividends data'}
+            except Exception as e:
+                dividend_info = {'error': str(e)}
             
             if 'error' not in dividend_info and dividend_info.get('dividends'):
                 dividends = dividend_info['dividends']
@@ -3340,12 +3358,7 @@ class ShansAi:
                 plt.close('all')
                 plt.cla()
                 
-                # Используем asset_service для получения данных
-                asset_info = self.asset_service.get_asset_price_history(symbol, '10Y')
-                
-                if 'error' in asset_info:
-                    self.logger.error(f"Error getting asset info: {asset_info['error']}")
-                    return None
+
                 
                 # Создаем актив напрямую для получения данных
                 asset = ok.Asset(symbol)
@@ -3421,7 +3434,14 @@ class ShansAi:
         """Получить график дивидендов с копирайтом"""
         try:
             # Получаем данные о дивидендах
-            dividend_info = self.asset_service.get_asset_dividends(symbol)
+            try:
+                asset = ok.Asset(symbol)
+                if hasattr(asset, 'dividends') and asset.dividends is not None:
+                    dividend_info = {'dividends': asset.dividends, 'currency': getattr(asset, 'currency', '')}
+                else:
+                    dividend_info = {'error': 'No dividends data'}
+            except Exception as e:
+                dividend_info = {'error': str(e)}
             
             if 'error' in dividend_info or not dividend_info.get('dividends'):
                 return None
@@ -3443,7 +3463,14 @@ class ShansAi:
         """Получить изображение таблицы дивидендов с копирайтом"""
         try:
             # Получаем данные о дивидендах
-            dividend_info = self.asset_service.get_asset_dividends(symbol)
+            try:
+                asset = ok.Asset(symbol)
+                if hasattr(asset, 'dividends') and asset.dividends is not None:
+                    dividend_info = {'dividends': asset.dividends, 'currency': getattr(asset, 'currency', '')}
+                else:
+                    dividend_info = {'error': 'No dividends data'}
+            except Exception as e:
+                dividend_info = {'error': str(e)}
             
             if 'error' in dividend_info or not dividend_info.get('dividends'):
                 return None
