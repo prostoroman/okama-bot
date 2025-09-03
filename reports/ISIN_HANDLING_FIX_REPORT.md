@@ -45,6 +45,10 @@ async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYP
 
 Modified both `handle_message` and `info_command` methods to properly use the resolved symbol from the asset service.
 
+#### Additional Improvement: Symbol Selection Logic
+
+Added intelligent symbol selection logic to prioritize US and major exchanges when multiple symbols are found for the same ISIN.
+
 #### Changes in `bot.py`
 
 **Before:**
@@ -89,6 +93,34 @@ except Exception as e:
     info_text = f"Ошибка при получении информации об активе: {str(e)}"
 ```
 
+#### Changes in `services/asset_service.py`
+
+**Added Symbol Selection Logic:**
+```python
+def _select_best_symbol(self, search_result) -> str:
+    """
+    Select the best symbol from search results, prioritizing US and major exchanges
+    
+    Args:
+        search_result: DataFrame with search results
+        
+    Returns:
+        Best symbol string
+    """
+    # Priority order for exchanges
+    priority_exchanges = ['US', 'MOEX', 'LSE', 'XETR', 'XFRA', 'XAMS']
+    
+    # First, try to find symbols with priority exchanges
+    for exchange in priority_exchanges:
+        for _, row in search_result.iterrows():
+            symbol = row['symbol']
+            if '.' in symbol and symbol.split('.')[-1] == exchange:
+                return symbol
+    
+    # If no priority exchange found, return the first result
+    return search_result.iloc[0]['symbol']
+```
+
 ### Key Changes
 
 1. **Added Symbol Resolution:** Explicitly call `resolve_symbol_or_isin()` to get the resolved symbol
@@ -123,18 +155,36 @@ def test_isin_resolution():
 ### Test Results
 
 ```
-Testing ISIN resolution functionality...
-Testing ISIN resolution for: US0378331005
-Resolved result: {'symbol': 'AAPL.US', 'type': 'isin', 'source': 'okama_search'}
-✅ Resolved symbol: AAPL.US
+Testing complete ISIN resolution flow...
+Testing complete ISIN flow for: US0378331005
 
-Testing get_asset_info for resolved symbol: AAPL.US
-✅ Asset info retrieved successfully
-Asset name: Apple Inc
-Asset country: USA
-Asset exchange: NASDAQ
+1. Testing resolve_symbol_or_isin...
+   Resolved result: {'symbol': 'AAPL.US', 'type': 'isin', 'source': 'okama_search'}
+   ✅ Resolved symbol: AAPL.US
 
-✅ All tests passed!
+2. Testing get_asset_info...
+   ✅ Asset info retrieved successfully
+   Asset name: Apple Inc
+   Asset country: USA
+   Asset exchange: NASDAQ
+
+3. Testing direct asset creation...
+   ✅ Asset created successfully: symbol                AAPL.US
+name                Apple Inc
+country                   USA
+exchange               NASDAQ
+currency                  USD
+type             Common Stock
+isin             US0378331005
+first date            1981-01
+last date             2025-09
+period length           44.70
+dtype: object
+   Asset name: Apple Inc
+   Asset country: USA
+   Asset exchange: NASDAQ
+
+✅ All tests passed! ISIN resolution is working correctly.
 ```
 
 ## Verification

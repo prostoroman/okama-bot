@@ -68,8 +68,8 @@ class AssetService:
                     import okama as ok
                     search_result = ok.search(upper)
                     if len(search_result) > 0:
-                        # Found the asset, use its symbol
-                        symbol = search_result.iloc[0]['symbol']
+                        # Found the asset, prioritize US and major exchanges
+                        symbol = self._select_best_symbol(search_result)
                         return {'symbol': symbol, 'type': 'isin', 'source': 'okama_search'}
                     else:
                         # ISIN not found, return error
@@ -102,6 +102,29 @@ class AssetService:
             return False
         mid = val[2:11]
         return mid.isalnum()
+
+    def _select_best_symbol(self, search_result) -> str:
+        """
+        Select the best symbol from search results, prioritizing US and major exchanges
+        
+        Args:
+            search_result: DataFrame with search results
+            
+        Returns:
+            Best symbol string
+        """
+        # Priority order for exchanges
+        priority_exchanges = ['US', 'MOEX', 'LSE', 'XETR', 'XFRA', 'XAMS']
+        
+        # First, try to find symbols with priority exchanges
+        for exchange in priority_exchanges:
+            for _, row in search_result.iterrows():
+                symbol = row['symbol']
+                if '.' in symbol and symbol.split('.')[-1] == exchange:
+                    return symbol
+        
+        # If no priority exchange found, return the first result
+        return search_result.iloc[0]['symbol']
 
 
 
