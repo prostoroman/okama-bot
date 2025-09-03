@@ -237,7 +237,10 @@ class ShansAi:
         Returns:
             Best symbol string
         """
-        # Priority order for exchanges
+        # Allowed exchanges from okama configuration (all official namespaces)
+        allowed_exchanges = ['US', 'LSE', 'XETR', 'XFRA', 'XSTU', 'XAMS', 'MOEX', 'XTAE', 'PIF', 'FX', 'CC', 'INDX', 'COMM', 'RE', 'CBR', 'PF', 'INFL', 'RATE', 'RATIO']
+        
+        # Priority order for exchanges (subset of allowed exchanges)
         priority_exchanges = ['US', 'MOEX', 'LSE', 'XETR', 'XFRA', 'XAMS']
         
         # First, try to find exact match with priority exchanges
@@ -268,8 +271,26 @@ class ShansAi:
                 if '.' in symbol and symbol.split('.')[-1] == exchange:
                     return symbol
         
-        # If no priority exchange found, return the first result
-        return search_result.iloc[0]['symbol']
+        # Fourth, try to find any result with allowed exchanges
+        for exchange in allowed_exchanges:
+            for _, row in search_result.iterrows():
+                symbol = row['symbol']
+                if '.' in symbol and symbol.split('.')[-1] == exchange:
+                    # Verify the symbol is actually supported by okama
+                    try:
+                        ok.Asset(symbol)
+                        return symbol
+                    except Exception:
+                        continue  # Skip this symbol if it's not supported
+        
+        # If no allowed exchange found, try the first result
+        first_symbol = search_result.iloc[0]['symbol']
+        try:
+            ok.Asset(first_symbol)
+            return first_symbol
+        except Exception:
+            # If even the first result fails, return it anyway (will be handled by caller)
+            return first_symbol
 
 
 
@@ -3279,7 +3300,13 @@ class ShansAi:
                 dividends = dividend_info['dividends']
                 currency = dividend_info.get('currency', '')
                 
-                if dividends:
+                # Проверяем, что дивиденды не пустые (исправляем проблему с pandas Series)
+                if isinstance(dividends, pd.Series):
+                    has_dividends = not dividends.empty and dividends.size > 0
+                else:
+                    has_dividends = bool(dividends) and len(dividends) > 0
+                
+                if has_dividends:
                     # Формируем краткую информацию о дивидендах + текст последних выплат
                     try:
                         dividend_series = pd.Series(dividends)
