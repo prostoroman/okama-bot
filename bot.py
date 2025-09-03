@@ -3296,9 +3296,10 @@ class ShansAi:
             except Exception as e:
                 dividend_info = {'error': str(e)}
             
-            if 'error' not in dividend_info and dividend_info.get('dividends'):
-                dividends = dividend_info['dividends']
-                currency = dividend_info.get('currency', '')
+            if 'error' not in dividend_info:
+                dividends = dividend_info.get('dividends')
+                if dividends is not None:
+                    currency = dividend_info.get('currency', '')
                 
                 # Проверяем, что дивиденды не пустые (исправляем проблему с pandas Series)
                 if isinstance(dividends, pd.Series):
@@ -3414,8 +3415,20 @@ class ShansAi:
             except Exception as e:
                 dividend_info = {'error': str(e)}
             
-            if 'error' in dividend_info or not dividend_info.get('dividends'):
+            if 'error' in dividend_info:
                 return None
+            
+            dividends = dividend_info.get('dividends')
+            if dividends is None:
+                return None
+            
+            # Проверяем, что дивиденды не пустые (исправляем проблему с pandas Series)
+            if isinstance(dividends, pd.Series):
+                if dividends.empty or dividends.size == 0:
+                    return None
+            else:
+                if not dividends or len(dividends) == 0:
+                    return None
             
             # Создаем график дивидендов
             dividend_chart = self._create_dividend_chart(symbol, dividend_info['dividends'], dividend_info.get('currency', ''))
@@ -3443,8 +3456,20 @@ class ShansAi:
             except Exception as e:
                 dividend_info = {'error': str(e)}
             
-            if 'error' in dividend_info or not dividend_info.get('dividends'):
+            if 'error' in dividend_info:
                 return None
+            
+            dividends = dividend_info.get('dividends')
+            if dividends is None:
+                return None
+            
+            # Проверяем, что дивиденды не пустые (исправляем проблему с pandas Series)
+            if isinstance(dividends, pd.Series):
+                if dividends.empty or dividends.size == 0:
+                    return None
+            else:
+                if not dividends or len(dividends) == 0:
+                    return None
             
             # Создаем изображение таблицы дивидендов
             dividend_table = self._create_dividend_table_image(symbol, dividend_info['dividends'], dividend_info.get('currency', ''))
