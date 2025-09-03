@@ -45,7 +45,7 @@ if sys.version_info < (3, 7):
 # Local imports
 from config import Config
 from services.asset_service import AssetService
-from yandexgpt_service import YandexGPTService
+from services.yandexgpt_service import YandexGPTService
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore

@@ -19,7 +19,7 @@ def debug_api():
     
     try:
         from config import Config
-        from yandexgpt_service import YandexGPTService
+        from services.yandexgpt_service import YandexGPTService
         
         # Проверяем конфигурацию
         Config.validate()
