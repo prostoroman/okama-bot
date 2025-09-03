@@ -785,16 +785,7 @@ class OkamaFinanceBot:
             if asset_info.get('volatility') != 'N/A':
                 info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
             
-            # Получаем AI анализ
-            try:
-                analysis = await self._get_ai_analysis(symbol)
-                if analysis:
-                    info_text += "\n" + analysis
-                else:
-                    info_text += "\nAI-анализ временно недоступен"
-            except Exception as analysis_error:
-                self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
-                info_text += "\nAI-анализ временно недоступен"
+
             
             # Создаем кнопки для дополнительных функций
             keyboard = [
@@ -858,93 +849,11 @@ class OkamaFinanceBot:
             self.logger.error(f"Error getting daily chart for {symbol}: {e}")
             return None
 
-    async def _get_ai_analysis(self, symbol: str) -> Optional[str]:
-        """Получить AI анализ актива без рекомендаций с таймаутом"""
-        try:
-            # Получаем базовые данные для анализа с таймаутом
-            import asyncio
-            try:
-                price_history = await asyncio.wait_for(
-                    asyncio.to_thread(self.asset_service.get_asset_price_history, symbol, '1Y'),
-                    timeout=20.0
-                )
-            except asyncio.TimeoutError:
-                self.logger.error(f"Timeout getting price history for AI analysis of {symbol}")
-                return None
-            
-            if 'error' in price_history:
-                return None
-            
-            # Получаем анализ с таймаутом
-            try:
-                analysis = await asyncio.wait_for(
-                    asyncio.to_thread(self.analysis_engine.analyze_asset, symbol, price_history, '1Y'),
-                    timeout=15.0
-                )
-            except asyncio.TimeoutError:
-                self.logger.error(f"Timeout getting AI analysis for {symbol}")
-                return None
-            
-            if 'error' in analysis:
-                return None
-            
-            # Модифицируем анализ, убирая рекомендации
-            analysis_text = analysis['analysis']
-            
-            return analysis_text
-            
-        except Exception as e:
-            self.logger.error(f"Error getting AI analysis for {symbol}: {e}")
-            return None
 
 
 
-    def _create_daily_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
-        """Создать ежедневный график с централизованными стилями"""
-        try:
-            # Подготавливаем данные для графика
-            if hasattr(prices, 'index') and hasattr(prices, 'values'):
-                dates = prices.index
-                values = prices.values
-            else:
-                # Fallback для других типов данных
-                dates = list(prices.keys()) if isinstance(prices, dict) else range(len(prices))
-                values = list(prices.values()) if isinstance(prices, dict) else list(prices)
-            
-            # Конвертируем даты если нужно
-            try:
-                if hasattr(dates, 'to_timestamp'):
-                    dates = dates.to_timestamp()
-                elif hasattr(dates, 'astype'):
-                    dates = dates.astype('datetime64[ns]')
-            except Exception:
-                pass
-            
-            # Используем универсальный метод создания графика
-            # Создаем pandas Series с датами и значениями
-            import pandas as pd
-            import io
-            if not isinstance(prices, pd.Series):
-                prices = pd.Series(values, index=dates)
-            
-            # Создаем график
-            fig, ax = chart_styles.create_price_chart(
-                data=prices,
-                symbol=symbol,
-                currency=currency,
-                period='1Y'
-            )
-            
-            # Сохраняем в bytes
-            buf = io.BytesIO()
-            chart_styles.save_figure(fig, buf)
-            chart_styles.cleanup_figure(fig)
-            buf.seek(0)
-            return buf.getvalue()
-            
-        except Exception as e:
-            self.logger.error(f"Error creating daily chart with styles for {symbol}: {e}")
-            return None
+
+
 
     def _filter_data_by_period(self, data, period: str):
         """
@@ -1019,52 +928,7 @@ class OkamaFinanceBot:
             self.logger.warning(f"Error filtering data by period {period}: {e}")
             return data
 
-    def _create_monthly_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
-        """Создать месячный график с централизованными стилями"""
-        try:
-            # Подготавливаем данные для графика
-            if hasattr(prices, 'index') and hasattr(prices, 'values'):
-                dates = prices.index
-                values = prices.values
-            else:
-                # Fallback для других типов данных
-                dates = list(prices.keys()) if isinstance(prices, dict) else range(len(prices))
-                values = list(prices.values()) if isinstance(prices, dict) else list(prices)
-            
-            # Конвертируем даты если нужно
-            try:
-                if hasattr(dates, 'to_timestamp'):
-                    dates = dates.to_timestamp()
-                elif hasattr(dates, 'astype'):
-                    dates = dates.astype('datetime64[ns]')
-            except Exception:
-                pass
-            
-            # Используем универсальный метод создания графика
-            # Создаем pandas Series с датами и значениями
-            import pandas as pd
-            import io
-            if not isinstance(prices, pd.Series):
-                prices = pd.Series(values, index=dates)
-            
-            # Создаем график
-            fig, ax = chart_styles.create_price_chart(
-                data=prices,
-                symbol=symbol,
-                currency=currency,
-                period='10Y'
-            )
-            
-            # Сохраняем в bytes
-            buf = io.BytesIO()
-            chart_styles.save_figure(fig, buf)
-            chart_styles.cleanup_figure(fig)
-            buf.seek(0)
-            return buf.getvalue()
-            
-        except Exception as e:
-            self.logger.error(f"Error creating monthly chart with styles for {symbol}: {e}")
-            return None
+
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /namespace command"""
@@ -2506,16 +2370,7 @@ class OkamaFinanceBot:
                         if asset_info.get('volatility') != 'N/A':
                             info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
                         
-                        # Получаем AI анализ
-                        try:
-                            analysis = await self._get_ai_analysis(symbol)
-                            if analysis:
-                                info_text += "\n" + analysis
-                            else:
-                                info_text += "\nAI-анализ временно недоступен"
-                        except Exception as analysis_error:
-                            self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
-                            info_text += "\nAI-анализ временно недоступен"
+
                         
                         # Создаем кнопки для дополнительных функций
                         keyboard = [
