@@ -10,16 +10,16 @@ To run tests locally, use one of these commands:
 
 ```bash
 # Run all tests with unittest
-python3 -m unittest discover tests/ -v
+python -m unittest discover tests/ -v
 
 # Run specific test file
-python3 -m unittest tests.test_bot -v
+python -m unittest tests.test_bot -v
 
 # Run specific test class
-python3 -m unittest tests.test_bot.TestBotImports -v
+python -m unittest tests.test_bot.TestBotImports -v
 
 # Run specific test method
-python3 -m unittest tests.test_bot.TestBotImports.test_bot_import -v
+python -m unittest tests.test_bot.TestBotImports.test_bot_import -v
 ```
 
 ### GitHub Actions
