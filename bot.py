@@ -741,8 +741,12 @@ class OkamaFinanceBot:
             examples_text = ", ".join(examples)
             
             await self._send_message_safe(update, 
+                f"📊 Команда /info - Информация об активе\n\n"
                 f"Укажите название инструмента, например: {examples_text}\n\n"
-                "Или просто отправьте название инструмента в сообщении.")
+                f"💡 Поддерживаются:\n"
+                f"• Символы: SBER.MOEX, AAPL.US, SPY.US\n"
+                f"• ISIN коды: RU0009029540 (Сбербанк), US0378331005 (Apple)\n\n"
+                f"Или просто отправьте название инструмента в сообщении.")
             return
         
         symbol = context.args[0].upper()
@@ -762,183 +766,88 @@ class OkamaFinanceBot:
                 await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
                 return
             
-            # Получаем ежедневный график (1Y)
-            await self._send_message_safe(update, "📈 Получаю ежедневный график...")
+            # Формируем базовую информацию
+            info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+            info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+            info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
+            info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
+            info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
             
+            if asset_info.get('isin'):
+                info_text += f"🔹 ISIN: {asset_info['isin']}\n"
+            
+            if asset_info.get('current_price') is not None:
+                info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+            
+            if asset_info.get('annual_return') != 'N/A':
+                info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+            
+            if asset_info.get('volatility') != 'N/A':
+                info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+            
+            # Получаем AI анализ
             try:
-                daily_chart = await self._get_daily_chart(symbol)
-                
-                self.logger.info(f"Daily chart result for {symbol}: {type(daily_chart)}")
-                # Создаем кнопки для дополнительных функций (всегда)
-                keyboard = [
-                    [
-                        InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
-                        InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
-                    ]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                if daily_chart:
-                    self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
-                    # Формируем базовую информацию для подписи
-                    if self.asset_service._looks_like_isin(symbol):
-                        # Для ISIN выводим всю информацию об объекте Asset
-                        caption = f"📊 {symbol} - Информация об объекте Asset\n\n"
-                        
-                        # Добавляем все атрибуты объекта Asset
-                        if 'asset_attributes' in asset_info:
-                            for attr_name, attr_value in asset_info['asset_attributes'].items():
-                                caption += f"🔹 {attr_name}: {attr_value}\n"
-                        else:
-                            caption += "❌ Атрибуты объекта Asset недоступны\n"
-                    else:
-                        # Обычная информация для тикеров
-                        caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                        caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                        caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                        caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                        caption += f"📈: {asset_info.get('type', 'N/A')}\n"
-                        
-                        if asset_info.get('current_price') is not None:
-                            caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                        
-                        if asset_info.get('annual_return') != 'N/A':
-                            caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                        
-                        if asset_info.get('volatility') != 'N/A':
-                            caption += f"📉 Волатильность: {asset_info['volatility']}\n"
-                    
-                    # Получаем AI анализ
-                    try:
-                        analysis = await self._get_ai_analysis(symbol)
-                        if analysis:
-                            caption += analysis
-                        else:
-                            caption += "AI-анализ временно недоступен"
-                    except Exception as analysis_error:
-                        self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
-                        caption += "AI-анализ временно недоступен"
-                    
-                    # Отправляем график с информацией
-                    await update.message.reply_photo(
-                        photo=daily_chart,
-                        caption=self._truncate_caption(caption)
-                    )
-                    
-                    # Отправляем кнопки после графика
-                    await update.message.reply_text(
-                        "Выберите дополнительную информацию:",
-                        reply_markup=reply_markup
-                    )
-                    
+                analysis = await self._get_ai_analysis(symbol)
+                if analysis:
+                    info_text += "\n" + analysis
                 else:
-                    # Если график не удался, отправляем информацию без графика
-                    if self.asset_service._looks_like_isin(symbol):
-                        # Для ISIN выводим всю информацию об объекте Asset
-                        info_text = f"📊 {symbol} - Информация об объекте Asset\n\n"
-                        
-                        # Добавляем все атрибуты объекта Asset
-                        if 'asset_attributes' in asset_info:
-                            for attr_name, attr_value in asset_info['asset_attributes'].items():
-                                info_text += f"🔹 {attr_name}: {attr_value}\n"
-                        else:
-                            info_text += "❌ Атрибуты объекта Asset недоступны\n"
-                        
-                        info_text += "\n❌ Ежедневный график временно недоступен"
-                    else:
-                        # Обычная информация для тикеров
-                        info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                        info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                        info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                        info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                        info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
-                        
-                        if asset_info.get('current_price') is not None:
-                            info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                        
-                        if asset_info.get('annual_return') != 'N/A':
-                            info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                        
-                        if asset_info.get('volatility') != 'N/A':
-                            info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
-                        
-                        info_text += "\n❌ Ежедневный график временно недоступен"
-                    
-                    await self._send_message_safe(update, info_text, reply_markup=reply_markup)
-                    
-            except Exception as chart_error:
-                self.logger.error(f"Error creating daily chart for {symbol}: {chart_error}")
-                await self._send_message_safe(update, f"❌ Ошибка при создании графика: {str(chart_error)}")
+                    info_text += "\nAI-анализ временно недоступен"
+            except Exception as analysis_error:
+                self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
+                info_text += "\nAI-анализ временно недоступен"
+            
+            # Создаем кнопки для дополнительных функций
+            keyboard = [
+                [
+                    InlineKeyboardButton("📈 Ежедневный график (1Y)", callback_data=f"daily_chart_{symbol}"),
+                    InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}")
+                ],
+                [
+                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Отправляем информацию с кнопками
+            await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                 
         except Exception as e:
             self.logger.error(f"Error in info command for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график за 1 год с таймаутом"""
+        """Получить ежедневный график простым способом"""
         try:
-            # Получаем данные для ежедневного графика с таймаутом
-            self.logger.info(f"Getting daily chart for {symbol}")
-            
-            # Добавляем таймаут для предотвращения зависания
             import asyncio
-            try:
-                # Запускаем получение данных с таймаутом 30 секунд
-                price_history = await asyncio.wait_for(
-                    asyncio.to_thread(self.asset_service.get_asset_price_history, symbol, '1Y'),
-                    timeout=30.0
-                )
-            except asyncio.TimeoutError:
-                self.logger.error(f"Timeout getting price history for {symbol}")
-                return None
+            import matplotlib.pyplot as plt
+            import io
             
-            try:
-                keys = list(price_history.keys()) if isinstance(price_history, dict) else type(price_history)
-                charts_keys = list(price_history.get('charts', {}).keys()) if isinstance(price_history, dict) and 'charts' in price_history else []
-                has_prices = isinstance(price_history, dict) and ('prices' in price_history and price_history['prices'] is not None)
-                self.logger.info(f"price_history keys: {keys}; charts: {charts_keys}; has_prices: {has_prices}")
-            except Exception:
-                pass
-            
-            if 'error' in price_history:
-                self.logger.error(f"Error in price_history: {price_history['error']}")
-                return None
-            
-            # Получаем данные о ценах
-            if 'prices' in price_history and price_history['prices'] is not None:
-                prices = price_history['prices']
-                currency = price_history.get('currency', 'USD')
-                
-                # Создаем график с использованием централизованных стилей с таймаутом
-                try:
-                    return await asyncio.wait_for(
-                        asyncio.to_thread(self._create_daily_chart_with_styles, symbol, prices, currency),
-                        timeout=15.0
-                    )
-                except asyncio.TimeoutError:
-                    self.logger.error(f"Timeout creating chart for {symbol}")
+            # Простой вызов: x = okama.Asset('VOO.US'); x.close_daily.plot()
+            def create_simple_daily_chart():
+                asset = ok.Asset(symbol)
+                if hasattr(asset, 'close_daily') and asset.close_daily is not None:
+                    asset.close_daily.plot()
+                    plt.title(f'Ежедневный график {symbol}')
+                    plt.xlabel('Дата')
+                    plt.ylabel('Цена')
+                    plt.grid(True)
+                    
+                    # Сохраняем в bytes
+                    output = io.BytesIO()
+                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                    output.seek(0)
+                    plt.close()
+                    return output.getvalue()
+                else:
                     return None
             
-            # Fallback к старому методу если нет данных о ценах
-            if 'charts' in price_history and price_history['charts']:
-                charts = price_history['charts']
-                if 'adj_close' in charts and charts['adj_close']:
-                    self.logger.info(f"Found adj_close chart for {symbol}")
-                    return charts['adj_close']
-                elif 'moex_daily' in charts and charts['moex_daily']:
-                    self.logger.info(f"Found moex_daily chart for {symbol}")
-                    return charts['moex_daily']
-                elif 'fallback' in charts and charts['fallback']:
-                    self.logger.info(f"Found fallback chart for {symbol}")
-                    return charts['fallback']
-                
-                for chart_type, chart_data in charts.items():
-                    if chart_data:
-                        self.logger.info(f"Using {chart_type} chart for {symbol}")
-                        return chart_data
+            # Выполняем с таймаутом
+            chart_data = await asyncio.wait_for(
+                asyncio.to_thread(create_simple_daily_chart),
+                timeout=30.0
+            )
             
-            self.logger.warning(f"No charts found for {symbol}")
-            return None
+            return chart_data
             
         except Exception as e:
             self.logger.error(f"Error getting daily chart for {symbol}: {e}")
@@ -2573,93 +2482,50 @@ class OkamaFinanceBot:
                             await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
                             return
                         
-                        # Получаем ежедневный график (1Y)
-                        await self._send_message_safe(update, "📈 Получаю ежедневный график...")
+                        # Формируем базовую информацию
+                        info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                        info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                        info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                        info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                        info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
                         
+                        if asset_info.get('isin'):
+                            info_text += f"🔹 ISIN: {asset_info['isin']}\n"
+                        
+                        if asset_info.get('current_price') is not None:
+                            info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                        
+                        if asset_info.get('annual_return') != 'N/A':
+                            info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                        
+                        if asset_info.get('volatility') != 'N/A':
+                            info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+                        
+                        # Получаем AI анализ
                         try:
-                            daily_chart = await self._get_daily_chart(symbol)
-                            
-                            self.logger.info(f"Daily chart result for {symbol}: {type(daily_chart)}")
-                            # Создаем кнопки для дополнительных функций (всегда)
-                            keyboard = [
-                                [
-                                    InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
-                                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
-                                ]
-                            ]
-                            reply_markup = InlineKeyboardMarkup(keyboard)
-                            
-                            if daily_chart:
-                                self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
-                                # Формируем базовую информацию для подписи
-                                caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                                caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                                caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                                caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                                caption += f"📈: {asset_info.get('type', 'N/A')}\n"
-                                
-                                if asset_info.get('isin'):
-                                    caption += f"🔹 ISIN: {asset_info['isin']}\n"
-                                
-                                if asset_info.get('current_price') is not None:
-                                    caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                                
-                                if asset_info.get('annual_return') != 'N/A':
-                                    caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                                
-                                if asset_info.get('volatility') != 'N/A':
-                                    caption += f"📉 Волатильность: {asset_info['volatility']}\n"
-                                
-                                # Получаем AI анализ
-                                try:
-                                    analysis = await self._get_ai_analysis(symbol)
-                                    if analysis:
-                                        caption += analysis
-                                    else:
-                                        caption += "AI-анализ временно недоступен"
-                                except Exception as analysis_error:
-                                    self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
-                                    caption += "AI-анализ временно недоступен"
-                                
-                                # Отправляем график с информацией
-                                await update.message.reply_photo(
-                                    photo=daily_chart,
-                                    caption=self._truncate_caption(caption)
-                                )
-                                
-                                # Отправляем кнопки после графика
-                                await update.message.reply_text(
-                                    "Выберите дополнительную информацию:",
-                                    reply_markup=reply_markup
-                                )
-                                
+                            analysis = await self._get_ai_analysis(symbol)
+                            if analysis:
+                                info_text += "\n" + analysis
                             else:
-                                # Если график не удался, отправляем информацию без графика
-                                info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                                info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                                info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                                info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                                info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
-                                
-                                if asset_info.get('isin'):
-                                    info_text += f"🔹 ISIN: {asset_info['isin']}\n"
-                                
-                                if asset_info.get('current_price') is not None:
-                                    info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                                
-                                if asset_info.get('annual_return') != 'N/A':
-                                    info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                                
-                                if asset_info.get('volatility') != 'N/A':
-                                    info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
-                                
-                                info_text += "\n❌ Ежедневный график временно недоступен"
-                                
-                                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
-                                
-                        except Exception as chart_error:
-                            self.logger.error(f"Error creating daily chart for {symbol}: {chart_error}")
-                            await self._send_message_safe(update, f"❌ Ошибка при создании графика: {str(chart_error)}")
+                                info_text += "\nAI-анализ временно недоступен"
+                        except Exception as analysis_error:
+                            self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
+                            info_text += "\nAI-анализ временно недоступен"
+                        
+                        # Создаем кнопки для дополнительных функций
+                        keyboard = [
+                            [
+                                InlineKeyboardButton("📈 Ежедневный график (1Y)", callback_data=f"daily_chart_{symbol}"),
+                                InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}")
+                            ],
+                            [
+                                InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                            ]
+                        ]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        
+                        # Отправляем информацию с кнопками
+                        await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                             
                     except Exception as e:
                         await self._handle_error(update, e, f"info command for {symbol}")
@@ -2850,6 +2716,10 @@ class OkamaFinanceBot:
                 user_context = self._get_user_context(user_id)
                 symbols = user_context.get('current_symbols', [])
                 await self._handle_correlation_button(update, context, symbols)
+            elif callback_data.startswith('daily_chart_'):
+                symbol = callback_data.replace('daily_chart_', '')
+                self.logger.info(f"Daily chart button clicked for symbol: {symbol}")
+                await self._handle_daily_chart_button(update, context, symbol)
             elif callback_data.startswith('monthly_chart_'):
                 symbol = callback_data.replace('monthly_chart_', '')
                 self.logger.info(f"Monthly chart button clicked for symbol: {symbol}")
@@ -3633,6 +3503,29 @@ class OkamaFinanceBot:
             self.logger.error(f"Error in mixed comparison correlation matrix: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании корреляционной матрицы: {str(e)}")
 
+    async def _handle_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle daily chart button click for single asset"""
+        try:
+            await self._send_callback_message(update, context, "📈 Получаю ежедневный график за 1 год...")
+            
+            # Получаем ежедневный график за 1 год
+            daily_chart = await self._get_daily_chart(symbol)
+            
+            if daily_chart:
+                caption = f"📈 Ежедневный график {symbol} за 1 год\n\n"
+                caption += "Показывает краткосрочные движения и волатильность"
+                
+                await update.callback_query.message.reply_photo(
+                    photo=daily_chart,
+                    caption=self._truncate_caption(caption)
+                )
+            else:
+                await self._send_callback_message(update, context, "❌ Не удалось получить ежедневный график")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling daily chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании ежедневного графика: {str(e)}")
+
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle monthly chart button click for single asset"""
         try:
@@ -3725,50 +3618,38 @@ class OkamaFinanceBot:
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить месячный график за 10 лет с централизованными стилями и копирайтом"""
+        """Получить месячный график простым способом"""
         try:
-            # Получаем данные для месячного графика
-            price_history = self.asset_service.get_asset_price_history(symbol, '10Y')
+            import asyncio
+            import matplotlib.pyplot as plt
+            import io
             
-            if 'error' in price_history:
-                self.logger.error(f"Error in price_history: {price_history['error']}")
-                return None
+            # Простой вызов: x = okama.Asset('VOO.US'); x.close_monthly.plot()
+            def create_simple_monthly_chart():
+                asset = ok.Asset(symbol)
+                if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
+                    asset.close_monthly.plot()
+                    plt.title(f'Месячный график {symbol}')
+                    plt.xlabel('Дата')
+                    plt.ylabel('Цена')
+                    plt.grid(True)
+                    
+                    # Сохраняем в bytes
+                    output = io.BytesIO()
+                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                    output.seek(0)
+                    plt.close()
+                    return output.getvalue()
+                else:
+                    return None
             
-            # Сначала проверяем наличие готового месячного графика
-            if 'charts' in price_history and price_history['charts']:
-                charts = price_history['charts']
-                if 'close_monthly' in charts and charts['close_monthly']:
-                    chart_data = charts['close_monthly']
-                    if isinstance(chart_data, bytes) and len(chart_data) > 0:
-                        self.logger.info(f"Using existing monthly chart for {symbol}")
-                        return chart_data
+            # Выполняем с таймаутом
+            chart_data = await asyncio.wait_for(
+                asyncio.to_thread(create_simple_monthly_chart),
+                timeout=30.0
+            )
             
-            # Если готового графика нет, создаем новый из месячных данных
-            if 'price_data' in price_history and 'close_monthly' in price_history['price_data']:
-                monthly_info = price_history['price_data']['close_monthly']
-                currency = price_history.get('currency', 'USD')
-                
-                # Получаем месячные данные из asset
-                try:
-                    asset = ok.Asset(symbol)
-                    monthly_data = asset.close_monthly
-                    if monthly_data is not None and len(monthly_data) > 0:
-                        # Фильтруем данные за 10 лет
-                        filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
-                        return self._create_monthly_chart_with_styles(symbol, filtered_monthly, currency)
-                except Exception as asset_error:
-                    self.logger.warning(f"Could not get monthly data from asset: {asset_error}")
-            
-            # Fallback к любому доступному графику
-            if 'charts' in price_history and price_history['charts']:
-                charts = price_history['charts']
-                for chart_key, chart_data in charts.items():
-                    if chart_data and isinstance(chart_data, bytes) and len(chart_data) > 0:
-                        self.logger.info(f"Using fallback chart: {chart_key} for {symbol}")
-                        return chart_data
-            
-            self.logger.warning(f"No valid charts found for {symbol}")
-            return None
+            return chart_data
             
         except Exception as e:
             self.logger.error(f"Error getting monthly chart for {symbol}: {e}")

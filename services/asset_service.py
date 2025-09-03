@@ -78,12 +78,8 @@ class AssetService:
                     # Search failed, return error
                     return {'error': f'Ошибка поиска ISIN {upper}: {str(e)}'}
 
-            # Plain ticker without suffix – try to guess the appropriate namespace
-            guessed_symbol = self._guess_namespace(upper)
-            if guessed_symbol:
-                return {'symbol': guessed_symbol, 'type': 'ticker', 'source': 'guessed'}
-            else:
-                return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
+            # Plain ticker without suffix – return as is
+            return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
 
         except Exception as e:
             return {'error': f"Ошибка при разборе идентификатора: {str(e)}"}
@@ -107,155 +103,11 @@ class AssetService:
         mid = val[2:11]
         return mid.isalnum()
 
-    def _guess_namespace(self, ticker: str) -> Optional[str]:
-        """
-        Guess the appropriate namespace for a plain ticker based on known patterns
-        """
-        # Common Russian stocks (MOEX)
-        russian_stocks = {
-            'SBER', 'GAZP', 'LKOH', 'GMKN', 'YNDX', 'MGNT', 'VTBR', 'ROSN', 'NVTK', 'TATN',
-            'SNGS', 'SNGSP', 'CHMF', 'PLZL', 'POLY', 'RUAL', 'RUALR', 'MTSS', 'MVID', 'OZON'
-        }
-        
-        # Common US stocks
-        us_stocks = {
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC',
-            'KO', 'DIS', 'MCD', 'SBUX', 'NKE', 'ADBE', 'CRM', 'VOO', 'SPY', 'QQQ', 'AGG'
-        }
-        
-        # Common indices
-        indices = {
-            'SPX', 'IXIC', 'DJI', 'RTSI', 'IMOEX', 'RGBITR', 'MCFTR'
-        }
-        
-        # Common commodities
-        commodities = {
-            'GC', 'SI', 'CL', 'BRENT', 'HG', 'ZC', 'ZS', 'ZW'
-        }
-        
-        # Common currencies
-        currencies = {
-            'EUR', 'USD', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD', 'RUB', 'CNY'
-        }
-        
-        # Common crypto
-        crypto = {
-            'BTC', 'ETH', 'XRP', 'ADA', 'DOT', 'LINK', 'LTC', 'BCH'
-        }
-        
-        if ticker in russian_stocks:
-            return f"{ticker}.MOEX"
-        elif ticker in us_stocks:
-            return f"{ticker}.US"
-        elif ticker in indices:
-            return f"{ticker}.INDX"
-        elif ticker in commodities:
-            return f"{ticker}.COMM"
-        elif ticker in currencies:
-            return f"{ticker}.FX"
-        elif ticker in crypto:
-            return f"{ticker}.CC"
-        
-        # If no match found, return None (will use plain ticker)
-        return None
 
-    def search_by_isin(self, isin: str) -> Optional[str]:
-        """
-        Search for asset by ISIN using okama.Asset.search("") or direct creation
-        
-        Args:
-            isin: ISIN code to search for
-            
-        Returns:
-            Okama ticker if found, None otherwise
-        """
-        try:
-            # First try to create asset directly with ISIN
-            try:
-                asset = ok.Asset(isin=isin)
-                # If successful, return the ISIN as the symbol
-                return isin
-            except Exception as direct_error:
-                self.logger.debug(f"Direct ISIN creation failed for {isin}: {direct_error}")
-            
-            # Fallback to search method
-            search_results = ok.Asset.search(isin)
-            
-            if not search_results or len(search_results) == 0:
-                return None
-            
-            # Look for exact ISIN match first
-            for result in search_results:
-                if hasattr(result, 'isin') and result.isin and result.isin.upper() == isin.upper():
-                    # Return the ticker in okama format
-                    if hasattr(result, 'ticker'):
-                        return result.ticker
-                    elif hasattr(result, 'symbol'):
-                        return result.symbol
-            
-            # If no exact match, return the first result
-            first_result = search_results[0]
-            if hasattr(first_result, 'ticker'):
-                return first_result.ticker
-            elif hasattr(first_result, 'symbol'):
-                return first_result.symbol
-            
-            return None
-            
-        except Exception as e:
-            self.logger.warning(f"Error searching ISIN {isin} via okama.Asset.search: {e}")
-            return None
 
-    def _try_resolve_isin_via_moex(self, isin: str) -> Optional[str]:
-        """
-        Attempt to resolve ISIN to MOEX SECID using MOEX ISS API and return okama ticker SECID.MOEX
-        Returns None if not found.
-        """
-        try:
-            import requests  # Local import to avoid mandatory dependency at module import
-        except Exception:
-            return None
 
-        try:
-            url = f"https://iss.moex.com/iss/securities.json?isin={isin}&iss.meta=off"
-            resp = requests.get(url, timeout=8)
-            if resp.status_code != 200:
-                return None
-            data = resp.json()
-            # The payload contains 'securities': { 'columns': [...], 'data': [[...], ...] }
-            sec = data.get('securities') if isinstance(data, dict) else None
-            if not sec:
-                return None
-            columns = sec.get('columns') or []
-            rows = sec.get('data') or []
-            if not columns or not rows:
-                return None
-            try:
-                secid_idx = columns.index('SECID') if 'SECID' in columns else None
-                isin_idx = columns.index('ISIN') if 'ISIN' in columns else None
-            except Exception:
-                secid_idx = None
-                isin_idx = None
-            if secid_idx is None:
-                return None
-            # Prefer exact ISIN match if column present
-            for row in rows:
-                try:
-                    if isin_idx is not None and isinstance(row, list) and len(row) > max(secid_idx, isin_idx):
-                        if str(row[isin_idx]).upper() != isin:
-                            continue
-                    secid = row[secid_idx]
-                    if isinstance(secid, str) and secid:
-                        return f"{secid.upper()}.MOEX"
-                except Exception:
-                    continue
-            # Fallback: take first row
-            first = rows[0]
-            if isinstance(first, list) and len(first) > secid_idx and isinstance(first[secid_idx], str):
-                return f"{first[secid_idx].upper()}.MOEX"
-            return None
-        except Exception:
-            return None
+
+
 
     def _get_asset_suggestions(self, symbol: str) -> str:
         """Get suggestions for alternative assets when the requested one is not found"""
@@ -493,7 +345,7 @@ class AssetService:
     
     def get_asset_price(self, symbol: str) -> Dict[str, Union[str, Any]]:
         """
-        Get current asset price
+        Get current asset price - simplified version
         
         Args:
             symbol: Asset symbol (e.g., 'VOO.US', 'SPY.US')
@@ -507,264 +359,38 @@ class AssetService:
             if 'error' in resolved:
                 return {'error': resolved['error']}
             symbol = resolved['symbol']
-            self.logger.info(f"Getting asset price for {symbol}")
             
-            # Create asset object
-            try:
-                asset = ok.Asset(symbol)
-            except Exception as e:
-                return {'error': f"Не удалось создать актив {symbol}: {str(e)}"}
+            # Simple call: ok.Asset().price
+            asset = ok.Asset(symbol)
+            price = asset.price
             
-            # Get price data
-            price_data = asset.price
+            if price is None:
+                return {'error': 'No price data available'}
             
-            # Helper: try MOEX ISS fallback before returning an error
-            def _maybe_moex_fallback(error_message: str) -> Dict[str, Union[str, Any]]:
-                if symbol.upper().endswith('.MOEX'):
-                    fallback = self._fetch_moex_price(symbol)
-                    if fallback is not None:
-                        price_value, ts = fallback
-                        return {
-                            'price': price_value,
-                            'currency': 'RUB',
-                            'timestamp': ts
-                        }
-                return {'error': error_message}
-            
-            # Check if price_data is valid and has data
-            if price_data is None:
-                return _maybe_moex_fallback('No price data available')
-            
-            # Handle NaN values - try to get price from adj_close or close_monthly
-            if isinstance(price_data, float) and (price_data != price_data or price_data in (float('inf'), float('-inf'))):
-                # price_data is NaN or infinite, try fallback to adj_close
-                if hasattr(asset, 'adj_close') and asset.adj_close is not None and len(asset.adj_close) > 0:
-                    try:
-                        # Get last valid price from adj_close
-                        adj_close_clean = asset.adj_close.dropna()
-                        if len(adj_close_clean) > 0:
-                            latest_price = adj_close_clean.iloc[-1]
-                            latest_date = adj_close_clean.index[-1]
-                            return {
-                                'price': float(latest_price),
-                                'currency': getattr(asset, 'currency', ''),
-                                'timestamp': str(latest_date)
-                            }
-                    except Exception as e:
-                        self.logger.warning(f"Failed to get price from adj_close for {symbol}: {e}")
-                
-                # If adj_close failed, try close_monthly
-                if hasattr(asset, 'close_monthly') and asset.close_monthly is not None and len(asset.close_monthly) > 0:
-                    try:
-                        # Get last valid price from close_monthly
-                        monthly_clean = asset.close_monthly.dropna()
-                        if len(monthly_clean) > 0:
-                            latest_price = monthly_clean.iloc[-1]
-                            latest_date = monthly_clean.index[-1]
-                            return {
-                                'price': float(latest_price),
-                                'currency': getattr(asset, 'currency', ''),
-                                'timestamp': str(latest_date)
-                            }
-                    except Exception as e:
-                        self.logger.warning(f"Failed to get price from close_monthly for {symbol}: {e}")
-                
-                # If all fallbacks failed, try MOEX ISS
-                return _maybe_moex_fallback('Price data is NaN, fallbacks failed')
-            
-            # Handle different types of price data
-            if hasattr(price_data, 'iloc') and hasattr(price_data, 'index'):
-                try:
-                    import pandas as pd  # Local import to avoid hard dependency at module import time
-                except Exception:
-                    pd = None
-                
-                # Guard empty
-                if not hasattr(price_data, '__len__') or len(price_data) == 0:
-                    return _maybe_moex_fallback('No price data available')
-                
-                # If Series: take last valid non-NaN
-                if getattr(price_data, 'ndim', 1) == 1:
-                    series = price_data
-                    try:
-                        series_non_nan = series.dropna()
-                    except Exception:
-                        # Fallback if dropna is not available or fails
-                        series_non_nan = series[~series.isna()] if hasattr(series, 'isna') else series
-                    if len(series_non_nan) == 0:
-                        return _maybe_moex_fallback('No price data available')
-                    latest_price = series_non_nan.iloc[-1]
-                    latest_date = series_non_nan.index[-1]
-                else:
-                    # DataFrame: take last row with any valid value, then pick the last non-NaN cell
-                    df = price_data
-                    try:
-                        df_non_nan = df.dropna(how='all')
-                    except Exception:
-                        df_non_nan = df
-                    if len(df_non_nan) == 0:
-                        return _maybe_moex_fallback('No price data available')
-                    last_date = df_non_nan.index[-1]
-                    last_row = df_non_nan.iloc[-1]
-                    # Prefer the last non-NaN value in the row
-                    try:
-                        non_nan_values = last_row.dropna()
-                    except Exception:
-                        non_nan_values = last_row[last_row.notna()] if hasattr(last_row, 'notna') else last_row
-                    if hasattr(non_nan_values, 'empty') and non_nan_values.empty:
-                        # As a fallback, stack and take the very last valid value across the frame
-                        try:
-                            stacked = df_non_nan.stack().dropna()
-                            if len(stacked) == 0:
-                                return _maybe_moex_fallback('No price data available')
-                            latest_price = stacked.iloc[-1]
-                            latest_date = stacked.index[-1][0]
-                        except Exception:
-                            return _maybe_moex_fallback('Invalid price data format')
-                    else:
-                        latest_price = non_nan_values.iloc[-1] if hasattr(non_nan_values, 'iloc') else non_nan_values
-                        latest_date = last_date
-            elif isinstance(price_data, (int, float)):
-                # It's a single price value
-                latest_price = price_data
-                latest_date = datetime.now()
-            else:
-                # Try to convert to list/array and find last finite numeric value
-                try:
-                    # Support numpy arrays, lists, tuples, etc.
-                    sequence_like = price_data
-                    # Determine length
-                    length = len(sequence_like)
-                    if length == 0:
-                        return _maybe_moex_fallback('No price data available')
-                    
-                    # Local import for numpy if available
-                    try:
-                        import numpy as np
-                    except Exception:
-                        np = None
-                    
-                    latest_price = None
-                    # Iterate backwards to find last finite numeric
-                    for idx in range(length - 1, -1, -1):
-                        candidate = sequence_like[idx]
-                        # Unwrap numpy/pandas scalar
-                        try:
-                            if hasattr(candidate, 'item'):
-                                candidate = candidate.item()
-                        except Exception:
-                            pass
-                        # Check numeric and finiteness
-                        if isinstance(candidate, (int, float)):
-                            if np is not None:
-                                if np.isfinite(float(candidate)):
-                                    latest_price = float(candidate)
-                                    break
-                            else:
-                                # Fallback finiteness check
-                                val = float(candidate)
-                                if not (val != val or val in (float('inf'), float('-inf'))):
-                                    latest_price = val
-                                    break
-                    if latest_price is None:
-                        return _maybe_moex_fallback('No valid price value available')
-                    latest_date = getattr(asset, 'last_date', datetime.now())
-                except (TypeError, IndexError):
-                    return _maybe_moex_fallback('Invalid price data format')
-            
-            # Normalize scalar to float and guard NaN/inf
-            try:
-                import numpy as np
-            except Exception:
-                np = None
-            
-            try:
-                # Extract python scalar if it's a numpy/pandas scalar
-                if hasattr(latest_price, 'item'):
-                    latest_price = latest_price.item()
-            except Exception:
-                pass
-            
-            # Convert to float if possible
-            try:
-                latest_price_float = float(latest_price)
-            except (TypeError, ValueError):
-                return _maybe_moex_fallback('Invalid price value')
-            
-            # Check for NaN or infinite
-            if (np is not None and not np.isfinite(latest_price_float)) or (np is None and (latest_price_float != latest_price_float or latest_price_float in (float('inf'), float('-inf')))):
-                return _maybe_moex_fallback('No valid price value available')
-            
-            info = {
-                'price': latest_price_float,
-                'currency': getattr(asset, 'currency', ''),
-                'timestamp': str(latest_date)
-            }
-            
-            # Try to generate a price chart from the historical series if available
-            try:
-                series_for_plot = None
-                try:
-                    import pandas as pd  # type: ignore
-                except Exception:
-                    pd = None  # type: ignore
-                raw = asset.price
-                if pd is not None and hasattr(raw, 'iloc') and hasattr(raw, 'index') and len(raw) > 1:
-                    if getattr(raw, 'ndim', 1) == 1:
-                        series_for_plot = raw.dropna()
-                    else:
-                        df_non_nan = raw.dropna(how='all') if hasattr(raw, 'dropna') else raw
-                        if len(df_non_nan) > 0 and hasattr(df_non_nan, 'columns'):
-                            try:
-                                first_col = df_non_nan.columns[0]
-                                series_for_plot = df_non_nan[first_col].dropna()
-                            except Exception:
-                                series_for_plot = None
-                if series_for_plot is not None and len(series_for_plot) > 1:
-                    # Convert PeriodIndex to Timestamp if needed
-                    try:
-                        if hasattr(series_for_plot.index, 'to_timestamp'):
-                            series_for_plot = series_for_plot.copy()
-                            series_for_plot.index = series_for_plot.index.to_timestamp()
-                    except Exception:
-                        pass
-                    
-                    # Create the plot using chart_styles
-                    try:
-                        from services.chart_styles import chart_styles
-                        
-                        fig, ax = chart_styles.create_price_chart(
-                            series_for_plot, symbol, getattr(asset, "currency", ""), 
-                            period='',
-                            copyright=False
-                        )
-                        
-                        buf = io.BytesIO()
-                        chart_styles.save_figure(fig, buf)
-                        chart_styles.cleanup_figure(fig)
-                        info['chart'] = buf.getvalue()
-                    except Exception:
-                        # Silently ignore plotting errors
-                        pass
-            except Exception:
-                # Silently ignore plotting errors
-                pass
-            
-            return info
-            
-        except Exception as e:
-            error_msg = str(e)
-            self.logger.error(f"Error getting asset price for {symbol}: {error_msg}")
-            
-            # Check if it's a "not found" error
-            if "not found" in error_msg.lower() or "404" in error_msg:
-                suggestions = self._get_asset_suggestions(symbol)
+            # Handle different price types
+            if isinstance(price, (int, float)):
                 return {
-                    'error': f"Актив {symbol} не найден в базе данных Okama.\n\n{suggestions}",
-                    'suggestions': suggestions
+                    'price': float(price),
+                    'currency': getattr(asset, 'currency', ''),
+                    'timestamp': str(datetime.now())
                 }
+            elif hasattr(price, 'iloc') and hasattr(price, 'index'):
+                # Pandas Series/DataFrame - get last value
+                if len(price) > 0:
+                    latest_price = price.iloc[-1]
+                    latest_date = price.index[-1]
+                    return {
+                        'price': float(latest_price),
+                        'currency': getattr(asset, 'currency', ''),
+                        'timestamp': str(latest_date)
+                    }
+                else:
+                    return {'error': 'No price data available'}
             else:
-                return {'error': f"Ошибка при получении цены: {error_msg}"}
+                return {'error': 'Invalid price data format'}
+                
+        except Exception as e:
+            return {'error': f"Не удалось получить цену {symbol}: {str(e)}"}
     
     def get_asset_price_history(self, symbol: str, period: str = '1Y') -> Dict[str, Union[str, Any]]:
         """
