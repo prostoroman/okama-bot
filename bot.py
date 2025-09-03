@@ -779,8 +779,8 @@ class OkamaFinanceBot:
             # Создаем кнопки для дополнительных функций
             keyboard = [
                 [
-                    InlineKeyboardButton("📈 Ежедневный график (1Y)", callback_data=f"daily_chart_{symbol}"),
-                    InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}")
+                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{symbol}"),
+                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{symbol}")
                 ],
                 [
                     InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
@@ -4914,9 +4914,7 @@ class OkamaFinanceBot:
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
         
-        # Add message handlers
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-        application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
+        # Message handlers removed - functionality moved to command handlers
         
         # Start the bot
         logger.info("Starting Okama Finance Bot...")
