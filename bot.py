@@ -804,12 +804,13 @@ class OkamaFinanceBot:
             
             # Простой вызов: x = okama.Asset('VOO.US'); x.close_daily.plot()
             def create_simple_daily_chart():
+                # Полная очистка matplotlib
+                plt.clf()
+                plt.close('all')
+                plt.cla()
+                
                 asset = ok.Asset(symbol)
                 if hasattr(asset, 'close_daily') and asset.close_daily is not None:
-                    # Очищаем предыдущий график
-                    plt.clf()
-                    plt.close('all')
-                    
                     # Создаем новый график
                     asset.close_daily.plot()
                     plt.title(f'Ежедневный график {symbol}')
@@ -821,7 +822,12 @@ class OkamaFinanceBot:
                     output = io.BytesIO()
                     plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
                     output.seek(0)
+                    
+                    # Полная очистка после сохранения
+                    plt.clf()
                     plt.close('all')
+                    plt.cla()
+                    
                     return output.getvalue()
                 else:
                     return None
@@ -3245,12 +3251,13 @@ class OkamaFinanceBot:
             
             # Простой вызов: x = okama.Asset('VOO.US'); x.close_monthly.plot()
             def create_simple_monthly_chart():
+                # Полная очистка matplotlib
+                plt.clf()
+                plt.close('all')
+                plt.cla()
+                
                 asset = ok.Asset(symbol)
                 if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
-                    # Очищаем предыдущий график
-                    plt.clf()
-                    plt.close('all')
-                    
                     # Создаем новый график
                     asset.close_monthly.plot()
                     plt.title(f'Месячный график {symbol}')
@@ -3262,7 +3269,12 @@ class OkamaFinanceBot:
                     output = io.BytesIO()
                     plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
                     output.seek(0)
+                    
+                    # Полная очистка после сохранения
+                    plt.clf()
                     plt.close('all')
+                    plt.cla()
+                    
                     return output.getvalue()
                 else:
                     return None
