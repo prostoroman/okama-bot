@@ -736,8 +736,13 @@ class OkamaFinanceBot:
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
         if not context.args:
+            # Get random examples for user
+            examples = self.asset_service.get_random_examples(3)
+            examples_text = ", ".join(examples)
+            
             await self._send_message_safe(update, 
-                "Укажите тикер актива. Пример: /info AAPL.US или /info SBER.MOEX")
+                f"Укажите название инструмента, например: {examples_text}\n\n"
+                "Или просто отправьте название инструмента в сообщении.")
             return
         
         symbol = context.args[0].upper()
@@ -2518,6 +2523,125 @@ class OkamaFinanceBot:
         try:
             user_message = update.message.text
             user_id = update.effective_user.id
+            
+            # Check if message looks like an asset symbol
+            if self.asset_service.is_likely_asset_symbol(user_message):
+                # Resolve the symbol
+                resolved = self.asset_service.resolve_symbol_or_isin(user_message)
+                
+                if 'error' not in resolved:
+                    symbol = resolved['symbol']
+                    
+                    # Update user context with the symbol
+                    self._update_user_context(user_id, 
+                                            last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []))
+                    
+                    # Process as info command
+                    await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
+                    
+                    try:
+                        # Получаем базовую информацию об активе
+                        asset_info = self.asset_service.get_asset_info(symbol)
+                        
+                        if 'error' in asset_info:
+                            await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
+                            return
+                        
+                        # Получаем ежедневный график (1Y)
+                        await self._send_message_safe(update, "📈 Получаю ежедневный график...")
+                        
+                        try:
+                            daily_chart = await self._get_daily_chart(symbol)
+                            
+                            self.logger.info(f"Daily chart result for {symbol}: {type(daily_chart)}")
+                            # Создаем кнопки для дополнительных функций (всегда)
+                            keyboard = [
+                                [
+                                    InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
+                                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                                ]
+                            ]
+                            reply_markup = InlineKeyboardMarkup(keyboard)
+                            
+                            if daily_chart:
+                                self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
+                                # Формируем базовую информацию для подписи
+                                caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                                caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                                caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                                caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                                caption += f"📈: {asset_info.get('type', 'N/A')}\n"
+                                
+                                if asset_info.get('current_price') is not None:
+                                    caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                                
+                                if asset_info.get('annual_return') != 'N/A':
+                                    caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                                
+                                if asset_info.get('volatility') != 'N/A':
+                                    caption += f"📉 Волатильность: {asset_info['volatility']}\n"
+                                
+                                # Получаем AI анализ
+                                try:
+                                    analysis = await self._get_ai_analysis(symbol)
+                                    if analysis:
+                                        caption += analysis
+                                    else:
+                                        caption += "AI-анализ временно недоступен"
+                                except Exception as analysis_error:
+                                    self.logger.error(f"Error in AI analysis for {symbol}: {analysis_error}")
+                                    caption += "AI-анализ временно недоступен"
+                                
+                                # Отправляем график с информацией
+                                await update.message.reply_photo(
+                                    photo=daily_chart,
+                                    caption=self._truncate_caption(caption)
+                                )
+                                
+                                # Отправляем кнопки после графика
+                                await update.message.reply_text(
+                                    "Выберите дополнительную информацию:",
+                                    reply_markup=reply_markup
+                                )
+                                
+                            else:
+                                # Если график не удался, отправляем информацию без графика
+                                info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                                info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                                info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                                info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                                info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
+                                
+                                if asset_info.get('current_price') is not None:
+                                    info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                                
+                                if asset_info.get('annual_return') != 'N/A':
+                                    info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                                
+                                if asset_info.get('volatility') != 'N/A':
+                                    info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+                                
+                                info_text += "\n❌ Ежедневный график временно недоступен"
+                                
+                                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                                
+                        except Exception as chart_error:
+                            self.logger.error(f"Error creating daily chart for {symbol}: {chart_error}")
+                            await self._send_message_safe(update, f"❌ Ошибка при создании графика: {str(chart_error)}")
+                            
+                    except Exception as e:
+                        await self._handle_error(update, e, f"info command for {symbol}")
+                    
+                    return
+                else:
+                    # Symbol resolution failed, show error and examples
+                    examples = self.asset_service.get_random_examples(3)
+                    examples_text = ", ".join(examples)
+                    
+                    await self._send_message_safe(update, 
+                        f"❌ {resolved['error']}\n\n"
+                        f"Примеры правильных названий: {examples_text}")
+                    return
             
             # Update user context
             self._update_user_context(user_id, conversation_history=user_message)
