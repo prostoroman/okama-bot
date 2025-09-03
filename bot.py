@@ -826,6 +826,11 @@ class OkamaFinanceBot:
             def create_simple_daily_chart():
                 asset = ok.Asset(symbol)
                 if hasattr(asset, 'close_daily') and asset.close_daily is not None:
+                    # Очищаем предыдущий график
+                    plt.clf()
+                    plt.close('all')
+                    
+                    # Создаем новый график
                     asset.close_daily.plot()
                     plt.title(f'Ежедневный график {symbol}')
                     plt.xlabel('Дата')
@@ -836,7 +841,7 @@ class OkamaFinanceBot:
                     output = io.BytesIO()
                     plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
                     output.seek(0)
-                    plt.close()
+                    plt.close('all')
                     return output.getvalue()
                 else:
                     return None
@@ -3506,14 +3511,13 @@ class OkamaFinanceBot:
     async def _handle_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle daily chart button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "📈 Получаю ежедневный график за 1 год...")
+            await self._send_callback_message(update, context, "📈 Создаю ежедневный график...")
             
             # Получаем ежедневный график за 1 год
             daily_chart = await self._get_daily_chart(symbol)
             
             if daily_chart:
-                caption = f"📈 Ежедневный график {symbol} за 1 год\n\n"
-                caption += "Показывает краткосрочные движения и волатильность"
+                caption = f"📈 Ежедневный график {symbol}\n\n"
                 
                 await update.callback_query.message.reply_photo(
                     photo=daily_chart,
@@ -3529,14 +3533,13 @@ class OkamaFinanceBot:
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle monthly chart button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "📅 Получаю месячный график за 10 лет...")
+            await self._send_callback_message(update, context, "📅 Создаю месячный график...")
             
             # Получаем месячный график за 10 лет
             monthly_chart = await self._get_monthly_chart(symbol)
             
             if monthly_chart:
                 caption = f"📅 Месячный график {symbol} за 10 лет\n\n"
-                caption += "Показывает долгосрочные тренды и сезонность"
                 
                 await update.callback_query.message.reply_photo(
                     photo=monthly_chart,
@@ -3628,6 +3631,11 @@ class OkamaFinanceBot:
             def create_simple_monthly_chart():
                 asset = ok.Asset(symbol)
                 if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
+                    # Очищаем предыдущий график
+                    plt.clf()
+                    plt.close('all')
+                    
+                    # Создаем новый график
                     asset.close_monthly.plot()
                     plt.title(f'Месячный график {symbol}')
                     plt.xlabel('Дата')
@@ -3638,7 +3646,7 @@ class OkamaFinanceBot:
                     output = io.BytesIO()
                     plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
                     output.seek(0)
-                    plt.close()
+                    plt.close('all')
                     return output.getvalue()
                 else:
                     return None
