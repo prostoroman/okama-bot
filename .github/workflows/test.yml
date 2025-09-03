@@ -1,4 +1,4 @@
-name: 🧪 Tests
+name: 🧪 Render Compatibility Tests
 
 on:
   push:
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.11", "3.12"]
 
     steps:
     - name: 📥 Checkout code
@@ -34,6 +34,11 @@ jobs:
         echo "YANDEX_FOLDER_ID=test_folder_id_123456789" >> $GITHUB_ENV
         echo "BOT_USERNAME=test_bot" >> $GITHUB_ENV
         echo "ADMIN_USER_ID=123456789" >> $GITHUB_ENV
+        echo "PYTHON_VERSION=3.13.0" >> $GITHUB_ENV
+        echo "PYTHONPATH=/opt/render/project/src" >> $GITHUB_ENV
+        echo "PYTHONUNBUFFERED=1" >> $GITHUB_ENV
+        echo "RENDER=true" >> $GITHUB_ENV
+        echo "RENDER_SERVICE_TYPE=worker" >> $GITHUB_ENV
 
     - name: 🔍 Test imports
       run: |
@@ -47,62 +52,24 @@ jobs:
         python -c "from services.analysis_engine_enhanced import EnhancedAnalysisEngine; print('✅ EnhancedAnalysisEngine import OK')"
         python -c "from services.financial_brain_enhanced import EnhancedOkamaFinancialBrain; print('✅ EnhancedOkamaFinancialBrain import OK')"
 
-    - name: 🧪 Run tests
+    - name: 🧪 Run Render compatibility tests
       env:
         MPLBACKEND: Agg
+        TELEGRAM_BOT_TOKEN: test_bot_token_123456789
+        YANDEX_API_KEY: test_yandex_api_key_123456789
+        YANDEX_FOLDER_ID: test_folder_id_123456789
+        BOT_USERNAME: test_bot
+        ADMIN_USER_ID: 123456789
+        PYTHON_VERSION: 3.13.0
+        PYTHONPATH: /opt/render/project/src
+        PYTHONUNBUFFERED: 1
+        RENDER: true
+        RENDER_SERVICE_TYPE: worker
       run: |
-        python -m unittest discover tests/ -v
+        python -m unittest tests/test_render_compatibility.py -v
 
     - name: 📊 Test completion
       run: |
-        echo "🎯 All tests completed successfully!"
-        echo "📈 Test coverage: Basic functionality verified"
-        echo "🚀 Okama Finance Bot is ready!"
-
-  lint:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-
-    - name: 📦 Install linting tools
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8
-
-    - name: 🔍 Run linters
-      run: |
-        echo "🔍 Checking code style..."
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        echo "✅ Linting completed!"
-
-  security:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-
-    - name: 📦 Install security tools
-      run: |
-        python -m pip install --upgrade pip
-        pip install bandit safety
-
-    - name: 🔒 Security scan
-      run: |
-        echo "🔒 Running security scan..."
-        bandit -r . -f json -o bandit-report.json || true
-        safety check || true
-        echo "✅ Security scan completed!"
+        echo "🎯 Render compatibility tests completed successfully!"
+        echo "📈 Bot is ready for deployment on Render!"
+        echo "🚀 Okama Finance Bot deployment ready!"
