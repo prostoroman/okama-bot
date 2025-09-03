@@ -98,53 +98,7 @@ class ShansAi:
         self.MAX_HISTORY_MESSAGES = 20
         self.MAX_TELEGRAM_CHUNK = 4000
         
-    # --- Okama compatibility helpers ---
-    def _ok_asset(self, symbol: str, currency: str = None):
-        """Create okama Asset with backward-compatible signature.
-        Tries with ccy first, falls back to positional or no currency if unsupported.
-        """
-        import okama as ok
-        try:
-            if currency is not None:
-                return ok.Asset(symbol, ccy=currency)
-            return ok.Asset(symbol)
-        except TypeError as e:
-            # Fallback for versions without ccy keyword
-            if currency is not None:
-                try:
-                    return ok.Asset(symbol, currency)
-                except Exception:
-                    return ok.Asset(symbol)
-            return ok.Asset(symbol)
 
-    def _ok_asset_list(self, symbols: list, currency: str = None):
-        """Create okama AssetList with backward-compatible signature."""
-        import okama as ok
-        try:
-            if currency is not None:
-                return ok.AssetList(symbols, ccy=currency)
-            return ok.AssetList(symbols)
-        except TypeError:
-            if currency is not None:
-                try:
-                    return ok.AssetList(symbols, currency)
-                except Exception:
-                    return ok.AssetList(symbols)
-            return ok.AssetList(symbols)
-
-    def _ok_portfolio(self, symbols: list, weights: list, currency: str = None):
-        """Create okama Portfolio with backward-compatible signature."""
-        import okama as ok
-        try:
-            if currency is not None:
-                return ok.Portfolio(symbols, ccy=currency, weights=weights)
-            return ok.Portfolio(symbols, weights=weights)
-        except TypeError:
-            if currency is not None:
-                try:
-                    return ok.Portfolio(symbols, currency, weights=weights)
-                except Exception:
-                    return ok.Portfolio(symbols, weights=weights)
 
     # --- Asset Service Methods ---
     
@@ -907,78 +861,25 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график с правильными данными и стилями"""
+        """Получить ежедневный график используя встроенные функции okama"""
         try:
             import asyncio
-            import matplotlib.pyplot as plt
             import io
-            import pandas as pd
             
             def create_daily_chart():
-                # Полная очистка matplotlib
-                plt.clf()
-                plt.close('all')
-                plt.cla()
-                
-
-                
-                # Создаем актив напрямую для получения данных
                 asset = ok.Asset(symbol)
-                currency = getattr(asset, 'currency', '')
+                # Используем встроенный метод plot() для создания графика
+                fig = asset.close_daily.plot(figsize=(12, 8), title=f'Ежедневный график {symbol}')
                 
-                # Используем close_daily для дневных данных
-                if hasattr(asset, 'close_daily') and asset.close_daily is not None:
-                    daily_data = asset.close_daily
-                    
-                    # Фильтруем данные на 1 год
-                    if len(daily_data) > 365:
-                        daily_data = daily_data.tail(365)
-                    
-                    # Создаем график с правильными стилями
-                    fig, ax = plt.subplots(figsize=(12, 8))
-                    
-                    # Конвертируем PeriodIndex в DatetimeIndex для лучшего отображения
-                    if isinstance(daily_data.index, pd.PeriodIndex):
-                        x_values = daily_data.index.to_timestamp()
-                    else:
-                        x_values = daily_data.index
-                    
-                    ax.plot(x_values, daily_data.values, linewidth=2, color='#1f77b4', alpha=0.8)
-                    ax.set_title(f'Ежедневный график {symbol}', fontsize=16, fontweight='bold', pad=20)
-                    ax.set_xlabel('Дата', fontsize=12)
-                    ax.set_ylabel(f'Цена ({currency})', fontsize=12)
-                    ax.grid(True, alpha=0.3)
-                    ax.tick_params(axis='x', rotation=45)
-                    
-                    # Форматируем оси
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    
-                    # Добавляем информацию о данных
-                    if len(daily_data) > 0:
-                        current_price = daily_data.iloc[-1]
-                        start_price = daily_data.iloc[0]
-                        change_pct = ((current_price - start_price) / start_price) * 100
-                        
-                        # Добавляем аннотацию с текущей ценой
-                        ax.annotate(f'Текущая цена: {current_price:.2f} {currency}\nИзменение: {change_pct:+.2f}%', 
-                                  xy=(0.02, 0.98), xycoords='axes fraction',
-                                  bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
-                                  fontsize=10, verticalalignment='top')
-                    
-                    # Сохраняем в bytes
-                    output = io.BytesIO()
-                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight', facecolor='white')
-                    output.seek(0)
-                    
-                    # Полная очистка после сохранения
-                    plt.clf()
-                    plt.close('all')
-                    plt.cla()
-                    
-                    return output.getvalue()
-                else:
-                    return None
+                # Сохраняем в bytes
+                output = io.BytesIO()
+                fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                output.seek(0)
+                
+                # Очистка
+                plt.close(fig)
+                
+                return output.getvalue()
             
             # Выполняем с таймаутом
             chart_data = await asyncio.wait_for(
@@ -1321,7 +1222,7 @@ class ShansAi:
                     
                     # Create portfolio using okama
                     try:
-                        portfolio = self._ok_portfolio(portfolio_symbols, weights=portfolio_weights, currency=portfolio_currency)
+                        portfolio = ok.Portfolio(portfolio_symbols, weights=portfolio_weights, ccy=portfolio_currency)
                         
                         # Add portfolio wealth index to expanded symbols
                         expanded_symbols.append(portfolio.wealth_index)
@@ -1457,10 +1358,10 @@ class ShansAi:
                             if portfolio_context:
                                 try:
                                     # Create portfolio object using okama
-                                    portfolio = self._ok_portfolio(
+                                    portfolio = ok.Portfolio(
                                         portfolio_context['portfolio_symbols'], 
                                         portfolio_context['portfolio_weights'], 
-                                        currency=portfolio_context['portfolio_currency']
+                                        ccy=portfolio_context['portfolio_currency']
                                     )
                                     assets_for_comparison.append(portfolio)
                                     self.logger.info(f"Added portfolio {portfolio_context['symbol']} to comparison")
@@ -1477,7 +1378,7 @@ class ShansAi:
                                     if ' (' in desc:
                                         portfolio_symbols = desc.split(' (')[1].rstrip(')').split(', ')
                                         portfolio_weights = [1.0/len(portfolio_symbols)] * len(portfolio_symbols)
-                                        portfolio = self._ok_portfolio(portfolio_symbols, portfolio_weights, currency=currency)
+                                        portfolio = ok.Portfolio(portfolio_symbols, portfolio_weights, ccy=currency)
                                         assets_for_comparison.append(portfolio)
                                         self.logger.info(f"Added generic portfolio to comparison")
                                     else:
@@ -1522,7 +1423,7 @@ class ShansAi:
                     # Create comparison using ok.AssetList (proper way to compare portfolios with assets)
                     try:
                         self.logger.info(f"Creating AssetList with {len(assets_for_comparison)} assets/portfolios")
-                        comparison = self._ok_asset_list(assets_for_comparison, currency=currency)
+                        comparison = ok.AssetList(assets_for_comparison, ccy=currency)
                         self.logger.info("Successfully created AssetList comparison")
                     except Exception as asset_list_error:
                         self.logger.error(f"Error creating AssetList: {asset_list_error}")
@@ -1532,7 +1433,7 @@ class ShansAi:
                 else:
                     # Regular comparison without portfolios
                     self.logger.info("Creating regular comparison without portfolios")
-                    comparison = self._ok_asset_list(symbols, currency=currency)
+                    comparison = ok.AssetList(symbols, ccy=currency)
                 
                 # Store context for buttons - use clean portfolio symbols for current_symbols
                 clean_symbols = []
@@ -1857,7 +1758,7 @@ class ShansAi:
                     self.logger.info(f"DEBUG: About to create ok.Portfolio with symbols={symbols}, ccy={currency}, weights={weights}")
                     self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
                     self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
-                    portfolio = self._ok_portfolio(symbols, weights=weights, currency=currency)
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
                     self.logger.info(f"DEBUG: Successfully created portfolio")
                 except Exception as e:
                     self.logger.error(f"DEBUG: Error creating portfolio: {e}")
@@ -1871,7 +1772,7 @@ class ShansAi:
                 
                 # Create portfolio chart with chart_styles using optimized method
                 fig, ax = chart_styles.create_portfolio_wealth_chart(
-                    data=wealth_index, symbols=symbols, currency=currency
+                    data=wealth_index, symbols=symbols, ccy=currency
                 )
                 
                 # Save chart to bytes with memory optimization
@@ -2074,7 +1975,7 @@ class ShansAi:
                     last_analysis_type='portfolio',
                     last_period='MAX',
                     current_symbols=symbols,
-                    current_currency=currency,
+                    current_ccy=currency,
                     current_currency_info=currency_info,
                     portfolio_weights=weights,
                     portfolio_count=portfolio_count
@@ -2501,10 +2402,10 @@ class ShansAi:
             # Add portfolios from context
             for pctx in portfolio_contexts:
                 try:
-                    p = self._ok_portfolio(
+                    p = ok.Portfolio(
                         pctx.get('portfolio_symbols', []),
                         weights=pctx.get('portfolio_weights', []),
-                        currency=pctx.get('portfolio_currency') or currency,
+                        ccy=pctx.get('portfolio_currency') or currency,
                     )
                     asset_list_items.append(p)
                     asset_names.append(pctx.get('symbol', 'Portfolio'))
@@ -2525,7 +2426,7 @@ class ShansAi:
             # Create AssetList with selected assets/portfolios
             img_buffer = None
             try:
-                asset_list = self._ok_asset_list(asset_list_items, currency=currency)
+                asset_list = ok.AssetList(asset_list_items, ccy=currency)
                 
                 # okama plotting
                 asset_list.plot_assets(kind="cagr")
@@ -2558,7 +2459,7 @@ class ShansAi:
                         try:
                             if isinstance(asset, str):
                                 # Individual asset
-                                asset_obj = self._ok_asset(asset)
+                                asset_obj = ok.Asset(asset)
                                 cagr = asset_obj.get_cagr()
                             else:
                                 # Portfolio
@@ -2574,7 +2475,7 @@ class ShansAi:
                             # Manual CAGR calculation
                             try:
                                 if isinstance(asset, str):
-                                    asset_obj = self._ok_asset(asset)
+                                    asset_obj = ok.Asset(asset)
                                     wealth_index = asset_obj.wealth_index
                                 else:
                                     wealth_index = asset.wealth_index
@@ -2645,7 +2546,7 @@ class ShansAi:
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList
-                asset_list = self._ok_asset_list(symbols, currency=currency)
+                asset_list = ok.AssetList(symbols, ccy=currency)
                 await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
         
         except Exception as e:
@@ -2723,7 +2624,7 @@ class ShansAi:
             # Process individual assets separately
             if asset_symbols:
                 try:
-                    asset_asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                    asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
                     
                     for symbol in asset_symbols:
                         if symbol in asset_asset_list.wealth_indexes.columns:
@@ -2799,7 +2700,7 @@ class ShansAi:
             fig, ax = chart_styles.create_drawdowns_chart(
                 data=pd.DataFrame(cleaned_drawdowns_data),
                 symbols=list(cleaned_drawdowns_data.keys()),
-                currency=currency
+                ccy=currency
             )
             
             # Save chart
@@ -2876,7 +2777,7 @@ class ShansAi:
                 await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList
-                asset_list = self._ok_asset_list(symbols, currency=currency)
+                asset_list = ok.AssetList(symbols, ccy=currency)
                 await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
             
         except Exception as e:
@@ -2925,7 +2826,7 @@ class ShansAi:
                             
                             # Create separate AssetList for portfolio assets
                             try:
-                                portfolio_asset_list = self._ok_asset_list(assets, currency=currency)
+                                portfolio_asset_list = ok.AssetList(assets, ccy=currency)
                                 
                                 if hasattr(portfolio_asset_list, 'dividend_yields'):
                                     # Calculate weighted dividend yield
@@ -2957,7 +2858,7 @@ class ShansAi:
             # Process individual assets separately
             if asset_symbols:
                 try:
-                    asset_asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                    asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
                     
                     if hasattr(asset_asset_list, 'dividend_yields'):
                         for symbol in asset_symbols:
@@ -3057,7 +2958,7 @@ class ShansAi:
                 await self._create_mixed_comparison_correlation_matrix(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList
-                asset_list = self._ok_asset_list(symbols, currency=currency)
+                asset_list = ok.AssetList(symbols, ccy=currency)
                 await self._create_correlation_matrix(update, context, asset_list, symbols)
             
         except Exception as e:
@@ -3132,7 +3033,7 @@ class ShansAi:
             # Process individual assets separately
             if asset_symbols:
                 try:
-                    asset_asset_list = self._ok_asset_list(asset_symbols, currency=currency)
+                    asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
                     
                     for symbol in asset_symbols:
                         if symbol in asset_asset_list.wealth_indexes.columns:
@@ -3324,78 +3225,25 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить месячный график с правильными данными и стилями"""
+        """Получить месячный график используя встроенные функции okama"""
         try:
             import asyncio
-            import matplotlib.pyplot as plt
             import io
-            import pandas as pd
             
             def create_monthly_chart():
-                # Полная очистка matplotlib
-                plt.clf()
-                plt.close('all')
-                plt.cla()
-                
-
-                
-                # Создаем актив напрямую для получения данных
                 asset = ok.Asset(symbol)
-                currency = getattr(asset, 'currency', '')
+                # Используем встроенный метод plot() для создания графика
+                fig = asset.close_monthly.plot(figsize=(12, 8), title=f'Месячный график {symbol}')
                 
-                # Используем close_monthly для месячных данных
-                if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
-                    monthly_data = asset.close_monthly
-                    
-                    # Фильтруем данные на 10 лет (120 месяцев)
-                    if len(monthly_data) > 120:
-                        monthly_data = monthly_data.tail(120)
-                    
-                    # Создаем график с правильными стилями
-                    fig, ax = plt.subplots(figsize=(12, 8))
-                    
-                    # Конвертируем PeriodIndex в DatetimeIndex для лучшего отображения
-                    if isinstance(monthly_data.index, pd.PeriodIndex):
-                        x_values = monthly_data.index.to_timestamp()
-                    else:
-                        x_values = monthly_data.index
-                    
-                    ax.plot(x_values, monthly_data.values, linewidth=2, color='#ff7f0e', alpha=0.8)
-                    ax.set_title(f'Месячный график {symbol}', fontsize=16, fontweight='bold', pad=20)
-                    ax.set_xlabel('Дата', fontsize=12)
-                    ax.set_ylabel(f'Цена ({currency})', fontsize=12)
-                    ax.grid(True, alpha=0.3)
-                    ax.tick_params(axis='x', rotation=45)
-                    
-                    # Форматируем оси
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    
-                    # Добавляем информацию о данных
-                    if len(monthly_data) > 0:
-                        current_price = monthly_data.iloc[-1]
-                        start_price = monthly_data.iloc[0]
-                        change_pct = ((current_price - start_price) / start_price) * 100
-                        
-                        # Добавляем аннотацию с текущей ценой
-                        ax.annotate(f'Текущая цена: {current_price:.2f} {currency}\nИзменение: {change_pct:+.2f}%', 
-                                  xy=(0.02, 0.98), xycoords='axes fraction',
-                                  bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
-                                  fontsize=10, verticalalignment='top')
-                    
-                    # Сохраняем в bytes
-                    output = io.BytesIO()
-                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight', facecolor='white')
-                    output.seek(0)
-                    
-                    # Полная очистка после сохранения
-                    plt.clf()
-                    plt.close('all')
-                    plt.cla()
-                    
-                    return output.getvalue()
-                else:
-                    return None
+                # Сохраняем в bytes
+                output = io.BytesIO()
+                fig.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                output.seek(0)
+                
+                # Очистка
+                plt.close(fig)
+                
+                return output.getvalue()
             
             # Выполняем с таймаутом
             chart_data = await asyncio.wait_for(
@@ -3481,7 +3329,7 @@ class ShansAi:
             fig, ax = chart_styles.create_dividends_chart_enhanced(
                 data=dividend_series,
                 symbol=symbol,
-                currency=currency
+                ccy=currency
             )
             
             # Рисуем столбчатую диаграмму
@@ -3649,7 +3497,7 @@ class ShansAi:
             await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
             
             # Create Portfolio again
-            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
             
             await self._create_risk_metrics_report(update, context, portfolio, final_symbols, currency)
             
@@ -3696,7 +3544,7 @@ class ShansAi:
             await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
             
             # Create Portfolio again
-            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
             
             await self._create_monte_carlo_forecast(update, context, portfolio, final_symbols, currency)
             
@@ -3743,7 +3591,7 @@ class ShansAi:
             await self._send_callback_message(update, context, "📈 Создаю прогноз с процентилями...")
             
             # Create Portfolio again
-            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
             
             await self._create_forecast_chart(update, context, portfolio, final_symbols, currency)
             
@@ -4380,7 +4228,7 @@ class ShansAi:
             await self._send_callback_message(update, context, "📉 Создаю график просадок...")
             
             # Create Portfolio again
-            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
             
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -4513,7 +4361,7 @@ class ShansAi:
             await self._send_callback_message(update, context, "💰 Создаю график доходности...")
             
             # Create Portfolio again
-            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
             
             await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -4651,7 +4499,7 @@ class ShansAi:
             await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
             
             # Create Portfolio again
-            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
             
             await self._create_portfolio_rolling_cagr_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -4669,7 +4517,7 @@ class ShansAi:
             
             # Create standardized rolling CAGR chart using chart_styles
             fig, ax = chart_styles.create_portfolio_rolling_cagr_chart(
-                data=rolling_cagr_data, symbols=symbols, currency=currency
+                data=rolling_cagr_data, symbols=symbols, ccy=currency
             )
             
             # Save the figure using standardized method
@@ -4777,7 +4625,7 @@ class ShansAi:
             await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
             
             # Create Portfolio again
-            portfolio = self._ok_portfolio(final_symbols, weights=weights, currency=currency)
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
             
             await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -4796,7 +4644,7 @@ class ShansAi:
             
             # Create standardized comparison chart using chart_styles
             fig, ax = chart_styles.create_portfolio_compare_assets_chart(
-                data=compare_data, symbols=symbols, currency=currency
+                data=compare_data, symbols=symbols, ccy=currency
             )
             
             # Save the figure using standardized method
@@ -4841,7 +4689,7 @@ class ShansAi:
                             continue
                         
                         # Get individual asset
-                        asset = self._ok_asset(symbol, currency=currency)
+                        asset = ok.Asset(symbol, ccy=currency)
                         
                         # Calculate wealth index from price data
                         price_data = asset.price
