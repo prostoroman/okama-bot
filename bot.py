@@ -6,6 +6,7 @@ import json
 import threading
 import re
 import traceback
+import asyncio
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any, Union
 import io
@@ -967,13 +968,19 @@ class ShansAi:
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
         """Получить ежедневный график используя встроенные функции okama"""
         try:
-            import asyncio
             import io
             
             def create_daily_chart():
+                # Устанавливаем backend для headless режима
+                import matplotlib
+                matplotlib.use('Agg')
+                
                 asset = ok.Asset(symbol)
                 # Используем встроенный метод plot() для создания графика
-                fig = asset.close_daily.plot(figsize=(12, 8), title=f'Ежедневный график {symbol}')
+                ax = asset.close_daily.plot(figsize=(12, 8), title=f'Ежедневный график {symbol}')
+                
+                # Получаем Figure из Axes
+                fig = ax.figure
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
@@ -3331,13 +3338,19 @@ class ShansAi:
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
         """Получить месячный график используя встроенные функции okama"""
         try:
-            import asyncio
             import io
             
             def create_monthly_chart():
+                # Устанавливаем backend для headless режима
+                import matplotlib
+                matplotlib.use('Agg')
+                
                 asset = ok.Asset(symbol)
                 # Используем встроенный метод plot() для создания графика
-                fig = asset.close_monthly.plot(figsize=(12, 8), title=f'Месячный график {symbol}')
+                ax = asset.close_monthly.plot(figsize=(12, 8), title=f'Месячный график {symbol}')
+                
+                # Получаем Figure из Axes
+                fig = ax.figure
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
