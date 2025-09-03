@@ -838,31 +838,73 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график простым способом"""
+        """Получить ежедневный график с правильными данными и стилями"""
         try:
             import asyncio
             import matplotlib.pyplot as plt
             import io
+            import pandas as pd
             
-            # Простой вызов: x = okama.Asset('VOO.US'); x.close_daily.plot()
-            def create_simple_daily_chart():
+            def create_daily_chart():
                 # Полная очистка matplotlib
                 plt.clf()
                 plt.close('all')
                 plt.cla()
                 
+                # Используем asset_service для получения данных
+                asset_info = self.asset_service.get_asset_price_history(symbol, '1Y')
+                
+                if 'error' in asset_info:
+                    self.logger.error(f"Error getting asset info: {asset_info['error']}")
+                    return None
+                
+                # Создаем актив напрямую для получения данных
                 asset = ok.Asset(symbol)
-                if hasattr(asset, 'close_daily') and asset.close_daily is not None:
-                    # Создаем новый график
-                    asset.close_daily.plot()
-                    plt.title(f'Ежедневный график {symbol}')
-                    plt.xlabel('Дата')
-                    plt.ylabel('Цена')
-                    plt.grid(True)
+                currency = getattr(asset, 'currency', '')
+                
+                # Используем adj_close для дневных данных (как в asset_service)
+                if hasattr(asset, 'adj_close') and asset.adj_close is not None:
+                    daily_data = asset.adj_close
+                    
+                    # Фильтруем данные на 1 год
+                    if len(daily_data) > 365:
+                        daily_data = daily_data.tail(365)
+                    
+                    # Создаем график с правильными стилями
+                    fig, ax = plt.subplots(figsize=(12, 8))
+                    
+                    # Конвертируем PeriodIndex в DatetimeIndex для лучшего отображения
+                    if isinstance(daily_data.index, pd.PeriodIndex):
+                        x_values = daily_data.index.to_timestamp()
+                    else:
+                        x_values = daily_data.index
+                    
+                    ax.plot(x_values, daily_data.values, linewidth=2, color='#1f77b4', alpha=0.8)
+                    ax.set_title(f'Ежедневный график {symbol}', fontsize=16, fontweight='bold', pad=20)
+                    ax.set_xlabel('Дата', fontsize=12)
+                    ax.set_ylabel(f'Цена ({currency})', fontsize=12)
+                    ax.grid(True, alpha=0.3)
+                    ax.tick_params(axis='x', rotation=45)
+                    
+                    # Форматируем оси
+                    ax.spines['top'].set_visible(False)
+                    ax.spines['right'].set_visible(False)
+                    
+                    # Добавляем информацию о данных
+                    if len(daily_data) > 0:
+                        current_price = daily_data.iloc[-1]
+                        start_price = daily_data.iloc[0]
+                        change_pct = ((current_price - start_price) / start_price) * 100
+                        
+                        # Добавляем аннотацию с текущей ценой
+                        ax.annotate(f'Текущая цена: {current_price:.2f} {currency}\nИзменение: {change_pct:+.2f}%', 
+                                  xy=(0.02, 0.98), xycoords='axes fraction',
+                                  bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+                                  fontsize=10, verticalalignment='top')
                     
                     # Сохраняем в bytes
                     output = io.BytesIO()
-                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight', facecolor='white')
                     output.seek(0)
                     
                     # Полная очистка после сохранения
@@ -876,7 +918,7 @@ class ShansAi:
             
             # Выполняем с таймаутом
             chart_data = await asyncio.wait_for(
-                asyncio.to_thread(create_simple_daily_chart),
+                asyncio.to_thread(create_daily_chart),
                 timeout=30.0
             )
             
@@ -3285,31 +3327,73 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить месячный график простым способом"""
+        """Получить месячный график с правильными данными и стилями"""
         try:
             import asyncio
             import matplotlib.pyplot as plt
             import io
+            import pandas as pd
             
-            # Простой вызов: x = okama.Asset('VOO.US'); x.close_monthly.plot()
-            def create_simple_monthly_chart():
+            def create_monthly_chart():
                 # Полная очистка matplotlib
                 plt.clf()
                 plt.close('all')
                 plt.cla()
                 
+                # Используем asset_service для получения данных
+                asset_info = self.asset_service.get_asset_price_history(symbol, '10Y')
+                
+                if 'error' in asset_info:
+                    self.logger.error(f"Error getting asset info: {asset_info['error']}")
+                    return None
+                
+                # Создаем актив напрямую для получения данных
                 asset = ok.Asset(symbol)
+                currency = getattr(asset, 'currency', '')
+                
+                # Используем close_monthly для месячных данных
                 if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
-                    # Создаем новый график
-                    asset.close_monthly.plot()
-                    plt.title(f'Месячный график {symbol}')
-                    plt.xlabel('Дата')
-                    plt.ylabel('Цена')
-                    plt.grid(True)
+                    monthly_data = asset.close_monthly
+                    
+                    # Фильтруем данные на 10 лет (120 месяцев)
+                    if len(monthly_data) > 120:
+                        monthly_data = monthly_data.tail(120)
+                    
+                    # Создаем график с правильными стилями
+                    fig, ax = plt.subplots(figsize=(12, 8))
+                    
+                    # Конвертируем PeriodIndex в DatetimeIndex для лучшего отображения
+                    if isinstance(monthly_data.index, pd.PeriodIndex):
+                        x_values = monthly_data.index.to_timestamp()
+                    else:
+                        x_values = monthly_data.index
+                    
+                    ax.plot(x_values, monthly_data.values, linewidth=2, color='#ff7f0e', alpha=0.8)
+                    ax.set_title(f'Месячный график {symbol}', fontsize=16, fontweight='bold', pad=20)
+                    ax.set_xlabel('Дата', fontsize=12)
+                    ax.set_ylabel(f'Цена ({currency})', fontsize=12)
+                    ax.grid(True, alpha=0.3)
+                    ax.tick_params(axis='x', rotation=45)
+                    
+                    # Форматируем оси
+                    ax.spines['top'].set_visible(False)
+                    ax.spines['right'].set_visible(False)
+                    
+                    # Добавляем информацию о данных
+                    if len(monthly_data) > 0:
+                        current_price = monthly_data.iloc[-1]
+                        start_price = monthly_data.iloc[0]
+                        change_pct = ((current_price - start_price) / start_price) * 100
+                        
+                        # Добавляем аннотацию с текущей ценой
+                        ax.annotate(f'Текущая цена: {current_price:.2f} {currency}\nИзменение: {change_pct:+.2f}%', 
+                                  xy=(0.02, 0.98), xycoords='axes fraction',
+                                  bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+                                  fontsize=10, verticalalignment='top')
                     
                     # Сохраняем в bytes
                     output = io.BytesIO()
-                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight')
+                    plt.savefig(output, format='PNG', dpi=300, bbox_inches='tight', facecolor='white')
                     output.seek(0)
                     
                     # Полная очистка после сохранения
@@ -3323,7 +3407,7 @@ class ShansAi:
             
             # Выполняем с таймаутом
             chart_data = await asyncio.wait_for(
-                asyncio.to_thread(create_simple_monthly_chart),
+                asyncio.to_thread(create_monthly_chart),
                 timeout=30.0
             )
             
