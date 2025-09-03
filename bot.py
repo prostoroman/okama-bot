@@ -4686,7 +4686,7 @@ class ShansAi:
             
             # Create standardized rolling CAGR chart using chart_styles
             fig, ax = chart_styles.create_portfolio_rolling_cagr_chart(
-                data=rolling_cagr_data, symbols=symbols, ccy=currency
+                data=rolling_cagr_data, symbols=symbols, currency=currency
             )
             
             # Save the figure using standardized method
@@ -4813,7 +4813,7 @@ class ShansAi:
             
             # Create standardized comparison chart using chart_styles
             fig, ax = chart_styles.create_portfolio_compare_assets_chart(
-                data=compare_data, symbols=symbols, ccy=currency
+                data=compare_data, symbols=symbols, currency=currency
             )
             
             # Save the figure using standardized method
