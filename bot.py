@@ -1829,7 +1829,7 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_message_safe(update, f"�� Создаю портфель: {', '.join(symbols)}...")
+            await self._send_message_safe(update, f"Создаю портфель: {', '.join(symbols)}...")
             
             # Create portfolio using okama
             
@@ -1904,7 +1904,7 @@ class ShansAi:
                 
                 # Create portfolio chart with chart_styles using optimized method
                 fig, ax = chart_styles.create_portfolio_wealth_chart(
-                    data=wealth_index, symbols=symbols, ccy=currency
+                    data=wealth_index, symbols=symbols, currency=currency
                 )
                 
                 # Save chart to bytes with memory optimization
@@ -3264,11 +3264,11 @@ class ShansAi:
         try:
             await self._send_callback_message(update, context, "📅 Создаю месячный график...")
             
-            # Получаем месячный график за 10 лет
+            # Получаем месячный график=
             monthly_chart = await self._get_monthly_chart(symbol)
             
             if monthly_chart:
-                caption = f"📅 Месячный график {symbol} за 10 лет\n\n"
+                caption = f"📅 Месячный график {symbol}\n\n"
                 
                 await update.callback_query.message.reply_photo(
                     photo=monthly_chart,
