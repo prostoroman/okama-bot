@@ -720,10 +720,9 @@ class ShansAi:
             examples_text = ", ".join(examples)
             
             await self._send_message_safe(update, 
-                f"📊 Команда /info - Информация об активе\n\n"
-                f"Укажите название инструмента, например: {examples_text}\n\n"
-                f"ISIN коды: RU0009029540 (Сбербанк), US0378331005 (Apple)\n\n"
-                f"Или просто отправьте название инструмента.")
+                f"📊 Информация об активе\n\n"
+                f"Примеры: {examples_text}\n\n"
+                f"Просто отправьте название инструмента")
             return
         
         symbol = context.args[0].upper()
@@ -767,6 +766,59 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in info command for {symbol}: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle text messages - treat as asset symbol for /info"""
+        if not update.message or not update.message.text:
+            return
+        
+        text = update.message.text.strip()
+        if not text:
+            return
+        
+        # Treat text as asset symbol and process with /info logic
+        symbol = text.upper()
+        
+        # Update user context
+        user_id = update.effective_user.id
+        self._update_user_context(user_id, 
+                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []))
+        
+        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
+        
+        try:
+            # Получаем базовую информацию об активе
+            asset_info = self.asset_service.get_asset_info(symbol)
+            
+            if 'error' in asset_info:
+                await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
+                return
+            
+            # Получаем сырой вывод объекта ok.Asset
+            try:
+                asset = ok.Asset(symbol)
+                info_text = f"{asset}"
+            except Exception as e:
+                info_text = f"Ошибка при получении информации об активе: {str(e)}"
+            
+            # Создаем кнопки для дополнительных функций
+            keyboard = [
+                [
+                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{symbol}"),
+                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{symbol}")
+                ],
+                [
+                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Отправляем информацию с кнопками
+            await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                
+        except Exception as e:
+            self.logger.error(f"Error in handle_message for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
@@ -4888,7 +4940,8 @@ class ShansAi:
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
         
-        # Message handlers removed - functionality moved to command handlers
+        # Add message handler for waiting user input after empty /info
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
         # Start the bot
         logger.info("Starting Okama Finance Bot...")
