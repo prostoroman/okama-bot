@@ -34,6 +34,10 @@ class AssetService:
             'MOEX': ['SBER.MOEX', 'GAZP.MOEX', 'LKOH.MOEX'],
             'LSE': ['VOD.LSE', 'HSBA.LSE', 'BP.LSE']
         }
+        
+        # Import random for random examples
+        import random
+        self.random = random
     
     def resolve_symbol_or_isin(self, identifier: str) -> Dict[str, Union[str, Any]]:
         """
@@ -1470,3 +1474,59 @@ class AssetService:
         except Exception as e:
             self.logger.warning(f"Error filtering data by period {period}: {e}")
             return data
+
+    def get_random_examples(self, count: int = 3) -> list:
+        """
+        Get random examples of asset symbols for user suggestions
+        
+        Args:
+            count: Number of examples to return
+            
+        Returns:
+            List of random asset symbols
+        """
+        try:
+            all_examples = []
+            for category, symbols in self.known_assets.items():
+                all_examples.extend(symbols)
+            
+            # Shuffle and return requested number
+            self.random.shuffle(all_examples)
+            return all_examples[:count]
+        except Exception as e:
+            self.logger.error(f"Error getting random examples: {e}")
+            # Fallback to basic examples
+            return ['SBER.MOEX', 'SPY.US', 'AAPL.US'][:count]
+
+    def is_likely_asset_symbol(self, text: str) -> bool:
+        """
+        Check if text looks like an asset symbol
+        
+        Args:
+            text: Text to check
+            
+        Returns:
+            True if text looks like an asset symbol
+        """
+        try:
+            if not text or not isinstance(text, str):
+                return False
+            
+            text = text.strip().upper()
+            
+            # Check if it's already in okama format (XXX.SUFFIX)
+            if '.' in text and len(text.split('.')) == 2:
+                return True
+            
+            # Check if it looks like a plain ticker (3-5 letters, all uppercase)
+            if len(text) >= 2 and len(text) <= 6 and text.isalpha():
+                return True
+            
+            # Check if it looks like an ISIN (12 characters, alphanumeric)
+            if len(text) == 12 and text.isalnum():
+                return True
+            
+            return False
+        except Exception as e:
+            self.logger.error(f"Error checking if text is asset symbol: {e}")
+            return False
