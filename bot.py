@@ -764,6 +764,15 @@ class OkamaFinanceBot:
                 daily_chart = await self._get_daily_chart(symbol)
                 
                 self.logger.info(f"Daily chart result for {symbol}: {type(daily_chart)}")
+                # Создаем кнопки для дополнительных функций (всегда)
+                keyboard = [
+                    [
+                        InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
+                        InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 if daily_chart:
                     self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
                     # Формируем базовую информацию для подписи
@@ -799,23 +808,32 @@ class OkamaFinanceBot:
                         caption=self._truncate_caption(caption)
                     )
                     
-                    # Создаем кнопки для дополнительных функций
-                    keyboard = [
-                        [
-                            InlineKeyboardButton("📅 Месячный график (10Y)", callback_data=f"monthly_chart_{symbol}"),
-                            InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
-                        ]
-                    ]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    
-                    if hasattr(update, 'message') and update.message is not None:
-                        await update.message.reply_text(
-                            "Выберите дополнительную информацию:",
-                            reply_markup=reply_markup
-                        )
+                    # Отправляем кнопки после графика
+                    await update.message.reply_text(
+                        "Выберите дополнительную информацию:",
+                        reply_markup=reply_markup
+                    )
                     
                 else:
-                    await self._send_message_safe(update, "❌ Не удалось получить ежедневный график")
+                    # Если график не удался, отправляем информацию без графика
+                    info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                    info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                    info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                    info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                    info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
+                    
+                    if asset_info.get('current_price') is not None:
+                        info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                    
+                    if asset_info.get('annual_return') != 'N/A':
+                        info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                    
+                    if asset_info.get('volatility') != 'N/A':
+                        info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+                    
+                    info_text += "\n❌ Ежедневный график временно недоступен"
+                    
+                    await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                     
             except Exception as chart_error:
                 self.logger.error(f"Error creating daily chart for {symbol}: {chart_error}")
@@ -826,11 +844,30 @@ class OkamaFinanceBot:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график за 1 год"""
+        """Получить ежедневный график за 1 год с таймаутом"""
         try:
-            # Получаем данные для ежедневного графика
+            # Получаем данные для ежедневного графика с таймаутом
             self.logger.info(f"Getting daily chart for {symbol}")
-            price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            
+            # Добавляем таймаут для предотвращения зависания
+            import asyncio
+            try:
+                # Запускаем получение данных с таймаутом 30 секунд
+                price_history = await asyncio.wait_for(
+                    asyncio.to_thread(self.asset_service.get_asset_price_history, symbol, '1Y'),
+                    timeout=30.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.error(f"Timeout getting price history for {symbol}")
+                return None
+            
+            try:
+                keys = list(price_history.keys()) if isinstance(price_history, dict) else type(price_history)
+                charts_keys = list(price_history.get('charts', {}).keys()) if isinstance(price_history, dict) and 'charts' in price_history else []
+                has_prices = isinstance(price_history, dict) and ('prices' in price_history and price_history['prices'] is not None)
+                self.logger.info(f"price_history keys: {keys}; charts: {charts_keys}; has_prices: {has_prices}")
+            except Exception:
+                pass
             
             if 'error' in price_history:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
@@ -841,8 +878,15 @@ class OkamaFinanceBot:
                 prices = price_history['prices']
                 currency = price_history.get('currency', 'USD')
                 
-                # Создаем график с использованием централизованных стилей
-                return self._create_daily_chart_with_styles(symbol, prices, currency)
+                # Создаем график с использованием централизованных стилей с таймаутом
+                try:
+                    return await asyncio.wait_for(
+                        asyncio.to_thread(self._create_daily_chart_with_styles, symbol, prices, currency),
+                        timeout=15.0
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.error(f"Timeout creating chart for {symbol}")
+                    return None
             
             # Fallback к старому методу если нет данных о ценах
             if 'charts' in price_history and price_history['charts']:
@@ -850,6 +894,9 @@ class OkamaFinanceBot:
                 if 'adj_close' in charts and charts['adj_close']:
                     self.logger.info(f"Found adj_close chart for {symbol}")
                     return charts['adj_close']
+                elif 'moex_daily' in charts and charts['moex_daily']:
+                    self.logger.info(f"Found moex_daily chart for {symbol}")
+                    return charts['moex_daily']
                 elif 'fallback' in charts and charts['fallback']:
                     self.logger.info(f"Found fallback chart for {symbol}")
                     return charts['fallback']
@@ -867,23 +914,37 @@ class OkamaFinanceBot:
             return None
 
     async def _get_ai_analysis(self, symbol: str) -> Optional[str]:
-        """Получить AI анализ актива без рекомендаций"""
+        """Получить AI анализ актива без рекомендаций с таймаутом"""
         try:
-            # Получаем базовые данные для анализа
-            price_history = self.asset_service.get_asset_price_history(symbol, '1Y')
+            # Получаем базовые данные для анализа с таймаутом
+            import asyncio
+            try:
+                price_history = await asyncio.wait_for(
+                    asyncio.to_thread(self.asset_service.get_asset_price_history, symbol, '1Y'),
+                    timeout=20.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.error(f"Timeout getting price history for AI analysis of {symbol}")
+                return None
             
             if 'error' in price_history:
                 return None
             
-            # Получаем анализ
-            analysis = self.analysis_engine.analyze_asset(symbol, price_history, '1Y')
+            # Получаем анализ с таймаутом
+            try:
+                analysis = await asyncio.wait_for(
+                    asyncio.to_thread(self.analysis_engine.analyze_asset, symbol, price_history, '1Y'),
+                    timeout=15.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.error(f"Timeout getting AI analysis for {symbol}")
+                return None
             
             if 'error' in analysis:
                 return None
             
             # Модифицируем анализ, убирая рекомендации
             analysis_text = analysis['analysis']
-            
             
             return analysis_text
             
@@ -939,6 +1000,79 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error creating daily chart with styles for {symbol}: {e}")
             return None
+
+    def _filter_data_by_period(self, data, period: str):
+        """
+        Filter data by specified period
+        
+        Args:
+            data: Pandas Series with price data
+            period: Time period (e.g., '1Y', '2Y', '5Y', 'MAX')
+            
+        Returns:
+            Filtered data series
+        """
+        try:
+            if period == 'MAX':
+                return data
+            
+            # Parse period
+            import re
+            match = re.match(r'(\d+)([YMD])', period.upper())
+            if not match:
+                # Default period depends on data type
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - default to 10 years
+                    return data.tail(120)  # Last 120 months (10 years)
+                else:
+                    # Daily data - default to 1 year
+                    return data.tail(365)  # Last 365 days (1 year)
+            
+            number, unit = match.groups()
+            number = int(number)
+            
+            # Calculate how many data points to take
+            if unit == 'Y':
+                # For monthly data, take last N*12 months
+                # For daily data, take last N*365 days
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data
+                    points_to_take = number * 12
+                else:
+                    # Daily data
+                    points_to_take = number * 365
+            elif unit == 'M':
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data
+                    points_to_take = number
+                else:
+                    # Daily data
+                    points_to_take = number * 30
+            elif unit == 'D':
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - take at least 1 month
+                    points_to_take = max(1, number // 30)
+                else:
+                    # Daily data
+                    points_to_take = number
+            else:
+                # Default depends on data type
+                if hasattr(data.index, 'freq') and 'M' in str(data.index.freq):
+                    # Monthly data - default to 10 years
+                    points_to_take = 120
+                else:
+                    # Daily data - default to 1 year
+                    points_to_take = 365
+            
+            # Take last N points
+            if len(data) > points_to_take:
+                return data.tail(points_to_take)
+            else:
+                return data
+                
+        except Exception as e:
+            self.logger.warning(f"Error filtering data by period {period}: {e}")
+            return data
 
     def _create_monthly_chart_with_styles(self, symbol: str, prices, currency: str) -> Optional[bytes]:
         """Создать месячный график с централизованными стилями"""
@@ -1258,15 +1392,31 @@ class OkamaFinanceBot:
                 # First check exact match, then check case-insensitive match
                 is_portfolio = symbol in saved_portfolios
                 
+                # Additional check: avoid treating asset symbols as portfolios
+                # If the symbol looks like an asset symbol (contains .), 
+                # and there's no explicit portfolio indicator, treat it as asset
+                if is_portfolio and ('.' in symbol and 
+                    not any(indicator in symbol.upper() for indicator in ['PORTFOLIO_', 'PF_', '.PF', '.pf'])):
+                    # This looks like an asset symbol, not a portfolio
+                    is_portfolio = False
+                
                 if not is_portfolio:
                     # Check case-insensitive match for portfolio symbols
+                    # But only for symbols that look like portfolio names (not asset symbols)
                     for portfolio_key in saved_portfolios.keys():
                         if (symbol.lower() == portfolio_key.lower() or
                             symbol.upper() == portfolio_key.upper()):
-                            # Use the exact key from saved_portfolios
-                            symbol = portfolio_key
-                            is_portfolio = True
-                            break
+                            # Additional check: avoid treating asset symbols as portfolios
+                            if ('.' in symbol and 
+                                not any(indicator in symbol.upper() for indicator in ['PORTFOLIO_', 'PF_', '.PF', '.pf'])):
+                                # This looks like an asset symbol, not a portfolio
+                                is_portfolio = False
+                                break
+                            else:
+                                # Use the exact key from saved_portfolios
+                                symbol = portfolio_key
+                                is_portfolio = True
+                                break
                 
                 self.logger.info(f"Symbol '{symbol}' is_portfolio: {is_portfolio}, in saved_portfolios: {symbol in saved_portfolios}")
                 
@@ -1546,16 +1696,33 @@ class OkamaFinanceBot:
                 caption += f"📅 Период: полный доступный период данных\n\n"
                 caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
                 
-                # Create keyboard with analysis buttons - use proper callback data format
-                keyboard = [
-                    [
+                # Create keyboard with analysis buttons conditionally
+                # Determine composition: portfolios vs assets
+                try:
+                    has_portfolios_only = all(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
+                    has_assets_only = all(not isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
+                    is_mixed_comparison = not (has_portfolios_only or has_assets_only)
+                except Exception:
+                    # Safe fallback
+                    has_portfolios_only = False
+                    is_mixed_comparison = False
+
+                keyboard = []
+
+                # Hide these buttons for mixed comparisons (portfolio + asset)
+                if not is_mixed_comparison:
+                    keyboard.append([
                         InlineKeyboardButton("📉 Drawdowns", callback_data="drawdowns_compare"),
                         InlineKeyboardButton("💰 Dividends", callback_data="dividends_compare")
-                    ],
-                    [
+                    ])
+                    keyboard.append([
                         InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
-                    ]
-                ]
+                    ])
+
+                # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
+                keyboard.append([
+                    InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
+                ])
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -2561,6 +2728,9 @@ class OkamaFinanceBot:
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
                 await self._handle_portfolio_compare_assets_button(update, context, symbols)
+            elif callback_data == 'risk_return_compare':
+                self.logger.info("Risk / Return button clicked")
+                await self._handle_risk_return_compare_button(update, context)
             elif callback_data.startswith('namespace_'):
                 namespace = callback_data.replace('namespace_', '')
                 self.logger.info(f"Namespace button clicked for: {namespace}")
@@ -2579,6 +2749,143 @@ class OkamaFinanceBot:
         except Exception as e:
             self.logger.error(f"Error in button callback: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_risk_return_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle Risk / Return (CAGR) button for all comparison types"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            symbols = user_context.get('current_symbols', [])
+            currency = user_context.get('current_currency', 'USD')
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+
+            # Validate that we have symbols to compare
+            if not expanded_symbols:
+                await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
+                return
+
+            await self._send_callback_message(update, context, "📊 Создаю график Risk / Return (CAGR)…")
+
+            # Prepare assets for comparison
+            asset_list_items = []
+            asset_names = []
+            
+            # Add portfolios from context
+            for pctx in portfolio_contexts:
+                try:
+                    p = self._ok_portfolio(
+                        pctx.get('portfolio_symbols', []),
+                        weights=pctx.get('portfolio_weights', []),
+                        currency=pctx.get('portfolio_currency') or currency,
+                    )
+                    asset_list_items.append(p)
+                    asset_names.append(pctx.get('symbol', 'Portfolio'))
+                except Exception as pe:
+                    self.logger.warning(f"Failed to recreate portfolio for Risk/Return: {pe}")
+            
+            # Add individual assets
+            for symbol in symbols:
+                if symbol not in [pctx.get('symbol', '') for pctx in portfolio_contexts]:
+                    # This is an individual asset, not a portfolio
+                    asset_list_items.append(symbol)
+                    asset_names.append(symbol)
+
+            if not asset_list_items:
+                await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для построения графика")
+                return
+
+            # Create AssetList with selected assets/portfolios
+            img_buffer = None
+            try:
+                asset_list = self._ok_asset_list(asset_list_items, currency=currency)
+                
+                # okama plotting
+                asset_list.plot_assets(kind="cagr")
+                current_fig = plt.gcf()
+                
+                # Apply styling
+                if current_fig.axes:
+                    ax = current_fig.axes[0]
+                    chart_styles.apply_styling(
+                        ax,
+                        title=f"Risk / Return: CAGR\n{', '.join(asset_names)}",
+                        ylabel='CAGR (%)',
+                        grid=True,
+                        legend=True,
+                        copyright=True
+                    )
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(current_fig, img_buffer)
+                img_buffer.seek(0)
+                chart_styles.cleanup_figure(current_fig)
+            except Exception as plot_error:
+                # Fallback: compute CAGR manually and plot as bar chart
+                self.logger.warning(f"Risk/Return okama plot failed, falling back to manual bar: {plot_error}")
+                try:
+                    cagr_values = {}
+                    
+                    # Calculate CAGR for each asset
+                    for i, asset in enumerate(asset_list_items):
+                        asset_name = asset_names[i]
+                        try:
+                            if isinstance(asset, str):
+                                # Individual asset
+                                asset_obj = self._ok_asset(asset)
+                                cagr = asset_obj.get_cagr()
+                            else:
+                                # Portfolio
+                                cagr = asset.get_cagr()
+                            
+                            if hasattr(cagr, 'iloc'):
+                                cagr_val = float(cagr.iloc[0])
+                            elif hasattr(cagr, '__iter__') and not isinstance(cagr, str):
+                                cagr_val = float(list(cagr)[0])
+                            else:
+                                cagr_val = float(cagr)
+                        except Exception:
+                            # Manual CAGR calculation
+                            try:
+                                if isinstance(asset, str):
+                                    asset_obj = self._ok_asset(asset)
+                                    wealth_index = asset_obj.wealth_index
+                                else:
+                                    wealth_index = asset.wealth_index
+                                
+                                wi = wealth_index.dropna()
+                                periods = len(wi)
+                                cagr_val = ((wi.iloc[-1] / wi.iloc[0]) ** (12.0 / max(periods, 1))) - 1 if periods > 1 else 0.0
+                            except Exception:
+                                cagr_val = 0.0
+                        
+                        cagr_values[asset_name] = cagr_val
+
+                    cagr_df = pd.DataFrame.from_dict(cagr_values, orient='index')
+                    cagr_df.columns = ['CAGR']
+                    fig, ax = chart_styles.create_bar_chart(
+                        cagr_df['CAGR'],
+                        title=f"Risk / Return: CAGR\n{', '.join(asset_names)}",
+                        ylabel='CAGR (%)'
+                    )
+                    img_buffer = io.BytesIO()
+                    chart_styles.save_figure(fig, img_buffer)
+                    img_buffer.seek(0)
+                    chart_styles.cleanup_figure(fig)
+                except Exception as fallback_error:
+                    self.logger.error(f"Risk/Return manual bar failed: {fallback_error}")
+                    await self._send_callback_message(update, context, "❌ Не удалось построить график Risk / Return (CAGR)")
+                    return
+
+            # Send image
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(f"📊 Risk / Return (CAGR) для сравнения: {', '.join(asset_names)}")
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error handling Risk / Return button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при построении Risk / Return: {str(e)}")
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
@@ -3271,27 +3578,37 @@ class OkamaFinanceBot:
                 self.logger.error(f"Error in price_history: {price_history['error']}")
                 return None
             
-            # Получаем данные о ценах
-            if 'prices' in price_history and price_history['prices'] is not None:
-                prices = price_history['prices']
-                currency = price_history.get('currency', 'USD')
-                
-                # Создаем график с использованием централизованных стилей
-                return self._create_monthly_chart_with_styles(symbol, prices, currency)
-            
-            # Fallback к старому методу если нет данных о ценах
+            # Сначала проверяем наличие готового месячного графика
             if 'charts' in price_history and price_history['charts']:
                 charts = price_history['charts']
                 if 'close_monthly' in charts and charts['close_monthly']:
                     chart_data = charts['close_monthly']
                     if isinstance(chart_data, bytes) and len(chart_data) > 0:
-                        # Копирайт уже добавлен в готовом изображении
+                        self.logger.info(f"Using existing monthly chart for {symbol}")
                         return chart_data
+            
+            # Если готового графика нет, создаем новый из месячных данных
+            if 'price_data' in price_history and 'close_monthly' in price_history['price_data']:
+                monthly_info = price_history['price_data']['close_monthly']
+                currency = price_history.get('currency', 'USD')
                 
+                # Получаем месячные данные из asset
+                try:
+                    asset = ok.Asset(symbol)
+                    monthly_data = asset.close_monthly
+                    if monthly_data is not None and len(monthly_data) > 0:
+                        # Фильтруем данные за 10 лет
+                        filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
+                        return self._create_monthly_chart_with_styles(symbol, filtered_monthly, currency)
+                except Exception as asset_error:
+                    self.logger.warning(f"Could not get monthly data from asset: {asset_error}")
+            
+            # Fallback к любому доступному графику
+            if 'charts' in price_history and price_history['charts']:
+                charts = price_history['charts']
                 for chart_key, chart_data in charts.items():
                     if chart_data and isinstance(chart_data, bytes) and len(chart_data) > 0:
                         self.logger.info(f"Using fallback chart: {chart_key} for {symbol}")
-                        # Копирайт уже добавлен в готовом изображении
                         return chart_data
             
             self.logger.warning(f"No valid charts found for {symbol}")

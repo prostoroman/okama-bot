@@ -723,6 +723,7 @@ class AssetService:
             # Initialize charts dictionary
             charts = {}
             price_data_info = {}
+            moex_daily_series = None
             
             # Filter data by period for each chart type
             adj_close_data = None
@@ -733,7 +734,12 @@ class AssetService:
             if hasattr(asset, 'close_monthly'):
                 monthly_data = asset.close_monthly
 
-            if adj_close_data is not None and len(adj_close_data) > 0:
+            if (
+                adj_close_data is not None
+                and hasattr(adj_close_data, 'iloc')
+                and hasattr(adj_close_data, 'index')
+                and len(adj_close_data) > 0
+            ):
                 # Daily data - always show 1 year for better detail
                 filtered_adj_close = self._filter_data_by_period(adj_close_data, '1Y')
                 adj_close_chart = self.create_price_chart(
@@ -754,7 +760,12 @@ class AssetService:
                         'max_price': float(filtered_adj_close.max())
                     }
             
-            if monthly_data is not None and len(monthly_data) > 0:
+            if (
+                monthly_data is not None
+                and hasattr(monthly_data, 'iloc')
+                and hasattr(monthly_data, 'index')
+                and len(monthly_data) > 0
+            ):
                 # Monthly data - always show 10 years for long-term trends
                 filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
                 monthly_chart = self.create_price_chart(
@@ -785,9 +796,17 @@ class AssetService:
                 
                 if hasattr(asset, 'price') and asset.price is not None:
                     fallback_data = asset.price
-                    if hasattr(fallback_data, '__len__') and len(fallback_data) > 5:
+                    if (
+                        not isinstance(fallback_data, (int, float))
+                        and hasattr(fallback_data, '__len__')
+                        and len(fallback_data) > 5
+                    ):
                         # If it's daily data, show 1 year
-                        if hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq):
+                        if (
+                            hasattr(fallback_data, 'index')
+                            and hasattr(fallback_data.index, 'freq')
+                            and 'M' not in str(fallback_data.index.freq)
+                        ):
                             fallback_period = '1Y'
                         else:
                             # If it's monthly data, show 10 years
@@ -811,6 +830,31 @@ class AssetService:
                                 'min_price': float(filtered_fallback.min()),
                                 'max_price': float(filtered_fallback.max())
                             }
+
+                # Extra fallback for MOEX symbols: fetch daily close history via MOEX ISS
+                try:
+                    if symbol.upper().endswith('.MOEX'):
+                        moex_daily_series = self._fetch_moex_daily_history(symbol, period_days=365)
+                        if moex_daily_series is not None and len(moex_daily_series) > 5:
+                            moex_chart = self.create_price_chart(
+                                moex_daily_series, symbol, '1Y', currency,
+                                f"Дневные цены (MOEX ISS): {symbol}"
+                            )
+                            if moex_chart:
+                                charts['moex_daily'] = moex_chart
+                                price_data_info['moex_daily'] = {
+                                    'data_points': len(moex_daily_series),
+                                    'start_date': str(moex_daily_series.index[0])[:10],
+                                    'end_date': str(moex_daily_series.index[-1])[:10],
+                                    'period': '1Y',
+                                    'currency': currency,
+                                    'current_price': float(moex_daily_series.iloc[-1]),
+                                    'start_price': float(moex_daily_series.iloc[0]),
+                                    'min_price': float(moex_daily_series.min()),
+                                    'max_price': float(moex_daily_series.max())
+                                }
+                except Exception as moex_fallback_error:
+                    self.logger.warning(f"MOEX daily history fallback failed for {symbol}: {moex_fallback_error}")
             
             # Check if we have any charts
             if not charts:
@@ -826,19 +870,42 @@ class AssetService:
             }
             
             # Add actual price data for the bot to use
-            if adj_close_data is not None and len(adj_close_data) > 0:
+            if (
+                adj_close_data is not None
+                and hasattr(adj_close_data, 'iloc')
+                and hasattr(adj_close_data, 'index')
+                and len(adj_close_data) > 0
+            ):
                 # Use daily data for the bot's chart creation
                 filtered_adj_close = self._filter_data_by_period(adj_close_data, '1Y')
                 response_data['prices'] = filtered_adj_close
-            elif monthly_data is not None and len(monthly_data) > 0:
+            elif (
+                monthly_data is not None
+                and hasattr(monthly_data, 'iloc')
+                and hasattr(monthly_data, 'index')
+                and len(monthly_data) > 0
+            ):
                 # Fallback to monthly data if no daily data
                 filtered_monthly = self._filter_data_by_period(monthly_data, '10Y')
                 response_data['prices'] = filtered_monthly
+            elif (
+                moex_daily_series is not None
+                and hasattr(moex_daily_series, '__len__')
+                and len(moex_daily_series) > 0
+            ):
+                # Use MOEX daily series if available
+                response_data['prices'] = moex_daily_series
             elif 'fallback' in price_data_info:
                 # Use fallback data if available
                 fallback_data = asset.price
-                if hasattr(fallback_data, '__len__') and len(fallback_data) > 5:
-                    fallback_period = '1Y' if hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq) else '10Y'
+                if (
+                    not isinstance(fallback_data, (int, float))
+                    and hasattr(fallback_data, '__len__')
+                    and len(fallback_data) > 5
+                ):
+                    fallback_period = '1Y' if (
+                        hasattr(fallback_data, 'index') and hasattr(fallback_data.index, 'freq') and 'M' not in str(fallback_data.index.freq)
+                    ) else '10Y'
                     filtered_fallback = self._filter_data_by_period(fallback_data, fallback_period)
                     response_data['prices'] = filtered_fallback
             
@@ -962,6 +1029,115 @@ class AssetService:
             
         except Exception as e:
             self.logger.error(f"Error creating price chart: {e}")
+            return None
+
+    def _fetch_moex_daily_history(self, symbol: str, period_days: int = 365):
+        """
+        Fetch daily close history for MOEX shares via ISS API as pandas Series.
+        Returns Series indexed by date with float close prices, or None on failure.
+        """
+        try:
+            import requests
+            import pandas as pd
+            from datetime import datetime, timedelta
+
+            base = symbol.split('.')[0].upper()
+            since = (datetime.now() - timedelta(days=period_days + 7)).strftime('%Y-%m-%d')
+
+            # Try candles endpoint first (interval=24)
+            candles_url = (
+                f"https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/"
+                f"securities/{base}/candles.json?interval=24&from={since}&iss.meta=off"
+            )
+            try:
+                resp = requests.get(candles_url, timeout=10)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    if isinstance(d, dict) and 'candles' in d:
+                        cols = d['candles'].get('columns') or []
+                        rows = d['candles'].get('data') or []
+                        if rows and cols:
+                            try:
+                                close_idx = cols.index('close') if 'close' in cols else 1
+                            except Exception:
+                                close_idx = 1
+                            # prefer 'end' as candle end time, fallback to 7th column
+                            try:
+                                date_idx = cols.index('end') if 'end' in cols else 7
+                            except Exception:
+                                date_idx = 7
+
+                            dates = []
+                            values = []
+                            for row in rows:
+                                try:
+                                    dt = pd.to_datetime(row[date_idx]).date()
+                                    val = float(row[close_idx])
+                                    dates.append(dt)
+                                    values.append(val)
+                                except Exception:
+                                    continue
+                            if dates:
+                                s = pd.Series(values, index=pd.to_datetime(dates))
+                                s = s.sort_index().last(f'{period_days}D')
+                                return s
+            except Exception:
+                pass
+
+            # Fallback: history endpoint with pagination
+            history_base = (
+                f"https://iss.moex.com/iss/history/engines/stock/markets/shares/boards/TQBR/"
+                f"securities/{base}.json?from={since}&iss.meta=off"
+            )
+            start = 0
+            all_dates = []
+            all_values = []
+            for _ in range(20):  # up to ~2000 rows
+                url = f"{history_base}&start={start}"
+                resp = requests.get(url, timeout=10)
+                if resp.status_code != 200:
+                    break
+                d = resp.json()
+                if not isinstance(d, dict) or 'history' not in d:
+                    break
+                cols = d['history'].get('columns') or []
+                rows = d['history'].get('data') or []
+                if not rows:
+                    break
+                try:
+                    if 'CLOSE' in cols:
+                        close_idx = cols.index('CLOSE')
+                    elif 'LEGALCLOSEPRICE' in cols:
+                        close_idx = cols.index('LEGALCLOSEPRICE')
+                    else:
+                        close_idx = None
+                    date_idx = cols.index('TRADEDATE') if 'TRADEDATE' in cols else None
+                except Exception:
+                    close_idx = None
+                    date_idx = None
+
+                if close_idx is None or date_idx is None:
+                    break
+
+                for row in rows:
+                    try:
+                        dt = pd.to_datetime(row[date_idx]).date()
+                        val = float(row[close_idx])
+                        all_dates.append(dt)
+                        all_values.append(val)
+                    except Exception:
+                        continue
+
+                start += len(rows)
+
+            if all_dates:
+                import pandas as pd  # reimport for scope
+                s = pd.Series(all_values, index=pd.to_datetime(all_dates))
+                s = s.sort_index().last(f'{period_days}D')
+                return s if len(s) > 0 else None
+
+            return None
+        except Exception:
             return None
     
     def _fetch_moex_price(self, symbol: str) -> Optional[tuple]:
