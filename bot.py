@@ -781,20 +781,32 @@ class OkamaFinanceBot:
                 if daily_chart:
                     self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
                     # Формируем базовую информацию для подписи
-                    caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                    caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                    caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                    caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                    caption += f"📈: {asset_info.get('type', 'N/A')}\n"
-                    
-                    if asset_info.get('current_price') is not None:
-                        caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                    
-                    if asset_info.get('annual_return') != 'N/A':
-                        caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                    
-                    if asset_info.get('volatility') != 'N/A':
-                        caption += f"📉 Волатильность: {asset_info['volatility']}\n"
+                    if self.asset_service._looks_like_isin(symbol):
+                        # Для ISIN выводим всю информацию об объекте Asset
+                        caption = f"📊 {symbol} - Информация об объекте Asset\n\n"
+                        
+                        # Добавляем все атрибуты объекта Asset
+                        if 'asset_attributes' in asset_info:
+                            for attr_name, attr_value in asset_info['asset_attributes'].items():
+                                caption += f"🔹 {attr_name}: {attr_value}\n"
+                        else:
+                            caption += "❌ Атрибуты объекта Asset недоступны\n"
+                    else:
+                        # Обычная информация для тикеров
+                        caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                        caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                        caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                        caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                        caption += f"📈: {asset_info.get('type', 'N/A')}\n"
+                        
+                        if asset_info.get('current_price') is not None:
+                            caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                        
+                        if asset_info.get('annual_return') != 'N/A':
+                            caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                        
+                        if asset_info.get('volatility') != 'N/A':
+                            caption += f"📉 Волатильность: {asset_info['volatility']}\n"
                     
                     # Получаем AI анализ
                     try:
@@ -821,22 +833,36 @@ class OkamaFinanceBot:
                     
                 else:
                     # Если график не удался, отправляем информацию без графика
-                    info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                    info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                    info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                    info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                    info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
-                    
-                    if asset_info.get('current_price') is not None:
-                        info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                    
-                    if asset_info.get('annual_return') != 'N/A':
-                        info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                    
-                    if asset_info.get('volatility') != 'N/A':
-                        info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
-                    
-                    info_text += "\n❌ Ежедневный график временно недоступен"
+                    if self.asset_service._looks_like_isin(symbol):
+                        # Для ISIN выводим всю информацию об объекте Asset
+                        info_text = f"📊 {symbol} - Информация об объекте Asset\n\n"
+                        
+                        # Добавляем все атрибуты объекта Asset
+                        if 'asset_attributes' in asset_info:
+                            for attr_name, attr_value in asset_info['asset_attributes'].items():
+                                info_text += f"🔹 {attr_name}: {attr_value}\n"
+                        else:
+                            info_text += "❌ Атрибуты объекта Asset недоступны\n"
+                        
+                        info_text += "\n❌ Ежедневный график временно недоступен"
+                    else:
+                        # Обычная информация для тикеров
+                        info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                        info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                        info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                        info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                        info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
+                        
+                        if asset_info.get('current_price') is not None:
+                            info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                        
+                        if asset_info.get('annual_return') != 'N/A':
+                            info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                        
+                        if asset_info.get('volatility') != 'N/A':
+                            info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+                        
+                        info_text += "\n❌ Ежедневный график временно недоступен"
                     
                     await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                     
@@ -2566,20 +2592,32 @@ class OkamaFinanceBot:
                             if daily_chart:
                                 self.logger.info(f"Daily chart size: {len(daily_chart)} bytes")
                                 # Формируем базовую информацию для подписи
-                                caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                                caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                                caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                                caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                                caption += f"📈: {asset_info.get('type', 'N/A')}\n"
-                                
-                                if asset_info.get('current_price') is not None:
-                                    caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                                
-                                if asset_info.get('annual_return') != 'N/A':
-                                    caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                                
-                                if asset_info.get('volatility') != 'N/A':
-                                    caption += f"📉 Волатильность: {asset_info['volatility']}\n"
+                                if self.asset_service._looks_like_isin(symbol):
+                                    # Для ISIN выводим всю информацию об объекте Asset
+                                    caption = f"📊 {symbol} - Информация об объекте Asset\n\n"
+                                    
+                                    # Добавляем все атрибуты объекта Asset
+                                    if 'asset_attributes' in asset_info:
+                                        for attr_name, attr_value in asset_info['asset_attributes'].items():
+                                            caption += f"🔹 {attr_name}: {attr_value}\n"
+                                    else:
+                                        caption += "❌ Атрибуты объекта Asset недоступны\n"
+                                else:
+                                    # Обычная информация для тикеров
+                                    caption = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                                    caption += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                                    caption += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                                    caption += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                                    caption += f"📈: {asset_info.get('type', 'N/A')}\n"
+                                    
+                                    if asset_info.get('current_price') is not None:
+                                        caption += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                                    
+                                    if asset_info.get('annual_return') != 'N/A':
+                                        caption += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                                    
+                                    if asset_info.get('volatility') != 'N/A':
+                                        caption += f"📉 Волатильность: {asset_info['volatility']}\n"
                                 
                                 # Получаем AI анализ
                                 try:
@@ -2606,22 +2644,36 @@ class OkamaFinanceBot:
                                 
                             else:
                                 # Если график не удался, отправляем информацию без графика
-                                info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-                                info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-                                info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
-                                info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
-                                info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
-                                
-                                if asset_info.get('current_price') is not None:
-                                    info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-                                
-                                if asset_info.get('annual_return') != 'N/A':
-                                    info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-                                
-                                if asset_info.get('volatility') != 'N/A':
-                                    info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
-                                
-                                info_text += "\n❌ Ежедневный график временно недоступен"
+                                if self.asset_service._looks_like_isin(symbol):
+                                    # Для ISIN выводим всю информацию об объекте Asset
+                                    info_text = f"📊 {symbol} - Информация об объекте Asset\n\n"
+                                    
+                                    # Добавляем все атрибуты объекта Asset
+                                    if 'asset_attributes' in asset_info:
+                                        for attr_name, attr_value in asset_info['asset_attributes'].items():
+                                            info_text += f"🔹 {attr_name}: {attr_value}\n"
+                                    else:
+                                        info_text += "❌ Атрибуты объекта Asset недоступны\n"
+                                    
+                                    info_text += "\n❌ Ежедневный график временно недоступен"
+                                else:
+                                    # Обычная информация для тикеров
+                                    info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
+                                    info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
+                                    info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
+                                    info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
+                                    info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
+                                    
+                                    if asset_info.get('current_price') is not None:
+                                        info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
+                                    
+                                    if asset_info.get('annual_return') != 'N/A':
+                                        info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
+                                    
+                                    if asset_info.get('volatility') != 'N/A':
+                                        info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+                                    
+                                    info_text += "\n❌ Ежедневный график временно недоступен"
                                 
                                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                                 

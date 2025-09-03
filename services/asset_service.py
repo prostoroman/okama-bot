@@ -63,22 +63,8 @@ class AssetService:
                 return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
 
             if self._looks_like_isin(upper):
-                # First try to resolve via okama.Asset.search
-                okama_symbol = self.search_by_isin(upper)
-                if okama_symbol:
-                    return {'symbol': okama_symbol, 'type': 'isin', 'source': 'okama_search'}
-                
-                # Fallback to MOEX ISS (works for instruments listed on MOEX)
-                moex_symbol = self._try_resolve_isin_via_moex(upper)
-                if moex_symbol:
-                    return {'symbol': moex_symbol, 'type': 'isin', 'source': 'moex'}
-                else:
-                    return {
-                        'error': (
-                            f"Не удалось определить тикер по ISIN {upper}. "
-                            "Попробуйте указать тикер в формате AAPL.US или SBER.MOEX."
-                        )
-                    }
+                # For ISIN, return the ISIN itself as symbol for direct Asset creation
+                return {'symbol': upper, 'type': 'isin', 'source': 'direct_isin'}
 
             # Plain ticker without suffix – try to guess the appropriate namespace
             guessed_symbol = self._guess_namespace(upper)
@@ -330,6 +316,23 @@ class AssetService:
                 'last_date': getattr(asset, 'last_date', 'N/A'),
                 'period_length': 'N/A'
             }
+            
+            # For ISIN assets, add all available attributes
+            if self._looks_like_isin(symbol):
+                # Get all attributes of the asset object
+                asset_attributes = {}
+                for attr in dir(asset):
+                    if not attr.startswith('_') and not callable(getattr(asset, attr)):
+                        try:
+                            value = getattr(asset, attr)
+                            # Convert to string if it's not a basic type
+                            if not isinstance(value, (str, int, float, bool, type(None))):
+                                value = str(value)
+                            asset_attributes[attr] = value
+                        except Exception:
+                            asset_attributes[attr] = 'Error getting attribute'
+                
+                info['asset_attributes'] = asset_attributes
             
             # Calculate period length if dates are available
             if info['first_date'] != 'N/A' and info['last_date'] != 'N/A':
