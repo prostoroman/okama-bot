@@ -308,21 +308,11 @@ class ShansAi:
     # =======================
     # Вспомогательные функции для истории
     # =======================
-    def _init_chat(self, chat_id: int):
-        if chat_id not in self.user_history:
-            self.user_history[chat_id] = []
-        if chat_id not in self.context_enabled:
-            self.context_enabled[chat_id] = True
 
-    def _history_trim(self, chat_id: int):
-        if len(self.user_history[chat_id]) > self.MAX_HISTORY_MESSAGES:
-            self.user_history[chat_id] = self.user_history[chat_id][-self.MAX_HISTORY_MESSAGES:]
 
-    def history_append(self, chat_id: int, role: str, text: str):
-        if not self.context_enabled.get(chat_id, True):
-            return
-        self.user_history[chat_id].append({"role": role, "parts": [text]})
-        self._history_trim(chat_id)
+
+
+
 
     def _split_text(self, text: str):
         for i in range(0, len(text), self.MAX_TELEGRAM_CHUNK):
