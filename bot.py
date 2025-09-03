@@ -742,9 +742,17 @@ class ShansAi:
                 await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
                 return
             
+            # Get the resolved symbol from asset service
+            resolved = self.asset_service.resolve_symbol_or_isin(symbol)
+            if 'error' in resolved:
+                await self._send_message_safe(update, f"❌ Ошибка: {resolved['error']}")
+                return
+            
+            resolved_symbol = resolved['symbol']
+            
             # Получаем сырой вывод объекта ok.Asset
             try:
-                asset = ok.Asset(symbol)
+                asset = ok.Asset(resolved_symbol)
                 info_text = f"{asset}"
             except Exception as e:
                 info_text = f"Ошибка при получении информации об активе: {str(e)}"
@@ -752,11 +760,11 @@ class ShansAi:
             # Создаем кнопки для дополнительных функций
             keyboard = [
                 [
-                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{symbol}"),
-                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{symbol}")
+                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{resolved_symbol}"),
+                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{resolved_symbol}")
                 ],
                 [
-                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{resolved_symbol}")
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -795,9 +803,17 @@ class ShansAi:
                 await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
                 return
             
+            # Get the resolved symbol from asset service
+            resolved = self.asset_service.resolve_symbol_or_isin(symbol)
+            if 'error' in resolved:
+                await self._send_message_safe(update, f"❌ Ошибка: {resolved['error']}")
+                return
+            
+            resolved_symbol = resolved['symbol']
+            
             # Получаем сырой вывод объекта ok.Asset
             try:
-                asset = ok.Asset(symbol)
+                asset = ok.Asset(resolved_symbol)
                 info_text = f"{asset}"
             except Exception as e:
                 info_text = f"Ошибка при получении информации об активе: {str(e)}"
@@ -805,11 +821,11 @@ class ShansAi:
             # Создаем кнопки для дополнительных функций
             keyboard = [
                 [
-                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{symbol}"),
-                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{symbol}")
+                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{resolved_symbol}"),
+                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{resolved_symbol}")
                 ],
                 [
-                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{resolved_symbol}")
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
