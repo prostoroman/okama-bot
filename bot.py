@@ -755,24 +755,12 @@ class ShansAi:
                 await self._send_message_safe(update, f"❌ Ошибка: {asset_info['error']}")
                 return
             
-            # Формируем базовую информацию
-            info_text = f"📊 {symbol} - {asset_info.get('name', 'N/A')}\n\n"
-            info_text += f"🏛️: {asset_info.get('exchange', 'N/A')}\n"
-            info_text += f"🌍: {asset_info.get('country', 'N/A')}\n"
-            info_text += f"💰: {asset_info.get('currency', 'N/A')}\n"
-            info_text += f"📈: {asset_info.get('type', 'N/A')}\n"
-            
-            if asset_info.get('isin'):
-                info_text += f"🔹 ISIN: {asset_info['isin']}\n"
-            
-            if asset_info.get('current_price') is not None:
-                info_text += f"💵 Текущая цена: {asset_info['current_price']:.2f} {asset_info.get('currency', 'N/A')}\n"
-            
-            if asset_info.get('annual_return') != 'N/A':
-                info_text += f"📊 Годовая доходность: {asset_info['annual_return']}\n"
-            
-            if asset_info.get('volatility') != 'N/A':
-                info_text += f"📉 Волатильность: {asset_info['volatility']}\n"
+            # Получаем сырой вывод объекта ok.Asset
+            try:
+                asset = ok.Asset(symbol)
+                info_text = f"{asset}"
+            except Exception as e:
+                info_text = f"Ошибка при получении информации об активе: {str(e)}"
             
 
             
