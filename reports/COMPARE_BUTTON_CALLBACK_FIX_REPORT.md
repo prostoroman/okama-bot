@@ -22,7 +22,7 @@ callback_data=f"drawdowns_{','.join(symbols)}"
 ### 2. Отсутствие метода _send_ai_analysis
 **Проблема**: В коде вызывался несуществующий метод:
 ```
-❌ Ошибка при создании сравнения: 'OkamaFinanceBot' object has no attribute '_send_ai_analysis'
+❌ Ошибка при создании сравнения: 'ShansAi' object has no attribute '_send_ai_analysis'
 ```
 
 **Корневая причина**: Метод был удален или не был создан, но вызов остался в коде.

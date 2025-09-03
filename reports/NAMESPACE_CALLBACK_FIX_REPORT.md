@@ -3,7 +3,7 @@
 ## Описание проблемы
 После рефакторинга методов namespace возникла ошибка:
 ```
-❌ Ошибка при получении данных для 'US': OkamaFinanceBot._send_callback_message() got an unexpected keyword argument 'reply_markup'
+❌ Ошибка при получении данных для 'US': ShansAi._send_callback_message() got an unexpected keyword argument 'reply_markup'
 ```
 
 ## Причина ошибки

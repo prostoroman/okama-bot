@@ -42,7 +42,7 @@ jobs:
 
     - name: 🔍 Test imports
       run: |
-        python -c "import matplotlib; matplotlib.use('Agg'); from bot import OkamaFinanceBot; print('✅ Bot import OK')"
+        python -c "import matplotlib; matplotlib.use('Agg'); from bot import ShansAi; print('✅ Bot import OK')"
         python -c "from services.asset_service import AssetService; print('✅ AssetService import OK')"
         python -c "from yandexgpt_service import YandexGPTService; print('✅ YandexGPTService import OK')"
         python -c "from services.intent_parser_enhanced import EnhancedIntentParser; print('✅ EnhancedIntentParser import OK')"

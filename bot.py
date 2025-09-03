@@ -65,8 +65,8 @@ def health_check():
     logger.info(f"✅ Bot token configured: {'Yes' if Config.TELEGRAM_BOT_TOKEN else 'No'}")
     return True
 
-class OkamaFinanceBot:
-    """Enhanced Telegram bot for financial analysis with Okama library"""
+class ShansAi:
+    """Telegram bot for financial analysis with Okama library"""
     
     def __init__(self):
         """Initialize the bot with required services"""
@@ -5006,7 +5006,7 @@ if __name__ == "__main__":
             logger.info("✅ Running on Python 3.12+ with latest python-telegram-bot")
         
         logger.info("🚀 Initializing bot services...")
-        bot = OkamaFinanceBot()
+        bot = ShansAi()
         logger.info("✅ Bot services initialized successfully")
         logger.info("🤖 Starting Telegram bot...")
         bot.run()
