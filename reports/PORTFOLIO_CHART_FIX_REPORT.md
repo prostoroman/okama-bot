@@ -45,10 +45,13 @@ fig, ax = chart_styles.create_portfolio_wealth_chart(
 
 ## Changes Made
 
-### 1. Fixed Parameter Name
+### 1. Fixed Parameter Names
 - **File:** `bot.py`
-- **Location:** Line 1907 in portfolio creation method
-- **Change:** Changed `ccy=currency` to `currency=currency`
+- **Location:** Multiple portfolio chart methods
+- **Change:** Changed `ccy=currency` to `currency=currency` in:
+  - `create_portfolio_wealth_chart()` call (line 1907)
+  - `create_portfolio_rolling_cagr_chart()` call (line 4689)
+  - `create_portfolio_compare_assets_chart()` call (line 4816)
 
 ## Testing Results
 
@@ -78,8 +81,8 @@ fig, ax = chart_styles.create_portfolio_wealth_chart(
 ## Files Modified
 
 1. **`bot.py`**
-   - Fixed parameter name in `create_portfolio_wealth_chart()` call
-   - Changed `ccy=currency` to `currency=currency`
+   - Fixed parameter names in multiple portfolio chart methods
+   - Changed `ccy=currency` to `currency=currency` in all chart_styles calls
 
 ## Conclusion
 
