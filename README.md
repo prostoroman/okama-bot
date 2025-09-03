@@ -138,7 +138,7 @@ okama-bot/
 ├── 📁 scripts/                     # Скрипты
 ├── bot.py                          # Основной файл бота
 ├── config.py                       # Управление конфигурацией
-├── yandexgpt_service.py            # Сервис YandexGPT
+├── services/yandexgpt_service.py   # Сервис YandexGPT
 ├── requirements.txt                # Зависимости Python
 └── .gitignore                      # Исключения Git
 ```
