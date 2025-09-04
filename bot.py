@@ -4755,15 +4755,13 @@ class ShansAi:
             
             for i, symbol in enumerate(final_symbols):
                 try:
-                    # Test if symbol exists in database
-                    test_asset = ok.Asset(symbol, ccy=currency)
-                    # Try to access price data to verify symbol is valid
-                    if test_asset.price is not None and len(test_asset.price) > 0:
-                        valid_symbols.append(symbol)
-                        valid_weights.append(weights[i])
-                    else:
-                        invalid_symbols.append(symbol)
-                        self.logger.warning(f"Symbol {symbol} has no price data")
+                    # Test if symbol exists in database - be more lenient
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    # Don't check price data length as it might be empty but symbol still valid
+                    valid_symbols.append(symbol)
+                    valid_weights.append(weights[i])
+                    self.logger.info(f"Symbol {symbol} validated successfully")
                 except Exception as e:
                     invalid_symbols.append(symbol)
                     self.logger.warning(f"Symbol {symbol} is invalid: {e}")
