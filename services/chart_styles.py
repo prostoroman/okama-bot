@@ -37,22 +37,10 @@ class ChartStyles:
             'legend.fontsize': 10,
         })
         
-        # Централизованная цветовая палитра
-        self.colors = {
-            'primary': '#005F73',      # глубокий морской синий
-            'secondary': '#0A9396',     # бирюзовый акцент
-            'success': '#94D2BD',      # мягкий мятный
-            'danger': '#AE2012',       # глубокий красный
-            'warning': '#EE9B00',      # янтарный
-            'neutral': '#E9ECEF',      # светло-серый фон
-            'text': '#2E3440',         # строгий графитовый
-            'grid': '#CBD5E1',         # светло-серые линии сетки
-        }
-        
         # Централизованные настройки стилей
         self.style = {
             'figsize': (12, 7),
-            'dpi': 160,
+            'dpi': 96,
             'facecolor': 'white',
             'edgecolor': 'none',
             'bbox_inches': 'tight',
@@ -61,7 +49,6 @@ class ChartStyles:
         
         # Централизованные настройки линий
         self.lines = {
-            'width': 2.2,
             'alpha': 0.95,
             'smooth_points': 2000,
         }
@@ -70,9 +57,9 @@ class ChartStyles:
         self.axes = {
             'fontsize': 12,
             'fontweight': 'medium',
-            'color': self.colors['text'],
+            'color': '#2E3440',  # строгий графитовый
             'tick_fontsize': 10,
-            'tick_color': self.colors['text'],
+            'tick_color': '#2E3440',  # строгий графитовый
         }
         
         # Централизованные настройки сетки
@@ -80,13 +67,13 @@ class ChartStyles:
             'alpha': 0.25,
             'linestyle': '-',
             'linewidth': 0.7,
-            'color': self.colors['grid'],
+            'color': '#CBD5E1',  # светло-серые линии сетки
             'zorder': 0,
         }
         
         # Централизованные настройки рамок
         self.spines = {
-            'color': self.colors['text'],
+            'color': '#2E3440',  # строгий графитовый
             'linewidth': 1.1,
         }
         
@@ -94,8 +81,6 @@ class ChartStyles:
         self.legend = {
             'fontsize': 10,
             'frameon': True,
-            'fancybox': True,
-            'shadow': True,
             'loc': 'upper left',
         }
         
@@ -104,14 +89,14 @@ class ChartStyles:
             'fontsize': 16,
             'fontweight': 'semibold',
             'pad': 18,
-            'color': self.colors['text'],
+            'color': '#2E3440',  # строгий графитовый
         }
         
         # Централизованные настройки копирайта
         self.copyright = {
             'text': '© shans.ai | data source: okama',
             'fontsize': 10,
-            'color': self.colors['text'],
+            'color': '#2E3440',  # строгий графитовый
             'alpha': 0.55,
             'position': (0.98, 0.02),
         }
@@ -170,7 +155,7 @@ class ChartStyles:
     def _apply_base_style(self, fig, ax):
         """Применить базовый стиль к оси"""
         try:
-            ax.set_facecolor(self.colors['neutral'])
+            ax.set_facecolor('#E9ECEF')  # светло-серый фон
             
             # Рамки - только снизу и слева
             for spine in ['top', 'right']:
@@ -233,8 +218,10 @@ class ChartStyles:
     
     def get_color(self, index):
         """Получить цвет по индексу"""
-        colors_list = list(self.colors.values())
-        return colors_list[index % len(colors_list)]
+        # Используем стандартные цвета matplotlib
+        import matplotlib.pyplot as plt
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        return colors[index % len(colors)]
     
     # ============================================================================
     # УНИВЕРСАЛЬНЫЕ МЕТОДЫ СОЗДАНИЯ ГРАФИКОВ
@@ -245,9 +232,9 @@ class ChartStyles:
         fig, ax = self.create_chart(**kwargs)
         
         if hasattr(data, 'plot'):
-            data.plot(ax=ax, linewidth=self.lines['width'], alpha=self.lines['alpha'])
+            data.plot(ax=ax, alpha=self.lines['alpha'])
         else:
-            ax.plot(data.index, data.values, linewidth=self.lines['width'], alpha=self.lines['alpha'])
+            ax.plot(data.index, data.values, alpha=self.lines['alpha'])
         
         # Extract copyright parameter from kwargs and pass to apply_styling
         copyright_param = kwargs.pop('copyright', True)
@@ -259,7 +246,7 @@ class ChartStyles:
         fig, ax = self.create_chart(**kwargs)
         
         if bar_color is None:
-            bar_color = self.colors['success']
+            bar_color = '#94D2BD'  # мягкий мятный
         
         if hasattr(data, 'plot'):
             data.plot(ax=ax, kind='bar', color=bar_color, alpha=0.8)
@@ -289,8 +276,7 @@ class ChartStyles:
         for i, column in enumerate(data.columns):
             color = self.get_color(i)
             ax.plot(x_values, data[column].values,
-                    color=color, linewidth=self.lines['width'],
-                    alpha=self.lines['alpha'], label=column)
+                    color=color, alpha=self.lines['alpha'], label=column)
         
         self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel)
         ax.tick_params(axis='x', rotation=45)
@@ -304,15 +290,14 @@ class ChartStyles:
         """Создать график цен актива"""
         title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
         ylabel = f'Цена ({currency})' if currency else 'Цена'
-        # Pass copyright=False through kwargs to avoid duplicate parameter error
-        kwargs['copyright'] = False
-        return self.create_line_chart(data, title, ylabel, **kwargs)
+        xlabel = ''  # Пустая подпись по оси X
+        return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
     def create_dividends_chart(self, data, symbol, currency, **kwargs):
         """Создать график дивидендов"""
         title = f'Дивиденды {symbol}'
         ylabel = f'Сумма ({currency})'
-        return self.create_bar_chart(data, title, ylabel, bar_color=self.colors['success'], **kwargs)
+        return self.create_bar_chart(data, title, ylabel, bar_color='#94D2BD', **kwargs)
     
     def create_dividend_yield_chart(self, data, symbols, **kwargs):
         """Создать график дивидендной доходности"""
@@ -337,8 +322,7 @@ class ChartStyles:
             if column in cleaned_data.columns and not cleaned_data[column].empty:
                 color = self.get_color(i)
                 ax.plot(cleaned_data.index, cleaned_data[column].values * 100,
-                       color=color, linewidth=self.lines['width'], 
-                       alpha=self.lines['alpha'], label=column)
+                       color=color, alpha=self.lines['alpha'], label=column)
         
         title = f'Просадки активов: {", ".join(symbols)}'
         ylabel = f'Просадка (%)'
@@ -382,7 +366,7 @@ class ChartStyles:
             if len(lines) >= 1:
                 lines[0].set_linewidth(3.0)
                 lines[0].set_alpha(1.0)
-                lines[0].set_color(self.colors['primary'])
+                lines[0].set_color('#005F73')  # глубокий морской синий
             
             for i in range(1, len(lines)):
                 lines[i].set_linewidth(1.5)
@@ -410,20 +394,12 @@ class ChartStyles:
         for i, column in enumerate(data.columns):
             color = self.get_color(i)
             ax.plot(data.index, data[column].values, 
-                   color=color, linewidth=self.lines['width'], 
-                   alpha=self.lines['alpha'], label=column)
+                   color=color, alpha=self.lines['alpha'], label=column)
         
         title = f'Сравнение активов: {", ".join(symbols)}'
         ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
-        self.apply_styling(ax, title=title, ylabel=ylabel, legend=False)
+        self.apply_styling(ax, title=title, ylabel=ylabel)
         ax.tick_params(axis='x', rotation=45)
-        
-        # Легенда
-        handles, labels = ax.get_legend_handles_labels()
-        if handles and labels:
-            legend_config = self.legend.copy()
-            legend_config.pop('loc', None)
-            ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(0.02, 0.98), **legend_config)
         
         return fig, ax
     
@@ -481,7 +457,7 @@ class ChartStyles:
         dates = [pd.to_datetime(date) for date in data.index]
         amounts = data.values
         
-        bars = ax.bar(dates, amounts, color=self.colors['success'], alpha=0.7, width=20)
+        bars = ax.bar(dates, amounts, color='#94D2BD', alpha=0.7, width=20)
         
         title = f'Дивиденды {symbol}'
         ylabel = f'Сумма ({currency})'
@@ -518,7 +494,7 @@ class ChartStyles:
                 main_line = ax.lines[0]
                 main_line.set_linewidth(self.monte_carlo['main_linewidth'])
                 main_line.set_alpha(self.monte_carlo['main_alpha'])
-                main_line.set_color(self.colors['primary'])
+                main_line.set_color('#005F73')  # глубокий морской синий
                 
                 # Тестовые линии
                 for i, line in enumerate(ax.lines[1:], 1):
@@ -536,9 +512,9 @@ class ChartStyles:
         try:
             if len(ax.lines) >= 3:
                 percentile_colors = [
-                    self.colors['danger'],    # 10% - красный
-                    self.colors['primary'],   # 50% - синий
-                    self.colors['success']     # 90% - зеленый
+                    '#AE2012',    # 10% - красный
+                    '#005F73',   # 50% - синий
+                    '#94D2BD'     # 90% - зеленый
                 ]
                 
                 percentile_labels = [
@@ -556,7 +532,7 @@ class ChartStyles:
                             line.set_label(percentile_labels[i])
                 
                 for line in ax.lines[3:]:
-                    line.set_color(self.colors['neutral'])
+                    line.set_color('#E9ECEF')  # светло-серый фон
                     line.set_linewidth(1.5)
                     line.set_alpha(0.6)
                     line.set_label('')
