@@ -2675,7 +2675,7 @@ class ShansAi:
             elif callback_data.startswith('portfolio_wealth_chart_'):
                 portfolio_symbol = callback_data.replace('portfolio_wealth_chart_', '')
                 self.logger.info(f"Portfolio wealth chart button clicked for portfolio: {portfolio_symbol}")
-                await self._handle_portfolio_wealth_chart_button(update, context, portfolio_symbol)
+                await self._handle_portfolio_wealth_chart_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('wealth_chart_'):
                 symbols = callback_data.replace('wealth_chart_', '').split(',')
                 self.logger.info(f"Wealth chart button clicked for symbols: {symbols}")
@@ -5309,6 +5309,40 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio wealth chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
+
+    async def _handle_portfolio_wealth_chart_by_symbol(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
+        """Handle portfolio wealth chart button click by portfolio symbol"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio wealth chart by symbol for user {user_id}, portfolio: {portfolio_symbol}")
+            
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            if portfolio_symbol not in saved_portfolios:
+                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
+                return
+            
+            portfolio_info = saved_portfolios[portfolio_symbol]
+            symbols = portfolio_info.get('symbols', [])
+            weights = portfolio_info.get('weights', [])
+            currency = portfolio_info.get('currency', 'USD')
+            
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            
+            if not symbols:
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
+                return
+            
+            await self._send_callback_message(update, context, "📈 Создаю график накопленной доходности...")
+            
+            # Create portfolio and generate wealth chart
+            portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+            await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio wealth chart by symbol: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
 
     async def _handle_portfolio_rolling_cagr_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
