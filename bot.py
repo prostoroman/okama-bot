@@ -1765,27 +1765,16 @@ class ShansAi:
         """Handle /portfolio command for creating portfolio with weights"""
         try:
             if not context.args:
-                # Get random examples for user
-                examples = self.get_random_examples(3)
-                examples_text = ", ".join(examples)
                 
                 await self._send_message_safe(update, 
                     f"📊 Команда /portfolio - Создание портфеля\n\n"
-                    f"Примеры: {examples_text}\n\n"
-                    f"Просто отправьте активы в формате:\n"
-                    f"`символ1:доля1 символ2:доля2 символ3:доля3`\n\n"
+                    f"Введите список активов с указанием долей:\n"
                     f"Примеры:\n"
-                    f"• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации\n"
-                    f"• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель\n"
-                    f"• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - портфель с золотом\n\n"
-                    f"💡 Важные моменты:\n"
-                    f"• Доли должны суммироваться в 1.0 (100%)\n"
-                    f"• Базовая валюта определяется по первому символу\n"
-                    f"• Поддерживаются все типы активов: акции, облигации, товары, индексы\n\n"
-                    f"Что вы получите:\n"
-                    f"✅ График накопленной доходности портфеля\n"
-                    f"✅ Таблица активов с весами\n"
-                    f"✅ Основные характеристики портфеля"
+                    f"• SPY.US:0.5 QQQ.US:0.3 BND.US:0.2\n"
+                    f"• SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3\n"
+                    f"• VOO.US:0.6 GC.COMM:0.2 BND.US:0.2\n\n"
+                    f"💡Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
+                    f"💡Базовая валюта определяется по первому символу\n"
                 )
                 
                 # Set flag to wait for portfolio input
@@ -1996,11 +1985,18 @@ class ShansAi:
                     last_analysis_type='portfolio',
                     last_period='MAX',
                     current_symbols=symbols,
-                    current_ccy=currency,
+                    current_currency=currency,
                     current_currency_info=currency_info,
                     portfolio_weights=weights,
                     portfolio_count=portfolio_count
                 )
+                
+                # Verify what was saved
+                saved_context = self._get_user_context(user_id)
+                self.logger.info(f"Saved context keys: {list(saved_context.keys())}")
+                self.logger.info(f"Saved current_symbols: {saved_context.get('current_symbols')}")
+                self.logger.info(f"Saved current_currency: {saved_context.get('current_currency')}")
+                self.logger.info(f"Saved portfolio_weights: {saved_context.get('portfolio_weights')}")
                 
                 # Get current saved portfolios and check for existing portfolio
                 saved_portfolios = user_context.get('saved_portfolios', {})
@@ -2331,34 +2327,38 @@ class ShansAi:
             self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
             self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
             
-            # Determine base currency from the first asset
+            # Determine base currency from the first asset using .currency property
             first_symbol = symbols[0]
             currency_info = ""
             try:
-                if '.' in first_symbol:
-                    namespace = first_symbol.split('.')[1]
-                    if namespace == 'MOEX':
-                        currency = "RUB"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'US':
-                        currency = "USD"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'LSE':
-                        currency = "GBP"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'FX':
-                        currency = "USD"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                # Create asset to get its currency
+                first_asset = ok.Asset(first_symbol)
+                currency = first_asset.currency
+                currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                self.logger.info(f"Currency determined from asset {first_symbol}: {currency}")
+            except Exception as e:
+                self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
+                # Fallback to namespace-based detection
+                try:
+                    if '.' in first_symbol:
+                        namespace = first_symbol.split('.')[1]
+                        if namespace == 'MOEX':
+                            currency = "RUB"
+                        elif namespace == 'US':
+                            currency = "USD"
+                        elif namespace == 'LSE':
+                            currency = "GBP"
+                        elif namespace == 'FX':
+                            currency = "USD"
+                        else:
+                            currency = "USD"
                     else:
                         currency = "USD"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                else:
+                    currency_info = f"автоматически определена по namespace ({first_symbol})"
+                except Exception as fallback_error:
+                    self.logger.warning(f"Could not determine currency from namespace {first_symbol}: {fallback_error}")
                     currency = "USD"
-                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
-            except Exception as e:
-                self.logger.warning(f"Could not determine currency from {first_symbol}: {e}")
-                currency = "USD"
-                currency_info = "автоматически определена (USD по умолчанию)"
+                    currency_info = "автоматически определена (USD по умолчанию)"
             
             # Create portfolio using okama
             try:
@@ -2386,7 +2386,7 @@ class ShansAi:
                 portfolio_data_str = ','.join(symbols)
                 
                 # Add portfolio symbol display
-                portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
+                portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}`\n"
                 portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
                 
                 # Add buttons with wealth chart as first
@@ -2420,11 +2420,18 @@ class ShansAi:
                     last_analysis_type='portfolio',
                     last_period='MAX',
                     current_symbols=symbols,
-                    current_ccy=currency,
+                    current_currency=currency,
                     current_currency_info=currency_info,
                     portfolio_weights=weights,
                     portfolio_count=portfolio_count
                 )
+                
+                # Verify what was saved
+                saved_context = self._get_user_context(user_id)
+                self.logger.info(f"Saved context keys: {list(saved_context.keys())}")
+                self.logger.info(f"Saved current_symbols: {saved_context.get('current_symbols')}")
+                self.logger.info(f"Saved current_currency: {saved_context.get('current_currency')}")
+                self.logger.info(f"Saved portfolio_weights: {saved_context.get('portfolio_weights')}")
                 
             except Exception as e:
                 self.logger.error(f"Error creating portfolio: {e}")
