@@ -1514,7 +1514,7 @@ class ShansAi:
                                     # Create portfolio object using okama
                                     portfolio = ok.Portfolio(
                                         portfolio_context['portfolio_symbols'], 
-                                        portfolio_context['portfolio_weights'], 
+                                        weights=portfolio_context['portfolio_weights'], 
                                         ccy=portfolio_context['portfolio_currency']
                                     )
                                     assets_for_comparison.append(portfolio)
@@ -1532,7 +1532,7 @@ class ShansAi:
                                     if ' (' in desc:
                                         portfolio_symbols = desc.split(' (')[1].rstrip(')').split(', ')
                                         portfolio_weights = [1.0/len(portfolio_symbols)] * len(portfolio_symbols)
-                                        portfolio = ok.Portfolio(portfolio_symbols, portfolio_weights, ccy=currency)
+                                        portfolio = ok.Portfolio(portfolio_symbols, weights=portfolio_weights, ccy=currency)
                                         assets_for_comparison.append(portfolio)
                                         self.logger.info(f"Added generic portfolio to comparison")
                                     else:
