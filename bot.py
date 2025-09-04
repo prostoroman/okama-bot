@@ -1686,10 +1686,12 @@ class ShansAi:
             # Get user context with detailed logging
             user_context = self._get_user_context(user_id)
             self.logger.info(f"User context keys: {list(user_context.keys())}")
+            self.logger.info(f"Full user context: {user_context}")
             
             saved_portfolios = user_context.get('saved_portfolios', {})
             self.logger.info(f"Saved portfolios count: {len(saved_portfolios)}")
             self.logger.info(f"Saved portfolios keys: {list(saved_portfolios.keys())}")
+            self.logger.info(f"Saved portfolios content: {saved_portfolios}")
             
             if not saved_portfolios:
                 await self._send_message_safe(update, 
@@ -2224,11 +2226,14 @@ class ShansAi:
                         }, ensure_ascii=False)
                     }
                 
-                # Add the new portfolio to saved portfolios only if it doesn't exist
-                if not existing_portfolio_symbol:
-                    saved_portfolios[portfolio_symbol] = portfolio_attributes
+                # Add the new portfolio to saved portfolios (always save, even if similar exists)
+                saved_portfolios[portfolio_symbol] = portfolio_attributes
                 
                 # Update saved portfolios in context (single update)
+                self.logger.info(f"Updating user context with portfolio: {portfolio_symbol}")
+                self.logger.info(f"Portfolio attributes: {portfolio_attributes}")
+                self.logger.info(f"Current saved portfolios: {saved_portfolios}")
+                
                 self._update_user_context(
                     user_id,
                     saved_portfolios=saved_portfolios,
@@ -2631,7 +2636,7 @@ class ShansAi:
             elif callback_data.startswith('portfolio_drawdowns_'):
                 portfolio_symbol = callback_data.replace('portfolio_drawdowns_', '')
                 self.logger.info(f"Portfolio drawdowns button clicked for portfolio: {portfolio_symbol}")
-                await self._handle_portfolio_drawdowns_button(update, context, portfolio_symbol)
+                await self._handle_portfolio_drawdowns_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('compare_assets_'):
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
@@ -4658,6 +4663,40 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating forecast chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика прогноза: {str(e)}")
+
+    async def _handle_portfolio_drawdowns_by_symbol(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
+        """Handle portfolio drawdowns button click by portfolio symbol"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio drawdowns by symbol for user {user_id}, portfolio: {portfolio_symbol}")
+            
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            if portfolio_symbol not in saved_portfolios:
+                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
+                return
+            
+            portfolio_info = saved_portfolios[portfolio_symbol]
+            symbols = portfolio_info.get('symbols', [])
+            weights = portfolio_info.get('weights', [])
+            currency = portfolio_info.get('currency', 'USD')
+            
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            
+            if not symbols:
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
+                return
+            
+            await self._send_callback_message(update, context, "📉 Создаю график просадок...")
+            
+            # Create portfolio and generate drawdowns chart
+            portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+            await self._create_portfolio_drawdowns_chart(update, context, portfolio, symbols, currency, weights)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio drawdowns by symbol: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
 
     async def _handle_portfolio_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle portfolio drawdowns button click"""
