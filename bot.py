@@ -1236,9 +1236,9 @@ class ShansAi:
                         else:
                             portfolio_str = ', '.join(symbols)
                         
-                        help_text += f"• `{portfolio_symbol}` - {portfolio_str}\n"
+                        help_text += f"• {portfolio_symbol} ({portfolio_str})\n"
                     
-                help_text += "💡 Примеры:\n"
+                help_text += "\n\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
                 help_text += "• `portfolio_5642.PF portfolio_5642.PF` - сравнение двух портефелей\n"
                 help_text += "• `portfolio_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
