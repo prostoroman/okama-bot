@@ -1008,10 +1008,9 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график за последний год используя встроенные функции okama"""
+        """Получить ежедневный график за последний год используя ChartStyles"""
         try:
             import io
-
             
             def create_daily_chart():
                 # Устанавливаем backend для headless режима
@@ -1026,19 +1025,22 @@ class ShansAi:
                 # Берем последние 252 торговых дня (примерно год)
                 filtered_data = daily_data.tail(252)
                 
-                # Используем встроенный метод plot() для создания графика
-                ax = filtered_data.plot(figsize=(12, 8), title=f'Ежедневный график {symbol} (последний год)')
-                
-                # Получаем Figure из Axes
-                fig = ax.figure
+                # Используем ChartStyles для создания графика
+                currency = getattr(asset, 'currency', '')
+                fig, ax = chart_styles.create_price_chart(
+                    data=filtered_data,
+                    symbol=symbol,
+                    currency=currency,
+                    period='последний год'
+                )
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
-                fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight')
+                chart_styles.save_figure(fig, output)
                 output.seek(0)
                 
                 # Очистка
-                plt.close(fig)
+                chart_styles.cleanup_figure(fig)
                 
                 return output.getvalue()
             
@@ -3597,7 +3599,7 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить месячный график используя встроенные функции okama"""
+        """Получить месячный график используя ChartStyles"""
         try:
             import io
             
@@ -3607,19 +3609,26 @@ class ShansAi:
                 matplotlib.use('Agg')
                 
                 asset = ok.Asset(symbol)
-                # Используем встроенный метод plot() для создания графика
-                ax = asset.close_monthly.plot(figsize=(12, 8), title=f'Месячный график {symbol}')
                 
-                # Получаем Figure из Axes
-                fig = ax.figure
+                # Получаем месячные данные
+                monthly_data = asset.close_monthly
+                
+                # Используем ChartStyles для создания графика
+                currency = getattr(asset, 'currency', '')
+                fig, ax = chart_styles.create_price_chart(
+                    data=monthly_data,
+                    symbol=symbol,
+                    currency=currency,
+                    period='месячный'
+                )
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
-                fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight')
+                chart_styles.save_figure(fig, output)
                 output.seek(0)
                 
                 # Очистка
-                plt.close(fig)
+                chart_styles.cleanup_figure(fig)
                 
                 return output.getvalue()
             
@@ -3718,8 +3727,9 @@ class ShansAi:
             return None
 
     def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
-        """Создать график дивидендов"""
+        """Создать график дивидендов используя ChartStyles"""
         try:
+            import io
             
             # Конвертируем дивиденды в pandas Series
             dividend_series = pd.Series(dividends)
@@ -3727,52 +3737,20 @@ class ShansAi:
             # Сортируем по дате
             dividend_series = dividend_series.sort_index()
             
-            # Создаем график с увеличенной высотой для таблицы
-            fig, ax = chart_styles.create_dividends_chart_enhanced(
+            # Используем ChartStyles для создания графика дивидендов
+            fig, ax = chart_styles.create_dividends_chart(
                 data=dividend_series,
                 symbol=symbol,
-                ccy=currency
+                currency=currency
             )
-            
-            # Рисуем столбчатую диаграмму
-            dates = [pd.to_datetime(date) for date in dividend_series.index]
-            amounts = dividend_series.values
-            
-            bars = ax.bar(dates, amounts, color='#2E8B57', alpha=0.7, width=20)
-            
-            # Настройка графика
-            ax.set_title(f'Дивиденды {symbol}', fontsize=16, fontweight='bold', pad=20)
-
-            ax.set_ylabel(f'Сумма ({currency})', fontsize=12)
-            ax.grid(True, linestyle='--', alpha=0.3)
-            
-            # Форматирование оси X
-            fig.autofmt_xdate()
-            
-            # Добавляем статистику в левом верхнем углу
-            total_dividends = dividend_series.sum()
-            avg_dividend = dividend_series.mean()
-            max_dividend = dividend_series.max()
-            
-            stats_text = f'Общая сумма: {total_dividends:.2f} {currency}\n'
-            stats_text += f'Средняя выплата: {avg_dividend:.2f} {currency}\n'
-            stats_text += f'Максимальная выплата: {max_dividend:.2f} {currency}'
-            
-            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
-                   verticalalignment='top', fontsize=10,
-                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
-            
-            # Убираем таблицу с графика и используем стандартные отступы
-            plt.subplots_adjust(right=0.95)
-            
-            # Добавляем копирайт к axes
-            chart_styles.add_copyright(ax)
             
             # Сохраняем в bytes
             output = io.BytesIO()
-            fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight')
+            chart_styles.save_figure(fig, output)
             output.seek(0)
-            plt.close(fig)
+            
+            # Очистка
+            chart_styles.cleanup_figure(fig)
             
             return output.getvalue()
             
@@ -3781,8 +3759,9 @@ class ShansAi:
             return None
 
     def _create_dividend_table_image(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
-        """Создать отдельное изображение с таблицей дивидендов"""
+        """Создать отдельное изображение с таблицей дивидендов используя ChartStyles"""
         try:
+            import io
             
             # Конвертируем дивиденды в pandas Series
             dividend_series = pd.Series(dividends)
@@ -3808,7 +3787,8 @@ class ShansAi:
             # Создаем фигуру для таблицы используя chart_styles
             fig, ax, table = chart_styles.create_dividend_table_chart(
                 table_data=table_data,
-                headers=table_headers
+                headers=table_headers,
+                title=f'Таблица дивидендов {symbol}\nПоследние {len(table_data)} выплат'
             )
             
             # Стилизуем таблицу
@@ -3818,7 +3798,7 @@ class ShansAi:
             
             # Цвета для заголовков
             for i in range(len(table_headers)):
-                table[(0, i)].set_facecolor('#4CAF50')
+                table[(0, i)].set_facecolor(chart_styles.colors['success'])
                 table[(0, i)].set_text_props(weight='bold', color='white')
                 table[(0, i)].set_height(0.12)
             
@@ -3826,15 +3806,11 @@ class ShansAi:
             for i in range(1, len(table_data) + 1):
                 for j in range(len(table_headers)):
                     if i % 2 == 0:
-                        table[(i, j)].set_facecolor('#F5F5F5')
+                        table[(i, j)].set_facecolor(chart_styles.colors['neutral'])
                     else:
-                        table[(i, j)].set_facecolor('#FFFFFF')
-                    table[(i, j)].set_text_props(color='black')
+                        table[(i, j)].set_facecolor('white')
+                    table[(i, j)].set_text_props(color=chart_styles.colors['text'])
                     table[(i, j)].set_height(0.08)
-            
-            # Добавляем заголовок таблицы
-            ax.set_title(f'Таблица дивидендов {symbol}\nПоследние {len(table_data)} выплат', 
-                        fontsize=16, fontweight='bold', pad=20, color='#2E3440')
             
             # Добавляем общую статистику внизу
             total_dividends = dividend_series.sum()
@@ -3846,14 +3822,16 @@ class ShansAi:
             stats_text += f'Максимальная выплата: {max_dividend:.2f} {currency}'
             
             ax.text(0.5, 0.02, stats_text, transform=ax.transAxes, 
-                   fontsize=10, ha='center', color='#4C566A',
-                   bbox=dict(boxstyle='round,pad=0.5', facecolor='#F8F9FA', alpha=0.8))
+                   fontsize=10, ha='center', color=chart_styles.colors['text'],
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor=chart_styles.colors['neutral'], alpha=0.8))
             
             # Сохраняем в bytes
             output = io.BytesIO()
-            fig.savefig(output, format='PNG', dpi=96, bbox_inches='tight', facecolor='white')
+            chart_styles.save_figure(fig, output)
             output.seek(0)
-            plt.close(fig)
+            
+            # Очистка
+            chart_styles.cleanup_figure(fig)
             
             return output.getvalue()
             
