@@ -66,14 +66,15 @@ elif callback_data.startswith('portfolio_drawdowns_'):
 ## Implementation Status
 
 ### ❌ **PENDING**
-- Fix button creation format
-- Create new function for portfolio_symbol handling
-- Update callback handler
+- Fix button creation format (drawdowns_{portfolio_data_str} → portfolio_drawdowns_{portfolio_symbol})
+- Create new function for portfolio_symbol handling (_handle_portfolio_drawdowns_by_symbol)
+- Update callback handler to use new function
 
 ### ✅ **COMPLETED**
 - Identified root cause
 - Created solution plan
 - Documented the issue
+- Created fix scripts
 
 ## Next Steps
 
@@ -89,3 +90,14 @@ After fix:
 - ✅ Создается график просадок портфеля
 - ✅ Нет ошибки "Неизвестная кнопка"
 - ✅ Стандартизированный формат callback_data
+
+## Additional Issue: Portfolio Not Saving to Context
+
+### Problem:
+Портфель не сохраняется в `saved_portfolios` в контексте пользователя.
+
+### Solution:
+Добавить сохранение портфеля в `saved_portfolios` после первого `_update_user_context` в `_handle_portfolio_input`.
+
+### Status:
+- ❌ **PENDING**: Add saved_portfolios saving logic
