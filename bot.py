@@ -2616,6 +2616,10 @@ class ShansAi:
                 portfolio_symbol = callback_data.replace('portfolio_compare_assets_', '')
                 self.logger.info(f"Portfolio compare assets button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_compare_assets_button(update, context, portfolio_symbol)
+            elif callback_data.startswith('portfolio_drawdowns_'):
+                portfolio_symbol = callback_data.replace('portfolio_drawdowns_', '')
+                self.logger.info(f"Portfolio drawdowns button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_drawdowns_button(update, context, portfolio_symbol)
             elif callback_data.startswith('compare_assets_'):
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
