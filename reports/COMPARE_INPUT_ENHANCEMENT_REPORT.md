@@ -27,6 +27,20 @@ help_text += "• `PF_1 PF_2` - сравнение портфелей с пор�
 help_text += "• `PF_1 SBER.MOEX` - смешанное сравнение\n\n"
 ```
 
+**Enhanced Portfolio Display:**
+```python
+# Create formatted portfolio string with symbols and weights
+if symbols and weights and len(symbols) == len(weights):
+    portfolio_parts = []
+    for i, (symbol, weight) in enumerate(zip(symbols, weights)):
+        portfolio_parts.append(f"{symbol}:{weight:.1%}")
+    portfolio_str = ' '.join(portfolio_parts)
+else:
+    portfolio_str = ', '.join(symbols)
+
+help_text += f"• `{portfolio_symbol}` - {portfolio_str}\n"
+```
+
 **Added Input Prompt:**
 ```python
 help_text += "💬 Введите символы для сравнения:"
@@ -80,6 +94,8 @@ if user_context.get('waiting_for_compare', False):
 - ✅ **3/3 tests passed**: All compare input tests successful
 - ✅ **6/6 parsing tests**: All input formats parsed correctly
 - ✅ **5/5 validation tests**: All validation rules working
+- ✅ **6/6 format tests**: Portfolio display format with weights working
+- ✅ **Integration tests**: Compare command integration verified
 - ✅ **Examples**: Help message examples verified
 
 ## User Experience
@@ -104,6 +120,14 @@ if user_context.get('waiting_for_compare', False):
 • `PF_1 PF_2` - сравнение портфелей с портфелями
 • `PF_1 SBER.MOEX` - смешанное сравнение
 
+💾 Ваши сохраненные портфели:
+• `PF_1` - SPY.US:60.0% QQQ.US:40.0%
+• `PF_2` - SBER.MOEX:70.0% GAZP.MOEX:30.0%
+
+💡 Вы можете использовать символы портфелей в сравнении:
+/compare PF_1 SPY.US - сравнить ваш портфель с S&P 500
+/compare PF_1 PF_2 - сравнить два ваших портфеля
+
 💬 Введите символы для сравнения:
 ```
 
@@ -124,15 +148,17 @@ if user_context.get('waiting_for_compare', False):
 ### Enhanced Functionality
 - **Portfolio Support:** Can compare portfolios with assets
 - **Mixed Comparisons:** Support for mixed portfolio-asset comparisons
+- **Portfolio Display:** Shows saved portfolios with symbols and weights
 - **Validation:** Proper input validation
 - **Reuse Logic:** Leverages existing comparison functionality
 
 ## Status
 - ✅ **COMPLETED**: Help message enhancement
+- ✅ **COMPLETED**: Portfolio display with weights
 - ✅ **COMPLETED**: Waiting mechanism implementation
 - ✅ **COMPLETED**: Input handler creation
 - ✅ **COMPLETED**: Message handler integration
 - ✅ **COMPLETED**: Comprehensive testing
 
 ## Summary
-The `/compare` command now supports text input functionality, providing a consistent and user-friendly interface for asset comparisons. Users can easily compare symbols with symbols, portfolios with portfolios, and mixed comparisons through a simple text input process, making the bot more accessible and intuitive to use.
+The `/compare` command now supports text input functionality, providing a consistent and user-friendly interface for asset comparisons. Users can easily compare symbols with symbols, portfolios with portfolios, and mixed comparisons through a simple text input process. The enhanced help message displays saved portfolios with their symbols and weights, making it easier for users to understand their portfolio composition and use them in comparisons. This makes the bot more accessible and intuitive to use.

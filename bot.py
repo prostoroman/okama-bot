@@ -1234,8 +1234,19 @@ class ShansAi:
                 if saved_portfolios:
                     help_text += "💾 Ваши сохраненные портфели:\n"
                     for portfolio_symbol, portfolio_info in saved_portfolios.items():
-                        symbols_str = ', '.join(portfolio_info['symbols'])
-                        help_text += f"• `{portfolio_symbol}` - {symbols_str}\n"
+                        symbols = portfolio_info.get('symbols', [])
+                        weights = portfolio_info.get('weights', [])
+                        
+                        # Create formatted portfolio string with symbols and weights
+                        if symbols and weights and len(symbols) == len(weights):
+                            portfolio_parts = []
+                            for i, (symbol, weight) in enumerate(zip(symbols, weights)):
+                                portfolio_parts.append(f"{symbol}:{weight:.1%}")
+                            portfolio_str = ' '.join(portfolio_parts)
+                        else:
+                            portfolio_str = ', '.join(symbols)
+                        
+                        help_text += f"• `{portfolio_symbol}` - {portfolio_str}\n"
                     
                     help_text += "\n💡 Вы можете использовать символы портфелей в сравнении:\n"
                     help_text += "`/compare PF_1 SPY.US` - сравнить ваш портфель с S&P 500\n"
