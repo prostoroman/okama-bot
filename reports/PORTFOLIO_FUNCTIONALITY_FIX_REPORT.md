@@ -83,12 +83,16 @@ callback_data=f"portfolio_drawdowns_{portfolio_symbol}"
 - ✅ **COMPLETED**: Debugging and logging improvements
 - ✅ **COMPLETED**: Error handling enhancements
 - ✅ **COMPLETED**: Test suite implementation and validation
+- ✅ **COMPLETED**: Portfolio input function fix
 
 ## Test Results
 - ✅ **3/3 tests passed**: All portfolio functionality tests successful
 - ✅ **Context storage**: Portfolio data correctly saved and retrieved
 - ✅ **Button formats**: All portfolio buttons use consistent format
 - ✅ **Data structure**: Portfolio data structure supports `/my` command display
+- ✅ **2/2 tests passed**: Portfolio input fix tests successful
+- ✅ **Portfolio input saving**: Portfolios created via text input are correctly saved
+- ✅ **Context verification**: All required fields are present after portfolio creation
 
 ## Summary
 The portfolio functionality has been successfully fixed:
@@ -125,8 +129,14 @@ The portfolio functionality has been successfully fixed:
 - **Root Cause**: Conditional saving based on existing portfolio check
 - **Solution**: Always save portfolios to ensure `/my` command works correctly
 
+### Portfolio Input Function Fix
+- **Issue**: Portfolios created via `_handle_portfolio_input` were not being saved to `saved_portfolios`
+- **Root Cause**: Missing logic to add portfolios to `saved_portfolios` in `_handle_portfolio_input` function
+- **Solution**: Added complete portfolio saving logic to `_handle_portfolio_input` function
+
 The bot should now correctly:
 - ✅ Save portfolios when created with `/portfolio`
+- ✅ Save portfolios when created via text input (`_handle_portfolio_input`)
 - ✅ Display saved portfolios with `/my` command
 - ✅ Handle "Просадки" button clicks correctly
 - ✅ Maintain consistent button formats across all portfolio actions
