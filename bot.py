@@ -2450,6 +2450,36 @@ class ShansAi:
                 self.logger.info(f"Saved current_currency: {saved_context.get('current_currency')}")
                 self.logger.info(f"Saved portfolio_weights: {saved_context.get('portfolio_weights')}")
                 
+                # Get current saved portfolios and add the new portfolio
+                saved_portfolios = user_context.get('saved_portfolios', {})
+                
+                # Create portfolio attributes for storage
+                portfolio_attributes = {
+                    'symbols': symbols,
+                    'weights': weights,
+                    'currency': currency,
+                    'created_at': datetime.now().isoformat(),
+                    'description': f"Портфель: {', '.join(symbols)}",
+                    'portfolio_symbol': portfolio_symbol,
+                    'total_weight': sum(weights),
+                    'asset_count': len(symbols)
+                }
+                
+                # Add portfolio to saved portfolios
+                saved_portfolios[portfolio_symbol] = portfolio_attributes
+                
+                # Update saved portfolios in context
+                self._update_user_context(
+                    user_id,
+                    saved_portfolios=saved_portfolios,
+                    portfolio_count=portfolio_count
+                )
+                
+                # Verify what was saved
+                final_saved_context = self._get_user_context(user_id)
+                self.logger.info(f"Final saved portfolios count: {len(final_saved_context.get('saved_portfolios', {}))}")
+                self.logger.info(f"Final saved portfolios keys: {list(final_saved_context.get('saved_portfolios', {}).keys())}")
+                
             except Exception as e:
                 self.logger.error(f"Error creating portfolio: {e}")
                 await self._send_message_safe(update, 
