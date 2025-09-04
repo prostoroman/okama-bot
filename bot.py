@@ -4748,8 +4748,48 @@ class ShansAi:
             self.logger.info(f"Creating wealth chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📈 Создаю график накопленной доходности...")
             
-            # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol, ccy=currency)
+                    # Try to access price data to verify symbol is valid
+                    if test_asset.price is not None and len(test_asset.price) > 0:
+                        valid_symbols.append(symbol)
+                        valid_weights.append(weights[i])
+                    else:
+                        invalid_symbols.append(symbol)
+                        self.logger.warning(f"Symbol {symbol} has no price data")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Create Portfolio with validated symbols
+            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
             
             await self._create_portfolio_wealth_chart(update, context, portfolio, final_symbols, currency, weights)
             
