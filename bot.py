@@ -956,6 +956,13 @@ class ShansAi:
             await self._handle_portfolio_input(update, context, text)
             return
         
+        # Check if user is waiting for compare input
+        if user_context.get('waiting_for_compare', False):
+            self.logger.info(f"Processing as compare input: {text}")
+            # Process as compare input
+            await self._handle_compare_input(update, context, text)
+            return
+        
         # Treat text as asset symbol and process with /info logic
         symbol = text.upper()
         
@@ -1218,6 +1225,10 @@ class ShansAi:
                 help_text += "`/compare символ1,символ2,символ3`\n"
                 help_text += "или\n"
                 help_text += "`/compare символ1, символ2, символ3`\n\n"
+                help_text += "💡 **Примеры ввода:**\n"
+                help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
+                help_text += "• `PF_1 PF_2` - сравнение портфелей с портфелями\n"
+                help_text += "• `PF_1 SBER.MOEX` - смешанное сравнение\n\n"
                 
                 # Add saved portfolios information
                 if saved_portfolios:
@@ -1259,9 +1270,13 @@ class ShansAi:
                 help_text += "• MOEX: SBER.MOEX, GAZP.MOEX\n"
                 help_text += "• Индексы: SPX.INDX, IXIC.INDX\n"
                 help_text += "• Товары: GC.COMM, CL.COMM, SI.COMM\n"
-                help_text += "• Валюты: EURUSD.FX, GBPUSD.FX"
+                help_text += "• Валюты: EURUSD.FX, GBPUSD.FX\n\n"
+                help_text += "💬 Введите символы для сравнения:"
                 
                 await self._send_message_safe(update, help_text)
+                
+                # Set waiting flag for compare input
+                self._update_user_context(user_id, waiting_for_compare=True)
                 return
 
             # Extract symbols from command arguments
@@ -2496,6 +2511,59 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in portfolio input handler: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}")
+
+    async def _handle_compare_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle compare input from user message"""
+        try:
+            user_id = update.effective_user.id
+            
+            # Clear waiting flag
+            self._update_user_context(user_id, waiting_for_compare=False)
+            
+            # Parse input text similar to compare_command logic
+            raw_args = text.strip()
+            
+            # Enhanced parsing logic for multiple formats
+            if ',' in raw_args:
+                # Handle comma-separated symbols (with or without spaces)
+                symbols = []
+                for symbol_part in raw_args.split(','):
+                    symbol_part = symbol_part.strip()
+                    if symbol_part:
+                        if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                            symbols.append(symbol_part)
+                        else:
+                            symbols.append(symbol_part.upper())
+                self.logger.info(f"Parsed comma-separated symbols: {symbols}")
+            else:
+                # Handle space-separated symbols
+                symbols = []
+                for symbol in raw_args.split():
+                    if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                        symbols.append(symbol)
+                    else:
+                        symbols.append(symbol.upper())
+                self.logger.info(f"Parsed space-separated symbols: {symbols}")
+            
+            # Clean up symbols
+            symbols = [symbol for symbol in symbols if symbol.strip()]
+            
+            if len(symbols) < 2:
+                await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
+                return
+            
+            if len(symbols) > 10:
+                await self._send_message_safe(update, "❌ Максимум 10 символов для сравнения")
+                return
+            
+            # Process the comparison using the same logic as compare_command
+            # We'll reuse the existing comparison logic by calling compare_command with args
+            context.args = symbols
+            await self.compare_command(update, context)
+            
+        except Exception as e:
+            self.logger.error(f"Error in compare input handler: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода сравнения: {str(e)}")
 
     async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить сообщение в callback query - исправлено для обработки None"""
