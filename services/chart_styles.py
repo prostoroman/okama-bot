@@ -113,7 +113,7 @@ class ChartStyles:
             'fontsize': 10,
             'color': self.colors['text'],
             'alpha': 0.55,
-            'position': (0.01, -0.02),
+            'position': (0.98, 0.02),
         }
         
         # Централизованные настройки Monte Carlo
@@ -227,7 +227,7 @@ class ChartStyles:
                    fontsize=self.copyright['fontsize'], 
                    color=self.copyright['color'], 
                    alpha=self.copyright['alpha'],
-                   ha='left', va='top')
+                   ha='right', va='bottom')
         except Exception as e:
             logger.error(f"Error adding copyright: {e}")
     
