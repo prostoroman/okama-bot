@@ -98,7 +98,7 @@ class ChartStyles:
             'fontsize': 10,
             'color': '#2E3440',  # строгий графитовый
             'alpha': 0.55,
-            'position': (0.98, 0.02),
+            'position': (0.98, 0.01),
         }
         
         # Централизованные настройки Monte Carlo
