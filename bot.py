@@ -1681,8 +1681,15 @@ class ShansAi:
         """Handle /my command for displaying saved portfolios"""
         try:
             user_id = update.effective_user.id
+            self.logger.info(f"Processing /my command for user {user_id}")
+            
+            # Get user context with detailed logging
             user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context keys: {list(user_context.keys())}")
+            
             saved_portfolios = user_context.get('saved_portfolios', {})
+            self.logger.info(f"Saved portfolios count: {len(saved_portfolios)}")
+            self.logger.info(f"Saved portfolios keys: {list(saved_portfolios.keys())}")
             
             if not saved_portfolios:
                 await self._send_message_safe(update, 
@@ -1697,7 +1704,11 @@ class ShansAi:
             # Create comprehensive portfolio list
             portfolio_list = "💼 Ваши сохраненные портфели:\n\n"
             
+            self.logger.info(f"Processing {len(saved_portfolios)} portfolios for display")
+            
             for portfolio_symbol, portfolio_info in saved_portfolios.items():
+                self.logger.info(f"Processing portfolio: {portfolio_symbol}")
+                self.logger.info(f"Portfolio info keys: {list(portfolio_info.keys())}")
                 portfolio_list += f"🏷️ **{portfolio_symbol}**\n"
                 
                 # Basic info
@@ -1735,7 +1746,7 @@ class ShansAi:
                 portfolio_list += f"🕐 Создан: {created_at}\n"
                 portfolio_list += "\n" + "─" * 40 + "\n\n"
             
-                            # Add usage instructions
+            # Add usage instructions
                 portfolio_list += "💡 **Использование в сравнении:**\n"
                 portfolio_list += "• `/compare PF_1 SPY.US` - сравнить портфель с активом\n"
                 portfolio_list += "• `/compare PF_1 PF_2` - сравнить два портфеля\n"
@@ -1759,7 +1770,8 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error in my portfolios command: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при получении списка портфелей: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            await self._send_message_safe(update, f"❌ Ошибка при получении списка портфелей: {str(e)}\n\n💡 Попробуйте создать новый портфель командой `/portfolio`")
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command for creating portfolio with weights"""
@@ -1956,14 +1968,14 @@ class ShansAi:
                 
                 # Add buttons with wealth chart as first
                 keyboard = [
-                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"wealth_chart_{portfolio_data_str}")],
-                    [InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📉 Просадки", callback_data=f"drawdowns_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{portfolio_data_str}")],
-                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"monte_carlo_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"forecast_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"compare_assets_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"rolling_cagr_{portfolio_data_str}")]
+                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💰 Доходность", callback_data=f"portfolio_returns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -2391,14 +2403,14 @@ class ShansAi:
                 
                 # Add buttons with wealth chart as first
                 keyboard = [
-                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"wealth_chart_{portfolio_data_str}")],
-                    [InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📉 Просадки", callback_data=f"drawdowns_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{portfolio_data_str}")],
-                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"monte_carlo_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"forecast_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"compare_assets_{portfolio_data_str}")],
-                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"rolling_cagr_{portfolio_data_str}")]
+                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💰 Доходность", callback_data=f"portfolio_returns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -2624,6 +2636,9 @@ class ShansAi:
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
                 await self._handle_portfolio_compare_assets_button(update, context, symbols)
+            elif callback_data == 'clear_all_portfolios':
+                self.logger.info("Clear all portfolios button clicked")
+                await self._handle_clear_all_portfolios_button(update, context)
             elif callback_data == 'compare_risk_return':
                 self.logger.info("Compare Risk / Return button clicked")
                 await self._handle_risk_return_compare_button(update, context)
