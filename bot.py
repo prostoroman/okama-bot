@@ -933,7 +933,7 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle text messages - treat as asset symbol for /info"""
+        """Handle text messages - treat as asset symbol for /info or portfolio for /portfolio"""
         if not update.message or not update.message.text:
             return
         
@@ -941,13 +941,27 @@ class ShansAi:
         if not text:
             return
         
+        user_id = update.effective_user.id
+        user_context = self._get_user_context(user_id)
+        
+        # Debug: Log user context state
+        self.logger.info(f"User {user_id} context: {user_context}")
+        self.logger.info(f"Waiting for portfolio: {user_context.get('waiting_for_portfolio', False)}")
+        self.logger.info(f"Input text: {text}")
+        
+        # Check if user is waiting for portfolio input
+        if user_context.get('waiting_for_portfolio', False):
+            self.logger.info(f"Processing as portfolio input: {text}")
+            # Process as portfolio input
+            await self._handle_portfolio_input(update, context, text)
+            return
+        
         # Treat text as asset symbol and process with /info logic
         symbol = text.upper()
         
         # Update user context
-        user_id = update.effective_user.id
         self._update_user_context(user_id, 
-                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []))
+                                last_assets=[symbol] + user_context.get('last_assets', []))
         
         await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
         
@@ -987,9 +1001,10 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить ежедневный график используя встроенные функции okama"""
+        """Получить ежедневный график за последний год используя встроенные функции okama"""
         try:
             import io
+
             
             def create_daily_chart():
                 # Устанавливаем backend для headless режима
@@ -997,8 +1012,15 @@ class ShansAi:
                 matplotlib.use('Agg')
                 
                 asset = ok.Asset(symbol)
+                
+                # Получаем данные за последний год
+                daily_data = asset.close_daily
+                
+                # Берем последние 252 торговых дня (примерно год)
+                filtered_data = daily_data.tail(252)
+                
                 # Используем встроенный метод plot() для создания графика
-                ax = asset.close_daily.plot(figsize=(12, 8), title=f'Ежедневный график {symbol}')
+                ax = filtered_data.plot(figsize=(12, 8), title=f'Ежедневный график {symbol} (последний год)')
                 
                 # Получаем Figure из Axes
                 fig = ax.figure
@@ -1743,24 +1765,37 @@ class ShansAi:
         """Handle /portfolio command for creating portfolio with weights"""
         try:
             if not context.args:
+                # Get random examples for user
+                examples = self.get_random_examples(3)
+                examples_text = ", ".join(examples)
+                
                 await self._send_message_safe(update, 
-                    "📊 Команда /portfolio - Создание портфеля\n\n"
-                    "Использование:\n"
-                    "`/portfolio символ1:доля1 символ2:доля2 символ3:доля3 ...`\n\n"
-                    "Примеры:\n"
-                    "• `/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации\n"
-                    "• `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель\n"
-                    "• `/portfolio VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - портфель с золотом\n\n"
-                    "💡 Важные моменты:\n"
-                    "• Доли должны суммироваться в 1.0 (100%)\n"
-                    "• Базовая валюта определяется по первому символу\n"
-                    "• Поддерживаются все типы активов: акции, облигации, товары, индексы\n"
-                    "• Портфели с одинаковыми активами и пропорциями не дублируются\n\n"
-                    "Что вы получите:\n"
-                    "✅ График накопленной доходности портфеля\n"
-                    "✅ Таблица активов с весами\n"
-                    "✅ Основные характеристики портфеля\n"
+                    f"📊 Команда /portfolio - Создание портфеля\n\n"
+                    f"Примеры: {examples_text}\n\n"
+                    f"Просто отправьте активы в формате:\n"
+                    f"`символ1:доля1 символ2:доля2 символ3:доля3`\n\n"
+                    f"Примеры:\n"
+                    f"• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации\n"
+                    f"• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель\n"
+                    f"• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - портфель с золотом\n\n"
+                    f"💡 Важные моменты:\n"
+                    f"• Доли должны суммироваться в 1.0 (100%)\n"
+                    f"• Базовая валюта определяется по первому символу\n"
+                    f"• Поддерживаются все типы активов: акции, облигации, товары, индексы\n\n"
+                    f"Что вы получите:\n"
+                    f"✅ График накопленной доходности портфеля\n"
+                    f"✅ Таблица активов с весами\n"
+                    f"✅ Основные характеристики портфеля"
                 )
+                
+                # Set flag to wait for portfolio input
+                user_id = update.effective_user.id
+                self.logger.info(f"Setting waiting_for_portfolio=True for user {user_id}")
+                self._update_user_context(user_id, waiting_for_portfolio=True)
+                
+                # Verify the flag was set
+                updated_context = self._get_user_context(user_id)
+                self.logger.info(f"Updated context waiting_for_portfolio: {updated_context.get('waiting_for_portfolio', False)}")
                 return
 
             # Extract symbols and weights from command arguments
@@ -1899,152 +1934,10 @@ class ShansAi:
                 
                 self.logger.info(f"Created Portfolio with weights: {weights}, total: {sum(weights):.6f}")
                 
-                # Generate beautiful portfolio chart using chart_styles
-                wealth_index = portfolio.wealth_index
+                # Get portfolio information (raw object like /info)
+                portfolio_text = f"{portfolio}"
                 
-                # Create portfolio chart with chart_styles using optimized method
-                fig, ax = chart_styles.create_portfolio_wealth_chart(
-                    data=wealth_index, symbols=symbols, currency=currency
-                )
-                
-                # Save chart to bytes with memory optimization
-                img_buffer = io.BytesIO()
-                chart_styles.save_figure(fig, img_buffer)
-                img_buffer.seek(0)
-                img_bytes = img_buffer.getvalue()
-                
-                # Clear matplotlib cache to free memory
-                chart_styles.cleanup_figure(fig)
-                
-                # Get portfolio information
-                portfolio_text = f"📊 Портфель: {', '.join(symbols)}\n\n"
-                portfolio_text += f"💰 Базовая валюта: {currency} ({currency_info})\n"
-                
-                # Safely get first and last dates
-                try:
-                    first_date = portfolio.first_date
-                    last_date = portfolio.last_date
-                    
-                    # Handle Period objects and other date types
-                    if hasattr(first_date, 'strftime'):
-                        first_date_str = first_date.strftime('%Y-%m-%d')
-                    elif hasattr(first_date, 'to_timestamp'):
-                        first_date_str = first_date.to_timestamp().strftime('%Y-%m-%d')
-                    else:
-                        first_date_str = str(first_date)
-                    
-                    if hasattr(last_date, 'strftime'):
-                        last_date_str = last_date.strftime('%Y-%m-%d')
-                    elif hasattr(last_date, 'to_timestamp'):
-                        last_date_str = last_date.to_timestamp().strftime('%Y-%m-%d')
-                    else:
-                        last_date_str = str(last_date)
-                    
-                    portfolio_text += f"📅 Период: {first_date_str} - {last_date_str}\n"
-                except Exception as e:
-                    self.logger.warning(f"Could not get portfolio dates: {e}")
-                    portfolio_text += "📅 Период: недоступен\n"
-                
-                # Safely get period length
-                try:
-                    period_length = portfolio.period_length
-                    
-                    if hasattr(period_length, 'strftime'):
-                        # If it's a datetime-like object
-                        period_length_str = str(period_length)
-                    elif hasattr(period_length, 'days'):
-                        # If it's a timedelta-like object
-                        period_length_str = str(period_length)
-                    elif hasattr(period_length, 'to_timestamp'):
-                        # If it's a Period object
-                        period_length_str = str(period_length)
-                    else:
-                        # Try to convert to string directly
-                        period_length_str = str(period_length)
-                    
-                    portfolio_text += f"⏱️ Длительность: {period_length_str}\n\n"
-                except Exception as e:
-                    self.logger.warning(f"Could not get period length: {e}")
-                    portfolio_text += "⏱️ Длительность: недоступна\n\n"
-                
-                # Show portfolio table
-                portfolio_text += "📋 Состав портфеля:\n"
-                if hasattr(portfolio, 'table') and not portfolio.table.empty:
-                    for _, row in portfolio.table.iterrows():
-                        symbol = row['ticker']
-                        weight = weights[symbols.index(symbol)]
-                        name = row.get('asset name', symbol)
-                        portfolio_text += f"• {symbol} ({name}): {weight:.1%}\n"
-                else:
-                    # Fallback if table is not available
-                    for symbol, weight in portfolio_data:
-                        portfolio_text += f"• {symbol}: {weight:.1%}\n"
-                
-                # Get final portfolio value safely
-                try:
-                    final_value = portfolio.wealth_index.iloc[-1]
-                    self.logger.info(f"Final value type: {type(final_value)}, value: {final_value}")
-                    
-                    # Log wealth_index info for debugging
-                    self.logger.info(f"Wealth index type: {type(portfolio.wealth_index)}")
-                    self.logger.info(f"Wealth index shape: {portfolio.wealth_index.shape if hasattr(portfolio.wealth_index, 'shape') else 'No shape'}")
-                    self.logger.info(f"Wealth index last few values: {portfolio.wealth_index.tail(3).tolist() if hasattr(portfolio.wealth_index, 'tail') else 'No tail method'}")
-                    
-                    # Handle different types of final_value
-                    if hasattr(final_value, '__iter__') and not isinstance(final_value, str):
-                        # If it's a Series or array-like, get the first value
-                        if hasattr(final_value, 'iloc'):
-                            final_value = final_value.iloc[0]
-                        elif hasattr(final_value, '__getitem__'):
-                            final_value = final_value[0]
-                        else:
-                            final_value = list(final_value)[0]
-                    
-                    # Handle Period objects and other special types
-                    if hasattr(final_value, 'to_timestamp'):
-                        # If it's a Period object, convert to timestamp first
-                        try:
-                            final_value = final_value.to_timestamp()
-                        except Exception:
-                            # If to_timestamp fails, try to convert to string first
-                            if hasattr(final_value, 'strftime'):
-                                final_value = str(final_value)
-                            else:
-                                final_value = str(final_value)
-                    
-                    # Handle Timestamp objects and other datetime-like objects
-                    if hasattr(final_value, 'timestamp'):
-                        try:
-                            final_value = final_value.timestamp()
-                        except Exception:
-                            final_value = str(final_value)
-                    
-                    # Convert to float safely
-                    if isinstance(final_value, (int, float)):
-                        final_value = float(final_value)
-                    else:
-                        # Try to convert to string first, then to float
-                        final_value_str = str(final_value)
-                        try:
-                            final_value = float(final_value_str)
-                        except (ValueError, TypeError):
-                            import re
-                            numeric_match = re.search(r'[\d.]+', final_value_str)
-                            if numeric_match:
-                                final_value = float(numeric_match.group())
-                            else:
-                                raise ValueError(f"Cannot convert {final_value} to float")
-                    
-                    portfolio_text += f"\n📈 Накопленная доходность портфеля: {final_value:.2f} {currency}"
-                except Exception as e:
-                    self.logger.warning(f"Could not get final portfolio value: {e}")
-                    # Try to get mean annual return instead
-                    try:
-                        mean_return_annual = portfolio.mean_return_annual
-                        portfolio_text += f"\n📈 Средняя годовая доходность: {mean_return_annual:.2%}"
-                    except Exception as e2:
-                        self.logger.warning(f"Could not get mean annual return: {e2}")
-                        portfolio_text += f"\n📈 Накопленная доходность портфеля: недоступна"
+                # Portfolio information is already set above as raw object
                 
                 # Generate portfolio symbol using PF namespace and okama's assigned symbol
                 user_id = update.effective_user.id
@@ -2068,12 +1961,13 @@ class ShansAi:
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
                 
-                # Add portfolio symbol display under the chart
+                # Add portfolio symbol display
                 portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
                 portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
                 
-                # Add risk metrics, Monte Carlo, forecast, and drawdowns buttons
+                # Add buttons with wealth chart as first
                 keyboard = [
+                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"wealth_chart_{portfolio_data_str}")],
                     [InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{portfolio_data_str}")],
                     [InlineKeyboardButton("📉 Просадки", callback_data=f"drawdowns_{portfolio_data_str}")],
                     [InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{portfolio_data_str}")],
@@ -2084,13 +1978,8 @@ class ShansAi:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # Send portfolio chart and information with buttons
-                await context.bot.send_photo(
-                    chat_id=update.effective_chat.id, 
-                    photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(portfolio_text),
-                    reply_markup=reply_markup
-                )
+                # Send portfolio information with buttons (no chart)
+                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
                 
                 # Store portfolio data in context
                 user_id = update.effective_user.id
@@ -2362,9 +2251,197 @@ class ShansAi:
             self.logger.error(f"Error in portfolio command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при выполнении команды портфеля: {str(e)}")
 
-
-
-
+    async def _handle_portfolio_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle portfolio input from user message"""
+        try:
+            user_id = update.effective_user.id
+            
+            # Clear waiting flag
+            self._update_user_context(user_id, waiting_for_portfolio=False)
+            
+            # Extract symbols and weights from input text
+            portfolio_data = []
+            
+            for arg in text.split():
+                if ':' in arg:
+                    symbol_part, weight_part = arg.split(':', 1)
+                    original_symbol = symbol_part.strip()
+                    # Преобразуем символ в верхний регистр
+                    symbol = original_symbol.upper()
+                    
+                    try:
+                        weight_str = weight_part.strip()
+                        self.logger.info(f"DEBUG: Converting weight '{weight_str}' to float for symbol '{symbol}'")
+                        weight = float(weight_str)
+                    except Exception as e:
+                        self.logger.error(f"Error converting weight '{weight_part.strip()}' to float: {e}")
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1")
+                        return
+                    
+                    if weight <= 0 or weight > 1:
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: {weight}. Доля должна быть от 0 до 1")
+                        return
+                    
+                    portfolio_data.append((symbol, weight))
+                    
+                else:
+                    await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
+                    return
+            
+            if not portfolio_data:
+                await self._send_message_safe(update, "❌ Не указаны активы для портфеля")
+                return
+            
+            # Check if weights sum to approximately 1.0
+            total_weight = sum(weight for _, weight in portfolio_data)
+            if abs(total_weight - 1.0) > 0.01:
+                # Предлагаем исправление, если сумма близка к 1
+                if abs(total_weight - 1.0) <= 0.1:
+                    corrected_weights = []
+                    for symbol, weight in portfolio_data:
+                        corrected_weight = weight / total_weight
+                        corrected_weights.append((symbol, corrected_weight))
+                    
+                    await self._send_message_safe(update, 
+                        f"⚠️ Сумма долей ({total_weight:.3f}) не равна 1.0\n\n"
+                        f"Исправленные доли:\n"
+                        f"{chr(10).join([f'• {symbol}: {weight:.3f}' for symbol, weight in corrected_weights])}\n\n"
+                        f"Попробуйте команду:\n"
+                        f"`/portfolio {' '.join([f'{symbol}:{weight:.3f}' for symbol, weight in corrected_weights])}`"
+                    )
+                else:
+                    await self._send_message_safe(update, 
+                        f"❌ Сумма долей должна быть равна 1.0, текущая сумма: {total_weight:.3f}\n\n"
+                        f"Пример правильной команды:\n"
+                        f"`/portfolio LQDT.MOEX:0.78 OBLG.MOEX:0.16 GOLD.MOEX:0.06`"
+                    )
+                return
+            
+            if len(portfolio_data) > 10:
+                await self._send_message_safe(update, "❌ Максимум 10 активов в портфеле")
+                return
+            
+            symbols = [symbol for symbol, _ in portfolio_data]
+            weights = [weight for _, weight in portfolio_data]
+            
+            await self._send_message_safe(update, f"Создаю портфель: {', '.join(symbols)}...")
+            
+            # Create portfolio using okama
+            self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
+            self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
+            self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
+            
+            # Determine base currency from the first asset
+            first_symbol = symbols[0]
+            currency_info = ""
+            try:
+                if '.' in first_symbol:
+                    namespace = first_symbol.split('.')[1]
+                    if namespace == 'MOEX':
+                        currency = "RUB"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'US':
+                        currency = "USD"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'LSE':
+                        currency = "GBP"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    elif namespace == 'FX':
+                        currency = "USD"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    else:
+                        currency = "USD"
+                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                else:
+                    currency = "USD"
+                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
+            except Exception as e:
+                self.logger.warning(f"Could not determine currency from {first_symbol}: {e}")
+                currency = "USD"
+                currency_info = "автоматически определена (USD по умолчанию)"
+            
+            # Create portfolio using okama
+            try:
+                portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                
+                # Get portfolio information (raw object like /info)
+                portfolio_text = f"{portfolio}"
+                
+                # Generate portfolio symbol using PF namespace and okama's assigned symbol
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                
+                # Count existing portfolios for this user
+                portfolio_count = user_context.get('portfolio_count', 0) + 1
+                
+                # Use PF namespace with okama's assigned symbol
+                # Get the portfolio symbol that okama assigned
+                if hasattr(portfolio, 'symbol'):
+                    portfolio_symbol = portfolio.symbol
+                else:
+                    # Fallback to custom symbol if okama doesn't provide one
+                    portfolio_symbol = f"PF_{portfolio_count}"
+                
+                # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
+                portfolio_data_str = ','.join(symbols)
+                
+                # Add portfolio symbol display
+                portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
+                portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
+                
+                # Add buttons with wealth chart as first
+                keyboard = [
+                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"wealth_chart_{portfolio_data_str}")],
+                    [InlineKeyboardButton("💰 Доходность", callback_data=f"returns_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📉 Просадки", callback_data=f"drawdowns_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📊 Риск метрики", callback_data=f"risk_metrics_{portfolio_data_str}")],
+                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"monte_carlo_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"forecast_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"compare_assets_{portfolio_data_str}")],
+                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"rolling_cagr_{portfolio_data_str}")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Send portfolio information with buttons (no chart)
+                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
+                
+                # Store portfolio data in context
+                user_id = update.effective_user.id
+                self.logger.info(f"Storing portfolio data in context for user {user_id}")
+                self.logger.info(f"Symbols: {symbols}")
+                self.logger.info(f"Currency: {currency}")
+                self.logger.info(f"Weights: {weights}")
+                self.logger.info(f"Portfolio symbol: {portfolio_symbol}")
+                
+                # Store portfolio information in user context
+                self._update_user_context(
+                    user_id, 
+                    last_assets=symbols,
+                    last_analysis_type='portfolio',
+                    last_period='MAX',
+                    current_symbols=symbols,
+                    current_ccy=currency,
+                    current_currency_info=currency_info,
+                    portfolio_weights=weights,
+                    portfolio_count=portfolio_count
+                )
+                
+            except Exception as e:
+                self.logger.error(f"Error creating portfolio: {e}")
+                await self._send_message_safe(update, 
+                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
+                    "💡 Возможные причины:\n"
+                    "• Один из символов недоступен\n"
+                    "• Проблемы с данными\n"
+                    "• Неверный формат символа\n\n"
+                    "Проверьте:\n"
+                    "• Правильность написания символов\n"
+                    "• Доступность данных для указанных активов"
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error in portfolio input handler: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}")
 
     async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить сообщение в callback query - исправлено для обработки None"""
@@ -2476,6 +2553,10 @@ class ShansAi:
                 self.logger.info(f"Forecast button clicked for symbols: {symbols}")
                 await self._handle_forecast_button(update, context, symbols)
 
+            elif callback_data.startswith('wealth_chart_'):
+                symbols = callback_data.replace('wealth_chart_', '').split(',')
+                self.logger.info(f"Wealth chart button clicked for symbols: {symbols}")
+                await self._handle_portfolio_wealth_chart_button(update, context, symbols)
             elif callback_data.startswith('returns_'):
                 symbols = callback_data.replace('returns_', '').split(',')
                 self.logger.info(f"Returns button clicked for symbols: {symbols}")
@@ -4630,6 +4711,124 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating portfolio returns chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика доходности: {str(e)}")
+
+    async def _handle_portfolio_wealth_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle portfolio wealth chart button click"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio wealth chart button for user {user_id}")
+            
+            user_context = self._get_user_context(user_id)
+            self.logger.info(f"User context content: {user_context}")
+            
+            # Prefer symbols passed from the button payload; fallback to context
+            button_symbols = symbols
+            final_symbols = button_symbols or user_context.get('current_symbols') or user_context.get('last_assets')
+            self.logger.info(f"Available keys in user context: {list(user_context.keys())}")
+            if not final_symbols:
+                self.logger.warning("No symbols provided by button and none found in context")
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
+                return
+            
+            # Check if we have portfolio-specific data
+            portfolio_weights = user_context.get('portfolio_weights', [])
+            portfolio_currency = user_context.get('current_currency', 'USD')
+            
+            # If we have portfolio weights, use them; otherwise use equal weights
+            if portfolio_weights and len(portfolio_weights) == len(final_symbols):
+                weights = portfolio_weights
+                currency = portfolio_currency
+                self.logger.info(f"Using stored portfolio weights: {weights}")
+            else:
+                # Fallback to equal weights if no portfolio weights found
+                weights = self._normalize_or_equalize_weights(final_symbols, [])
+                currency = user_context.get('current_currency', 'USD')
+                self.logger.info(f"Using equal weights as fallback: {weights}")
+            
+            self.logger.info(f"Creating wealth chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
+            await self._send_callback_message(update, context, "📈 Создаю график накопленной доходности...")
+            
+            # Create Portfolio again
+            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
+            
+            await self._create_portfolio_wealth_chart(update, context, portfolio, final_symbols, currency, weights)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio wealth chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
+
+    async def _create_portfolio_wealth_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
+        """Create and send portfolio wealth chart"""
+        try:
+            self.logger.info(f"Creating portfolio wealth chart for portfolio: {symbols}")
+            
+            # Generate wealth chart using chart_styles
+            wealth_index = portfolio.wealth_index
+            
+            # Create portfolio chart with chart_styles using optimized method
+            fig, ax = chart_styles.create_portfolio_wealth_chart(
+                data=wealth_index, symbols=symbols, currency=currency
+            )
+            
+            # Save chart to bytes with memory optimization
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(fig)
+            
+            # Build caption
+            caption = f"📈 График накопленной доходности портфеля: {', '.join(symbols)}\n\n"
+            caption += f"📊 Параметры:\n"
+            caption += f"• Валюта: {currency}\n"
+            caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
+            caption += f"• Период: MAX (весь доступный период)\n\n"
+            
+            # Get final portfolio value safely
+            try:
+                final_value = portfolio.wealth_index.iloc[-1]
+                
+                # Handle different types of final_value
+                if hasattr(final_value, '__iter__') and not isinstance(final_value, str):
+                    if hasattr(final_value, 'iloc'):
+                        final_value = final_value.iloc[0]
+                    elif hasattr(final_value, '__getitem__'):
+                        final_value = final_value[0]
+                    else:
+                        final_value = list(final_value)[0]
+                
+                # Convert to float safely
+                if isinstance(final_value, (int, float)):
+                    final_value = float(final_value)
+                else:
+                    final_value_str = str(final_value)
+                    try:
+                        final_value = float(final_value_str)
+                    except (ValueError, TypeError):
+                        import re
+                        numeric_match = re.search(r'[\d.]+', final_value_str)
+                        if numeric_match:
+                            final_value = float(numeric_match.group())
+                        else:
+                            raise ValueError(f"Cannot convert {final_value} to float")
+                
+                caption += f"📈 Накопленная доходность: {final_value:.2f} {currency}"
+            except Exception as e:
+                self.logger.warning(f"Could not get final portfolio value: {e}")
+                caption += f"📈 Накопленная доходность: недоступна"
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=io.BytesIO(img_bytes),
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio wealth chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
 
     async def _handle_portfolio_rolling_cagr_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle portfolio rolling CAGR button click"""
