@@ -96,22 +96,38 @@ The portfolio functionality has been successfully fixed:
 1. **Drawdown Button Fix**: 
    - Changed button format from `drawdowns_{portfolio_data_str}` to `portfolio_drawdowns_{portfolio_symbol}`
    - Updated all portfolio buttons to use consistent `portfolio_{action}_{symbol}` format
-   - Callback handlers now correctly match button formats
+   - Created new `_handle_portfolio_drawdowns_by_symbol` function to handle portfolio symbols correctly
+   - Fixed callback data parsing to prevent symbol splitting into individual characters
 
 2. **`/my` Command Enhancement**:
    - Added comprehensive logging for debugging
    - Enhanced error handling with detailed error messages
    - Improved portfolio display formatting
    - Added clear all portfolios functionality
+   - Fixed portfolio saving logic to always save portfolios (not just new ones)
 
 3. **Testing**:
    - Created comprehensive test suite
    - Verified context storage and retrieval
    - Confirmed button format consistency
    - Validated data structure integrity
+   - Added specific test for portfolio creation and `/my` command
+
+## Additional Fixes Applied
+
+### Portfolio Symbol Handling
+- **Issue**: Portfolio symbols were being split into individual characters
+- **Root Cause**: Incorrect function signature in `_handle_portfolio_drawdowns_button`
+- **Solution**: Created `_handle_portfolio_drawdowns_by_symbol` function that properly handles portfolio symbols
+
+### Portfolio Saving Logic
+- **Issue**: Portfolios weren't always being saved to context
+- **Root Cause**: Conditional saving based on existing portfolio check
+- **Solution**: Always save portfolios to ensure `/my` command works correctly
 
 The bot should now correctly:
 - ✅ Save portfolios when created with `/portfolio`
 - ✅ Display saved portfolios with `/my` command
 - ✅ Handle "Просадки" button clicks correctly
 - ✅ Maintain consistent button formats across all portfolio actions
+- ✅ Properly parse portfolio symbols without character splitting
