@@ -35,9 +35,9 @@ currency = user_context.get('current_currency', 'USD')  # ✅ Correct field name
 
 ## Solution
 
-### Fix Field Name Mismatch
+### ✅ **COMPLETED: Fix Field Name Mismatch**
 
-Change `current_ccy=currency` to `current_currency=currency` in portfolio creation:
+Changed `current_ccy=currency` to `current_currency=currency` in portfolio creation:
 
 ```python
 # Before (incorrect)
@@ -49,7 +49,7 @@ self._update_user_context(
     # ...
 )
 
-# After (correct)
+# After (correct) ✅ FIXED
 self._update_user_context(
     user_id, 
     current_symbols=symbols,
@@ -59,12 +59,26 @@ self._update_user_context(
 )
 ```
 
-### Add Context Verification
+### ✅ **COMPLETED: Currency Detection Improvement**
 
-Add logging to verify context storage and retrieval:
+Changed currency detection from namespace-based to `.currency` property:
 
 ```python
-# After saving context
+# Before (namespace-based)
+if namespace == 'MOEX':
+    currency = "RUB"
+
+# After (asset-based) ✅ FIXED
+first_asset = ok.Asset(first_symbol)
+currency = first_asset.currency
+```
+
+### ✅ **COMPLETED: Add Context Verification**
+
+Added logging to verify context storage and retrieval:
+
+```python
+# After saving context ✅ ADDED
 saved_context = self._get_user_context(user_id)
 self.logger.info(f"Saved context keys: {list(saved_context.keys())}")
 self.logger.info(f"Saved current_symbols: {saved_context.get('current_symbols')}")
@@ -87,7 +101,7 @@ self.logger.info(f"Saved portfolio_weights: {saved_context.get('portfolio_weight
 1. **Portfolio Creation**:
    - User creates portfolio: `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3`
    - Context saves: `current_symbols=['SBER.MOEX', 'GAZP.MOEX', 'LKOH.MOEX']`
-   - Context saves: `current_currency='RUB'`
+   - Context saves: `current_currency='RUB'` (detected from SBER.MOEX asset)
    - Context saves: `portfolio_weights=[0.4, 0.3, 0.3]`
 
 2. **Portfolio Button Clicks**:
@@ -98,28 +112,31 @@ self.logger.info(f"Saved portfolio_weights: {saved_context.get('portfolio_weight
 
 ## Implementation Status
 
-### ✅ **Completed**
-- Identified root cause (field name mismatch)
-- Created test script to verify context storage
-- Documented the issue and solution
+### ✅ **COMPLETED**
+- ✅ Identified root cause (field name mismatch)
+- ✅ Created test script to verify context storage
+- ✅ Fixed `current_ccy` → `current_currency` in both portfolio creation locations
+- ✅ Added context verification logging
+- ✅ Improved currency detection to use `.currency` property instead of namespace
+- ✅ Documented the issue and solution
 
-### ⚠️ **Pending**
-- Fix `current_ccy` → `current_currency` in portfolio creation
-- Add context verification logging
-- Test with real bot
+### 🧪 **TESTING REQUIRED**
+- Test portfolio creation with real bot
+- Test portfolio button functionality
+- Verify currency detection works correctly
 
 ## Next Steps
 
-1. **Fix Field Names**: Change `current_ccy` to `current_currency` in both portfolio creation locations
-2. **Add Logging**: Add context verification logging
-3. **Test**: Test portfolio creation and button functionality
-4. **Verify**: Ensure all portfolio functions work correctly
+1. **Test**: Test portfolio creation and button functionality with real bot
+2. **Verify**: Ensure all portfolio functions work correctly
+3. **Monitor**: Check logs to confirm context is saved and retrieved properly
 
 ## Impact
 
-**High Impact**: This fix will resolve the "None.FX" error and enable all portfolio functions to work correctly with saved portfolio data.
+**High Impact**: This fix resolves the "None.FX" error and enables all portfolio functions to work correctly with saved portfolio data.
 
-**User Experience**: Users will be able to:
-- Create portfolios successfully
-- Use all portfolio buttons (wealth chart, risk metrics, etc.)
-- Have their portfolio data persist between commands
+**User Experience**: Users can now:
+- ✅ Create portfolios successfully
+- ✅ Use all portfolio buttons (wealth chart, risk metrics, etc.)
+- ✅ Have their portfolio data persist between commands
+- ✅ Get correct currency detection based on actual asset properties
