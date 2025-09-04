@@ -2660,7 +2660,7 @@ class ShansAi:
             elif callback_data.startswith('portfolio_monte_carlo_'):
                 portfolio_symbol = callback_data.replace('portfolio_monte_carlo_', '')
                 self.logger.info(f"Portfolio monte carlo button clicked for portfolio: {portfolio_symbol}")
-                await self._handle_monte_carlo_button(update, context, portfolio_symbol)
+                await self._handle_portfolio_monte_carlo_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('monte_carlo_'):
                 symbols = callback_data.replace('monte_carlo_', '').split(',')
                 self.logger.info(f"Monte Carlo button clicked for symbols: {symbols}")
@@ -4028,6 +4028,91 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error handling Monte Carlo button: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании прогноза Monte Carlo: {str(e)}")
+
+    async def _handle_portfolio_monte_carlo_by_symbol(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
+        """Handle portfolio Monte Carlo button click by portfolio symbol"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio Monte Carlo by symbol for user {user_id}, portfolio: {portfolio_symbol}")
+            
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            if portfolio_symbol not in saved_portfolios:
+                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
+                return
+            
+            portfolio_info = saved_portfolios[portfolio_symbol]
+            symbols = portfolio_info.get('symbols', [])
+            weights = portfolio_info.get('weights', [])
+            currency = portfolio_info.get('currency', 'USD')
+            
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            
+            if not symbols:
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
+                return
+            
+            await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
+            
+            # Filter out None values and empty strings
+            final_symbols = [s for s in symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            self.logger.info(f"Filtered symbols: {final_symbols}")
+            
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Debug logging
+                    self.logger.info(f"Validating symbol {i}: '{symbol}' (type: {type(symbol)})")
+                    
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    valid_symbols.append(symbol)
+                    valid_weights.append(weights[i])
+                    self.logger.info(f"Symbol {symbol} validated successfully")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Create Portfolio with validated symbols
+            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            
+            await self._create_monte_carlo_forecast(update, context, portfolio, final_symbols, currency)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio Monte Carlo by symbol: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании прогноза Monte Carlo: {str(e)}")
 
