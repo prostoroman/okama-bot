@@ -2558,6 +2558,8 @@ class ShansAi:
                 self.logger.info(f"Wealth chart button clicked for symbols: {symbols}")
                 self.logger.info(f"Callback data: '{callback_data}'")
                 self.logger.info(f"Parsed symbols: {[f"'{s}'" for s in symbols]}")
+                self.logger.info(f"Symbol types: {[type(s) for s in symbols]}")
+                self.logger.info(f"Symbol lengths: {[len(str(s)) if s else 'None' for s in symbols]}")
                 await self._handle_portfolio_wealth_chart_button(update, context, symbols)
             elif callback_data.startswith('returns_'):
                 symbols = callback_data.replace('returns_', '').split(',')
@@ -4623,11 +4625,60 @@ class ShansAi:
                 currency = user_context.get('current_currency', 'USD')
                 self.logger.info(f"Using equal weights as fallback: {weights}")
             
+            # Filter out None values and empty strings
+            final_symbols = [s for s in final_symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            self.logger.info(f"Filtered symbols: {final_symbols}")
+            
             self.logger.info(f"Creating drawdowns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📉 Создаю график просадок...")
             
-            # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Debug logging
+                    self.logger.info(f"Validating symbol {i}: '{symbol}' (type: {type(symbol)})")
+                    
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    valid_symbols.append(symbol)
+                    valid_weights.append(weights[i])
+                    self.logger.info(f"Symbol {symbol} validated successfully")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Create Portfolio with validated symbols
+            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
             
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -5111,11 +5162,60 @@ class ShansAi:
                 currency = user_context.get('current_currency', 'USD')
                 self.logger.info(f"Using equal weights as fallback: {weights}")
             
+            # Filter out None values and empty strings
+            final_symbols = [s for s in final_symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            self.logger.info(f"Filtered symbols: {final_symbols}")
+            
             self.logger.info(f"Creating rolling CAGR chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
             
-            # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Debug logging
+                    self.logger.info(f"Validating symbol {i}: '{symbol}' (type: {type(symbol)})")
+                    
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    valid_symbols.append(symbol)
+                    valid_weights.append(weights[i])
+                    self.logger.info(f"Symbol {symbol} validated successfully")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Create Portfolio with validated symbols
+            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
             
             await self._create_portfolio_rolling_cagr_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -5237,11 +5337,60 @@ class ShansAi:
                 currency = user_context.get('current_currency', 'USD')
                 self.logger.info(f"Using equal weights as fallback: {weights}")
             
+            # Filter out None values and empty strings
+            final_symbols = [s for s in final_symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            self.logger.info(f"Filtered symbols: {final_symbols}")
+            
             self.logger.info(f"Creating compare assets chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
             await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
             
-            # Create Portfolio again
-            portfolio = ok.Portfolio(final_symbols, weights=weights, ccy=currency)
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Debug logging
+                    self.logger.info(f"Validating symbol {i}: '{symbol}' (type: {type(symbol)})")
+                    
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    valid_symbols.append(symbol)
+                    valid_weights.append(weights[i])
+                    self.logger.info(f"Symbol {symbol} validated successfully")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Create Portfolio with validated symbols
+            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
             
             await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
             
