@@ -2502,7 +2502,7 @@ class ShansAi:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
-            if callback_data == "drawdowns" or callback_data == "drawdowns_compare":
+            if callback_data == "drawdowns" or callback_data == "drawdowns_compare" or callback_data == "compare_drawdowns":
                 self.logger.info("Drawdowns button clicked")
                 
                 # Get data from user context
@@ -2518,7 +2518,7 @@ class ShansAi:
                 else:
                     symbols = user_context.get('current_symbols', [])
                     await self._handle_drawdowns_button(update, context, symbols)
-            elif callback_data == "dividends" or callback_data == "dividends_compare":
+            elif callback_data == "dividends" or callback_data == "dividends_compare" or callback_data == "compare_dividends":
                 self.logger.info("Dividends button clicked")
                 
                 # Get data from user context
@@ -2526,7 +2526,7 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 symbols = user_context.get('current_symbols', [])
                 await self._handle_dividends_button(update, context, symbols)
-            elif callback_data == "correlation" or callback_data == "correlation_compare":
+            elif callback_data == "correlation" or callback_data == "correlation_compare" or callback_data == "compare_correlation":
                 self.logger.info("Correlation button clicked")
                 
                 # Get data from user context
@@ -2534,32 +2534,60 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 symbols = user_context.get('current_symbols', [])
                 await self._handle_correlation_button(update, context, symbols)
+            elif callback_data.startswith('info_daily_chart_'):
+                symbol = callback_data.replace('info_daily_chart_', '')
+                self.logger.info(f"Info daily chart button clicked for symbol: {symbol}")
+                await self._handle_daily_chart_button(update, context, symbol)
             elif callback_data.startswith('daily_chart_'):
                 symbol = callback_data.replace('daily_chart_', '')
                 self.logger.info(f"Daily chart button clicked for symbol: {symbol}")
                 await self._handle_daily_chart_button(update, context, symbol)
+            elif callback_data.startswith('info_monthly_chart_'):
+                symbol = callback_data.replace('info_monthly_chart_', '')
+                self.logger.info(f"Info monthly chart button clicked for symbol: {symbol}")
+                await self._handle_monthly_chart_button(update, context, symbol)
             elif callback_data.startswith('monthly_chart_'):
                 symbol = callback_data.replace('monthly_chart_', '')
                 self.logger.info(f"Monthly chart button clicked for symbol: {symbol}")
                 await self._handle_monthly_chart_button(update, context, symbol)
+            elif callback_data.startswith('info_dividends_'):
+                symbol = callback_data.replace('info_dividends_', '')
+                self.logger.info(f"Info dividends button clicked for symbol: {symbol}")
+                await self._handle_single_dividends_button(update, context, symbol)
             elif callback_data.startswith('dividends_') and ',' not in callback_data:
                 # Для одиночного актива (dividends_AAA)
                 symbol = callback_data.replace('dividends_', '')
                 self.logger.info(f"Dividends button clicked for symbol: {symbol}")
                 await self._handle_single_dividends_button(update, context, symbol)
+            elif callback_data.startswith('portfolio_risk_metrics_'):
+                portfolio_symbol = callback_data.replace('portfolio_risk_metrics_', '')
+                self.logger.info(f"Portfolio risk metrics button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_risk_metrics_button(update, context, portfolio_symbol)
             elif callback_data.startswith('risk_metrics_'):
                 symbols = callback_data.replace('risk_metrics_', '').split(',')
                 self.logger.info(f"Risk metrics button clicked for symbols: {symbols}")
                 await self._handle_risk_metrics_button(update, context, symbols)
+            elif callback_data.startswith('portfolio_monte_carlo_'):
+                portfolio_symbol = callback_data.replace('portfolio_monte_carlo_', '')
+                self.logger.info(f"Portfolio monte carlo button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_monte_carlo_button(update, context, portfolio_symbol)
             elif callback_data.startswith('monte_carlo_'):
                 symbols = callback_data.replace('monte_carlo_', '').split(',')
                 self.logger.info(f"Monte Carlo button clicked for symbols: {symbols}")
                 await self._handle_monte_carlo_button(update, context, symbols)
+            elif callback_data.startswith('portfolio_forecast_'):
+                portfolio_symbol = callback_data.replace('portfolio_forecast_', '')
+                self.logger.info(f"Portfolio forecast button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_forecast_button(update, context, portfolio_symbol)
             elif callback_data.startswith('forecast_'):
                 symbols = callback_data.replace('forecast_', '').split(',')
                 self.logger.info(f"Forecast button clicked for symbols: {symbols}")
                 await self._handle_forecast_button(update, context, symbols)
 
+            elif callback_data.startswith('portfolio_wealth_chart_'):
+                portfolio_symbol = callback_data.replace('portfolio_wealth_chart_', '')
+                self.logger.info(f"Portfolio wealth chart button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_wealth_chart_button(update, context, portfolio_symbol)
             elif callback_data.startswith('wealth_chart_'):
                 symbols = callback_data.replace('wealth_chart_', '').split(',')
                 self.logger.info(f"Wealth chart button clicked for symbols: {symbols}")
@@ -2568,18 +2596,33 @@ class ShansAi:
                 self.logger.info(f"Symbol types: {[type(s) for s in symbols]}")
                 self.logger.info(f"Symbol lengths: {[len(str(s)) if s else 'None' for s in symbols]}")
                 await self._handle_portfolio_wealth_chart_button(update, context, symbols)
+            elif callback_data.startswith('portfolio_returns_'):
+                portfolio_symbol = callback_data.replace('portfolio_returns_', '')
+                self.logger.info(f"Portfolio returns button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_returns_button(update, context, portfolio_symbol)
             elif callback_data.startswith('returns_'):
                 symbols = callback_data.replace('returns_', '').split(',')
                 self.logger.info(f"Returns button clicked for symbols: {symbols}")
                 await self._handle_portfolio_returns_button(update, context, symbols)
+            elif callback_data.startswith('portfolio_rolling_cagr_'):
+                portfolio_symbol = callback_data.replace('portfolio_rolling_cagr_', '')
+                self.logger.info(f"Portfolio rolling CAGR button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_rolling_cagr_button(update, context, portfolio_symbol)
             elif callback_data.startswith('rolling_cagr_'):
                 symbols = callback_data.replace('rolling_cagr_', '').split(',')
                 self.logger.info(f"Rolling CAGR button clicked for symbols: {symbols}")
                 await self._handle_portfolio_rolling_cagr_button(update, context, symbols)
+            elif callback_data.startswith('portfolio_compare_assets_'):
+                portfolio_symbol = callback_data.replace('portfolio_compare_assets_', '')
+                self.logger.info(f"Portfolio compare assets button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_compare_assets_button(update, context, portfolio_symbol)
             elif callback_data.startswith('compare_assets_'):
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
                 await self._handle_portfolio_compare_assets_button(update, context, symbols)
+            elif callback_data == 'compare_risk_return':
+                self.logger.info("Compare Risk / Return button clicked")
+                await self._handle_risk_return_compare_button(update, context)
             elif callback_data == 'risk_return_compare':
                 self.logger.info("Risk / Return button clicked")
                 await self._handle_risk_return_compare_button(update, context)
@@ -2591,6 +2634,9 @@ class ShansAi:
                 namespace = callback_data.replace('excel_namespace_', '')
                 self.logger.info(f"Excel namespace button clicked for: {namespace}")
                 await self._handle_excel_namespace_button(update, context, namespace)
+            elif callback_data == 'utility_clear_portfolios':
+                self.logger.info("Utility clear portfolios button clicked")
+                await self._handle_clear_all_portfolios_button(update, context)
             elif callback_data == 'clear_all_portfolios':
                 self.logger.info("Clear all portfolios button clicked")
                 await self._handle_clear_all_portfolios_button(update, context)
