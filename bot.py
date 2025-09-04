@@ -2556,6 +2556,8 @@ class ShansAi:
             elif callback_data.startswith('wealth_chart_'):
                 symbols = callback_data.replace('wealth_chart_', '').split(',')
                 self.logger.info(f"Wealth chart button clicked for symbols: {symbols}")
+                self.logger.info(f"Callback data: '{callback_data}'")
+                self.logger.info(f"Parsed symbols: {[f"'{s}'" for s in symbols]}")
                 await self._handle_portfolio_wealth_chart_button(update, context, symbols)
             elif callback_data.startswith('returns_'):
                 symbols = callback_data.replace('returns_', '').split(',')
@@ -4730,6 +4732,15 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены. Выполните команду /portfolio заново.")
                 return
             
+            # Filter out None values and empty strings
+            final_symbols = [s for s in final_symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            self.logger.info(f"Filtered symbols: {final_symbols}")
+            
             # Check if we have portfolio-specific data
             portfolio_weights = user_context.get('portfolio_weights', [])
             portfolio_currency = user_context.get('current_currency', 'USD')
@@ -4755,6 +4766,9 @@ class ShansAi:
             
             for i, symbol in enumerate(final_symbols):
                 try:
+                    # Debug logging
+                    self.logger.info(f"Validating symbol {i}: '{symbol}' (type: {type(symbol)})")
+                    
                     # Test if symbol exists in database - be more lenient
                     test_asset = ok.Asset(symbol)
                     # If asset was created successfully, consider it valid
