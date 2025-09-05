@@ -94,24 +94,13 @@ class ChartStyles:
         
         # Централизованные настройки копирайта
         self.copyright = {
-            'text': 'shans.ai | data source: okama',
+            'text': 'shans.ai | okama',
             'fontsize': 10,
             'color': '#2E3440',  # строгий графитовый
             'alpha': 0.55,
-            'position': (0.98, 0.01),
+            'position': (0.98, 0.00),
         }
         
-        # Централизованные настройки Monte Carlo
-        self.monte_carlo = {
-            'main_linewidth': 3.0,
-            'main_alpha': 0.95,
-            'test_linewidth': 0.8,
-            'test_alpha': 0.6,
-            'test_colors': [
-                '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
-                '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'
-            ]
-        }
 
     # ============================================================================
     # БАЗОВЫЕ МЕТОДЫ СОЗДАНИЯ И СТИЛИЗАЦИИ
@@ -521,65 +510,7 @@ class ChartStyles:
     # СПЕЦИАЛЬНЫЕ СТИЛИ
     # ============================================================================
     
-    def apply_monte_carlo_style(self, ax):
-        """Применить стили для графиков Monte Carlo"""
-        try:
-            test_colors = self.monte_carlo['test_colors']
-            
-            if len(ax.lines) > 0:
-                # Основная линия
-                main_line = ax.lines[0]
-                main_line.set_linewidth(self.monte_carlo['main_linewidth'])
-                main_line.set_alpha(self.monte_carlo['main_alpha'])
-                main_line.set_color('#005F73')  # глубокий морской синий
-                
-                # Тестовые линии
-                for i, line in enumerate(ax.lines[1:], 1):
-                    line.set_linewidth(self.monte_carlo['test_linewidth'])
-                    line.set_alpha(self.monte_carlo['test_alpha'])
-                    line.set_color(test_colors[i % len(test_colors)])
-            
-            ax.grid(True, **self.grid)
-            
-        except Exception as e:
-            logger.error(f"Error applying Monte Carlo styles: {e}")
     
-    def apply_percentile_style(self, ax):
-        """Применить стили для графиков процентилей"""
-        try:
-            if len(ax.lines) >= 3:
-                percentile_colors = [
-                    '#AE2012',    # 10% - красный
-                    '#005F73',   # 50% - синий
-                    '#94D2BD'     # 90% - зеленый
-                ]
-                
-                percentile_labels = [
-                    '10% процентиль (пессимистичный)',
-                    '50% процентиль (средний)',
-                    '90% процентиль (оптимистичный)'
-                ]
-                
-                for i, line in enumerate(ax.lines[:3]):
-                    if i < len(percentile_colors):
-                        line.set_color(percentile_colors[i])
-                        line.set_linewidth(2.5)
-                        line.set_alpha(0.9)
-                        if i < len(percentile_labels):
-                            line.set_label(percentile_labels[i])
-                
-                for line in ax.lines[3:]:
-                    line.set_color('#E9ECEF')  # светло-серый фон
-                    line.set_linewidth(1.5)
-                    line.set_alpha(0.6)
-                    line.set_label('')
-                
-                ax.grid(True, **self.grid)
-                if ax.get_legend() is not None:
-                    ax.legend(**self.legend)
-            
-        except Exception as e:
-            logger.error(f"Error applying percentile styles: {e}")
     
     # ============================================================================
     # УТИЛИТЫ
