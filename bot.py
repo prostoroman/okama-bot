@@ -1352,44 +1352,8 @@ class ShansAi:
                 # Show symbols in specific namespace
                 namespace = context.args[0].upper()
                 
-                try:
-                    symbols_df = ok.symbols_in_namespace(namespace)
-                    
-                    # Check if DataFrame is empty
-                    if symbols_df.empty:
-                        await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не найдено или пусто")
-                        return
-                    
-                    # Convert DataFrame to list of symbols
-                    # The DataFrame has 'symbol' column with full names like 'AAPL.US'
-                    # We want to extract just the ticker part
-                    if 'symbol' in symbols_df.columns:
-                        # Extract ticker part (before the dot)
-                        symbols = []
-                        for full_symbol in symbols_df['symbol'].tolist():
-                            if pd.isna(full_symbol) or full_symbol is None:
-                                continue
-                            symbol_str = str(full_symbol).strip()
-                            if '.' in symbol_str:
-                                ticker = symbol_str.split('.')[0]
-                                symbols.append(ticker)
-                            else:
-                                symbols.append(symbol_str)
-                    elif 'ticker' in symbols_df.columns:
-                        symbols = symbols_df['ticker'].tolist()
-                    else:
-                        # If no clear column, try to get the first column
-                        symbols = symbols_df.iloc[:, 0].tolist()
-                    
-                    if not symbols:
-                        await self._send_message_safe(update, f"❌ Пространство имен '{namespace}' не содержит символов")
-                        return
-                    
-                    # Используем единый метод для показа символов
-                    await self._show_namespace_symbols(update, context, namespace, is_callback=False)
-                    
-                except Exception as e:
-                    await self._send_message_safe(update, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
+                # Use the unified method that handles both okama and tushare
+                await self._show_namespace_symbols(update, context, namespace, is_callback=False)
                     
         except ImportError:
             await self._send_message_safe(update, "❌ Библиотека okama не установлена")

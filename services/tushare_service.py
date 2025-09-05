@@ -71,8 +71,15 @@ class TushareService:
                 return self._get_mainland_stock_info(symbol_code, exchange)
                 
         except Exception as e:
-            self.logger.error(f"Error getting symbol info for {symbol}: {e}")
-            return {"error": str(e)}
+            error_msg = str(e)
+            # Handle specific API permission errors
+            if "权限" in error_msg or "permission" in error_msg.lower():
+                return {"error": "API权限不足. Пожалуйста, проверьте ваш Tushare API ключ и убедитесь, что у вас есть доступ к данным."}
+            elif "404" in error_msg or "not found" in error_msg.lower():
+                return {"error": f"Символ {symbol} не найден в базе данных Tushare"}
+            else:
+                self.logger.error(f"Error getting symbol info for {symbol}: {e}")
+                return {"error": f"Ошибка получения данных: {error_msg}"}
     
     def _get_mainland_stock_info(self, symbol_code: str, exchange: str) -> Dict[str, Any]:
         """Get stock information for mainland China exchanges"""
@@ -365,5 +372,11 @@ class TushareService:
             return symbols[:100]  # Limit to first 100 symbols
             
         except Exception as e:
-            self.logger.error(f"Error getting symbols for exchange {exchange}: {e}")
-            return []
+            error_msg = str(e)
+            # Handle specific API permission errors
+            if "权限" in error_msg or "permission" in error_msg.lower():
+                self.logger.error(f"API permission error for exchange {exchange}: {e}")
+                raise Exception("API权限不足. Пожалуйста, проверьте ваш Tushare API ключ и убедитесь, что у вас есть доступ к данным.")
+            else:
+                self.logger.error(f"Error getting symbols for exchange {exchange}: {e}")
+                raise Exception(f"Ошибка получения символов для биржи {exchange}: {error_msg}")
