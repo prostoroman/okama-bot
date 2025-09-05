@@ -203,6 +203,40 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error applying styling: {e}")
     
+    def apply_drawdown_styling(self, ax, title=None, xlabel=None, ylabel=None, 
+                              grid=True, legend=True, copyright=True, **kwargs):
+        """Apply styling for drawdown charts with standard grid colors and date labels above"""
+        try:
+            # Заголовок
+            if title:
+                ax.set_title(title, **self.title)
+            
+            # Подписи осей
+            if xlabel:
+                ax.set_xlabel(xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+            if ylabel:
+                ax.set_ylabel(ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+            
+            # Сетка с стандартными цветами matplotlib (без кастомных цветов)
+            if grid:
+                ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+            
+            # Легенда
+            if legend:
+                handles, labels = ax.get_legend_handles_labels()
+                if handles and labels:
+                    ax.legend(**self.legend)
+            
+            # Копирайт
+            if copyright:
+                self.add_copyright(ax)
+            
+            # Move date labels to appear above the chart
+            ax.tick_params(axis='x', labeltop=True, labelbottom=False)
+                
+        except Exception as e:
+            logger.error(f"Error applying drawdown styling: {e}")
+    
     def add_copyright(self, ax):
         """Добавить копирайт"""
         try:
@@ -326,7 +360,10 @@ class ChartStyles:
         
         title = f'Просадки активов: {", ".join(symbols)}'
         ylabel = f'Просадка (%)'
-        self.apply_styling(ax, title=title, ylabel=ylabel)
+        
+        # Apply drawdown-specific styling with standard grid colors and date labels above
+        self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True)
+        
         return fig, ax
     
     def create_portfolio_wealth_chart(self, data, symbols, currency, **kwargs):

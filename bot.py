@@ -5117,8 +5117,8 @@ class ShansAi:
             if current_fig.axes:
                 ax = current_fig.axes[0]
                 
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_styling(
+                # Apply drawdown-specific styling with standard grid colors and date labels above
+                chart_styles.apply_drawdown_styling(
                     ax,
                     title=f'Просадки портфеля\n{", ".join(symbols)}',
                     ylabel='Просадка (%)',
