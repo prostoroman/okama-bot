@@ -716,7 +716,7 @@ class ShansAi:
 /info [тикер] [период] — базовая информация об активе с графиком и анализом
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
-/namespace [название] — список пространств имен или символы в пространстве
+/list [название] — список пространств имен или символы в пространстве
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -763,16 +763,16 @@ class ShansAi:
         await self._send_message_safe(update, help_text)
     
     async def show_namespace_help(self, update: Update):
-        """Показать справку по команде /namespace"""
-        help_text = """📚 Команда /namespace - Пространства имен
+        """Показать справку по команде /list"""
+        help_text = """📚 Команда /list - Пространства имен
 
-Используйте команду `/namespace` для просмотра всех доступных пространств имен.
+Используйте команду `/list` для просмотра всех доступных пространств имен.
 
-• `/namespace US` - американские акции
-• `/namespace MOEX` - российские акции
-• `/namespace INDX` - мировые индексы
-• `/namespace FX` - валютные пары
-• `/namespace COMM` - товарные активы
+• `/list US` - американские акции
+• `/list MOEX` - российские акции
+• `/list INDX` - мировые индексы
+• `/list FX` - валютные пары
+• `/list COMM` - товарные активы
 
 """
         
@@ -1064,7 +1064,7 @@ class ShansAi:
 
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /namespace command"""
+        """Handle /list command"""
         try:
             
             if not context.args:
@@ -1118,7 +1118,7 @@ class ShansAi:
                         response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
                     response += "\n"
                 
-                response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
+                response += "💡 Используйте `/list <код>` для просмотра символов в конкретном пространстве"
                 
                 # Создаем кнопки для основных пространств имен
                 keyboard = []
@@ -6351,7 +6351,7 @@ class ShansAi:
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("info", self.info_command))
-        application.add_handler(CommandHandler("namespace", self.namespace_command))
+        application.add_handler(CommandHandler("list", self.namespace_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))
