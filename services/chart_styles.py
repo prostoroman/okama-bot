@@ -94,7 +94,7 @@ class ChartStyles:
         
         # Централизованные настройки копирайта
         self.copyright = {
-            'text': '© shans.ai | data source: okama',
+            'text': 'shans.ai | data source: okama',
             'fontsize': 10,
             'color': '#2E3440',  # строгий графитовый
             'alpha': 0.55,
