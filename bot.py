@@ -46,6 +46,7 @@ if sys.version_info < (3, 7):
 # Local imports
 from config import Config
 from services.yandexgpt_service import YandexGPTService
+from services.tushare_service import TushareService
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -78,6 +79,13 @@ class ShansAi:
         # Initialize services
         self.yandexgpt_service = YandexGPTService()
         
+        # Initialize Tushare service if API key is available
+        try:
+            self.tushare_service = TushareService()
+        except ValueError:
+            self.tushare_service = None
+            self.logger.warning("Tushare service not initialized - API key not provided")
+        
         # Known working asset symbols for suggestions
         self.known_assets = {
             'US': ['VOO.US', 'SPY.US', 'QQQ.US', 'AGG.US', 'AAPL.US', 'TSLA.US', 'MSFT.US'],
@@ -85,7 +93,11 @@ class ShansAi:
             'COMM': ['GC.COMM', 'SI.COMM', 'CL.COMM', 'BRENT.COMM'],
             'FX': ['EURUSD.FX', 'GBPUSD.FX', 'USDJPY.FX'],
             'MOEX': ['SBER.MOEX', 'GAZP.MOEX', 'LKOH.MOEX'],
-            'LSE': ['VOD.LSE', 'HSBA.LSE', 'BP.LSE']
+            'LSE': ['VOD.LSE', 'HSBA.LSE', 'BP.LSE'],
+            'SSE': ['600000.SH', '000001.SH'],
+            'SZSE': ['000001.SZ', '399005.SZ'],
+            'BSE': ['900001.BJ', '800001.BJ'],
+            'HKEX': ['00001.HK', '00700.HK']
         }
         
         # User session storage (in-memory for fast access)
@@ -125,7 +137,11 @@ class ShansAi:
 
             # If already okama-style ticker like XXX.SUFFIX
             if '.' in upper and len(upper.split('.')) == 2 and all(part for part in upper.split('.')):
-                return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
+                # Check if it's a Chinese exchange symbol
+                if self.tushare_service and self.tushare_service.is_tushare_symbol(upper):
+                    return {'symbol': upper, 'type': 'ticker', 'source': 'tushare'}
+                else:
+                    return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
 
             if self._looks_like_isin(upper):
                 # For ISIN, search for the corresponding symbol
@@ -165,11 +181,24 @@ class ShansAi:
                         'name': name
                     }
                 else:
+                    # Not found in Okama, try Tushare if available
+                    if self.tushare_service:
+                        tushare_results = self.tushare_service.search_symbols(raw)
+                        if tushare_results:
+                            # Return the first result
+                            result = tushare_results[0]
+                            return {
+                                'symbol': result['symbol'],
+                                'type': 'ticker',
+                                'source': 'tushare_search',
+                                'name': result['name']
+                            }
+                    
                     # Not found, try as plain ticker
                     if self._looks_like_ticker(raw):
                         return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
                     else:
-                        return {'error': f'"{raw}" не найден в базе данных okama'}
+                        return {'error': f'"{raw}" не найден в базе данных okama и tushare'}
             except Exception as e:
                 # Search failed, try as plain ticker
                 if self._looks_like_ticker(raw):
@@ -179,6 +208,21 @@ class ShansAi:
 
         except Exception as e:
             return {'error': f"Ошибка при разборе идентификатора: {str(e)}"}
+
+    def determine_data_source(self, symbol: str) -> str:
+        """
+        Determine which data source to use (okama or tushare) based on symbol
+        
+        Args:
+            symbol: Symbol in format like 'AAPL.US' or '600000.SH'
+            
+        Returns:
+            'tushare' for Chinese exchanges, 'okama' for others
+        """
+        if not self.tushare_service:
+            return 'okama'
+        
+        return 'tushare' if self.tushare_service.is_tushare_symbol(symbol) else 'okama'
 
     def _looks_like_isin(self, val: str) -> bool:
         """
@@ -778,9 +822,86 @@ class ShansAi:
         
         await self._send_message_safe(update, help_text)
     
+    async def _show_tushare_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
+        """Show symbols for Chinese exchanges using Tushare"""
+        try:
+            if not self.tushare_service:
+                error_msg = "❌ Сервис Tushare недоступен"
+                if is_callback:
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=error_msg
+                    )
+                else:
+                    await self._send_message_safe(update, error_msg)
+                return
+            
+            # Get symbols from Tushare
+            symbols = self.tushare_service.get_exchange_symbols(namespace)
+            
+            if not symbols:
+                error_msg = f"❌ Символы для биржи '{namespace}' не найдены"
+                if is_callback:
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=error_msg
+                    )
+                else:
+                    await self._send_message_safe(update, error_msg)
+                return
+            
+            # Format response
+            exchange_names = {
+                'SSE': 'Shanghai Stock Exchange',
+                'SZSE': 'Shenzhen Stock Exchange', 
+                'BSE': 'Beijing Stock Exchange',
+                'HKEX': 'Hong Kong Stock Exchange'
+            }
+            
+            response = f"📊 Биржа: {exchange_names.get(namespace, namespace)}\n\n"
+            response += f"📈 Статистика:\n"
+            response += f"• Всего символов: {len(symbols)}\n\n"
+            
+            # Show first 30 symbols
+            display_count = min(30, len(symbols))
+            response += f"📋 Показываю первые {display_count}:\n\n"
+            
+            for i, symbol in enumerate(symbols[:display_count], 1):
+                response += f"{i:2d}. `{symbol}`\n"
+            
+            if len(symbols) > display_count:
+                response += f"\n... и еще {len(symbols) - display_count} символов"
+            
+            response += f"\n\n💡 Используйте `/info <символ>` для получения подробной информации об активе"
+            
+            if is_callback:
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=response,
+                    parse_mode='Markdown'
+                )
+            else:
+                await self._send_message_safe(update, response)
+                
+        except Exception as e:
+            error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
+            if is_callback:
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=error_msg
+                )
+            else:
+                await self._send_message_safe(update, error_msg)
+    
     async def _show_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
         """Единый метод для показа символов в пространстве имен"""
         try:
+            # Check if it's a Chinese exchange
+            chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
+            if namespace in chinese_exchanges:
+                await self._show_tushare_namespace_symbols(update, context, namespace, is_callback)
+                return
+            
             symbols_df = ok.symbols_in_namespace(namespace)
             
             if symbols_df.empty:
@@ -906,27 +1027,15 @@ class ShansAi:
             
             resolved_symbol = resolved['symbol']
             
-            # Получаем сырой вывод объекта ok.Asset
-            try:
-                asset = ok.Asset(resolved_symbol)
-                info_text = f"{asset}"
-            except Exception as e:
-                info_text = f"Ошибка при получении информации об активе: {str(e)}"
+            # Determine data source
+            data_source = self.determine_data_source(resolved_symbol)
             
-            # Создаем кнопки для дополнительных функций
-            keyboard = [
-                [
-                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{resolved_symbol}"),
-                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{resolved_symbol}")
-                ],
-                [
-                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{resolved_symbol}")
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            # Отправляем информацию с кнопками
-            await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+            if data_source == 'tushare':
+                # Use Tushare service for Chinese exchanges
+                await self._handle_tushare_info(update, resolved_symbol)
+            else:
+                # Use Okama for other exchanges
+                await self._handle_okama_info(update, resolved_symbol)
                 
         except Exception as e:
             self.logger.error(f"Error in info command for {symbol}: {e}")
@@ -981,9 +1090,26 @@ class ShansAi:
             
             resolved_symbol = resolved['symbol']
             
+            # Determine data source
+            data_source = self.determine_data_source(resolved_symbol)
+            
+            if data_source == 'tushare':
+                # Use Tushare service for Chinese exchanges
+                await self._handle_tushare_info(update, resolved_symbol)
+            else:
+                # Use Okama for other exchanges
+                await self._handle_okama_info(update, resolved_symbol)
+                
+        except Exception as e:
+            self.logger.error(f"Error in handle_message for {symbol}: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
+    async def _handle_okama_info(self, update: Update, symbol: str):
+        """Handle info display for Okama assets"""
+        try:
             # Получаем сырой вывод объекта ok.Asset
             try:
-                asset = ok.Asset(resolved_symbol)
+                asset = ok.Asset(symbol)
                 info_text = f"{asset}"
             except Exception as e:
                 info_text = f"Ошибка при получении информации об активе: {str(e)}"
@@ -991,20 +1117,68 @@ class ShansAi:
             # Создаем кнопки для дополнительных функций
             keyboard = [
                 [
-                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{resolved_symbol}"),
-                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{resolved_symbol}")
+                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{symbol}"),
+                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{symbol}")
                 ],
                 [
-                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{resolved_symbol}")
+                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             # Отправляем информацию с кнопками
             await self._send_message_safe(update, info_text, reply_markup=reply_markup)
-                
+            
         except Exception as e:
-            self.logger.error(f"Error in handle_message for {symbol}: {e}")
+            self.logger.error(f"Error in _handle_okama_info for {symbol}: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
+    async def _handle_tushare_info(self, update: Update, symbol: str):
+        """Handle info display for Tushare assets"""
+        try:
+            if not self.tushare_service:
+                await self._send_message_safe(update, "❌ Сервис Tushare недоступен")
+                return
+            
+            # Get symbol information from Tushare
+            symbol_info = self.tushare_service.get_symbol_info(symbol)
+            
+            if 'error' in symbol_info:
+                await self._send_message_safe(update, f"❌ Ошибка: {symbol_info['error']}")
+                return
+            
+            # Format information
+            info_text = f"📊 {symbol_info.get('name', 'N/A')} ({symbol})\n\n"
+            info_text += f"🏢 Биржа: {symbol_info.get('exchange', 'N/A')}\n"
+            info_text += f"🏭 Отрасль: {symbol_info.get('industry', 'N/A')}\n"
+            info_text += f"📍 Регион: {symbol_info.get('area', 'N/A')}\n"
+            info_text += f"📅 Дата листинга: {symbol_info.get('list_date', 'N/A')}\n"
+            
+            if 'current_price' in symbol_info:
+                info_text += f"\n💰 Текущая цена: {symbol_info['current_price']:.2f}\n"
+                if 'change' in symbol_info:
+                    change_sign = "+" if symbol_info['change'] >= 0 else ""
+                    info_text += f"📈 Изменение: {change_sign}{symbol_info['change']:.2f} ({symbol_info.get('pct_chg', 0):.2f}%)\n"
+                if 'volume' in symbol_info:
+                    info_text += f"📊 Объем: {symbol_info['volume']:,.0f}\n"
+            
+            # Создаем кнопки для дополнительных функций
+            keyboard = [
+                [
+                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"tushare_daily_chart_{symbol}"),
+                    InlineKeyboardButton("📅 Месячный график", callback_data=f"tushare_monthly_chart_{symbol}")
+                ],
+                [
+                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"tushare_dividends_{symbol}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Отправляем информацию с кнопками
+            await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+            
+        except Exception as e:
+            self.logger.error(f"Error in _handle_tushare_info for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
@@ -1081,6 +1255,7 @@ class ShansAi:
                 # Categorize namespaces for better organization
                 categories = {
                     'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE'],
+                    'Китайские биржи': ['SSE', 'SZSE', 'BSE', 'HKEX'],
                     'Индексы': ['INDX'],
                     'Валюты': ['FX', 'CBR'],
                     'Товары': ['COMM'],
@@ -1135,6 +1310,17 @@ class ShansAi:
                     InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR"),
                     InlineKeyboardButton("🇫🇷 XFRA", callback_data="namespace_XFRA"),
                     InlineKeyboardButton("🇳🇱 XAMS", callback_data="namespace_XAMS")
+                ])
+                
+                # Китайские биржи
+                keyboard.append([
+                    InlineKeyboardButton("🇨🇳 SSE", callback_data="namespace_SSE"),
+                    InlineKeyboardButton("🇨🇳 SZSE", callback_data="namespace_SZSE"),
+                    InlineKeyboardButton("🇨🇳 BSE", callback_data="namespace_BSE")
+                ])
+                
+                keyboard.append([
+                    InlineKeyboardButton("🇭🇰 HKEX", callback_data="namespace_HKEX")
                 ])
                 
                 # Индексы и валюты
@@ -2649,6 +2835,18 @@ class ShansAi:
                 symbol = callback_data.replace('dividends_', '')
                 self.logger.info(f"Dividends button clicked for symbol: {symbol}")
                 await self._handle_single_dividends_button(update, context, symbol)
+            elif callback_data.startswith('tushare_daily_chart_'):
+                symbol = callback_data.replace('tushare_daily_chart_', '')
+                self.logger.info(f"Tushare daily chart button clicked for symbol: {symbol}")
+                await self._handle_tushare_daily_chart_button(update, context, symbol)
+            elif callback_data.startswith('tushare_monthly_chart_'):
+                symbol = callback_data.replace('tushare_monthly_chart_', '')
+                self.logger.info(f"Tushare monthly chart button clicked for symbol: {symbol}")
+                await self._handle_tushare_monthly_chart_button(update, context, symbol)
+            elif callback_data.startswith('tushare_dividends_'):
+                symbol = callback_data.replace('tushare_dividends_', '')
+                self.logger.info(f"Tushare dividends button clicked for symbol: {symbol}")
+                await self._handle_tushare_dividends_button(update, context, symbol)
             elif callback_data.startswith('portfolio_risk_metrics_'):
                 portfolio_symbol = callback_data.replace('portfolio_risk_metrics_', '')
                 self.logger.info(f"Portfolio risk metrics button clicked for portfolio: {portfolio_symbol}")
@@ -3598,6 +3796,86 @@ class ShansAi:
             self.logger.error(f"Error handling dividends button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
+    async def _handle_tushare_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle Tushare daily chart button click"""
+        try:
+            await self._send_callback_message(update, context, "📈 Создаю ежедневный график...")
+            
+            if not self.tushare_service:
+                await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
+                return
+            
+            # Get daily chart from Tushare
+            chart_bytes = await self._get_tushare_daily_chart(symbol)
+            
+            if chart_bytes:
+                await self._send_photo_safe(update, context, chart_bytes, 
+                                          caption=f"📈 Ежедневный график {symbol}")
+            else:
+                await self._send_callback_message(update, context, "❌ Не удалось создать график")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling Tushare daily chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика: {str(e)}")
+
+    async def _handle_tushare_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle Tushare monthly chart button click"""
+        try:
+            await self._send_callback_message(update, context, "📅 Создаю месячный график...")
+            
+            if not self.tushare_service:
+                await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
+                return
+            
+            # Get monthly chart from Tushare
+            chart_bytes = await self._get_tushare_monthly_chart(symbol)
+            
+            if chart_bytes:
+                await self._send_photo_safe(update, context, chart_bytes, 
+                                          caption=f"📅 Месячный график {symbol}")
+            else:
+                await self._send_callback_message(update, context, "❌ Не удалось создать график")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling Tushare monthly chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика: {str(e)}")
+
+    async def _handle_tushare_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle Tushare dividends button click"""
+        try:
+            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
+            
+            if not self.tushare_service:
+                await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
+                return
+            
+            # Get dividend data from Tushare
+            dividend_data = self.tushare_service.get_dividend_data(symbol)
+            
+            if dividend_data.empty:
+                await self._send_callback_message(update, context, f"💵 Дивиденды для {symbol} не найдены")
+                return
+            
+            # Format dividend information
+            info_text = f"💵 Дивиденды {symbol}\n\n"
+            
+            # Show last 10 dividends
+            recent_dividends = dividend_data.tail(10)
+            for _, row in recent_dividends.iterrows():
+                ann_date = row['ann_date'].strftime('%Y-%m-%d') if pd.notna(row['ann_date']) else 'N/A'
+                div_proc_date = row['div_proc_date'].strftime('%Y-%m-%d') if pd.notna(row['div_proc_date']) else 'N/A'
+                stk_div_date = row['stk_div_date'].strftime('%Y-%m-%d') if pd.notna(row['stk_div_date']) else 'N/A'
+                
+                info_text += f"📅 {ann_date}: {row.get('cash_div_tax', 0):.4f}\n"
+                info_text += f"   💰 Дата выплаты: {div_proc_date}\n"
+                info_text += f"   📊 Дата регистрации: {stk_div_date}\n\n"
+            
+            await self._send_callback_message(update, context, info_text)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling Tushare dividends button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
+
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
         """Получить месячный график используя ChartStyles"""
         try:
@@ -3683,6 +3961,98 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error getting dividend chart for {symbol}: {e}")
+            return None
+
+    async def _get_tushare_daily_chart(self, symbol: str) -> Optional[bytes]:
+        """Get daily chart from Tushare data"""
+        try:
+            import io
+            
+            def create_tushare_daily_chart():
+                # Set backend for headless mode
+                import matplotlib
+                matplotlib.use('Agg')
+                
+                # Get daily data from Tushare
+                daily_data = self.tushare_service.get_daily_data(symbol)
+                
+                if daily_data.empty:
+                    return None
+                
+                # Create chart using ChartStyles
+                fig, ax = chart_styles.create_price_chart(
+                    data=daily_data['close'],
+                    symbol=symbol,
+                    currency='CNY',  # Default currency for Chinese stocks
+                    period='ежедневный'
+                )
+                
+                # Save to bytes
+                buffer = io.BytesIO()
+                fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+                buffer.seek(0)
+                chart_bytes = buffer.getvalue()
+                buffer.close()
+                plt.close(fig)
+                
+                return chart_bytes
+            
+            # Run chart creation in thread to avoid blocking
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(create_tushare_daily_chart)
+                chart_bytes = future.result(timeout=30)
+                
+            return chart_bytes
+            
+        except Exception as e:
+            self.logger.error(f"Error getting Tushare daily chart for {symbol}: {e}")
+            return None
+
+    async def _get_tushare_monthly_chart(self, symbol: str) -> Optional[bytes]:
+        """Get monthly chart from Tushare data"""
+        try:
+            import io
+            
+            def create_tushare_monthly_chart():
+                # Set backend for headless mode
+                import matplotlib
+                matplotlib.use('Agg')
+                
+                # Get monthly data from Tushare
+                monthly_data = self.tushare_service.get_monthly_data(symbol)
+                
+                if monthly_data.empty:
+                    return None
+                
+                # Create chart using ChartStyles
+                fig, ax = chart_styles.create_price_chart(
+                    data=monthly_data['close'],
+                    symbol=symbol,
+                    currency='CNY',  # Default currency for Chinese stocks
+                    period='месячный'
+                )
+                
+                # Save to bytes
+                buffer = io.BytesIO()
+                fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+                buffer.seek(0)
+                chart_bytes = buffer.getvalue()
+                buffer.close()
+                plt.close(fig)
+                
+                return chart_bytes
+            
+            # Run chart creation in thread to avoid blocking
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(create_tushare_monthly_chart)
+                chart_bytes = future.result(timeout=30)
+                
+            return chart_bytes
+            
+        except Exception as e:
+            self.logger.error(f"Error getting Tushare monthly chart for {symbol}: {e}")
             return None
 
     async def _get_dividend_table_image(self, symbol: str) -> Optional[bytes]:

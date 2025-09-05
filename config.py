@@ -20,6 +20,9 @@ class Config:
     # Okama Configuration
     OKAMA_API_KEY = os.getenv('OKAMA_API_KEY')
     
+    # Tushare Configuration
+    TUSHARE_API_KEY = os.getenv('TUSHARE_API_KEY')
+    
     # Bot Settings
     MAX_MESSAGE_LENGTH = 4096
     MAX_CAPTION_LENGTH = 1024

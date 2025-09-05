@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+config.env
+
 
 # Python
 __pycache__/
@@ -57,4 +59,3 @@ charts/
 # Test files
 test_*.py
 *_test.py
-config.env
