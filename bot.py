@@ -837,10 +837,21 @@ class ShansAi:
                 return
             
             # Get symbols from Tushare
-            symbols = self.tushare_service.get_exchange_symbols(namespace)
-            
-            if not symbols:
-                error_msg = f"❌ Символы для биржи '{namespace}' не найдены"
+            try:
+                symbols = self.tushare_service.get_exchange_symbols(namespace)
+                
+                if not symbols:
+                    error_msg = f"❌ Символы для биржи '{namespace}' не найдены"
+                    if is_callback:
+                        await context.bot.send_message(
+                            chat_id=update.callback_query.message.chat_id,
+                            text=error_msg
+                        )
+                    else:
+                        await self._send_message_safe(update, error_msg)
+                    return
+            except Exception as e:
+                error_msg = f"❌ Ошибка при получении символов для '{namespace}': {str(e)}"
                 if is_callback:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
@@ -6546,46 +6557,10 @@ class ShansAi:
     async def _handle_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle namespace button click - show symbols in specific namespace"""
         try:
-            
             self.logger.info(f"Handling namespace button for: {namespace}")
             
-            # Show symbols in specific namespace (same logic as namespace_command)
-            try:
-                symbols_df = ok.symbols_in_namespace(namespace)
-                
-                # Check if DataFrame is empty
-                if symbols_df.empty:
-                    await self._send_callback_message(update, context, f"❌ Пространство имен '{namespace}' не найдено или пусто")
-                    return
-                
-                # Convert DataFrame to list of symbols
-                if 'symbol' in symbols_df.columns:
-                    # Extract ticker part (before the dot)
-                    symbols = []
-                    for full_symbol in symbols_df['symbol'].tolist():
-                        if pd.isna(full_symbol) or full_symbol is None:
-                            continue
-                        symbol_str = str(full_symbol).strip()
-                        if '.' in symbol_str:
-                            ticker = symbol_str.split('.')[0]
-                            symbols.append(ticker)
-                        else:
-                            symbols.append(symbol_str)
-                elif 'ticker' in symbols_df.columns:
-                    symbols = symbols_df['ticker'].tolist()
-                else:
-                    # If no clear column, try to get the first column
-                    symbols = symbols_df.iloc[:, 0].tolist()
-                
-                if not symbols:
-                    await self._send_callback_message(update, context, f"❌ Пространство имен '{namespace}' не содержит символов")
-                    return
-                
-                # Используем единый метод для показа символов
-                await self._show_namespace_symbols(update, context, namespace, is_callback=True)
-                
-            except Exception as e:
-                await self._send_callback_message(update, context, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
+            # Use the unified method that handles both okama and tushare
+            await self._show_namespace_symbols(update, context, namespace, is_callback=True)
                 
         except ImportError:
             await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
