@@ -4859,8 +4859,6 @@ class ShansAi:
             if current_fig.axes:
                 ax = current_fig.axes[0]
                 
-                # Apply Monte Carlo specific styles to make lines thinner
-                chart_styles.apply_monte_carlo_style(ax)
                 
                 # Apply standard chart styling with centralized style
                 chart_styles.apply_styling(
@@ -4920,8 +4918,6 @@ class ShansAi:
             if current_fig.axes:
                 ax = current_fig.axes[0]  # Get the first (and usually only) axes
                 
-                # Apply percentile specific styles to ensure colors match legend
-                chart_styles.apply_percentile_style(ax)
                 
                 # Force legend update to match the new colors
                 if ax.get_legend():
