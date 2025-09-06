@@ -1082,8 +1082,7 @@ class ShansAi:
                 if is_callback:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
-                        text=error_msg,
-                        parse_mode='Markdown'
+                        text=error_msg
                     )
                 else:
                     await self._send_message_safe(update, error_msg)
@@ -1099,8 +1098,7 @@ class ShansAi:
                 if is_callback:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
-                        text=error_msg,
-                        parse_mode='Markdown'
+                        text=error_msg
                     )
                 else:
                     await self._send_message_safe(update, error_msg)
@@ -1110,8 +1108,7 @@ class ShansAi:
                 if is_callback:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
-                        text=error_msg,
-                        parse_mode='Markdown'
+                        text=error_msg
                     )
                 else:
                     await self._send_message_safe(update, error_msg)
@@ -1178,8 +1175,7 @@ class ShansAi:
             if is_callback:
                 await context.bot.send_message(
                     chat_id=update.callback_query.message.chat_id,
-                    text=error_msg,
-                    parse_mode='Markdown'
+                    text=error_msg
                 )
             else:
                 await self._send_message_safe(update, error_msg)
@@ -1201,8 +1197,7 @@ class ShansAi:
                     # Для callback сообщений отправляем через context.bot
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
-                        text=error_msg,
-                        parse_mode='Markdown'
+                        text=error_msg
                     )
                 else:
                     await self._send_message_safe(update, error_msg)
@@ -1264,8 +1259,7 @@ class ShansAi:
                 # Для callback сообщений отправляем через context.bot
                 await context.bot.send_message(
                     chat_id=update.callback_query.message.chat_id,
-                    text=error_msg,
-                    parse_mode='Markdown'
+                    text=error_msg
                 )
             else:
                 await self._send_message_safe(update, error_msg)
