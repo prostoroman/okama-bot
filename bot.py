@@ -638,9 +638,10 @@ class ShansAi:
     async def _create_hybrid_chinese_comparison(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """
         Создать гибридное сравнение китайских символов
-        - Только китайские символы без базового SPY
-        - Стандартные стили графиков
-        - Корректная легенда и даты
+        - Максимальный период по датам
+        - Данные по CNY.INFL из okama
+        - Скрытые xlabel и ylabel
+        - Заголовок: Сравнение название тикеров, биржа, валюта
         """
         try:
             self.logger.info(f"Creating hybrid comparison for Chinese symbols: {symbols}")
@@ -649,13 +650,16 @@ class ShansAi:
             currency, currency_info = self._get_currency_by_symbol(symbols[0])
             inflation_ticker = self._get_inflation_ticker_by_currency(currency)
             
-            # Получаем данные китайских символов через Tushare
+            # Получаем данные китайских символов через Tushare (максимальный период)
             chinese_data = {}
+            all_dates = set()
+            
             for symbol in symbols:
                 if self._is_chinese_symbol(symbol):
                     try:
                         symbol_info = self.tushare_service.get_symbol_info(symbol)
-                        historical_data = self.tushare_service.get_daily_data(symbol)
+                        # Получаем максимальный период данных
+                        historical_data = self.tushare_service.get_daily_data(symbol, start_date='19900101')
                         
                         if not historical_data.empty:
                             # Устанавливаем дату как индекс
@@ -664,6 +668,7 @@ class ShansAi:
                                 'info': symbol_info,
                                 'data': historical_data
                             }
+                            all_dates.update(historical_data.index)
                             self.logger.info(f"Got data for Chinese symbol {symbol}: {len(historical_data)} records")
                     except Exception as e:
                         self.logger.warning(f"Could not get data for Chinese symbol {symbol}: {e}")
@@ -673,14 +678,29 @@ class ShansAi:
                     f"❌ Не удалось получить данные для китайских символов: {', '.join(symbols)}")
                 return
             
+            # Получаем данные по инфляции из okama для CNY активов
+            inflation_data = None
+            if currency == 'CNY' and inflation_ticker == 'CNY.INFL':
+                try:
+                    import okama as ok
+                    inflation_asset = ok.Asset(inflation_ticker)
+                    inflation_data = inflation_asset.wealth_index
+                    self.logger.info(f"Got inflation data for {inflation_ticker}: {len(inflation_data)} records")
+                except Exception as e:
+                    self.logger.warning(f"Could not get inflation data for {inflation_ticker}: {e}")
+            
             # Создаем график с использованием стандартных стилей
             fig, ax = self.chart_styles.create_chart(figsize=(14, 8))
             
             # Получаем стандартные цвета
             import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
             colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
             
             # Добавляем данные китайских символов
+            symbol_names = []
+            exchanges = []
+            
             for i, (symbol, data_dict) in enumerate(chinese_data.items()):
                 historical_data = data_dict['data']
                 symbol_info = data_dict['info']
@@ -689,8 +709,13 @@ class ShansAi:
                     # Нормализуем данные к базовому значению (1000) как в okama
                     normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 1000
                     
-                    # Получаем название символа
+                    # Получаем название символа и биржу
                     symbol_name = symbol_info.get('name', symbol)
+                    exchange = symbol_info.get('exchange', 'Unknown')
+                    
+                    symbol_names.append(symbol_name)
+                    exchanges.append(exchange)
+                    
                     if len(symbol_name) > 30:
                         symbol_name = symbol_name[:27] + "..."
                     
@@ -700,11 +725,44 @@ class ShansAi:
                            color=colors[i % len(colors)],
                            alpha=0.9)
             
-            # Настройка заголовка и осей
-            ax.set_title(f"Сравнение китайских символов\nВалюта: {currency} ({currency_info})", 
-                        fontsize=16, fontweight='semibold', pad=20)
-            ax.set_xlabel("Дата", fontsize=12, fontweight='medium')
-            ax.set_ylabel("Wealth Index (база = 1000)", fontsize=12, fontweight='medium')
+            # Добавляем данные по инфляции если доступны
+            if inflation_data is not None and not inflation_data.empty:
+                # Нормализуем инфляцию к базовому значению (1000)
+                normalized_inflation = inflation_data / inflation_data.iloc[0] * 1000
+                ax.plot(inflation_data.index, normalized_inflation, 
+                       label=f"{inflation_ticker} - Инфляция", 
+                       linewidth=2, 
+                       color='red',
+                       alpha=0.7,
+                       linestyle='--')
+            
+            # Формируем заголовок: Сравнение название тикеров, биржа, валюта
+            title_parts = []
+            title_parts.append("Сравнение")
+            
+            # Добавляем названия тикеров
+            if symbol_names:
+                names_str = ", ".join(symbol_names[:3])  # Ограничиваем до 3 названий
+                if len(symbol_names) > 3:
+                    names_str += f" и еще {len(symbol_names) - 3}"
+                title_parts.append(names_str)
+            
+            # Добавляем биржи
+            unique_exchanges = list(set(exchanges))
+            if unique_exchanges:
+                exchanges_str = ", ".join(unique_exchanges)
+                title_parts.append(f"({exchanges_str})")
+            
+            # Добавляем валюту
+            title_parts.append(f"Валюта: {currency}")
+            
+            title = ", ".join(title_parts)
+            
+            # Настройка заголовка (скрываем xlabel и ylabel)
+            ax.set_title(title, fontsize=16, fontweight='semibold', pad=20)
+            # Скрываем подписи осей
+            ax.set_xlabel("")
+            ax.set_ylabel("")
             
             # Настройка легенды
             ax.legend(loc='upper left', fontsize=10, frameon=True, 
@@ -736,8 +794,9 @@ class ShansAi:
             caption = f"📈 Сравнение китайских символов: {', '.join(symbols)}\n\n"
             caption += f"💱 Валюта: {currency} ({currency_info})\n"
             caption += f"📊 Инфляция: {inflation_ticker}\n"
-            caption += f"📈 Данные: Tushare API\n"
-            caption += f"📏 Нормализация: база = 1000 (как в okama)"
+            caption += f"📈 Данные: Tushare API + Okama (инфляция)\n"
+            caption += f"📏 Нормализация: база = 1000 (как в okama)\n"
+            caption += f"📅 Период: максимальный доступный"
             
             # Отправляем график
             await context.bot.send_photo(
