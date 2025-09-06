@@ -47,6 +47,7 @@ if sys.version_info < (3, 7):
 from config import Config
 from services.yandexgpt_service import YandexGPTService
 from services.tushare_service import TushareService
+from services.google_vision_service import GoogleVisionService
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -85,6 +86,20 @@ class ShansAi:
         except ValueError:
             self.tushare_service = None
             self.logger.warning("Tushare service not initialized - API key not provided")
+        
+        # Initialize Google Vision service for chart analysis
+        try:
+            self.google_vision_service = GoogleVisionService()
+            if self.google_vision_service.is_available():
+                self.logger.info("Google Vision service initialized successfully")
+            else:
+                self.logger.warning("Google Vision service not available - check credentials")
+                # Log detailed status for debugging
+                status = self.google_vision_service.get_service_status()
+                self.logger.info(f"Google Vision status: {status}")
+        except Exception as e:
+            self.google_vision_service = None
+            self.logger.warning(f"Google Vision service not initialized: {e}")
         
         # Known working asset symbols for suggestions
         self.known_assets = {
@@ -761,6 +776,7 @@ class ShansAi:
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
 /list [название] — список пространств имен или символы в пространстве
+/vision_status — проверка статуса Google Vision API для анализа графиков
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -1392,6 +1408,62 @@ class ShansAi:
             self.logger.error(f"Error in namespace command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
+    async def vision_status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /vision_status command - check Google Vision API status"""
+        try:
+            if not self.google_vision_service:
+                await self._send_message_safe(update, "❌ Google Vision сервис не инициализирован")
+                return
+            
+            status = self.google_vision_service.get_service_status()
+            
+            status_text = "🤖 **Статус Google Vision API**\n\n"
+            
+            # Service availability
+            if status['available']:
+                status_text += "✅ **Сервис доступен**\n"
+            else:
+                status_text += "❌ **Сервис недоступен**\n"
+            
+            # Library installation
+            if status['library_installed']:
+                status_text += "✅ **Библиотека установлена**\n"
+            else:
+                status_text += "❌ **Библиотека не установлена**\n"
+            
+            # Credentials
+            status_text += "\n🔑 **Настройки аутентификации:**\n"
+            
+            if status['config_credentials_exist']:
+                status_text += f"✅ **Конфигурационный файл найден**\n"
+                status_text += f"📁 Путь: `{status['config_credentials_path']}`\n"
+            else:
+                status_text += "❌ **Конфигурационный файл не найден**\n"
+            
+            if status['credentials_exist']:
+                status_text += f"✅ **Переменная окружения**\n"
+                status_text += f"📁 Путь: `{status['credentials_path']}`\n"
+            else:
+                status_text += "❌ **Переменная окружения не установлена**\n"
+            
+            # Recommendations
+            status_text += "\n💡 **Рекомендации:**\n"
+            if not status['available']:
+                if not status['library_installed']:
+                    status_text += "• Установите библиотеку: `pip install google-cloud-vision`\n"
+                if not status['config_credentials_exist']:
+                    status_text += "• Проверьте наличие файла `config_files/google_vision_credentials.json`\n"
+                if not status['credentials_exist']:
+                    status_text += "• Установите переменную окружения `GOOGLE_APPLICATION_CREDENTIALS`\n"
+            else:
+                status_text += "• Сервис готов к работе! Используйте команду `/compare` для анализа графиков\n"
+            
+            await self._send_message_safe(update, status_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error in vision_status command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при проверке статуса: {str(e)}")
+
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
         try:
@@ -1793,12 +1865,32 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
+                # Analyze chart with Google Vision API if available
+                chart_analysis = None
+                if self.google_vision_service and self.google_vision_service.is_available():
+                    try:
+                        self.logger.info("Analyzing chart with Google Vision API")
+                        chart_analysis = self.google_vision_service.analyze_chart(img_bytes)
+                        if chart_analysis and chart_analysis.get('success'):
+                            self.logger.info("Chart analysis completed successfully")
+                        else:
+                            self.logger.warning("Chart analysis failed or returned no results")
+                    except Exception as e:
+                        self.logger.error(f"Error analyzing chart: {e}")
+                        chart_analysis = None
+                
                 # Create caption
                 caption = f"📊 Сравнение активов\n\n"
                 caption += f"🔍 Сравниваемые активы: {', '.join(symbols)}\n"
                 caption += f"💰 Валюта: {currency} ({currency_info})\n"
                 caption += f"📅 Период: полный доступный период данных\n\n"
                 caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
+                
+                # Add chart analysis if available
+                if chart_analysis and chart_analysis.get('success'):
+                    analysis_text = chart_analysis.get('analysis', '')
+                    if analysis_text:
+                        caption += f"\n\n🤖 Анализ графика:\n{analysis_text}"
                 
                 # Create keyboard with analysis buttons conditionally
                 # Determine composition: portfolios vs assets
@@ -1827,6 +1919,12 @@ class ShansAi:
                 keyboard.append([
                     InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
                 ])
+                
+                # Add chart analysis button if Google Vision is available
+                if self.google_vision_service and self.google_vision_service.is_available():
+                    keyboard.append([
+                        InlineKeyboardButton("🤖 Детальный анализ графика", callback_data="chart_analysis_compare")
+                    ])
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -2916,6 +3014,9 @@ class ShansAi:
             elif callback_data == 'risk_return_compare':
                 self.logger.info("Risk / Return button clicked")
                 await self._handle_risk_return_compare_button(update, context)
+            elif callback_data == 'chart_analysis_compare':
+                self.logger.info("Chart analysis button clicked")
+                await self._handle_chart_analysis_compare_button(update, context)
             elif callback_data.startswith('namespace_'):
                 namespace = callback_data.replace('namespace_', '')
                 self.logger.info(f"Namespace button clicked for: {namespace}")
@@ -3074,6 +3175,125 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling Risk / Return button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при построении Risk / Return: {str(e)}")
+
+    async def _handle_chart_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle chart analysis button click for comparison charts"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            symbols = user_context.get('current_symbols', [])
+            currency = user_context.get('current_currency', 'USD')
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+
+            # Validate that we have symbols to compare
+            if not expanded_symbols:
+                await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
+                return
+
+            # Check if Google Vision service is available
+            if not self.google_vision_service or not self.google_vision_service.is_available():
+                await self._send_callback_message(update, context, "❌ Сервис анализа графиков недоступен. Проверьте настройки Google Vision API.")
+                return
+
+            await self._send_callback_message(update, context, "🤖 Анализирую график с помощью Google Vision API...")
+
+            # Recreate the comparison chart for analysis
+            try:
+                # Prepare assets for comparison
+                asset_list_items = []
+                asset_names = []
+                
+                # Add portfolios from context
+                for pctx in portfolio_contexts:
+                    try:
+                        p = ok.Portfolio(
+                            pctx.get('portfolio_symbols', []),
+                            weights=pctx.get('portfolio_weights', []),
+                            ccy=pctx.get('portfolio_currency') or currency,
+                        )
+                        asset_list_items.append(p)
+                        asset_names.append(pctx.get('symbol', 'Portfolio'))
+                    except Exception as pe:
+                        self.logger.warning(f"Failed to recreate portfolio for analysis: {pe}")
+                
+                # Add individual assets
+                for symbol in symbols:
+                    if symbol not in [pctx.get('symbol', '') for pctx in portfolio_contexts]:
+                        asset_list_items.append(symbol)
+                        asset_names.append(symbol)
+
+                if not asset_list_items:
+                    await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для анализа")
+                    return
+
+                # Create comparison
+                comparison = ok.AssetList(asset_list_items, ccy=currency)
+                
+                # Create comparison chart
+                fig, ax = chart_styles.create_comparison_chart(
+                    comparison.wealth_indexes, symbols, currency
+                )
+                
+                # Save chart to bytes
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(fig, img_buffer)
+                img_buffer.seek(0)
+                img_bytes = img_buffer.getvalue()
+                
+                # Clear matplotlib cache
+                chart_styles.cleanup_figure(fig)
+                
+                # Analyze chart with Google Vision API
+                chart_analysis = self.google_vision_service.analyze_chart(img_bytes)
+                
+                if chart_analysis and chart_analysis.get('success'):
+                    # Format detailed analysis
+                    analysis_text = "🤖 **Детальный анализ графика**\n\n"
+                    
+                    # Add detected text
+                    detected_text = chart_analysis.get('text', '')
+                    if detected_text:
+                        analysis_text += f"📝 **Обнаруженный текст:**\n{detected_text[:500]}{'...' if len(detected_text) > 500 else ''}\n\n"
+                    
+                    # Add labels
+                    labels = chart_analysis.get('labels', [])
+                    if labels:
+                        analysis_text += "🏷️ **Обнаруженные элементы:**\n"
+                        for label in labels[:5]:  # Top 5 labels
+                            analysis_text += f"• {label['description']} (уверенность: {label['confidence']:.1%})\n"
+                        analysis_text += "\n"
+                    
+                    # Add objects
+                    objects = chart_analysis.get('objects', [])
+                    if objects:
+                        analysis_text += "📊 **Элементы графика:**\n"
+                        for obj in objects[:5]:  # Top 5 objects
+                            analysis_text += f"• {obj['name']} (уверенность: {obj['confidence']:.1%})\n"
+                        analysis_text += "\n"
+                    
+                    # Add summary analysis
+                    summary = chart_analysis.get('analysis', '')
+                    if summary:
+                        analysis_text += f"📈 **Сводка анализа:**\n{summary}\n\n"
+                    
+                    analysis_text += f"🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                    analysis_text += f"💰 **Валюта:** {currency}\n"
+                    analysis_text += f"📅 **Период:** полный доступный период данных"
+                    
+                    await self._send_callback_message(update, context, analysis_text)
+                    
+                else:
+                    error_msg = chart_analysis.get('error', 'Неизвестная ошибка') if chart_analysis else 'Анализ не выполнен'
+                    await self._send_callback_message(update, context, f"❌ Ошибка анализа графика: {error_msg}")
+                    
+            except Exception as chart_error:
+                self.logger.error(f"Error creating chart for analysis: {chart_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}")
+
+        except Exception as e:
+            self.logger.error(f"Error handling chart analysis button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}")
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
@@ -6760,6 +6980,7 @@ class ShansAi:
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
+        application.add_handler(CommandHandler("vision_status", self.vision_status_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))

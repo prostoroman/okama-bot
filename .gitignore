@@ -4,6 +4,10 @@
 .env.*.local
 config.env
 
+# Google Cloud credentials
+config_files/google_vision_credentials.json
+*.json
+
 
 # Python
 __pycache__/
