@@ -47,7 +47,7 @@ if sys.version_info < (3, 7):
 from config import Config
 from services.yandexgpt_service import YandexGPTService
 from services.tushare_service import TushareService
-from services.google_vision_service import GoogleVisionService
+from services.gemini_service import GeminiService
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -87,19 +87,19 @@ class ShansAi:
             self.tushare_service = None
             self.logger.warning("Tushare service not initialized - API key not provided")
         
-        # Initialize Google Vision service for chart analysis
+        # Initialize Gemini service for chart analysis
         try:
-            self.google_vision_service = GoogleVisionService()
-            if self.google_vision_service.is_available():
-                self.logger.info("Google Vision service initialized successfully")
+            self.gemini_service = GeminiService()
+            if self.gemini_service.is_available():
+                self.logger.info("Gemini service initialized successfully")
             else:
-                self.logger.warning("Google Vision service not available - check credentials")
+                self.logger.warning("Gemini service not available - check credentials")
                 # Log detailed status for debugging
-                status = self.google_vision_service.get_service_status()
-                self.logger.info(f"Google Vision status: {status}")
+                status = self.gemini_service.get_service_status()
+                self.logger.info(f"Gemini status: {status}")
         except Exception as e:
-            self.google_vision_service = None
-            self.logger.warning(f"Google Vision service not initialized: {e}")
+            self.gemini_service = None
+            self.logger.warning(f"Gemini service not initialized: {e}")
         
         # Known working asset symbols for suggestions
         self.known_assets = {
@@ -776,7 +776,7 @@ class ShansAi:
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
 /list [название] — список пространств имен или символы в пространстве
-/vision_status — проверка статуса Google Vision API для анализа графиков
+/gemini_status — проверка статуса Gemini API для анализа графиков
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -1406,16 +1406,16 @@ class ShansAi:
             self.logger.error(f"Error in namespace command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
-    async def vision_status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /vision_status command - check Google Vision API status"""
+    async def gemini_status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /gemini_status command - check Gemini API status"""
         try:
-            if not self.google_vision_service:
-                await self._send_message_safe(update, "❌ Google Vision сервис не инициализирован")
+            if not self.gemini_service:
+                await self._send_message_safe(update, "❌ Gemini сервис не инициализирован")
                 return
             
-            status = self.google_vision_service.get_service_status()
+            status = self.gemini_service.get_service_status()
             
-            status_text = "🤖 **Статус Google Vision API**\n\n"
+            status_text = "🤖 **Статус Gemini API**\n\n"
             
             # Service availability
             if status['available']:
@@ -1444,15 +1444,15 @@ class ShansAi:
                 if not status['library_installed']:
                     status_text += "• Установите библиотеку: `pip install requests`\n"
                 if not status['api_key_set']:
-                    status_text += "• Установите переменную окружения `GOOGLE_VISION_API_KEY`\n"
-                    status_text += "• Получите API ключ: https://console.cloud.google.com/apis/credentials\n"
+                    status_text += "• Установите переменную окружения `GEMINI_API_KEY`\n"
+                    status_text += "• Получите API ключ: https://aistudio.google.com/app/apikey\n"
             else:
                 status_text += "• Сервис готов к работе! Используйте команду `/compare` для анализа графиков\n"
             
             await self._send_message_safe(update, status_text)
             
         except Exception as e:
-            self.logger.error(f"Error in vision_status command: {e}")
+            self.logger.error(f"Error in gemini_status command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при проверке статуса: {str(e)}")
 
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1856,12 +1856,12 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Analyze chart with Google Vision API if available
+                # Analyze chart with Gemini API if available
                 chart_analysis = None
-                if self.google_vision_service and self.google_vision_service.is_available():
+                if self.gemini_service and self.gemini_service.is_available():
                     try:
-                        self.logger.info("Analyzing chart with Google Vision API")
-                        chart_analysis = self.google_vision_service.analyze_chart(img_bytes)
+                        self.logger.info("Analyzing chart with Gemini API")
+                        chart_analysis = self.gemini_service.analyze_chart(img_bytes)
                         if chart_analysis and chart_analysis.get('success'):
                             self.logger.info("Chart analysis completed successfully")
                         else:
@@ -1911,8 +1911,8 @@ class ShansAi:
                     InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
                 ])
                 
-                # Add chart analysis button if Google Vision is available
-                if self.google_vision_service and self.google_vision_service.is_available():
+                # Add chart analysis button if Gemini is available
+                if self.gemini_service and self.gemini_service.is_available():
                     keyboard.append([
                         InlineKeyboardButton("🤖 Детальный анализ графика", callback_data="chart_analysis_compare")
                     ])
@@ -1927,21 +1927,21 @@ class ShansAi:
                     reply_markup=reply_markup
                 )
                 
-                # Send Google Vision analysis as separate message
+                # Send Gemini analysis as separate message
                 if chart_analysis:
                     if chart_analysis.get('success'):
                         analysis_text = chart_analysis.get('analysis', '')
                         if analysis_text:
-                            analysis_message = f"🤖 **Анализ графика Google Vision API**\n\n{analysis_text}"
+                            analysis_message = f"🤖 **Анализ графика Gemini AI**\n\n{analysis_text}"
                             await self._send_message_safe(update, analysis_message)
                         else:
-                            await self._send_message_safe(update, "🤖 Google Vision API: Анализ выполнен, но результат пуст")
+                            await self._send_message_safe(update, "🤖 Gemini AI: Анализ выполнен, но результат пуст")
                     else:
                         error_msg = chart_analysis.get('error', 'Неизвестная ошибка')
-                        error_message = f"❌ **Ошибка Google Vision API**\n\n{error_msg}"
+                        error_message = f"❌ **Ошибка Gemini API**\n\n{error_msg}"
                         await self._send_message_safe(update, error_message)
                 else:
-                    await self._send_message_safe(update, "⚠️ Google Vision API недоступен - анализ не выполнен")
+                    await self._send_message_safe(update, "⚠️ Gemini API недоступен - анализ не выполнен")
                 
                 # Note: AI analysis is now handled by the button callbacks using context data
                 
@@ -3198,12 +3198,12 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            # Check if Google Vision service is available
-            if not self.google_vision_service or not self.google_vision_service.is_available():
-                await self._send_callback_message(update, context, "❌ Сервис анализа графиков недоступен. Проверьте настройки Google Vision API.")
+            # Check if Gemini service is available
+            if not self.gemini_service or not self.gemini_service.is_available():
+                await self._send_callback_message(update, context, "❌ Сервис анализа графиков недоступен. Проверьте настройки Gemini API.")
                 return
 
-            await self._send_callback_message(update, context, "🤖 Анализирую график с помощью Google Vision API...")
+            await self._send_callback_message(update, context, "🤖 Анализирую график с помощью Gemini AI...")
 
             # Recreate the comparison chart for analysis
             try:
@@ -3251,38 +3251,19 @@ class ShansAi:
                 # Clear matplotlib cache
                 chart_styles.cleanup_figure(fig)
                 
-                # Analyze chart with Google Vision API
-                chart_analysis = self.google_vision_service.analyze_chart(img_bytes)
+                # Analyze chart with Gemini API
+                chart_analysis = self.gemini_service.analyze_chart(img_bytes)
                 
                 if chart_analysis and chart_analysis.get('success'):
                     # Format detailed analysis
-                    analysis_text = "🤖 **Детальный анализ графика**\n\n"
+                    analysis_text = "🤖 **Детальный анализ графика Gemini AI**\n\n"
                     
-                    # Add detected text
-                    detected_text = chart_analysis.get('text', '')
-                    if detected_text:
-                        analysis_text += f"📝 **Обнаруженный текст:**\n{detected_text[:500]}{'...' if len(detected_text) > 500 else ''}\n\n"
+                    # Add full analysis from Gemini
+                    full_analysis = chart_analysis.get('full_analysis', '')
+                    if full_analysis:
+                        analysis_text += full_analysis
                     
-                    # Add labels
-                    labels = chart_analysis.get('labels', [])
-                    if labels:
-                        analysis_text += "🏷️ **Обнаруженные элементы:**\n"
-                        for label in labels[:5]:  # Top 5 labels
-                            analysis_text += f"• {label['description']} (уверенность: {label['confidence']:.1%})\n"
-                        analysis_text += "\n"
-                    
-                    # Add objects
-                    objects = chart_analysis.get('objects', [])
-                    if objects:
-                        analysis_text += "📊 **Элементы графика:**\n"
-                        for obj in objects[:5]:  # Top 5 objects
-                            analysis_text += f"• {obj['name']} (уверенность: {obj['confidence']:.1%})\n"
-                        analysis_text += "\n"
-                    
-                    # Add summary analysis
-                    summary = chart_analysis.get('analysis', '')
-                    if summary:
-                        analysis_text += f"📈 **Сводка анализа:**\n{summary}\n\n"
+                    # Gemini provides comprehensive analysis, no need for additional sections
                     
                     analysis_text += f"🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
                     analysis_text += f"💰 **Валюта:** {currency}\n"
@@ -7005,7 +6986,7 @@ class ShansAi:
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
-        application.add_handler(CommandHandler("vision_status", self.vision_status_command))
+        application.add_handler(CommandHandler("gemini_status", self.gemini_status_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))
