@@ -1315,8 +1315,7 @@ class ShansAi:
                 
                 # Categorize namespaces for better organization
                 categories = {
-                    'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE'],
-                    'Китайские биржи': ['SSE', 'SZSE', 'BSE', 'HKEX'],
+                    'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE', 'SSE', 'SZSE', 'BSE', 'HKEX'],
                     'Индексы': ['INDX'],
                     'Валюты': ['FX', 'CBR'],
                     'Товары': ['COMM'],
@@ -1347,7 +1346,7 @@ class ShansAi:
                 }
                 
                 for exchange_code, exchange_name in chinese_exchanges.items():
-                    namespace_data.append([exchange_code, exchange_name, 'Китайские биржи'])
+                    namespace_data.append([exchange_code, exchange_name, 'Биржи'])
                 
                 # Sort by category and then by namespace
                 namespace_data.sort(key=lambda x: (x[2], x[0]))
