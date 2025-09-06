@@ -4017,8 +4017,11 @@ class ShansAi:
             chart_bytes = await self._get_tushare_daily_chart(symbol)
             
             if chart_bytes:
-                await self._send_photo_safe(update, context, chart_bytes, 
-                                          caption=f"📈 Ежедневный график {symbol}")
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=io.BytesIO(chart_bytes),
+                    caption=self._truncate_caption(f"📈 Ежедневный график {symbol}")
+                )
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
                 
@@ -4039,8 +4042,11 @@ class ShansAi:
             chart_bytes = await self._get_tushare_monthly_chart(symbol)
             
             if chart_bytes:
-                await self._send_photo_safe(update, context, chart_bytes, 
-                                          caption=f"📅 Месячный график {symbol}")
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=io.BytesIO(chart_bytes),
+                    caption=self._truncate_caption(f"📅 Месячный график {symbol}")
+                )
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
                 
