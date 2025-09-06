@@ -351,25 +351,49 @@ class TushareService:
             self.logger.error(f"Error searching symbols: {e}")
             return []
     
-    def get_exchange_symbols(self, exchange: str) -> List[str]:
-        """Get all symbols for a specific exchange"""
+    def get_exchange_symbols(self, exchange: str) -> List[Dict[str, Any]]:
+        """Get all symbols for a specific exchange with detailed information"""
         try:
-            symbols = []
+            symbols_data = []
             
             if exchange == 'HKEX':
-                df = self.pro.hk_basic(fields='symbol')
-                symbols = [f"{row['symbol']}.HK" for _, row in df.iterrows()]
+                df = self.pro.hk_basic(fields='symbol,name,list_date')
+                for _, row in df.iterrows():
+                    symbols_data.append({
+                        'symbol': f"{row['symbol']}.HK",
+                        'name': row.get('name', 'N/A'),
+                        'currency': 'HKD',
+                        'list_date': row.get('list_date', 'N/A')
+                    })
             elif exchange == 'SSE':
-                df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol')
-                symbols = [f"{row['symbol']}.SH" for _, row in df.iterrows()]
+                df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol,name,list_date')
+                for _, row in df.iterrows():
+                    symbols_data.append({
+                        'symbol': f"{row['symbol']}.SH",
+                        'name': row.get('name', 'N/A'),
+                        'currency': 'CNY',
+                        'list_date': row.get('list_date', 'N/A')
+                    })
             elif exchange == 'SZSE':
-                df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol')
-                symbols = [f"{row['symbol']}.SZ" for _, row in df.iterrows()]
+                df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol,name,list_date')
+                for _, row in df.iterrows():
+                    symbols_data.append({
+                        'symbol': f"{row['symbol']}.SZ",
+                        'name': row.get('name', 'N/A'),
+                        'currency': 'CNY',
+                        'list_date': row.get('list_date', 'N/A')
+                    })
             elif exchange == 'BSE':
-                df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol')
-                symbols = [f"{row['symbol']}.BJ" for _, row in df.iterrows()]
+                df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol,name,list_date')
+                for _, row in df.iterrows():
+                    symbols_data.append({
+                        'symbol': f"{row['symbol']}.BJ",
+                        'name': row.get('name', 'N/A'),
+                        'currency': 'CNY',
+                        'list_date': row.get('list_date', 'N/A')
+                    })
             
-            return symbols[:100]  # Limit to first 100 symbols
+            return symbols_data[:100]  # Limit to first 100 symbols
             
         except Exception as e:
             error_msg = str(e)
@@ -380,3 +404,25 @@ class TushareService:
             else:
                 self.logger.error(f"Error getting symbols for exchange {exchange}: {e}")
                 raise Exception(f"Ошибка получения символов для биржи {exchange}: {error_msg}")
+    
+    def get_exchange_symbols_count(self, exchange: str) -> int:
+        """Get total count of symbols for a specific exchange"""
+        try:
+            if exchange == 'HKEX':
+                df = self.pro.hk_basic(fields='symbol')
+                return len(df)
+            elif exchange == 'SSE':
+                df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol')
+                return len(df)
+            elif exchange == 'SZSE':
+                df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol')
+                return len(df)
+            elif exchange == 'BSE':
+                df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol')
+                return len(df)
+            
+            return 0
+            
+        except Exception as e:
+            self.logger.error(f"Error getting symbol count for exchange {exchange}: {e}")
+            return 0

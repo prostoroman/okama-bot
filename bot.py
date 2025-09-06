@@ -838,9 +838,10 @@ class ShansAi:
             
             # Get symbols from Tushare
             try:
-                symbols = self.tushare_service.get_exchange_symbols(namespace)
+                symbols_data = self.tushare_service.get_exchange_symbols(namespace)
+                total_count = self.tushare_service.get_exchange_symbols_count(namespace)
                 
-                if not symbols:
+                if not symbols_data:
                     error_msg = f"❌ Символы для биржи '{namespace}' не найдены"
                     if is_callback:
                         await context.bot.send_message(
@@ -871,28 +872,47 @@ class ShansAi:
             
             response = f"📊 Биржа: {exchange_names.get(namespace, namespace)}\n\n"
             response += f"📈 Статистика:\n"
-            response += f"• Всего символов: {len(symbols)}\n\n"
+            response += f"• Всего символов: {total_count:,}\n"
+            response += f"• Показываю: {len(symbols_data)}\n\n"
             
-            # Show first 30 symbols
-            display_count = min(30, len(symbols))
-            response += f"📋 Показываю первые {display_count}:\n\n"
+            # Show first 20 symbols with detailed info
+            display_count = min(20, len(symbols_data))
+            response += f"📋 Первые {display_count} символов:\n\n"
             
-            for i, symbol in enumerate(symbols[:display_count], 1):
+            for i, symbol_info in enumerate(symbols_data[:display_count], 1):
+                symbol = symbol_info['symbol']
+                name = symbol_info['name']
+                currency = symbol_info['currency']
+                list_date = symbol_info['list_date']
+                
+                # Truncate long names
+                if len(name) > 25:
+                    name = name[:22] + "..."
+                
                 response += f"{i:2d}. `{symbol}`\n"
+                response += f"    📝 {name}\n"
+                response += f"    💰 {currency} | 📅 {list_date}\n\n"
             
-            if len(symbols) > display_count:
-                response += f"\n... и еще {len(symbols) - display_count} символов"
+            if len(symbols_data) > display_count:
+                response += f"... и еще {len(symbols_data) - display_count} символов\n\n"
             
-            response += f"\n\n💡 Используйте `/info <символ>` для получения подробной информации об активе"
+            response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
+            
+            # Create keyboard with Excel export button
+            keyboard = [
+                [InlineKeyboardButton("📊 Выгрузить в Excel", callback_data=f"excel_namespace_{namespace}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             
             if is_callback:
                 await context.bot.send_message(
                     chat_id=update.callback_query.message.chat_id,
                     text=response,
-                    parse_mode='Markdown'
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
                 )
             else:
-                await self._send_message_safe(update, response)
+                await self._send_message_safe(update, response, reply_markup=reply_markup)
                 
         except Exception as e:
             error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
@@ -6571,10 +6591,15 @@ class ShansAi:
     async def _handle_excel_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle Excel export button click for namespace"""
         try:
-            
             self.logger.info(f"Handling Excel export for namespace: {namespace}")
             
-            # Get symbols in namespace
+            # Check if it's a Chinese exchange
+            chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
+            if namespace in chinese_exchanges:
+                await self._handle_tushare_excel_export(update, context, namespace)
+                return
+            
+            # Get symbols in namespace for non-Chinese exchanges
             try:
                 symbols_df = ok.symbols_in_namespace(namespace)
                 
@@ -6611,6 +6636,80 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in Excel namespace button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
+
+    async def _handle_tushare_excel_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+        """Handle Excel export for Chinese exchanges using Tushare"""
+        try:
+            if not self.tushare_service:
+                await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
+                return
+            
+            # Show progress message
+            await self._send_callback_message(update, context, f"📊 Создаю Excel файл для {namespace}...")
+            
+            # Get all symbols data from Tushare
+            symbols_data = self.tushare_service.get_exchange_symbols(namespace)
+            total_count = self.tushare_service.get_exchange_symbols_count(namespace)
+            
+            if not symbols_data:
+                await self._send_callback_message(update, context, f"❌ Символы для биржи '{namespace}' не найдены")
+                return
+            
+            # Create DataFrame from symbols data
+            df = pd.DataFrame(symbols_data)
+            
+            # Add additional columns for better Excel formatting
+            df['Exchange'] = namespace
+            df['Exchange_Name'] = {
+                'SSE': 'Shanghai Stock Exchange',
+                'SZSE': 'Shenzhen Stock Exchange',
+                'BSE': 'Beijing Stock Exchange',
+                'HKEX': 'Hong Kong Stock Exchange'
+            }.get(namespace, namespace)
+            
+            # Reorder columns
+            df = df[['symbol', 'name', 'currency', 'list_date', 'Exchange', 'Exchange_Name']]
+            
+            # Rename columns for better readability
+            df.columns = ['Symbol', 'Company Name', 'Currency', 'List Date', 'Exchange Code', 'Exchange Name']
+            
+            # Create Excel file in memory
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name=f'{namespace}_Symbols')
+                
+                # Get the workbook and worksheet
+                workbook = writer.book
+                worksheet = writer.sheets[f'{namespace}_Symbols']
+                
+                # Auto-adjust column widths
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            excel_buffer.seek(0)
+            
+            # Send Excel file
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=excel_buffer,
+                filename=f"{namespace}_symbols.xlsx",
+                caption=self._truncate_caption(f"📊 Полный список символов биржи {namespace} ({total_count:,} символов)")
+            )
+            
+            excel_buffer.close()
+            
+        except Exception as e:
+            self.logger.error(f"Error in Tushare Excel export for {namespace}: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
 
     async def _handle_clear_all_portfolios_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle clear all portfolios button click"""
