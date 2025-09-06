@@ -637,8 +637,9 @@ class ShansAi:
     async def _create_hybrid_chinese_comparison(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """
         Создать гибридное сравнение китайских символов
-        - Базовый график с CNY валютой и инфляцией через okama
-        - Наложение данных китайских символов через matplotlib
+        - Только китайские символы без базового SPY
+        - Стандартные стили графиков
+        - Корректная легенда и даты
         """
         try:
             self.logger.info(f"Creating hybrid comparison for Chinese symbols: {symbols}")
@@ -646,15 +647,6 @@ class ShansAi:
             # Определяем валюту по первому символу
             currency, currency_info = self._get_currency_by_symbol(symbols[0])
             inflation_ticker = self._get_inflation_ticker_by_currency(currency)
-            
-            # Для HKD символов используем USD валюту (так как HK.INFL не существует)
-            base_currency = 'USD' if currency == 'HKD' else currency
-            
-            # Создаем базовый AssetList с соответствующей валютой и инфляцией
-            # Используем SPY.US как базовый символ для создания структуры
-            base_symbols = ['SPY.US']
-            asset_list = ok.AssetList(base_symbols, ccy=base_currency, inflation=True)
-            wealth_indexes = asset_list.wealth_indexes
             
             # Получаем данные китайских символов через Tushare
             chinese_data = {}
@@ -680,24 +672,14 @@ class ShansAi:
                     f"❌ Не удалось получить данные для китайских символов: {', '.join(symbols)}")
                 return
             
-            # Создаем гибридный график
-            fig, ax = plt.subplots(figsize=(14, 10))
+            # Создаем график с использованием стандартных стилей
+            fig, ax = self.chart_styles.create_chart(figsize=(14, 8))
             
-            # Добавляем базовый график (SPY в CNY)
-            for symbol, wealth_index in wealth_indexes.items():
-                # Преобразуем индекс в datetime если нужно
-                if hasattr(wealth_index.index, 'to_timestamp'):
-                    index = wealth_index.index.to_timestamp()
-                else:
-                    index = wealth_index.index
-                
-                ax.plot(index, wealth_index.values, 
-                       label=f"{symbol} (базовая валюта {base_currency})", 
-                       linewidth=2, alpha=0.7, color='blue')
+            # Получаем стандартные цвета
+            import matplotlib.pyplot as plt
+            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
             
             # Добавляем данные китайских символов
-            colors = ['red', 'green', 'orange', 'purple', 'brown']
-            
             for i, (symbol, data_dict) in enumerate(chinese_data.items()):
                 historical_data = data_dict['data']
                 symbol_info = data_dict['info']
@@ -706,21 +688,37 @@ class ShansAi:
                     # Нормализуем данные к базовому значению (100)
                     normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 100
                     
+                    # Получаем название символа
+                    symbol_name = symbol_info.get('name', symbol)
+                    if len(symbol_name) > 30:
+                        symbol_name = symbol_name[:27] + "..."
+                    
                     ax.plot(historical_data.index, normalized_data, 
-                           label=f"{symbol} ({symbol_info.get('name', 'N/A')})", 
-                           linewidth=2, color=colors[i % len(colors)])
+                           label=f"{symbol} - {symbol_name}", 
+                           linewidth=2.5, 
+                           color=colors[i % len(colors)],
+                           alpha=0.9)
             
-            ax.set_title(f"Гибридное сравнение китайских символов\n(базовая валюта {base_currency} + данные Tushare)", 
-                        fontsize=14, fontweight='bold')
-            ax.set_xlabel("Дата", fontsize=12)
-            ax.set_ylabel("Нормализованная доходность (база = 100)", fontsize=12)
-            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            ax.grid(True, alpha=0.3)
+            # Настройка заголовка и осей
+            ax.set_title(f"Сравнение китайских символов\nВалюта: {currency} ({currency_info})", 
+                        fontsize=16, fontweight='semibold', pad=20)
+            ax.set_xlabel("Дата", fontsize=12, fontweight='medium')
+            ax.set_ylabel("Нормализованная доходность (база = 100)", fontsize=12, fontweight='medium')
+            
+            # Настройка легенды
+            ax.legend(loc='upper left', fontsize=10, frameon=True, 
+                     fancybox=True, shadow=True, framealpha=0.9)
+            
+            # Настройка сетки
+            ax.grid(True, alpha=0.25, linestyle='-', linewidth=0.7)
             
             # Форматирование дат
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-            plt.xticks(rotation=45)
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            # Добавляем копирайт
+            self.chart_styles.add_copyright(fig)
             
             plt.tight_layout()
             
@@ -734,11 +732,11 @@ class ShansAi:
             plt.close()
             
             # Создаем caption
-            caption = f"Гибридное сравнение китайских символов: {', '.join(symbols)}\n\n"
-            caption += f"Валюта: {currency} ({currency_info})\n"
-            caption += f"Инфляция: {inflation_ticker}\n"
-            caption += f"Данные: Tushare + Okama (CNY)\n"
-            caption += f"Нормализация: база = 100"
+            caption = f"📈 Сравнение китайских символов: {', '.join(symbols)}\n\n"
+            caption += f"💱 Валюта: {currency} ({currency_info})\n"
+            caption += f"📊 Инфляция: {inflation_ticker}\n"
+            caption += f"📈 Данные: Tushare API\n"
+            caption += f"📏 Нормализация: база = 100"
             
             # Отправляем график
             await context.bot.send_photo(
