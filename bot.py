@@ -1889,11 +1889,7 @@ class ShansAi:
                 caption = f"Сравнение {', '.join(symbols)}\n\n"
                 caption += f"Валюта: {currency} ({currency_info})\n"
                 
-                # Add chart analysis if available
-                if chart_analysis and chart_analysis.get('success'):
-                    analysis_text = chart_analysis.get('analysis', '')
-                    if analysis_text:
-                        caption += f"\n\n🤖 Анализ графика:\n{analysis_text}"
+                # Chart analysis is only available via buttons
                 
                 # Create keyboard with analysis buttons conditionally
                 # Determine composition: portfolios vs assets
