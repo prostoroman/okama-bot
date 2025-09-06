@@ -543,6 +543,96 @@ class ShansAi:
         
         return "; ".join(summary) if summary else "Новый пользователь"
     
+    def _get_currency_by_symbol(self, symbol: str) -> tuple[str, str]:
+        """
+        Определить валюту по символу с учетом китайских бирж
+        
+        Returns:
+            tuple: (currency, currency_info)
+        """
+        try:
+            if '.' in symbol:
+                namespace = symbol.split('.')[1]
+                
+                # Китайские биржи
+                if namespace == 'HK':
+                    return "HKD", f"автоматически определена по бирже HKEX ({symbol})"
+                elif namespace == 'SH':
+                    return "CNY", f"автоматически определена по бирже SSE ({symbol})"
+                elif namespace == 'SZ':
+                    return "CNY", f"автоматически определена по бирже SZSE ({symbol})"
+                elif namespace == 'BJ':
+                    return "CNY", f"автоматически определена по бирже BSE ({symbol})"
+                
+                # Другие биржи
+                elif namespace == 'MOEX':
+                    return "RUB", f"автоматически определена по бирже MOEX ({symbol})"
+                elif namespace == 'US':
+                    return "USD", f"автоматически определена по бирже US ({symbol})"
+                elif namespace == 'LSE':
+                    return "GBP", f"автоматически определена по бирже LSE ({symbol})"
+                elif namespace == 'FX':
+                    return "USD", f"автоматически определена по бирже FX ({symbol})"
+                elif namespace == 'COMM':
+                    return "USD", f"автоматически определена по бирже COMM ({symbol})"
+                elif namespace == 'INDX':
+                    return "USD", f"автоматически определена по бирже INDX ({symbol})"
+                else:
+                    return "USD", f"автоматически определена по умолчанию ({symbol})"
+            else:
+                return "USD", f"автоматически определена по умолчанию ({symbol})"
+        except Exception as e:
+            self.logger.warning(f"Could not determine currency for {symbol}: {e}")
+            return "USD", f"автоматически определена по умолчанию ({symbol})"
+    
+    def _get_inflation_ticker_by_currency(self, currency: str) -> str:
+        """
+        Получить тикер инфляции по валюте
+        
+        Returns:
+            str: тикер инфляции (например, 'CN.INFL' для CNY)
+        """
+        inflation_mapping = {
+            'USD': 'US.INFL',
+            'RUB': 'RUS.INFL', 
+            'EUR': 'EU.INFL',
+            'GBP': 'GB.INFL',
+            'CNY': 'CN.INFL',  # Китайская инфляция
+            'HKD': 'HK.INFL'  # Гонконгская инфляция
+        }
+        return inflation_mapping.get(currency, 'US.INFL')
+    
+    def _is_chinese_symbol(self, symbol: str) -> bool:
+        """
+        Проверить, является ли символ китайским
+        
+        Returns:
+            bool: True если символ китайский
+        """
+        if not self.tushare_service:
+            return False
+        return self.tushare_service.is_tushare_symbol(symbol)
+    
+    def _get_chinese_symbol_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Получить данные китайского символа через Tushare
+        
+        Returns:
+            Dict с данными символа или None
+        """
+        if not self.tushare_service or not self._is_chinese_symbol(symbol):
+            return None
+        
+        try:
+            # Получаем базовую информацию о символе
+            symbol_info = self.tushare_service.get_symbol_info(symbol)
+            if symbol_info:
+                return symbol_info
+        except Exception as e:
+            self.logger.warning(f"Could not get Chinese symbol data for {symbol}: {e}")
+        
+        return None
+    
     # =======================
     # Вспомогательные функции для истории
     # =======================
@@ -1515,6 +1605,8 @@ class ShansAi:
                     
                 help_text += "\n\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
+                help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (HKD)\n"
+                help_text += "• `600000.SH 000001.SZ` - сравнение китайских акций (CNY)\n"
                 help_text += "• `portfolio_5642.PF portfolio_5642.PF` - сравнение двух портефелей\n"
                 help_text += "• `portfolio_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
                 help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
@@ -1721,33 +1813,8 @@ class ShansAi:
                     currency_info = f"автоматически определена по портфелю ({original_first_symbol})"
                     self.logger.info(f"Using portfolio currency for {original_first_symbol}: {currency}")
                 else:
-                    # Try to get currency info for the first asset
-                    if '.' in first_symbol:
-                        namespace = first_symbol.split('.')[1]
-                        if namespace == 'MOEX':
-                            currency = "RUB"  # Russian assets in RUB
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'US':
-                            currency = "USD"  # US assets in USD
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'LSE':
-                            currency = "GBP"  # London assets in GBP
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'FX':
-                            currency = "USD"  # Forex pairs in USD
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'COMM':
-                            currency = "USD"  # Commodities in USD
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'INDX':
-                            currency = "USD"  # Indices in USD
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        else:
-                            currency = "USD"  # Default to USD
-                            currency_info = "по умолчанию (USD)"
-                    else:
-                        currency = "USD"  # Default to USD
-                        currency_info = "по умолчанию (USD)"
+                    # Use our new currency detection function
+                    currency, currency_info = self._get_currency_by_symbol(first_symbol)
                     
                     self.logger.info(f"Auto-detected currency for {first_symbol}: {currency}")
                 
@@ -1837,11 +1904,33 @@ class ShansAi:
                                 currency = "USD"
                                 currency_info = "по умолчанию (USD)"
                     
+                    # Check if we have Chinese symbols that need special handling
+                    chinese_symbols = []
+                    okama_symbols = []
+                    
+                    for symbol in symbols:
+                        if self._is_chinese_symbol(symbol):
+                            chinese_symbols.append(symbol)
+                        else:
+                            okama_symbols.append(symbol)
+                    
+                    if chinese_symbols:
+                        # We have Chinese symbols - need special handling
+                        self.logger.info(f"Found Chinese symbols: {chinese_symbols}")
+                        await self._send_message_safe(update, 
+                            f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
+                            f"Китайские символы пока не поддерживаются в команде /compare.\n"
+                            f"Используйте команду /info для анализа отдельных китайских символов.\n\n"
+                            f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
+                        return
+                    
                     # Create comparison using ok.AssetList (proper way to compare portfolios with assets)
                     try:
                         self.logger.info(f"Creating AssetList with {len(assets_for_comparison)} assets/portfolios")
-                        comparison = ok.AssetList(assets_for_comparison, ccy=currency)
-                        self.logger.info("Successfully created AssetList comparison")
+                        # Add inflation support for Chinese symbols
+                        inflation_ticker = self._get_inflation_ticker_by_currency(currency)
+                        comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
+                        self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
                     except Exception as asset_list_error:
                         self.logger.error(f"Error creating AssetList: {asset_list_error}")
                         await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(asset_list_error)}")
@@ -1850,7 +1939,31 @@ class ShansAi:
                 else:
                     # Regular comparison without portfolios
                     self.logger.info("Creating regular comparison without portfolios")
-                    comparison = ok.AssetList(symbols, ccy=currency)
+                    
+                    # Check if we have Chinese symbols that need special handling
+                    chinese_symbols = []
+                    okama_symbols = []
+                    
+                    for symbol in symbols:
+                        if self._is_chinese_symbol(symbol):
+                            chinese_symbols.append(symbol)
+                        else:
+                            okama_symbols.append(symbol)
+                    
+                    if chinese_symbols:
+                        # We have Chinese symbols - need special handling
+                        self.logger.info(f"Found Chinese symbols: {chinese_symbols}")
+                        await self._send_message_safe(update, 
+                            f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
+                            f"Китайские символы пока не поддерживаются в команде /compare.\n"
+                            f"Используйте команду /info для анализа отдельных китайских символов.\n\n"
+                            f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
+                        return
+                    
+                    # Add inflation support for Chinese symbols
+                    inflation_ticker = self._get_inflation_ticker_by_currency(currency)
+                    comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
+                    self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
                 
                 # Store context for buttons - use clean portfolio symbols for current_symbols
                 clean_symbols = []
@@ -1890,6 +2003,11 @@ class ShansAi:
                 # Create caption
                 caption = f"Сравнение {', '.join(symbols)}\n\n"
                 caption += f"Валюта: {currency} ({currency_info})\n"
+                
+                # Add inflation information for Chinese symbols
+                if currency in ['CNY', 'HKD']:
+                    inflation_ticker = self._get_inflation_ticker_by_currency(currency)
+                    caption += f"Инфляция: {inflation_ticker}\n"
                 
                 # Chart analysis is only available via buttons
                 
@@ -2626,27 +2744,8 @@ class ShansAi:
                 self.logger.info(f"Currency determined from asset {first_symbol}: {currency}")
             except Exception as e:
                 self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
-                # Fallback to namespace-based detection
-                try:
-                    if '.' in first_symbol:
-                        namespace = first_symbol.split('.')[1]
-                        if namespace == 'MOEX':
-                            currency = "RUB"
-                        elif namespace == 'US':
-                            currency = "USD"
-                        elif namespace == 'LSE':
-                            currency = "GBP"
-                        elif namespace == 'FX':
-                            currency = "USD"
-                        else:
-                            currency = "USD"
-                    else:
-                        currency = "USD"
-                    currency_info = f"автоматически определена по namespace ({first_symbol})"
-                except Exception as fallback_error:
-                    self.logger.warning(f"Could not determine currency from namespace {first_symbol}: {fallback_error}")
-                    currency = "USD"
-                    currency_info = "автоматически определена (USD по умолчанию)"
+                # Fallback to namespace-based detection using our function
+                currency, currency_info = self._get_currency_by_symbol(first_symbol)
             
             # Create portfolio using okama
             try:
