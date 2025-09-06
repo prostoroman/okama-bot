@@ -907,21 +907,21 @@ class ShansAi:
             response += f"• Всего символов: {total_count:,}\n"
             response += f"• Показываю: {len(symbols_data)}\n\n"
             
-            # Show first 20 symbols with detailed info
+            # Show first 20 symbols with detailed info in table format
             display_count = min(20, len(symbols_data))
             response += f"📋 Первые {display_count} символов:\n\n"
             
-            for i, symbol_info in enumerate(symbols_data[:display_count], 1):
+            # Создаем таблицу символов в формате Markdown
+            for symbol_info in symbols_data[:display_count]:
                 symbol = symbol_info['symbol']
                 name = symbol_info['name']
                 currency = symbol_info['currency']
-                list_date = symbol_info['list_date']
                 
-                # Show full company names (no truncation for Chinese stocks)
+                # Truncate long names for table readability
+                if len(name) > 30:
+                    name = name[:27] + "..."
                 
-                response += f"{i:2d}. `{symbol}`\n"
-                response += f"    📝 {name}\n"
-                response += f"    💰 {currency} | 📅 {list_date}\n\n"
+                response += f"| `{symbol}` | {name} | {currency} |\n"
             
             if len(symbols_data) > display_count:
                 response += f"... и еще {len(symbols_data) - display_count} символов\n\n"
@@ -1002,15 +1002,16 @@ class ShansAi:
                 
                 top_symbols.append([symbol, name, country, currency])
             
-            # Создаем простую таблицу символов
+            # Создаем таблицу символов в формате Markdown
             if top_symbols:
+                # Добавляем строки таблицы
                 for row in top_symbols:
                     symbol = row[0]
                     name = row[1]
                     country = row[2]
                     currency = row[3]
                     
-                    response += f"• {symbol} - {name} | {country} | {currency}\n"
+                    response += f"| `{symbol}` | {name} | {country} | {currency} |\n"
                 
                 # Добавляем кнопку для выгрузки Excel
                 keyboard = [[
@@ -3198,7 +3199,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа графиков недоступен. Проверьте настройки Gemini API.")
                 return
 
-            await self._send_callback_message(update, context, "🤖 Анализирую график с помощью Gemini AI...")
+            await self._send_callback_message(update, context, "Анализ графика с помощью AI...")
 
             # Recreate the comparison chart for analysis
             try:
@@ -3251,7 +3252,7 @@ class ShansAi:
                 
                 if chart_analysis and chart_analysis.get('success'):
                     # Format detailed analysis
-                    analysis_text = "🤖 **Детальный анализ графика Gemini AI**\n\n"
+                    analysis_text = "🤖 **Анализ графика**\n\n"
                     
                     # Add full analysis from Gemini
                     full_analysis = chart_analysis.get('full_analysis', '')
