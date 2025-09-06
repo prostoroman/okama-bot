@@ -61,5 +61,5 @@ charts/
 *.svg
 
 # Test files
-test_*.py
-*_test.py
+# Allow test files in tests directory
+!tests/test_*.py
