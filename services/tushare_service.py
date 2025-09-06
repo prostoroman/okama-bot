@@ -102,7 +102,8 @@ class TushareService:
             # Find matching stock
             stock_info = df[df['symbol'] == symbol_code]
             if stock_info.empty:
-                return {"error": "Stock not found"}
+                # Try to find as index if not found as stock
+                return self._get_index_info(symbol_code, exchange)
             
             info = stock_info.iloc[0].to_dict()
             
@@ -134,6 +135,8 @@ class TushareService:
             
         except Exception as e:
             self.logger.error(f"Error getting mainland stock info: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return {"error": str(e)}
     
     def _get_hk_stock_info(self, symbol_code: str) -> Dict[str, Any]:
@@ -193,6 +196,59 @@ class TushareService:
             
         except Exception as e:
             self.logger.error(f"Error getting HK stock info: {e}")
+            return {"error": str(e)}
+    
+    def _get_index_info(self, symbol_code: str, exchange: str) -> Dict[str, Any]:
+        """Get index information for Chinese exchanges"""
+        try:
+            # Get index basic info
+            df = self.pro.index_basic(
+                market='',
+                fields='ts_code,name,market,publisher,category,base_date,base_point'
+            )
+            
+            # Find matching index by ts_code
+            # Map exchange to suffix
+            exchange_suffix = self.exchange_mappings.get(exchange, f'.{exchange}')
+            ts_code = f"{symbol_code}{exchange_suffix}"
+            index_info = df[df['ts_code'] == ts_code]
+            if index_info.empty:
+                return {"error": "Index not found"}
+            
+            info = index_info.iloc[0].to_dict()
+            
+            # Add exchange and other fields for consistency
+            info.update({
+                'exchange': exchange,
+                'area': 'China',
+                'industry': 'Index',
+                'list_date': info.get('base_date', 'N/A')
+            })
+            
+            # Get additional metrics
+            try:
+                daily_data = self.pro.index_daily(
+                    ts_code=info['ts_code'],
+                    start_date=(datetime.now() - timedelta(days=30)).strftime('%Y%m%d'),
+                    end_date=datetime.now().strftime('%Y%m%d')
+                )
+                
+                if not daily_data.empty:
+                    latest = daily_data.iloc[0]
+                    info.update({
+                        'current_price': latest['close'],
+                        'change': latest['change'],
+                        'pct_chg': latest['pct_chg'],
+                        'volume': latest['vol'],
+                        'amount': latest['amount']
+                    })
+            except Exception as e:
+                self.logger.warning(f"Could not get index price data: {e}")
+            
+            return info
+            
+        except Exception as e:
+            self.logger.error(f"Error getting index info: {e}")
             return {"error": str(e)}
     
     def get_daily_data(self, symbol: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:

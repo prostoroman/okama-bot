@@ -1148,9 +1148,9 @@ class ShansAi:
                 # No truncation for Chinese exchanges - show full names
                 table_data.append([f"`{symbol}`", escaped_name])
             
-            # Create table using tabulate
-            table = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
-            response += table + "\n"
+            # Create table using tabulate with simple format to avoid Markdown conflicts
+            table = tabulate.tabulate(table_data, headers=headers, tablefmt="simple")
+            response += f"```\n{table}\n```\n"
             
             if len(symbols_data) > display_count:
                 response += f"... и еще {len(symbols_data) - display_count} символов\n\n"
@@ -1232,10 +1232,10 @@ class ShansAi:
                 # No truncation - show full names
                 table_data.append([f"`{symbol}`", escaped_name])
             
-            # Create table using tabulate
+            # Create table using tabulate with simple format to avoid Markdown conflicts
             if table_data:
-                table = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
-                response += table + "\n"
+                table = tabulate.tabulate(table_data, headers=headers, tablefmt="simple")
+                response += f"```\n{table}\n```\n"
             
             # Добавляем кнопку для выгрузки Excel
             keyboard = [[
@@ -2059,8 +2059,7 @@ class ShansAi:
                         else:
                             # Mixed comparison - show message
                             await self._send_message_safe(update, 
-                                f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
-                                f"Смешанное сравнение (китайские + обычные символы) пока не поддерживается.\n"
+                                f"⚠️ Смешанное сравнение (китайские + прочие символы) пока не поддерживается.\n"
                                 f"Для сравнения только китайских символов используйте: /compare {' '.join(chinese_symbols)}\n\n"
                                 f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
                             return
