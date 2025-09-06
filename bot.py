@@ -594,14 +594,14 @@ class ShansAi:
             str: тикер инфляции (например, 'CNY.INFL' для CNY)
         """
         inflation_mapping = {
-            'USD': 'USD.INFL',
+            'USD': 'US.INFL',
             'RUB': 'RUS.INFL', 
             'EUR': 'EU.INFL',
             'GBP': 'GB.INFL',
             'CNY': 'CNY.INFL',  # Китайская инфляция
-            'HKD': 'USD.INFL'   # Гонконгская инфляция (приводим к USD)
+            'HKD': 'US.INFL'    # Гонконгская инфляция (приводим к USD)
         }
-        return inflation_mapping.get(currency, 'USD.INFL')
+        return inflation_mapping.get(currency, 'US.INFL')
     
     def _is_chinese_symbol(self, symbol: str) -> bool:
         """
@@ -1123,15 +1123,14 @@ class ShansAi:
             
             # Prepare data for tabulate
             table_data = []
-            headers = ["Символ", "Название", "Валюта"]
+            headers = ["Символ", "Название"]
             
             for symbol_info in symbols_data[:display_count]:
                 symbol = symbol_info['symbol']
                 name = symbol_info['name']
-                currency = symbol_info['currency']
                 
                 # No truncation for Chinese exchanges - show full names
-                table_data.append([f"`{symbol}`", name, currency])
+                table_data.append([f"`{symbol}`", name])
             
             # Create table using tabulate
             table = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
@@ -1201,19 +1200,16 @@ class ShansAi:
             display_count = min(30, total_symbols)
             response += f"📋 Первые {display_count}:\n\n"
             
-            # Get top symbols (first 30 or all if less than 30)
-            top_symbols = []
+            # Prepare data for tabulate
+            table_data = []
+            headers = ["Символ", "Название"]
+            
             for _, row in symbols_df.head(display_count).iterrows():
                 symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                 name = row['name'] if pd.notna(row['name']) else 'N/A'
-                country = row['country'] if pd.notna(row['country']) else 'N/A'
-                currency = row['currency'] if pd.notna(row['currency']) else 'N/A'
                 
-                # Truncate long names for readability
-                if len(name) > 40:
-                    name = name[:37] + "..."
-                
-                top_symbols.append([symbol, name, country, currency])
+                # No truncation - show full names
+                table_data.append([f"`{symbol}`", name])
             
             # Create table using tabulate
             if table_data:
@@ -1605,9 +1601,9 @@ class ShansAi:
                     InlineKeyboardButton("🏠 RE", callback_data="namespace_RE")
                 ])
                 
-                # Портфели и депозиты
+                # Инфляция и депозиты
                 keyboard.append([
-                    InlineKeyboardButton("💼 PF", callback_data="namespace_PF"),
+                    InlineKeyboardButton("📈 INFL", callback_data="namespace_INFL"),
                     InlineKeyboardButton("💰 PIF", callback_data="namespace_PIF"),
                     InlineKeyboardButton("🏦 RATE", callback_data="namespace_RATE")
                 ])
