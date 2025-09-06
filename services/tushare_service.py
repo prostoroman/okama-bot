@@ -357,41 +357,97 @@ class TushareService:
             symbols_data = []
             
             if exchange == 'HKEX':
-                df = self.pro.hk_basic(fields='symbol,name,list_date')
-                for _, row in df.iterrows():
-                    symbols_data.append({
-                        'symbol': f"{row['symbol']}.HK",
-                        'name': row.get('name', 'N/A'),
-                        'currency': 'HKD',
-                        'list_date': row.get('list_date', 'N/A')
-                    })
+                # Try to get English names for HKEX
+                try:
+                    df = self.pro.hk_basic(fields='symbol,name,enname,list_date')
+                    for _, row in df.iterrows():
+                        # Use English name if available, otherwise fall back to Chinese name
+                        name = row.get('enname') or row.get('name', 'N/A')
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.HK",
+                            'name': name,
+                            'currency': 'HKD',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+                except Exception:
+                    # Fallback to basic fields if enname is not available
+                    df = self.pro.hk_basic(fields='symbol,name,list_date')
+                    for _, row in df.iterrows():
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.HK",
+                            'name': row.get('name', 'N/A'),
+                            'currency': 'HKD',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
             elif exchange == 'SSE':
-                df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol,name,list_date')
-                for _, row in df.iterrows():
-                    symbols_data.append({
-                        'symbol': f"{row['symbol']}.SH",
-                        'name': row.get('name', 'N/A'),
-                        'currency': 'CNY',
-                        'list_date': row.get('list_date', 'N/A')
-                    })
+                # Try to get English names for SSE
+                try:
+                    df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol,name,enname,list_date')
+                    for _, row in df.iterrows():
+                        # Use English name if available, otherwise fall back to Chinese name
+                        name = row.get('enname') or row.get('name', 'N/A')
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SH",
+                            'name': name,
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+                except Exception:
+                    # Fallback to basic fields if enname is not available
+                    df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol,name,list_date')
+                    for _, row in df.iterrows():
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SH",
+                            'name': row.get('name', 'N/A'),
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
             elif exchange == 'SZSE':
-                df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol,name,list_date')
-                for _, row in df.iterrows():
-                    symbols_data.append({
-                        'symbol': f"{row['symbol']}.SZ",
-                        'name': row.get('name', 'N/A'),
-                        'currency': 'CNY',
-                        'list_date': row.get('list_date', 'N/A')
-                    })
+                # Try to get English names for SZSE
+                try:
+                    df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol,name,enname,list_date')
+                    for _, row in df.iterrows():
+                        # Use English name if available, otherwise fall back to Chinese name
+                        name = row.get('enname') or row.get('name', 'N/A')
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SZ",
+                            'name': name,
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+                except Exception:
+                    # Fallback to basic fields if enname is not available
+                    df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol,name,list_date')
+                    for _, row in df.iterrows():
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SZ",
+                            'name': row.get('name', 'N/A'),
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
             elif exchange == 'BSE':
-                df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol,name,list_date')
-                for _, row in df.iterrows():
-                    symbols_data.append({
-                        'symbol': f"{row['symbol']}.BJ",
-                        'name': row.get('name', 'N/A'),
-                        'currency': 'CNY',
-                        'list_date': row.get('list_date', 'N/A')
-                    })
+                # Try to get English names for BSE
+                try:
+                    df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol,name,enname,list_date')
+                    for _, row in df.iterrows():
+                        # Use English name if available, otherwise fall back to Chinese name
+                        name = row.get('enname') or row.get('name', 'N/A')
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.BJ",
+                            'name': name,
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+                except Exception:
+                    # Fallback to basic fields if enname is not available
+                    df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol,name,list_date')
+                    for _, row in df.iterrows():
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.BJ",
+                            'name': row.get('name', 'N/A'),
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
             
             return symbols_data[:100]  # Limit to first 100 symbols
             
