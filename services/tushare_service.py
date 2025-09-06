@@ -239,20 +239,12 @@ class TushareService:
             if not start_date:
                 start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y%m%d')
             
-            if exchange == 'HKEX':
-                # Hong Kong monthly data
-                df = self.pro.hk_monthly(
-                    ts_code=symbol,  # Use full symbol like 00001.HK
-                    start_date=start_date,
-                    end_date=end_date
-                )
-            else:
-                # Mainland China monthly data - use the original symbol format
-                df = self.pro.monthly(
-                    ts_code=symbol,  # Use full symbol like 600026.SH
-                    start_date=start_date,
-                    end_date=end_date
-                )
+            # Use regular monthly method for all exchanges (including HKEX)
+            df = self.pro.monthly(
+                ts_code=symbol,  # Use full symbol like 600026.SH or 00001.HK
+                start_date=start_date,
+                end_date=end_date
+            )
             
             if df.empty:
                 return pd.DataFrame()

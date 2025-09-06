@@ -4210,11 +4210,14 @@ class ShansAi:
                 # Prepare data for chart - set trade_date as index
                 chart_data = daily_data.set_index('trade_date')['close']
                 
+                # Determine currency based on exchange
+                currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+                
                 # Create chart using ChartStyles
                 fig, ax = chart_styles.create_price_chart(
                     data=chart_data,
                     symbol=symbol,
-                    currency='CNY',  # Default currency for Chinese stocks
+                    currency=currency,
                     period='ежедневный'
                 )
                 
@@ -4259,11 +4262,14 @@ class ShansAi:
                 # Prepare data for chart - set trade_date as index
                 chart_data = monthly_data.set_index('trade_date')['close']
                 
+                # Determine currency based on exchange
+                currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+                
                 # Create chart using ChartStyles
                 fig, ax = chart_styles.create_price_chart(
                     data=chart_data,
                     symbol=symbol,
-                    currency='CNY',  # Default currency for Chinese stocks
+                    currency=currency,
                     period='месячный'
                 )
                 
