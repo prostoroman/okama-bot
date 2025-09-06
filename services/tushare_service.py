@@ -373,12 +373,14 @@ class TushareService:
             symbols_data = []
             
             if exchange == 'HKEX':
-                # Get HKEX symbols using ts_code field
-                df = self.pro.hk_basic(fields='ts_code,name,list_date')
+                # Get HKEX symbols with English names
+                df = self.pro.hk_basic(fields='ts_code,name,enname,list_date')
                 for _, row in df.iterrows():
+                    # Use English name if available, otherwise fall back to Chinese name
+                    name = row.get('enname') or row.get('name', 'N/A')
                     symbols_data.append({
                         'symbol': row['ts_code'],  # Already includes .HK suffix
-                        'name': row.get('name', 'N/A'),
+                        'name': name,
                         'currency': 'HKD',
                         'list_date': row.get('list_date', 'N/A')
                     })
@@ -492,12 +494,14 @@ class TushareService:
             symbols_data = []
             
             if exchange == 'HKEX':
-                # Get HKEX symbols using ts_code field
-                df = self.pro.hk_basic(fields='ts_code,name,list_date')
+                # Get HKEX symbols with English names
+                df = self.pro.hk_basic(fields='ts_code,name,enname,list_date')
                 for _, row in df.iterrows():
+                    # Use English name if available, otherwise fall back to Chinese name
+                    name = row.get('enname') or row.get('name', 'N/A')
                     symbols_data.append({
                         'symbol': row['ts_code'],  # Already includes .HK suffix
-                        'name': row.get('name', 'N/A'),
+                        'name': name,
                         'currency': 'HKD',
                         'list_date': row.get('list_date', 'N/A')
                     })
