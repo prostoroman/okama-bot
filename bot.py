@@ -658,8 +658,8 @@ class ShansAi:
                 if self._is_chinese_symbol(symbol):
                     try:
                         symbol_info = self.tushare_service.get_symbol_info(symbol)
-                        # Получаем максимальный период данных
-                        historical_data = self.tushare_service.get_daily_data(symbol, start_date='19900101')
+                        # Получаем месячные данные для лучшего отображения
+                        historical_data = self.tushare_service.get_monthly_data(symbol, start_date='19900101')
                         
                         if not historical_data.empty:
                             # Устанавливаем дату как индекс
@@ -669,7 +669,7 @@ class ShansAi:
                                 'data': historical_data
                             }
                             all_dates.update(historical_data.index)
-                            self.logger.info(f"Got data for Chinese symbol {symbol}: {len(historical_data)} records")
+                            self.logger.info(f"Got monthly data for Chinese symbol {symbol}: {len(historical_data)} records")
                     except Exception as e:
                         self.logger.warning(f"Could not get data for Chinese symbol {symbol}: {e}")
             
@@ -684,8 +684,9 @@ class ShansAi:
                 try:
                     import okama as ok
                     inflation_asset = ok.Asset(inflation_ticker)
-                    inflation_data = inflation_asset.wealth_index
-                    self.logger.info(f"Got inflation data for {inflation_ticker}: {len(inflation_data)} records")
+                    # Получаем месячные данные инфляции для соответствия основным данным
+                    inflation_data = inflation_asset.wealth_index.resample('M').last()
+                    self.logger.info(f"Got monthly inflation data for {inflation_ticker}: {len(inflation_data)} records")
                 except Exception as e:
                     self.logger.warning(f"Could not get inflation data for {inflation_ticker}: {e}")
             
@@ -709,10 +710,10 @@ class ShansAi:
                     normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 1000
                     
                     # Получаем английское название символа для легенды
-                    symbol_name = symbol_info.get('name', symbol)
-                    # Если есть английское название, используем его
-                    if 'enname' in symbol_info and symbol_info['enname']:
-                        symbol_name = symbol_info['enname']
+                    symbol_name = symbol_info.get('enname', symbol_info.get('name', symbol))
+                    # Приоритет английскому названию
+                    if not symbol_name or symbol_name == symbol:
+                        symbol_name = symbol_info.get('name', symbol)
                     
                     symbols_list.append(symbol)
                     
@@ -786,9 +787,9 @@ class ShansAi:
             caption = f"📈 Сравнение китайских символов: {', '.join(symbols)}\n\n"
             caption += f"💱 Валюта: {currency} ({currency_info})\n"
             caption += f"📊 Инфляция: {inflation_ticker}\n"
-            caption += f"📈 Данные: Tushare API + Okama (инфляция)\n"
+            caption += f"📈 Данные: Tushare API (месячные) + Okama (инфляция)\n"
             caption += f"📏 Нормализация: база = 1000 (как в okama)\n"
-            caption += f"📅 Период: максимальный доступный"
+            caption += f"📅 Период: максимальный доступный (месячные данные)"
             
             # Отправляем график
             await context.bot.send_photo(
