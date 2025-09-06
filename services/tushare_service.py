@@ -84,20 +84,8 @@ class TushareService:
     def _get_mainland_stock_info(self, symbol_code: str, exchange: str) -> Dict[str, Any]:
         """Get stock information for mainland China exchanges"""
         try:
-            # Get stock basic info with English names
-            try:
-                df = self.pro.stock_basic(
-                    exchange='',
-                    list_status='L',
-                    fields='ts_code,symbol,name,enname,area,industry,list_date'
-                )
-            except Exception:
-                # Fallback to basic fields if enname is not available
-                df = self.pro.stock_basic(
-                    exchange='',
-                    list_status='L',
-                    fields='ts_code,symbol,name,area,industry,list_date'
-                )
+            # Get stock basic info
+            df = self.pro.stock_basic(exchange='', list_status='L')
             
             # Find matching stock
             stock_info = df[df['symbol'] == symbol_code]
@@ -202,10 +190,7 @@ class TushareService:
         """Get index information for Chinese exchanges"""
         try:
             # Get index basic info
-            df = self.pro.index_basic(
-                market='',
-                fields='ts_code,name,market,publisher,category,base_date,base_point'
-            )
+            df = self.pro.index_basic()
             
             # Find matching index by ts_code
             # Map exchange to suffix
@@ -213,7 +198,13 @@ class TushareService:
             ts_code = f"{symbol_code}{exchange_suffix}"
             index_info = df[df['ts_code'] == ts_code]
             if index_info.empty:
-                return {"error": "Index not found"}
+                # Provide more helpful error message with available indices
+                available_indices = df[df['ts_code'].str.contains(exchange_suffix, na=False)]
+                if len(available_indices) > 0:
+                    available_list = available_indices['ts_code'].head(5).tolist()
+                    return {"error": f"Index {symbol_code}{exchange_suffix} not found. Available {exchange} indices: {', '.join(available_list)}"}
+                else:
+                    return {"error": f"Index {symbol_code}{exchange_suffix} not found. No {exchange} indices available in database."}
             
             info = index_info.iloc[0].to_dict()
             
