@@ -1338,6 +1338,17 @@ class ShansAi:
                     
                     namespace_data.append([namespace, description, category])
                 
+                # Add Chinese exchanges manually (not in ok.namespaces)
+                chinese_exchanges = {
+                    'SSE': 'Shanghai Stock Exchange (上海证券交易所)',
+                    'SZSE': 'Shenzhen Stock Exchange (深圳证券交易所)', 
+                    'BSE': 'Beijing Stock Exchange (北京证券交易所)',
+                    'HKEX': 'Hong Kong Stock Exchange (香港交易所)'
+                }
+                
+                for exchange_code, exchange_name in chinese_exchanges.items():
+                    namespace_data.append([exchange_code, exchange_name, 'Китайские биржи'])
+                
                 # Sort by category and then by namespace
                 namespace_data.sort(key=lambda x: (x[2], x[0]))
                 
@@ -1872,38 +1883,11 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Analyze chart with available services
-                chart_analysis = None
-                
-                # Try Gemini API first
-                if self.gemini_service and self.gemini_service.is_available():
-                    try:
-                        self.logger.info("Analyzing chart with Gemini API")
-                        chart_analysis = self.gemini_service.analyze_chart(img_bytes)
-                        if chart_analysis and chart_analysis.get('success'):
-                            self.logger.info("Chart analysis completed successfully with Gemini")
-                        else:
-                            self.logger.warning("Gemini analysis failed, trying fallback")
-                            chart_analysis = None
-                    except Exception as e:
-                        self.logger.error(f"Error analyzing chart with Gemini: {e}")
-                        chart_analysis = None
-                
-                # Fallback to simple analysis if Gemini fails
-                if not chart_analysis and self.simple_analysis_service:
-                    try:
-                        self.logger.info("Using simple chart analysis as fallback")
-                        chart_analysis = self.simple_analysis_service.analyze_chart(img_bytes, symbols)
-                        if chart_analysis and chart_analysis.get('success'):
-                            self.logger.info("Simple chart analysis completed successfully")
-                    except Exception as e:
-                        self.logger.error(f"Error with simple chart analysis: {e}")
-                        chart_analysis = None
+                # Chart analysis is now only available via buttons
                 
                 # Create caption
-                caption = f"📊 Сравнение активов\n\n"
-                caption += f"🔍 Сравниваемые активы: {', '.join(symbols)}\n"
-                caption += f"💰 Валюта: {currency} ({currency_info})\n"
+                caption = f"Сравнение {', '.join(symbols)}\n\n"
+                caption += f"Валюта: {currency} ({currency_info})\n"
                 
                 # Add chart analysis if available
                 if chart_analysis and chart_analysis.get('success'):
@@ -1956,28 +1940,7 @@ class ShansAi:
                     reply_markup=reply_markup
                 )
                 
-                # Send analysis as separate message
-                if chart_analysis:
-                    if chart_analysis.get('success'):
-                        analysis_text = chart_analysis.get('analysis', '')
-                        service_type = chart_analysis.get('service_type', 'unknown')
-                        
-                        if analysis_text:
-                            if service_type == 'simple':
-                                analysis_message = f"📊 **Простой анализ графика**\n\n{analysis_text}"
-                            else:
-                                analysis_message = f"🤖 **Анализ графика Gemini AI**\n\n{analysis_text}"
-                            await self._send_message_safe(update, analysis_message)
-                        else:
-                            await self._send_message_safe(update, "🤖 Анализ выполнен, но результат пуст")
-                    else:
-                        error_msg = chart_analysis.get('error', 'Неизвестная ошибка')
-                        error_message = f"❌ **Ошибка анализа**\n\n{error_msg}"
-                        await self._send_message_safe(update, error_message)
-                else:
-                    await self._send_message_safe(update, "⚠️ Анализ графиков недоступен - проверьте настройки AI сервисов")
-                
-                # Note: AI analysis is now handled by the button callbacks using context data
+                # AI analysis is now only available via buttons
                 
             except Exception as e:
                 self.logger.error(f"Error creating comparison: {e}")
