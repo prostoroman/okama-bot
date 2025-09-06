@@ -698,7 +698,7 @@ class ShansAi:
             colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
             
             # Добавляем данные китайских символов
-            symbol_names = []
+            symbols_list = []
             
             for i, (symbol, data_dict) in enumerate(chinese_data.items()):
                 historical_data = data_dict['data']
@@ -708,13 +708,13 @@ class ShansAi:
                     # Нормализуем данные к базовому значению (1000) как в okama
                     normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 1000
                     
-                    # Получаем английское название символа
+                    # Получаем английское название символа для легенды
                     symbol_name = symbol_info.get('name', symbol)
                     # Если есть английское название, используем его
                     if 'enname' in symbol_info and symbol_info['enname']:
                         symbol_name = symbol_info['enname']
                     
-                    symbol_names.append(symbol_name)
+                    symbols_list.append(symbol)
                     
                     if len(symbol_name) > 30:
                         symbol_name = symbol_name[:27] + "..."
@@ -736,16 +736,14 @@ class ShansAi:
                        alpha=0.8,
                        linestyle='--')
             
-            # Формируем заголовок: Сравнение название тикеров, валюта (без биржи)
+            # Формируем заголовок: только тикеры
             title_parts = []
             title_parts.append("Comparison")
             
-            # Добавляем названия тикеров
-            if symbol_names:
-                names_str = ", ".join(symbol_names[:3])  # Ограничиваем до 3 названий
-                if len(symbol_names) > 3:
-                    names_str += f" and {len(symbol_names) - 3} more"
-                title_parts.append(names_str)
+            # Добавляем только тикеры
+            if symbols_list:
+                symbols_str = ", ".join(symbols_list)
+                title_parts.append(symbols_str)
             
             # Добавляем валюту
             title_parts.append(f"Currency: {currency}")
