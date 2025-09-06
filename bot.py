@@ -738,7 +738,11 @@ class ShansAi:
             caption += f"Нормализация: база = 100"
             
             # Отправляем график
-            await self._send_photo_safe(update, img_bytes, caption)
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_bytes,
+                caption=caption
+            )
             
             self.logger.info(f"Successfully created hybrid comparison for {len(symbols)} Chinese symbols")
             
@@ -1512,9 +1516,6 @@ class ShansAi:
                 # Show available namespaces
                 namespaces = ok.namespaces
                 
-                response = "📚 Доступные пространства имен (namespaces):\n\n"
-                response += f"• Всего: {len(namespaces)}\n\n"
-                
                 # Prepare data for tabulate
                 headers = ["Код", "Описание", "Категория"]
                 namespace_data = []
@@ -1545,10 +1546,10 @@ class ShansAi:
                 
                 # Add Chinese exchanges manually (not in ok.namespaces)
                 chinese_exchanges = {
-                    'SSE': 'Shanghai Stock Exchange (上海证券交易所)',
-                    'SZSE': 'Shenzhen Stock Exchange (深圳证券交易所)', 
-                    'BSE': 'Beijing Stock Exchange (北京证券交易所)',
-                    'HKEX': 'Hong Kong Stock Exchange (香港交易所)'
+                    'SSE': 'Shanghai Stock Exchange',
+                    'SZSE': 'Shenzhen Stock Exchange', 
+                    'BSE': 'Beijing Stock Exchange',
+                    'HKEX': 'Hong Kong Stock Exchange'
                 }
                 
                 for exchange_code, exchange_name in chinese_exchanges.items():
@@ -1556,6 +1557,7 @@ class ShansAi:
                 
                 # Sort by category and then by namespace
                 namespace_data.sort(key=lambda x: (x[2], x[0]))
+                response = "📚 Доступные пространства имен (namespaces): {len(namespaces)}\n\n"
                 
                 # Create table using tabulate or fallback to simple format
                 if TABULATE_AVAILABLE:
