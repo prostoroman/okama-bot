@@ -10,9 +10,12 @@ import os
 
 try:
     from google.cloud import vision
-    import requests
 except ImportError:
     vision = None
+
+try:
+    import requests
+except ImportError:
     requests = None
 
 logger = logging.getLogger(__name__)
@@ -32,8 +35,8 @@ class GoogleVisionService:
         self.api_key = api_key or os.getenv('GOOGLE_VISION_API_KEY')
         self.api_url = "https://vision.googleapis.com/v1/images:annotate"
         
-        if vision is None or requests is None:
-            logger.warning("Required libraries not installed. Chart analysis will be disabled.")
+        if requests is None:
+            logger.warning("Requests library not installed. Chart analysis will be disabled.")
             return
             
         try:
@@ -53,40 +56,17 @@ class GoogleVisionService:
             logger.warning("Invalid Google Vision API key format")
             return
         
-        # Test API key with a simple request
-        try:
-            # Create a simple test request to validate the API key
-            test_payload = {
-                "requests": [
-                    {
-                        "image": {
-                            "content": base64.b64encode(b"test").decode('utf-8')
-                        },
-                        "features": [
-                            {
-                                "type": "LABEL_DETECTION",
-                                "maxResults": 1
-                            }
-                        ]
-                    }
-                ]
-            }
-            
-            response = requests.post(
-                f"{self.api_url}?key={self.api_key}",
-                json=test_payload,
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                self.client = True  # Mark as initialized
-                logger.info("Google Vision API key validated successfully")
-            else:
-                logger.error(f"Google Vision API key validation failed: {response.status_code}")
-                self.client = None
-                
-        except Exception as e:
-            logger.error(f"Failed to validate Google Vision API key: {e}")
+        # Check if requests library is available
+        if requests is None:
+            logger.warning("Requests library not available")
+            return
+        
+        # Simple validation - just check format
+        if len(self.api_key) >= 20 and self.api_key.startswith('AIza'):
+            self.client = True  # Mark as initialized
+            logger.info("Google Vision API key format validated successfully")
+        else:
+            logger.warning("Google Vision API key format appears invalid")
             self.client = None
     
     def is_available(self) -> bool:
@@ -277,6 +257,6 @@ class GoogleVisionService:
             'available': self.is_available(),
             'api_key_set': bool(self.api_key),
             'api_key_length': len(self.api_key) if self.api_key else 0,
-            'library_installed': vision is not None and requests is not None,
+            'library_installed': requests is not None,
             'api_url': self.api_url
         }
