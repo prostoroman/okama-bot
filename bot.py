@@ -771,6 +771,17 @@ class ShansAi:
             for chunk in self._split_text(text):
                 await update.message.reply_text(chunk)
     
+    def _escape_markdown(self, text: str) -> str:
+        """Escape special Markdown characters"""
+        if not text:
+            return text
+        
+        # Escape special Markdown characters
+        escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for char in escape_chars:
+            text = text.replace(char, f'\\{char}')
+        return text
+
     async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown', reply_markup=None):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
         try:
@@ -1130,8 +1141,11 @@ class ShansAi:
                 symbol = symbol_info['symbol']
                 name = symbol_info['name']
                 
+                # Escape Markdown characters in company names
+                escaped_name = self._escape_markdown(name)
+                
                 # No truncation for Chinese exchanges - show full names
-                table_data.append([f"`{symbol}`", name])
+                table_data.append([f"`{symbol}`", escaped_name])
             
             # Create table using tabulate
             table = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
@@ -1211,8 +1225,11 @@ class ShansAi:
                 symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                 name = row['name'] if pd.notna(row['name']) else 'N/A'
                 
+                # Escape Markdown characters in company names
+                escaped_name = self._escape_markdown(name)
+                
                 # No truncation - show full names
-                table_data.append([f"`{symbol}`", name])
+                table_data.append([f"`{symbol}`", escaped_name])
             
             # Create table using tabulate
             if table_data:
