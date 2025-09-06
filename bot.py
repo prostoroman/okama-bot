@@ -1904,8 +1904,6 @@ class ShansAi:
                 caption = f"📊 Сравнение активов\n\n"
                 caption += f"🔍 Сравниваемые активы: {', '.join(symbols)}\n"
                 caption += f"💰 Валюта: {currency} ({currency_info})\n"
-                caption += f"📅 Период: полный доступный период данных\n\n"
-                caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
                 
                 # Add chart analysis if available
                 if chart_analysis and chart_analysis.get('success'):
@@ -1944,7 +1942,8 @@ class ShansAi:
                 # Add chart analysis button if Gemini is available
                 if self.gemini_service and self.gemini_service.is_available():
                     keyboard.append([
-                        InlineKeyboardButton("🤖 Детальный анализ графика", callback_data="chart_analysis_compare")
+                        InlineKeyboardButton("AI-анализ графика", callback_data="chart_analysis_compare"),
+                        InlineKeyboardButton("AI-анализ данных", callback_data="data_analysis_compare")
                     ])
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -3059,6 +3058,9 @@ class ShansAi:
             elif callback_data == 'chart_analysis_compare':
                 self.logger.info("Chart analysis button clicked")
                 await self._handle_chart_analysis_compare_button(update, context)
+            elif callback_data == 'data_analysis_compare':
+                self.logger.info("Data analysis button clicked")
+                await self._handle_data_analysis_compare_button(update, context)
             elif callback_data.startswith('namespace_'):
                 namespace = callback_data.replace('namespace_', '')
                 self.logger.info(f"Namespace button clicked for: {namespace}")
@@ -3317,6 +3319,147 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling chart analysis button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}")
+
+    async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle data analysis button click for comparison charts"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            symbols = user_context.get('current_symbols', [])
+            currency = user_context.get('current_currency', 'USD')
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+
+            # Validate that we have symbols to compare
+            if not expanded_symbols:
+                await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
+                return
+
+            # Check if Gemini service is available
+            if not self.gemini_service or not self.gemini_service.is_available():
+                await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен. Проверьте настройки Gemini API.")
+                return
+
+            await self._send_callback_message(update, context, "🤖 Анализирую данные с помощью Gemini AI...")
+
+            # Prepare data for analysis
+            try:
+                data_info = await self._prepare_data_for_analysis(symbols, currency, expanded_symbols, portfolio_contexts)
+                
+                # Analyze data with Gemini
+                data_analysis = self.gemini_service.analyze_data(data_info)
+                
+                if data_analysis and data_analysis.get('success'):
+                    analysis_text = data_analysis.get('analysis', '')
+                    
+                    if analysis_text:
+                        analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                        analysis_text += f"💰 **Валюта:** {currency}\n"
+                        analysis_text += f"📅 **Период:** полный доступный период данных\n"
+                        analysis_text += f"📊 **Тип анализа:** Данные (не изображение)"
+                        
+                        await self._send_callback_message(update, context, analysis_text)
+                    else:
+                        await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст")
+                        
+                else:
+                    error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
+                    await self._send_callback_message(update, context, f"❌ Ошибка анализа данных: {error_msg}")
+                    
+            except Exception as data_error:
+                self.logger.error(f"Error preparing data for analysis: {data_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}")
+
+        except Exception as e:
+            self.logger.error(f"Error handling data analysis button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}")
+
+    async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list) -> Dict[str, Any]:
+        """Prepare financial data for Gemini analysis"""
+        try:
+            data_info = {
+                'symbols': symbols,
+                'currency': currency,
+                'period': 'полный доступный период данных',
+                'performance': {},
+                'correlations': [],
+                'additional_info': ''
+            }
+            
+            # Calculate performance metrics for each symbol
+            for i, symbol in enumerate(symbols):
+                try:
+                    if i < len(expanded_symbols):
+                        asset_data = expanded_symbols[i]
+                        
+                        # Get basic performance metrics
+                        if hasattr(asset_data, 'total_return'):
+                            data_info['performance'][symbol] = {
+                                'total_return': asset_data.total_return,
+                                'annual_return': asset_data.annual_return if hasattr(asset_data, 'annual_return') else None,
+                                'volatility': asset_data.volatility if hasattr(asset_data, 'volatility') else None,
+                                'sharpe_ratio': asset_data.sharpe_ratio if hasattr(asset_data, 'sharpe_ratio') else None,
+                                'max_drawdown': asset_data.max_drawdown if hasattr(asset_data, 'max_drawdown') else None
+                            }
+                        else:
+                            # For portfolio data, try to get metrics differently
+                            data_info['performance'][symbol] = {
+                                'total_return': getattr(asset_data, 'total_return', 0),
+                                'annual_return': getattr(asset_data, 'annual_return', 0),
+                                'volatility': getattr(asset_data, 'volatility', 0),
+                                'sharpe_ratio': getattr(asset_data, 'sharpe_ratio', 0),
+                                'max_drawdown': getattr(asset_data, 'max_drawdown', 0)
+                            }
+                            
+                except Exception as e:
+                    self.logger.warning(f"Failed to get performance metrics for {symbol}: {e}")
+                    data_info['performance'][symbol] = {
+                        'total_return': 0,
+                        'annual_return': 0,
+                        'volatility': 0,
+                        'sharpe_ratio': 0,
+                        'max_drawdown': 0
+                    }
+            
+            # Calculate correlation matrix if we have multiple assets
+            if len(expanded_symbols) > 1:
+                try:
+                    # Create a simple correlation matrix
+                    correlation_matrix = []
+                    for i in range(len(symbols)):
+                        row = []
+                        for j in range(len(symbols)):
+                            if i == j:
+                                row.append(1.0)
+                            else:
+                                # Simple correlation calculation (placeholder)
+                                row.append(0.5)  # Default correlation
+                        correlation_matrix.append(row)
+                    
+                    data_info['correlations'] = correlation_matrix
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate correlations: {e}")
+                    data_info['correlations'] = []
+            
+            # Add portfolio context information
+            if portfolio_contexts:
+                portfolio_info = []
+                for pctx in portfolio_contexts:
+                    portfolio_info.append(f"Портфель {pctx.get('symbol', 'Unknown')}: {len(pctx.get('portfolio_symbols', []))} активов")
+                data_info['additional_info'] = f"Включает портфели: {'; '.join(portfolio_info)}"
+            
+            return data_info
+            
+        except Exception as e:
+            self.logger.error(f"Error preparing data for analysis: {e}")
+            return {
+                'symbols': symbols,
+                'currency': currency,
+                'period': 'полный доступный период данных',
+                'performance': {},
+                'correlations': [],
+                'additional_info': f'Ошибка подготовки данных: {str(e)}'
+            }
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
@@ -6908,9 +7051,9 @@ class ShansAi:
             # Show progress message
             await self._send_callback_message(update, context, f"📊 Создаю Excel файл для {namespace}...")
             
-            # Get all symbols data from Tushare
-            symbols_data = self.tushare_service.get_exchange_symbols(namespace)
-            total_count = self.tushare_service.get_exchange_symbols_count(namespace)
+            # Get ALL symbols data from Tushare (no limit for Excel export)
+            symbols_data = self.tushare_service.get_exchange_symbols_full(namespace)
+            total_count = len(symbols_data)
             
             if not symbols_data:
                 await self._send_callback_message(update, context, f"❌ Символы для биржи '{namespace}' не найдены")
