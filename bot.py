@@ -1929,6 +1929,22 @@ class ShansAi:
                     reply_markup=reply_markup
                 )
                 
+                # Send Google Vision analysis as separate message
+                if chart_analysis:
+                    if chart_analysis.get('success'):
+                        analysis_text = chart_analysis.get('analysis', '')
+                        if analysis_text:
+                            analysis_message = f"🤖 **Анализ графика Google Vision API**\n\n{analysis_text}"
+                            await self._send_message_safe(update, analysis_message)
+                        else:
+                            await self._send_message_safe(update, "🤖 Google Vision API: Анализ выполнен, но результат пуст")
+                    else:
+                        error_msg = chart_analysis.get('error', 'Неизвестная ошибка')
+                        error_message = f"❌ **Ошибка Google Vision API**\n\n{error_msg}"
+                        await self._send_message_safe(update, error_message)
+                else:
+                    await self._send_message_safe(update, "⚠️ Google Vision API недоступен - анализ не выполнен")
+                
                 # Note: AI analysis is now handled by the button callbacks using context data
                 
             except Exception as e:
@@ -6872,9 +6888,9 @@ class ShansAi:
             # Show progress message
             await self._send_callback_message(update, context, f"📊 Создаю Excel файл для {namespace}...")
             
-            # Get ALL symbols data from Tushare (no limit for Excel export)
-            symbols_data = self.tushare_service.get_exchange_symbols_full(namespace)
-            total_count = len(symbols_data)
+            # Get all symbols data from Tushare
+            symbols_data = self.tushare_service.get_exchange_symbols(namespace)
+            total_count = self.tushare_service.get_exchange_symbols_count(namespace)
             
             if not symbols_data:
                 await self._send_callback_message(update, context, f"❌ Символы для биржи '{namespace}' не найдены")
