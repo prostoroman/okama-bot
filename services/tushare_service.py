@@ -139,10 +139,16 @@ class TushareService:
     def _get_hk_stock_info(self, symbol_code: str) -> Dict[str, Any]:
         """Get stock information for Hong Kong exchange"""
         try:
-            # Get HK stock basic info
-            df = self.pro.hk_basic(
-                fields='ts_code,name,list_date'
-            )
+            # Get HK stock basic info with English names
+            try:
+                df = self.pro.hk_basic(
+                    fields='ts_code,name,enname,list_date'
+                )
+            except Exception:
+                # Fallback to basic fields if enname is not available
+                df = self.pro.hk_basic(
+                    fields='ts_code,name,list_date'
+                )
             
             # Find matching stock by ts_code
             ts_code = f"{symbol_code}.HK"
@@ -151,6 +157,10 @@ class TushareService:
                 return {"error": "Stock not found"}
             
             info = stock_info.iloc[0].to_dict()
+            
+            # Use English name if available, otherwise fall back to Chinese name
+            if 'enname' in info and info['enname']:
+                info['name'] = info['enname']
             
             # Add missing fields for consistency
             info.update({
