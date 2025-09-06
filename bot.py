@@ -563,7 +563,7 @@ class ShansAi:
             for chunk in self._split_text(text):
                 await update.message.reply_text(chunk)
     
-    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None, reply_markup=None):
+    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown', reply_markup=None):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
         try:
             # Проверяем, что update и message не None
