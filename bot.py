@@ -1095,14 +1095,14 @@ class ShansAi:
                 
                 if not symbols_data:
                     error_msg = f"❌ Символы для биржи '{namespace}' не найдены"
-                if is_callback:
-                    await context.bot.send_message(
-                        chat_id=update.callback_query.message.chat_id,
-                        text=error_msg
-                    )
-                else:
-                    await self._send_message_safe(update, error_msg)
-                return
+                    if is_callback:
+                        await context.bot.send_message(
+                            chat_id=update.callback_query.message.chat_id,
+                            text=error_msg
+                        )
+                    else:
+                        await self._send_message_safe(update, error_msg)
+                    return
             except Exception as e:
                 error_msg = f"❌ Ошибка при получении символов для '{namespace}': {str(e)}"
                 if is_callback:
