@@ -361,28 +361,15 @@ class TushareService:
             symbols_data = []
             
             if exchange == 'HKEX':
-                # Try to get English names for HKEX
-                try:
-                    df = self.pro.hk_basic(fields='symbol,name,enname,list_date')
-                    for _, row in df.iterrows():
-                        # Use English name if available, otherwise fall back to Chinese name
-                        name = row.get('enname') or row.get('name', 'N/A')
-                        symbols_data.append({
-                            'symbol': f"{row['symbol']}.HK",
-                            'name': name,
-                            'currency': 'HKD',
-                            'list_date': row.get('list_date', 'N/A')
-                        })
-                except Exception:
-                    # Fallback to basic fields if enname is not available
-                    df = self.pro.hk_basic(fields='symbol,name,list_date')
-                    for _, row in df.iterrows():
-                        symbols_data.append({
-                            'symbol': f"{row['symbol']}.HK",
-                            'name': row.get('name', 'N/A'),
-                            'currency': 'HKD',
-                            'list_date': row.get('list_date', 'N/A')
-                        })
+                # Get HKEX symbols using ts_code field
+                df = self.pro.hk_basic(fields='ts_code,name,list_date')
+                for _, row in df.iterrows():
+                    symbols_data.append({
+                        'symbol': row['ts_code'],  # Already includes .HK suffix
+                        'name': row.get('name', 'N/A'),
+                        'currency': 'HKD',
+                        'list_date': row.get('list_date', 'N/A')
+                    })
             elif exchange == 'SSE':
                 # Try to get English names for SSE
                 try:
@@ -453,7 +440,7 @@ class TushareService:
                             'list_date': row.get('list_date', 'N/A')
                         })
             
-            return symbols_data[:100]  # Limit to first 100 symbols
+            return symbols_data[:100]  # Limit to first 100 symbols for display
             
         except Exception as e:
             error_msg = str(e)
@@ -486,3 +473,100 @@ class TushareService:
         except Exception as e:
             self.logger.error(f"Error getting symbol count for exchange {exchange}: {e}")
             return 0
+    
+    def get_exchange_symbols_full(self, exchange: str) -> List[Dict[str, Any]]:
+        """Get ALL symbols for a specific exchange (no limit) for Excel export"""
+        try:
+            symbols_data = []
+            
+            if exchange == 'HKEX':
+                # Get HKEX symbols using ts_code field
+                df = self.pro.hk_basic(fields='ts_code,name,list_date')
+                for _, row in df.iterrows():
+                    symbols_data.append({
+                        'symbol': row['ts_code'],  # Already includes .HK suffix
+                        'name': row.get('name', 'N/A'),
+                        'currency': 'HKD',
+                        'list_date': row.get('list_date', 'N/A')
+                    })
+            elif exchange == 'SSE':
+                # Try to get English names for SSE
+                try:
+                    df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol,name,enname,list_date')
+                    for _, row in df.iterrows():
+                        # Use English name if available, otherwise fall back to Chinese name
+                        name = row.get('enname') or row.get('name', 'N/A')
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SH",
+                            'name': name,
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+                except Exception:
+                    # Fallback to basic fields if enname is not available
+                    df = self.pro.stock_basic(exchange='SSE', list_status='L', fields='symbol,name,list_date')
+                    for _, row in df.iterrows():
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SH",
+                            'name': row.get('name', 'N/A'),
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+            elif exchange == 'SZSE':
+                # Try to get English names for SZSE
+                try:
+                    df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol,name,enname,list_date')
+                    for _, row in df.iterrows():
+                        # Use English name if available, otherwise fall back to Chinese name
+                        name = row.get('enname') or row.get('name', 'N/A')
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SZ",
+                            'name': name,
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+                except Exception:
+                    # Fallback to basic fields if enname is not available
+                    df = self.pro.stock_basic(exchange='SZSE', list_status='L', fields='symbol,name,list_date')
+                    for _, row in df.iterrows():
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.SZ",
+                            'name': row.get('name', 'N/A'),
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+            elif exchange == 'BSE':
+                # Try to get English names for BSE
+                try:
+                    df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol,name,enname,list_date')
+                    for _, row in df.iterrows():
+                        # Use English name if available, otherwise fall back to Chinese name
+                        name = row.get('enname') or row.get('name', 'N/A')
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.BJ",
+                            'name': name,
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+                except Exception:
+                    # Fallback to basic fields if enname is not available
+                    df = self.pro.stock_basic(exchange='BSE', list_status='L', fields='symbol,name,list_date')
+                    for _, row in df.iterrows():
+                        symbols_data.append({
+                            'symbol': f"{row['symbol']}.BJ",
+                            'name': row.get('name', 'N/A'),
+                            'currency': 'CNY',
+                            'list_date': row.get('list_date', 'N/A')
+                        })
+            
+            return symbols_data  # No limit for Excel export
+            
+        except Exception as e:
+            error_msg = str(e)
+            # Handle specific API permission errors
+            if "权限" in error_msg or "permission" in error_msg.lower():
+                self.logger.error(f"API permission error for exchange {exchange}: {e}")
+                raise Exception("API权限不足. Пожалуйста, проверьте ваш Tushare API ключ и убедитесь, что у вас есть доступ к данным.")
+            else:
+                self.logger.error(f"Error getting symbols for exchange {exchange}: {e}")
+                raise Exception(f"Ошибка получения символов для биржи {exchange}: {error_msg}")
