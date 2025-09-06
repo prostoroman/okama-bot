@@ -88,6 +88,7 @@ class ShansAi:
         
         # Initialize services
         self.yandexgpt_service = YandexGPTService()
+        self.chart_styles = chart_styles
         
         # Initialize Tushare service if API key is available
         try:
@@ -1762,12 +1763,23 @@ class ShansAi:
             else:
                 # Handle space-separated symbols (original behavior)
                 symbols = []
-                for symbol in context.args:
-                    # Preserve original case for portfolio symbols, uppercase for regular assets
-                    if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
-                        symbols.append(symbol)  # Keep original case for portfolios
+                for arg in context.args:
+                    # Check if argument contains multiple symbols separated by spaces
+                    if ' ' in arg and not any(portfolio_indicator in arg.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                        # Split by spaces for regular assets
+                        for symbol in arg.split():
+                            symbol = symbol.strip()
+                            if symbol:
+                                symbols.append(symbol.upper())
                     else:
-                        symbols.append(symbol.upper())  # Uppercase for regular assets
+                        # Single symbol or portfolio
+                        symbol = arg.strip()
+                        if symbol:
+                            # Preserve original case for portfolio symbols, uppercase for regular assets
+                            if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                                symbols.append(symbol)  # Keep original case for portfolios
+                            else:
+                                symbols.append(symbol.upper())  # Uppercase for regular assets
                 self.logger.info(f"Parsed space-separated symbols: {symbols}")
             
             # Clean up symbols (remove empty strings and whitespace)
