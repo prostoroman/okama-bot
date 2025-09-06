@@ -685,8 +685,8 @@ class ShansAi:
                 symbol_info = data_dict['info']
                 
                 if not historical_data.empty:
-                    # Нормализуем данные к базовому значению (100)
-                    normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 100
+                    # Нормализуем данные к базовому значению (1000) как в okama
+                    normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 1000
                     
                     # Получаем название символа
                     symbol_name = symbol_info.get('name', symbol)
@@ -703,7 +703,7 @@ class ShansAi:
             ax.set_title(f"Сравнение китайских символов\nВалюта: {currency} ({currency_info})", 
                         fontsize=16, fontweight='semibold', pad=20)
             ax.set_xlabel("Дата", fontsize=12, fontweight='medium')
-            ax.set_ylabel("Нормализованная доходность (база = 100)", fontsize=12, fontweight='medium')
+            ax.set_ylabel("Wealth Index (база = 1000)", fontsize=12, fontweight='medium')
             
             # Настройка легенды
             ax.legend(loc='upper left', fontsize=10, frameon=True, 
@@ -736,7 +736,7 @@ class ShansAi:
             caption += f"💱 Валюта: {currency} ({currency_info})\n"
             caption += f"📊 Инфляция: {inflation_ticker}\n"
             caption += f"📈 Данные: Tushare API\n"
-            caption += f"📏 Нормализация: база = 100"
+            caption += f"📏 Нормализация: база = 1000 (как в okama)"
             
             # Отправляем график
             await context.bot.send_photo(
