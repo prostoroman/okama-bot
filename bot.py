@@ -1028,6 +1028,7 @@ class ShansAi:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
                         text=response,
+                        parse_mode='Markdown',
                         reply_markup=reply_markup
                     )
                 else:
@@ -1038,7 +1039,8 @@ class ShansAi:
                     # Для callback сообщений отправляем через context.bot
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
-                        text=response
+                        text=response,
+                        parse_mode='Markdown'
                     )
                 else:
                     await self._send_message_safe(update, response)
