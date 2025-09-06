@@ -647,10 +647,13 @@ class ShansAi:
             currency, currency_info = self._get_currency_by_symbol(symbols[0])
             inflation_ticker = self._get_inflation_ticker_by_currency(currency)
             
-            # Создаем базовый AssetList с CNY валютой и инфляцией
+            # Для HKD символов используем USD валюту (так как HK.INFL не существует)
+            base_currency = 'USD' if currency == 'HKD' else currency
+            
+            # Создаем базовый AssetList с соответствующей валютой и инфляцией
             # Используем SPY.US как базовый символ для создания структуры
             base_symbols = ['SPY.US']
-            asset_list = ok.AssetList(base_symbols, ccy='CNY', inflation=True)
+            asset_list = ok.AssetList(base_symbols, ccy=base_currency, inflation=True)
             wealth_indexes = asset_list.wealth_indexes
             
             # Получаем данные китайских символов через Tushare
@@ -1190,14 +1193,13 @@ class ShansAi:
             
             # Show statistics first
             total_symbols = len(symbols_df)
-            response = f"📊 Пространство имен: {namespace}\n\n"
-            response += f"📈 Статистика:\n"
-            response += f"• Всего символов: {total_symbols}\n"
-            response += f"• Колонки данных: {', '.join(symbols_df.columns)}\n\n"
+            response = f"📊 {namespace}: {total_symbols}\n\n"
+
+
             
             # Prepare data for display - show top 30 or all if less than 30
             display_count = min(30, total_symbols)
-            response += f"📋 Показываю первые {display_count}:\n\n"
+            response += f"📋 Первые {display_count}:\n\n"
             
             # Get top symbols (first 30 or all if less than 30)
             top_symbols = []
