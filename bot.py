@@ -6872,9 +6872,9 @@ class ShansAi:
             # Show progress message
             await self._send_callback_message(update, context, f"📊 Создаю Excel файл для {namespace}...")
             
-            # Get all symbols data from Tushare
-            symbols_data = self.tushare_service.get_exchange_symbols(namespace)
-            total_count = self.tushare_service.get_exchange_symbols_count(namespace)
+            # Get ALL symbols data from Tushare (no limit for Excel export)
+            symbols_data = self.tushare_service.get_exchange_symbols_full(namespace)
+            total_count = len(symbols_data)
             
             if not symbols_data:
                 await self._send_callback_message(update, context, f"❌ Символы для биржи '{namespace}' не найдены")
