@@ -1395,7 +1395,36 @@ class ShansAi:
             await self._handle_compare_input(update, context, text)
             return
         
-        # Treat text as asset symbol and process with /info logic
+        # Check if text contains multiple symbols (space or comma separated)
+        # This allows users to send "SPY.US QQQ.US" directly as a comparison request
+        symbols = []
+        if ',' in text:
+            # Handle comma-separated symbols
+            for symbol_part in text.split(','):
+                symbol_part = symbol_part.strip()
+                if symbol_part:
+                    if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                        symbols.append(symbol_part)
+                    else:
+                        symbols.append(symbol_part.upper())
+        elif ' ' in text:
+            # Handle space-separated symbols
+            for symbol in text.split():
+                symbol = symbol.strip()
+                if symbol:
+                    if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
+                        symbols.append(symbol)
+                    else:
+                        symbols.append(symbol.upper())
+        
+        # If we detected multiple symbols, treat as comparison request
+        if len(symbols) >= 2:
+            self.logger.info(f"Detected multiple symbols in message: {symbols}")
+            # Process as compare input
+            await self._handle_compare_input(update, context, text)
+            return
+        
+        # Treat text as single asset symbol and process with /info logic
         symbol = text.upper()
         
         # Update user context
