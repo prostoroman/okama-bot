@@ -4024,11 +4024,8 @@ class ShansAi:
             chart_bytes = await self._get_tushare_daily_chart(symbol)
             
             if chart_bytes:
-                await context.bot.send_photo(
-                    chat_id=update.effective_chat.id,
-                    photo=io.BytesIO(chart_bytes),
-                    caption=self._truncate_caption(f"📈 Ежедневный график {symbol}")
-                )
+                await self._send_photo_safe(update, context, chart_bytes, 
+                                          caption=f"📈 Ежедневный график {symbol}")
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
                 
@@ -4049,11 +4046,8 @@ class ShansAi:
             chart_bytes = await self._get_tushare_monthly_chart(symbol)
             
             if chart_bytes:
-                await context.bot.send_photo(
-                    chat_id=update.effective_chat.id,
-                    photo=io.BytesIO(chart_bytes),
-                    caption=self._truncate_caption(f"📅 Месячный график {symbol}")
-                )
+                await self._send_photo_safe(update, context, chart_bytes, 
+                                          caption=f"📅 Месячный график {symbol}")
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
                 
@@ -6879,9 +6873,9 @@ class ShansAi:
             # Show progress message
             await self._send_callback_message(update, context, f"📊 Создаю Excel файл для {namespace}...")
             
-            # Get ALL symbols data from Tushare (no limit for Excel export)
-            symbols_data = self.tushare_service.get_exchange_symbols_full(namespace)
-            total_count = len(symbols_data)
+            # Get all symbols data from Tushare
+            symbols_data = self.tushare_service.get_exchange_symbols(namespace)
+            total_count = self.tushare_service.get_exchange_symbols_count(namespace)
             
             if not symbols_data:
                 await self._send_callback_message(update, context, f"❌ Символы для биржи '{namespace}' не найдены")
