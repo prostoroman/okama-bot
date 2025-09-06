@@ -10,10 +10,10 @@ import os
 
 try:
     from google.cloud import vision
-    from google.oauth2 import service_account
+    import requests
 except ImportError:
     vision = None
-    service_account = None
+    requests = None
 
 logger = logging.getLogger(__name__)
 
@@ -21,18 +21,19 @@ logger = logging.getLogger(__name__)
 class GoogleVisionService:
     """Service for analyzing charts using Google Vision API"""
     
-    def __init__(self, credentials_path: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None):
         """
         Initialize Google Vision service
         
         Args:
-            credentials_path: Path to Google Cloud service account JSON file
+            api_key: Google Cloud Vision API key
         """
         self.client = None
-        self.credentials_path = credentials_path or os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        self.api_key = api_key or os.getenv('GOOGLE_VISION_API_KEY')
+        self.api_url = "https://vision.googleapis.com/v1/images:annotate"
         
-        if vision is None:
-            logger.warning("Google Cloud Vision library not installed. Chart analysis will be disabled.")
+        if vision is None or requests is None:
+            logger.warning("Required libraries not installed. Chart analysis will be disabled.")
             return
             
         try:
