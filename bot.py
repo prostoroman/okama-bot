@@ -901,9 +901,7 @@ class ShansAi:
                 currency = symbol_info['currency']
                 list_date = symbol_info['list_date']
                 
-                # Truncate long names
-                if len(name) > 25:
-                    name = name[:22] + "..."
+                # Show full company names (no truncation for Chinese stocks)
                 
                 response += f"{i:2d}. `{symbol}`\n"
                 response += f"    📝 {name}\n"
