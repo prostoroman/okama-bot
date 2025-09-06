@@ -594,14 +594,14 @@ class ShansAi:
             str: тикер инфляции (например, 'CNY.INFL' для CNY)
         """
         inflation_mapping = {
-            'USD': 'US.INFL',
+            'USD': 'USD.INFL',
             'RUB': 'RUS.INFL', 
             'EUR': 'EU.INFL',
             'GBP': 'GB.INFL',
             'CNY': 'CNY.INFL',  # Китайская инфляция
-            'HKD': 'US.INFL'    # Гонконгская инфляция (приводим к USD)
+            'HKD': 'USD.INFL'   # Гонконгская инфляция (приводим к USD)
         }
-        return inflation_mapping.get(currency, 'US.INFL')
+        return inflation_mapping.get(currency, 'USD.INFL')
     
     def _is_chinese_symbol(self, symbol: str) -> bool:
         """
