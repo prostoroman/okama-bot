@@ -26,6 +26,7 @@ except ImportError:
 # Third-party imports
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import pandas as pd
 import okama as ok
 
@@ -632,6 +633,118 @@ class ShansAi:
             self.logger.warning(f"Could not get Chinese symbol data for {symbol}: {e}")
         
         return None
+    
+    async def _create_hybrid_chinese_comparison(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """
+        Создать гибридное сравнение китайских символов
+        - Базовый график с CNY валютой и инфляцией через okama
+        - Наложение данных китайских символов через matplotlib
+        """
+        try:
+            self.logger.info(f"Creating hybrid comparison for Chinese symbols: {symbols}")
+            
+            # Определяем валюту по первому символу
+            currency, currency_info = self._get_currency_by_symbol(symbols[0])
+            inflation_ticker = self._get_inflation_ticker_by_currency(currency)
+            
+            # Создаем базовый AssetList с CNY валютой и инфляцией
+            # Используем SPY.US как базовый символ для создания структуры
+            base_symbols = ['SPY.US']
+            asset_list = ok.AssetList(base_symbols, ccy='CNY', inflation=True)
+            wealth_indexes = asset_list.wealth_indexes
+            
+            # Получаем данные китайских символов через Tushare
+            chinese_data = {}
+            for symbol in symbols:
+                if self._is_chinese_symbol(symbol):
+                    try:
+                        symbol_info = self.tushare_service.get_symbol_info(symbol)
+                        historical_data = self.tushare_service.get_daily_data(symbol)
+                        
+                        if not historical_data.empty:
+                            # Устанавливаем дату как индекс
+                            historical_data = historical_data.set_index('trade_date')
+                            chinese_data[symbol] = {
+                                'info': symbol_info,
+                                'data': historical_data
+                            }
+                            self.logger.info(f"Got data for Chinese symbol {symbol}: {len(historical_data)} records")
+                    except Exception as e:
+                        self.logger.warning(f"Could not get data for Chinese symbol {symbol}: {e}")
+            
+            if not chinese_data:
+                await self._send_message_safe(update, 
+                    f"❌ Не удалось получить данные для китайских символов: {', '.join(symbols)}")
+                return
+            
+            # Создаем гибридный график
+            fig, ax = plt.subplots(figsize=(14, 10))
+            
+            # Добавляем базовый график (SPY в CNY)
+            for symbol, wealth_index in wealth_indexes.items():
+                # Преобразуем индекс в datetime если нужно
+                if hasattr(wealth_index.index, 'to_timestamp'):
+                    index = wealth_index.index.to_timestamp()
+                else:
+                    index = wealth_index.index
+                
+                ax.plot(index, wealth_index.values, 
+                       label=f"{symbol} (базовая валюта CNY)", 
+                       linewidth=2, alpha=0.7, color='blue')
+            
+            # Добавляем данные китайских символов
+            colors = ['red', 'green', 'orange', 'purple', 'brown']
+            
+            for i, (symbol, data_dict) in enumerate(chinese_data.items()):
+                historical_data = data_dict['data']
+                symbol_info = data_dict['info']
+                
+                if not historical_data.empty:
+                    # Нормализуем данные к базовому значению (100)
+                    normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 100
+                    
+                    ax.plot(historical_data.index, normalized_data, 
+                           label=f"{symbol} ({symbol_info.get('name', 'N/A')})", 
+                           linewidth=2, color=colors[i % len(colors)])
+            
+            ax.set_title(f"Гибридное сравнение китайских символов\n(базовая валюта CNY + данные Tushare)", 
+                        fontsize=14, fontweight='bold')
+            ax.set_xlabel("Дата", fontsize=12)
+            ax.set_ylabel("Нормализованная доходность (база = 100)", fontsize=12)
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax.grid(True, alpha=0.3)
+            
+            # Форматирование дат
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+            plt.xticks(rotation=45)
+            
+            plt.tight_layout()
+            
+            # Сохраняем график в bytes
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Очищаем matplotlib
+            plt.close()
+            
+            # Создаем caption
+            caption = f"Гибридное сравнение китайских символов: {', '.join(symbols)}\n\n"
+            caption += f"Валюта: {currency} ({currency_info})\n"
+            caption += f"Инфляция: {inflation_ticker}\n"
+            caption += f"Данные: Tushare + Okama (CNY)\n"
+            caption += f"Нормализация: база = 100"
+            
+            # Отправляем график
+            await self._send_photo_safe(update, img_bytes, caption)
+            
+            self.logger.info(f"Successfully created hybrid comparison for {len(symbols)} Chinese symbols")
+            
+        except Exception as e:
+            self.logger.error(f"Error creating hybrid Chinese comparison: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании гибридного сравнения: {str(e)}")
     
     # =======================
     # Вспомогательные функции для истории
@@ -1605,8 +1718,8 @@ class ShansAi:
                     
                 help_text += "\n\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
-                help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (HKD)\n"
-                help_text += "• `600000.SH 000001.SZ` - сравнение китайских акций (CNY)\n"
+                help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (гибридный подход)\n"
+                help_text += "• `600000.SH 000001.SZ` - сравнение китайских акций (гибридный подход)\n"
                 help_text += "• `portfolio_5642.PF portfolio_5642.PF` - сравнение двух портефелей\n"
                 help_text += "• `portfolio_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
                 help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
@@ -1915,14 +2028,22 @@ class ShansAi:
                             okama_symbols.append(symbol)
                     
                     if chinese_symbols:
-                        # We have Chinese symbols - need special handling
+                        # We have Chinese symbols - use hybrid approach
                         self.logger.info(f"Found Chinese symbols: {chinese_symbols}")
-                        await self._send_message_safe(update, 
-                            f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
-                            f"Китайские символы пока не поддерживаются в команде /compare.\n"
-                            f"Используйте команду /info для анализа отдельных китайских символов.\n\n"
-                            f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
-                        return
+                        
+                        # Check if we have only Chinese symbols (pure Chinese comparison)
+                        if len(chinese_symbols) == len(symbols):
+                            # Pure Chinese comparison - use hybrid approach
+                            await self._create_hybrid_chinese_comparison(update, context, chinese_symbols)
+                            return
+                        else:
+                            # Mixed comparison - show message
+                            await self._send_message_safe(update, 
+                                f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
+                                f"Смешанное сравнение (китайские + обычные символы) пока не поддерживается.\n"
+                                f"Для сравнения только китайских символов используйте: /compare {' '.join(chinese_symbols)}\n\n"
+                                f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
+                            return
                     
                     # Create comparison using ok.AssetList (proper way to compare portfolios with assets)
                     try:
@@ -1951,14 +2072,22 @@ class ShansAi:
                             okama_symbols.append(symbol)
                     
                     if chinese_symbols:
-                        # We have Chinese symbols - need special handling
+                        # We have Chinese symbols - use hybrid approach
                         self.logger.info(f"Found Chinese symbols: {chinese_symbols}")
-                        await self._send_message_safe(update, 
-                            f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
-                            f"Китайские символы пока не поддерживаются в команде /compare.\n"
-                            f"Используйте команду /info для анализа отдельных китайских символов.\n\n"
-                            f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
-                        return
+                        
+                        # Check if we have only Chinese symbols (pure Chinese comparison)
+                        if len(chinese_symbols) == len(symbols):
+                            # Pure Chinese comparison - use hybrid approach
+                            await self._create_hybrid_chinese_comparison(update, context, chinese_symbols)
+                            return
+                        else:
+                            # Mixed comparison - show message
+                            await self._send_message_safe(update, 
+                                f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
+                                f"Смешанное сравнение (китайские + обычные символы) пока не поддерживается.\n"
+                                f"Для сравнения только китайских символов используйте: /compare {' '.join(chinese_symbols)}\n\n"
+                                f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
+                            return
                     
                     # Add inflation support for Chinese symbols
                     inflation_ticker = self._get_inflation_ticker_by_currency(currency)
