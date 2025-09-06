@@ -4194,9 +4194,12 @@ class ShansAi:
                 if daily_data.empty:
                     return None
                 
+                # Prepare data for chart - set trade_date as index
+                chart_data = daily_data.set_index('trade_date')['close']
+                
                 # Create chart using ChartStyles
                 fig, ax = chart_styles.create_price_chart(
-                    data=daily_data['close'],
+                    data=chart_data,
                     symbol=symbol,
                     currency='CNY',  # Default currency for Chinese stocks
                     period='ежедневный'
@@ -4240,9 +4243,12 @@ class ShansAi:
                 if monthly_data.empty:
                     return None
                 
+                # Prepare data for chart - set trade_date as index
+                chart_data = monthly_data.set_index('trade_date')['close']
+                
                 # Create chart using ChartStyles
                 fig, ax = chart_styles.create_price_chart(
-                    data=monthly_data['close'],
+                    data=chart_data,
                     symbol=symbol,
                     currency='CNY',  # Default currency for Chinese stocks
                     period='месячный'
