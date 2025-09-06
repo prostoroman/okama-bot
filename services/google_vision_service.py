@@ -43,38 +43,51 @@ class GoogleVisionService:
             self.client = None
     
     def _initialize_client(self):
-        """Initialize Google Vision client with credentials"""
-        # First, try to find credentials file in config_files directory
-        config_credentials_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'config_files',
-            'google_vision_credentials.json'
-        )
+        """Initialize Google Vision client with API key"""
+        if not self.api_key:
+            logger.warning("Google Vision API key not provided")
+            return
         
-        # Priority order: parameter -> env var -> config file
-        credentials_file = None
-        if self.credentials_path and os.path.exists(self.credentials_path):
-            credentials_file = self.credentials_path
-            logger.info(f"Using provided credentials file: {credentials_file}")
-        elif os.path.exists(config_credentials_path):
-            credentials_file = config_credentials_path
-            logger.info(f"Using config credentials file: {credentials_file}")
-        elif os.getenv('GOOGLE_APPLICATION_CREDENTIALS') and os.path.exists(os.getenv('GOOGLE_APPLICATION_CREDENTIALS')):
-            credentials_file = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-            logger.info(f"Using environment credentials file: {credentials_file}")
+        # Validate API key format (should be a string)
+        if not isinstance(self.api_key, str) or len(self.api_key.strip()) == 0:
+            logger.warning("Invalid Google Vision API key format")
+            return
         
-        if credentials_file:
-            # Use service account file
-            credentials = service_account.Credentials.from_service_account_file(
-                credentials_file,
-                scopes=['https://www.googleapis.com/auth/cloud-vision']
+        # Test API key with a simple request
+        try:
+            # Create a simple test request to validate the API key
+            test_payload = {
+                "requests": [
+                    {
+                        "image": {
+                            "content": base64.b64encode(b"test").decode('utf-8')
+                        },
+                        "features": [
+                            {
+                                "type": "LABEL_DETECTION",
+                                "maxResults": 1
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            response = requests.post(
+                f"{self.api_url}?key={self.api_key}",
+                json=test_payload,
+                timeout=5
             )
-            self.client = vision.ImageAnnotatorClient(credentials=credentials)
-            logger.info("Google Vision client initialized with service account file")
-        else:
-            # Try to use default credentials (environment variable or metadata server)
-            self.client = vision.ImageAnnotatorClient()
-            logger.info("Google Vision client initialized with default credentials")
+            
+            if response.status_code == 200:
+                self.client = True  # Mark as initialized
+                logger.info("Google Vision API key validated successfully")
+            else:
+                logger.error(f"Google Vision API key validation failed: {response.status_code}")
+                self.client = None
+                
+        except Exception as e:
+            logger.error(f"Failed to validate Google Vision API key: {e}")
+            self.client = None
     
     def is_available(self) -> bool:
         """Check if Google Vision service is available"""
@@ -95,43 +108,83 @@ class GoogleVisionService:
             return None
         
         try:
-            # Create image object
-            image = vision.Image(content=image_bytes)
+            # Encode image to base64
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
             
-            # Perform text detection (OCR)
-            text_response = self.client.text_detection(image=image)
-            texts = text_response.text_annotations
+            # Prepare API request payload
+            payload = {
+                "requests": [
+                    {
+                        "image": {
+                            "content": image_base64
+                        },
+                        "features": [
+                            {
+                                "type": "TEXT_DETECTION",
+                                "maxResults": 1
+                            },
+                            {
+                                "type": "LABEL_DETECTION",
+                                "maxResults": 10
+                            },
+                            {
+                                "type": "OBJECT_LOCALIZATION",
+                                "maxResults": 10
+                            }
+                        ]
+                    }
+                ]
+            }
             
-            # Perform object detection to identify chart elements
-            objects_response = self.client.object_localization(image=image)
-            objects = objects_response.localized_object_annotations
+            # Make API request
+            response = requests.post(
+                f"{self.api_url}?key={self.api_key}",
+                json=payload,
+                timeout=30
+            )
             
-            # Perform label detection for general chart identification
-            labels_response = self.client.label_detection(image=image)
-            labels = labels_response.label_annotations
+            if response.status_code != 200:
+                logger.error(f"Google Vision API request failed: {response.status_code}")
+                return {
+                    'error': f"API request failed with status {response.status_code}",
+                    'success': False
+                }
+            
+            result = response.json()
+            
+            if 'responses' not in result or not result['responses']:
+                logger.error("Invalid response from Google Vision API")
+                return {
+                    'error': "Invalid API response",
+                    'success': False
+                }
+            
+            response_data = result['responses'][0]
             
             # Extract text content
             detected_text = ""
-            if texts:
-                detected_text = texts[0].description if texts[0].description else ""
+            if 'textAnnotations' in response_data and response_data['textAnnotations']:
+                detected_text = response_data['textAnnotations'][0].get('description', '')
             
             # Extract chart-related labels
             chart_labels = []
-            for label in labels:
-                if label.score > 0.7:  # High confidence labels only
-                    chart_labels.append({
-                        'description': label.description,
-                        'confidence': label.score
-                    })
+            if 'labelAnnotations' in response_data:
+                for label in response_data['labelAnnotations']:
+                    if label.get('score', 0) > 0.7:  # High confidence labels only
+                        chart_labels.append({
+                            'description': label.get('description', ''),
+                            'confidence': label.get('score', 0)
+                        })
             
             # Extract objects (potential chart elements)
             chart_objects = []
-            for obj in objects:
-                if obj.score > 0.7:  # High confidence objects only
-                    chart_objects.append({
-                        'name': obj.name,
-                        'confidence': obj.score
-                    })
+            if 'localizedObjectAnnotations' in response_data:
+                for obj in response_data['localizedObjectAnnotations']:
+                    if obj.get('score', 0) > 0.7:  # High confidence objects only
+                        chart_objects.append({
+                            'name': obj.get('name', ''),
+                            'confidence': obj.get('score', 0)
+                        })
             
             # Generate analysis summary
             analysis = self._generate_analysis_summary(
@@ -220,18 +273,10 @@ class GoogleVisionService:
         Returns:
             Dictionary with service status
         """
-        # Check for config credentials file
-        config_credentials_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'config_files',
-            'google_vision_credentials.json'
-        )
-        
         return {
             'available': self.is_available(),
-            'credentials_path': self.credentials_path,
-            'credentials_exist': os.path.exists(self.credentials_path) if self.credentials_path else False,
-            'config_credentials_exist': os.path.exists(config_credentials_path),
-            'config_credentials_path': config_credentials_path,
-            'library_installed': vision is not None
+            'api_key_set': bool(self.api_key),
+            'api_key_length': len(self.api_key) if self.api_key else 0,
+            'library_installed': vision is not None and requests is not None,
+            'api_url': self.api_url
         }

@@ -1431,30 +1431,23 @@ class ShansAi:
             else:
                 status_text += "❌ **Библиотека не установлена**\n"
             
-            # Credentials
-            status_text += "\n🔑 **Настройки аутентификации:**\n"
+            # API Key
+            status_text += "\n🔑 **Настройки API ключа:**\n"
             
-            if status['config_credentials_exist']:
-                status_text += f"✅ **Конфигурационный файл найден**\n"
-                status_text += f"📁 Путь: `{status['config_credentials_path']}`\n"
+            if status['api_key_set']:
+                status_text += f"✅ **API ключ установлен**\n"
+                status_text += f"📏 Длина ключа: {status['api_key_length']} символов\n"
             else:
-                status_text += "❌ **Конфигурационный файл не найден**\n"
-            
-            if status['credentials_exist']:
-                status_text += f"✅ **Переменная окружения**\n"
-                status_text += f"📁 Путь: `{status['credentials_path']}`\n"
-            else:
-                status_text += "❌ **Переменная окружения не установлена**\n"
+                status_text += "❌ **API ключ не установлен**\n"
             
             # Recommendations
             status_text += "\n💡 **Рекомендации:**\n"
             if not status['available']:
                 if not status['library_installed']:
-                    status_text += "• Установите библиотеку: `pip install google-cloud-vision`\n"
-                if not status['config_credentials_exist']:
-                    status_text += "• Проверьте наличие файла `config_files/google_vision_credentials.json`\n"
-                if not status['credentials_exist']:
-                    status_text += "• Установите переменную окружения `GOOGLE_APPLICATION_CREDENTIALS`\n"
+                    status_text += "• Установите библиотеку: `pip install requests`\n"
+                if not status['api_key_set']:
+                    status_text += "• Установите переменную окружения `GOOGLE_VISION_API_KEY`\n"
+                    status_text += "• Получите API ключ: https://console.cloud.google.com/apis/credentials\n"
             else:
                 status_text += "• Сервис готов к работе! Используйте команду `/compare` для анализа графиков\n"
             

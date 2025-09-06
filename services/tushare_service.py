@@ -84,12 +84,20 @@ class TushareService:
     def _get_mainland_stock_info(self, symbol_code: str, exchange: str) -> Dict[str, Any]:
         """Get stock information for mainland China exchanges"""
         try:
-            # Get stock basic info
-            df = self.pro.stock_basic(
-                exchange='',
-                list_status='L',
-                fields='ts_code,symbol,name,area,industry,list_date'
-            )
+            # Get stock basic info with English names
+            try:
+                df = self.pro.stock_basic(
+                    exchange='',
+                    list_status='L',
+                    fields='ts_code,symbol,name,enname,area,industry,list_date'
+                )
+            except Exception:
+                # Fallback to basic fields if enname is not available
+                df = self.pro.stock_basic(
+                    exchange='',
+                    list_status='L',
+                    fields='ts_code,symbol,name,area,industry,list_date'
+                )
             
             # Find matching stock
             stock_info = df[df['symbol'] == symbol_code]
@@ -97,6 +105,10 @@ class TushareService:
                 return {"error": "Stock not found"}
             
             info = stock_info.iloc[0].to_dict()
+            
+            # Use English name if available, otherwise fall back to Chinese name
+            if 'enname' in info and info['enname']:
+                info['name'] = info['enname']
             
             # Get additional metrics
             try:

@@ -9,25 +9,37 @@
 ### 1. Установка зависимостей
 
 ```bash
-pip install google-cloud-vision>=3.4.0
+pip install requests>=2.31.0
 ```
 
-### 2. Настройка credentials
+### 2. Получение API ключа
 
-Скопируйте пример файла и заполните его вашими данными:
+1. Перейдите в [Google Cloud Console](https://console.cloud.google.com/)
+2. Выберите ваш проект или создайте новый
+3. Включите Vision API:
+   - Перейдите в "APIs & Services" > "Library"
+   - Найдите "Cloud Vision API"
+   - Нажмите "Enable"
+4. Создайте API ключ:
+   - Перейдите в "APIs & Services" > "Credentials"
+   - Нажмите "Create Credentials" > "API Key"
+   - Скопируйте созданный ключ
+
+### 3. Настройка API ключа
+
+Установите переменную окружения:
 
 ```bash
-cp config_files/google_vision_credentials.json.example config_files/google_vision_credentials.json
+export GOOGLE_VISION_API_KEY="your_api_key_here"
 ```
 
-Отредактируйте файл `config_files/google_vision_credentials.json` и замените:
-- `your-project-id` на ID вашего Google Cloud проекта
-- `your-private-key-id` на ID приватного ключа
-- `YOUR_PRIVATE_KEY_HERE` на ваш приватный ключ
-- `your-service-account@your-project-id.iam.gserviceaccount.com` на email сервисного аккаунта
-- `your-client-id` на ID клиента
+Или добавьте в файл `config.env`:
 
-### 3. Проверка настройки
+```bash
+GOOGLE_VISION_API_KEY=your_api_key_here
+```
+
+### 4. Проверка настройки
 
 Используйте команду для проверки статуса:
 
@@ -94,42 +106,52 @@ cp config_files/google_vision_credentials.json.example config_files/google_visio
 
 1. **Проверьте библиотеку:**
    ```bash
-   pip install google-cloud-vision>=3.4.0
+   pip install requests>=2.31.0
    ```
 
-2. **Проверьте файл credentials:**
+2. **Проверьте API ключ:**
    ```bash
    /vision_status
    ```
 
 3. **Проверьте права доступа:**
-   - Убедитесь, что сервисный аккаунт имеет права на Vision API
-   - Проверьте, что проект активен
+   - Убедитесь, что Vision API включен в проекте
+   - Проверьте, что API ключ активен
+   - Убедитесь, что у ключа есть доступ к Vision API
 
 ### Ошибки аутентификации
 
-- Проверьте правильность данных в файле credentials
-- Убедитесь, что сервисный аккаунт активен
+- Проверьте правильность API ключа
+- Убедитесь, что ключ не истек
 - Проверьте, что Vision API включен в проекте
+- Убедитесь, что ключ не ограничен неправильно
 
 ## Безопасность
 
-- Файл `config_files/google_vision_credentials.json` добавлен в `.gitignore`
-- Не коммитьте реальные credentials в репозиторий
-- Используйте переменную окружения `GOOGLE_APPLICATION_CREDENTIALS` для продакшена
+- Не коммитьте API ключ в репозиторий
+- Используйте переменную окружения `GOOGLE_VISION_API_KEY`
+- Ограничьте API ключ только необходимыми API
+- Регулярно ротируйте API ключи
 
 ## Альтернативные способы настройки
 
 ### Переменная окружения
 
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-key.json"
+export GOOGLE_VISION_API_KEY="your_api_key_here"
 ```
 
 ### Параметр в коде
 
 ```python
-google_vision_service = GoogleVisionService(credentials_path="/path/to/your/service-account-key.json")
+google_vision_service = GoogleVisionService(api_key="your_api_key_here")
+```
+
+### Файл конфигурации
+
+Добавьте в `config.env`:
+```bash
+GOOGLE_VISION_API_KEY=your_api_key_here
 ```
 
 ## Поддерживаемые функции
