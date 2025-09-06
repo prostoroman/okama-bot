@@ -591,15 +591,15 @@ class ShansAi:
         Получить тикер инфляции по валюте
         
         Returns:
-            str: тикер инфляции (например, 'CN.INFL' для CNY)
+            str: тикер инфляции (например, 'CNY.INFL' для CNY)
         """
         inflation_mapping = {
             'USD': 'US.INFL',
             'RUB': 'RUS.INFL', 
             'EUR': 'EU.INFL',
             'GBP': 'GB.INFL',
-            'CNY': 'CN.INFL',  # Китайская инфляция
-            'HKD': 'HK.INFL'  # Гонконгская инфляция
+            'CNY': 'CNY.INFL',  # Китайская инфляция
+            'HKD': 'US.INFL'    # Гонконгская инфляция (приводим к USD)
         }
         return inflation_mapping.get(currency, 'US.INFL')
     
@@ -689,7 +689,7 @@ class ShansAi:
                     index = wealth_index.index
                 
                 ax.plot(index, wealth_index.values, 
-                       label=f"{symbol} (базовая валюта CNY)", 
+                       label=f"{symbol} (базовая валюта {base_currency})", 
                        linewidth=2, alpha=0.7, color='blue')
             
             # Добавляем данные китайских символов
@@ -707,7 +707,7 @@ class ShansAi:
                            label=f"{symbol} ({symbol_info.get('name', 'N/A')})", 
                            linewidth=2, color=colors[i % len(colors)])
             
-            ax.set_title(f"Гибридное сравнение китайских символов\n(базовая валюта CNY + данные Tushare)", 
+            ax.set_title(f"Гибридное сравнение китайских символов\n(базовая валюта {base_currency} + данные Tushare)", 
                         fontsize=14, fontweight='bold')
             ax.set_xlabel("Дата", fontsize=12)
             ax.set_ylabel("Нормализованная доходность (база = 100)", fontsize=12)
@@ -1114,21 +1114,25 @@ class ShansAi:
             response += f"• Всего символов: {total_count:,}\n"
             response += f"• Показываю: {len(symbols_data)}\n\n"
             
-            # Show first 20 symbols with detailed info in table format
+            # Show first 20 symbols with detailed info using TABULATE
             display_count = min(20, len(symbols_data))
             response += f"📋 Первые {display_count} символов:\n\n"
             
-            # Создаем таблицу символов в формате Markdown
+            # Prepare data for tabulate
+            table_data = []
+            headers = ["Символ", "Название", "Валюта"]
+            
             for symbol_info in symbols_data[:display_count]:
                 symbol = symbol_info['symbol']
                 name = symbol_info['name']
                 currency = symbol_info['currency']
                 
-                # Truncate long names for table readability
-                if len(name) > 30:
-                    name = name[:27] + "..."
-                
-                response += f"| `{symbol}` | {name} | {currency} |\n"
+                # No truncation for Chinese exchanges - show full names
+                table_data.append([f"`{symbol}`", name, currency])
+            
+            # Create table using tabulate
+            table = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
+            response += table + "\n"
             
             if len(symbols_data) > display_count:
                 response += f"... и еще {len(symbols_data) - display_count} символов\n\n"
@@ -1209,48 +1213,31 @@ class ShansAi:
                 
                 top_symbols.append([symbol, name, country, currency])
             
-            # Создаем таблицу символов в формате Markdown
-            if top_symbols:
-                # Добавляем строки таблицы
-                for row in top_symbols:
-                    symbol = row[0]
-                    name = row[1]
-                    country = row[2]
-                    currency = row[3]
-                    
-                    response += f"| `{symbol}` | {name} | {country} | {currency} |\n"
-                
-                # Добавляем кнопку для выгрузки Excel
-                keyboard = [[
-                    InlineKeyboardButton(
-                        f"📊 Полный список в Excel ({total_symbols})", 
-                        callback_data=f"excel_namespace_{namespace}"
-                    )
-                ]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                # Отправляем сообщение с таблицей и кнопкой
-                if is_callback:
-                    # Для callback сообщений отправляем через context.bot с кнопками
-                    await context.bot.send_message(
-                        chat_id=update.callback_query.message.chat_id,
-                        text=response,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                else:
-                    await self._send_message_safe(update, response, reply_markup=reply_markup)
+            # Create table using tabulate
+            if table_data:
+                table = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
+                response += table + "\n"
+            
+            # Добавляем кнопку для выгрузки Excel
+            keyboard = [[
+                InlineKeyboardButton(
+                    f"📊 Полный список в Excel ({total_symbols})", 
+                    callback_data=f"excel_namespace_{namespace}"
+                )
+            ]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Отправляем сообщение с таблицей и кнопкой
+            if is_callback:
+                # Для callback сообщений отправляем через context.bot с кнопками
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=response,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
             else:
-                response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
-                if is_callback:
-                    # Для callback сообщений отправляем через context.bot
-                    await context.bot.send_message(
-                        chat_id=update.callback_query.message.chat_id,
-                        text=response,
-                        parse_mode='Markdown'
-                    )
-                else:
-                    await self._send_message_safe(update, response)
+                await self._send_message_safe(update, response, reply_markup=reply_markup)
             
         except Exception as e:
             error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
