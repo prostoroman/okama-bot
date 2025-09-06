@@ -2047,8 +2047,8 @@ class ShansAi:
                         else:
                             okama_symbols.append(symbol)
                     
+                    # If we have Chinese symbols, use hybrid approach
                     if chinese_symbols:
-                        # We have Chinese symbols - use hybrid approach
                         self.logger.info(f"Found Chinese symbols: {chinese_symbols}")
                         
                         # Check if we have only Chinese symbols (pure Chinese comparison)
@@ -2064,6 +2064,9 @@ class ShansAi:
                                 f"Для сравнения только китайских символов используйте: /compare {' '.join(chinese_symbols)}\n\n"
                                 f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
                             return
+                    
+                    # No Chinese symbols - use standard okama approach
+                    self.logger.info(f"No Chinese symbols found, using standard okama comparison for: {symbols}")
                     
                     # Create comparison using ok.AssetList (proper way to compare portfolios with assets)
                     try:
@@ -2091,8 +2094,8 @@ class ShansAi:
                         else:
                             okama_symbols.append(symbol)
                     
+                    # If we have Chinese symbols, use hybrid approach
                     if chinese_symbols:
-                        # We have Chinese symbols - use hybrid approach
                         self.logger.info(f"Found Chinese symbols: {chinese_symbols}")
                         
                         # Check if we have only Chinese symbols (pure Chinese comparison)
@@ -2109,7 +2112,10 @@ class ShansAi:
                                 f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
                             return
                     
-                    # Add inflation support for Chinese symbols
+                    # No Chinese symbols - use standard okama approach
+                    self.logger.info(f"No Chinese symbols found, using standard okama comparison for: {symbols}")
+                    
+                    # Add inflation support for non-Chinese symbols
                     inflation_ticker = self._get_inflation_ticker_by_currency(currency)
                     comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
                     self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
