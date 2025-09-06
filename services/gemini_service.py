@@ -133,10 +133,27 @@ class GeminiService:
             
             if response.status_code != 200:
                 logger.error(f"Gemini API request failed: {response.status_code}")
-                return {
-                    'error': f"API request failed with status {response.status_code}",
-                    'success': False
-                }
+                try:
+                    error_data = response.json()
+                    error_message = error_data.get('error', {}).get('message', f'API request failed with status {response.status_code}')
+                    
+                    # Check for specific error types
+                    if 'location is not supported' in error_message.lower():
+                        error_message = "Gemini API недоступен в вашем регионе. Попробуйте использовать VPN или другой AI сервис."
+                    elif 'quota' in error_message.lower():
+                        error_message = "Превышена квота Gemini API. Попробуйте позже."
+                    elif 'invalid' in error_message.lower() and 'key' in error_message.lower():
+                        error_message = "Неверный API ключ Gemini. Проверьте настройки."
+                    
+                    return {
+                        'error': error_message,
+                        'success': False
+                    }
+                except:
+                    return {
+                        'error': f"API request failed with status {response.status_code}",
+                        'success': False
+                    }
             
             result = response.json()
             
