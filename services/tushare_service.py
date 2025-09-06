@@ -129,15 +129,23 @@ class TushareService:
         try:
             # Get HK stock basic info
             df = self.pro.hk_basic(
-                fields='ts_code,symbol,name,area,industry,list_date'
+                fields='ts_code,name,list_date'
             )
             
-            # Find matching stock
-            stock_info = df[df['symbol'] == symbol_code]
+            # Find matching stock by ts_code
+            ts_code = f"{symbol_code}.HK"
+            stock_info = df[df['ts_code'] == ts_code]
             if stock_info.empty:
                 return {"error": "Stock not found"}
             
             info = stock_info.iloc[0].to_dict()
+            
+            # Add missing fields for consistency
+            info.update({
+                'exchange': 'HKEX',
+                'area': 'Hong Kong',
+                'industry': 'N/A'  # HK basic doesn't provide industry info
+            })
             
             # Get additional metrics
             try:
