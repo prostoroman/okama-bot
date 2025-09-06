@@ -699,7 +699,6 @@ class ShansAi:
             
             # Добавляем данные китайских символов
             symbol_names = []
-            exchanges = []
             
             for i, (symbol, data_dict) in enumerate(chinese_data.items()):
                 historical_data = data_dict['data']
@@ -709,12 +708,13 @@ class ShansAi:
                     # Нормализуем данные к базовому значению (1000) как в okama
                     normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 1000
                     
-                    # Получаем название символа и биржу
+                    # Получаем английское название символа
                     symbol_name = symbol_info.get('name', symbol)
-                    exchange = symbol_info.get('exchange', 'Unknown')
+                    # Если есть английское название, используем его
+                    if 'enname' in symbol_info and symbol_info['enname']:
+                        symbol_name = symbol_info['enname']
                     
                     symbol_names.append(symbol_name)
-                    exchanges.append(exchange)
                     
                     if len(symbol_name) > 30:
                         symbol_name = symbol_name[:27] + "..."
@@ -730,31 +730,25 @@ class ShansAi:
                 # Нормализуем инфляцию к базовому значению (1000)
                 normalized_inflation = inflation_data / inflation_data.iloc[0] * 1000
                 ax.plot(inflation_data.index, normalized_inflation, 
-                       label=f"{inflation_ticker} - Инфляция", 
-                       linewidth=2, 
+                       label=f"{inflation_ticker} - Inflation", 
+                       linewidth=3, 
                        color='red',
-                       alpha=0.7,
+                       alpha=0.8,
                        linestyle='--')
             
-            # Формируем заголовок: Сравнение название тикеров, биржа, валюта
+            # Формируем заголовок: Сравнение название тикеров, валюта (без биржи)
             title_parts = []
-            title_parts.append("Сравнение")
+            title_parts.append("Comparison")
             
             # Добавляем названия тикеров
             if symbol_names:
                 names_str = ", ".join(symbol_names[:3])  # Ограничиваем до 3 названий
                 if len(symbol_names) > 3:
-                    names_str += f" и еще {len(symbol_names) - 3}"
+                    names_str += f" and {len(symbol_names) - 3} more"
                 title_parts.append(names_str)
             
-            # Добавляем биржи
-            unique_exchanges = list(set(exchanges))
-            if unique_exchanges:
-                exchanges_str = ", ".join(unique_exchanges)
-                title_parts.append(f"({exchanges_str})")
-            
             # Добавляем валюту
-            title_parts.append(f"Валюта: {currency}")
+            title_parts.append(f"Currency: {currency}")
             
             title = ", ".join(title_parts)
             
@@ -771,9 +765,9 @@ class ShansAi:
             # Настройка сетки
             ax.grid(True, alpha=0.25, linestyle='-', linewidth=0.7)
             
-            # Форматирование дат
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            # Форматирование дат - только года
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+            ax.xaxis.set_major_locator(mdates.YearLocator())
             plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
             
             # Добавляем копирайт
