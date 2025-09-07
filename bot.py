@@ -3869,10 +3869,10 @@ class ShansAi:
 
             # Check if Gemini service is available
             if not self.gemini_service or not self.gemini_service.is_available():
-                await self._send_callback_message(update, context, "❌ Сервис анализа графиков недоступен. Проверьте настройки Gemini API.")
+                await self._send_callback_message(update, context, "❌ Сервис анализа графиков недоступен. Проверьте настройки Gemini API.", parse_mode='Markdown')
                 return
 
-            await self._send_callback_message(update, context, "Анализ графика с помощью AI...")
+            await self._send_callback_message(update, context, "Анализ графика с помощью AI...", parse_mode='Markdown')
 
             # Recreate the comparison chart for analysis
             try:
@@ -3903,7 +3903,7 @@ class ShansAi:
                             asset_names.append(display_symbols[i])  # Use descriptive name
 
                 if not asset_list_items:
-                    await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для анализа")
+                    await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для анализа", parse_mode='Markdown')
                     return
 
                 # Create comparison
@@ -3941,19 +3941,19 @@ class ShansAi:
                     analysis_text += f"💰 **Валюта:** {currency}\n"
                     analysis_text += f"📅 **Период:** полный доступный период данных"
                     
-                    await self._send_callback_message(update, context, analysis_text)
+                    await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown')
                     
                 else:
                     error_msg = chart_analysis.get('error', 'Неизвестная ошибка') if chart_analysis else 'Анализ не выполнен'
-                    await self._send_callback_message(update, context, f"❌ Ошибка анализа графика: {error_msg}")
+                    await self._send_callback_message(update, context, f"❌ Ошибка анализа графика: {error_msg}", parse_mode='Markdown')
                     
             except Exception as chart_error:
                 self.logger.error(f"Error creating chart for analysis: {chart_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown')
 
         except Exception as e:
             self.logger.error(f"Error handling chart analysis button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown')
 
     async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle data analysis button click for comparison charts"""
@@ -3972,10 +3972,10 @@ class ShansAi:
 
             # Check if Gemini service is available
             if not self.gemini_service or not self.gemini_service.is_available():
-                await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен. Проверьте настройки Gemini API.")
+                await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен. Проверьте настройки Gemini API.", parse_mode='Markdown')
                 return
 
-            await self._send_callback_message(update, context, "🤖 Анализирую данные с помощью Gemini AI...")
+            await self._send_callback_message(update, context, "🤖 Анализирую данные с помощью Gemini AI...", parse_mode='Markdown')
 
             # Prepare data for analysis
             try:
@@ -3993,21 +3993,21 @@ class ShansAi:
                         analysis_text += f"📅 **Период:** полный доступный период данных\n"
                         analysis_text += f"📊 **Тип анализа:** Данные (не изображение)"
                         
-                        await self._send_callback_message(update, context, analysis_text)
+                        await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown')
                     else:
-                        await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст")
+                        await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown')
                         
                 else:
                     error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
-                    await self._send_callback_message(update, context, f"❌ Ошибка анализа данных: {error_msg}")
+                    await self._send_callback_message(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown')
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for analysis: {data_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown')
 
         except Exception as e:
             self.logger.error(f"Error handling data analysis button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown')
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
@@ -5693,7 +5693,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling risk metrics button: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}", parse_mode='Markdown')
 
     async def _handle_portfolio_risk_metrics_by_symbol(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
         """Handle portfolio risk metrics button click by portfolio symbol"""
@@ -5778,7 +5778,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling portfolio risk metrics by symbol: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}", parse_mode='Markdown')
 
     async def _handle_monte_carlo_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle Monte Carlo button click for portfolio"""
