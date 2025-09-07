@@ -522,7 +522,7 @@ class ChartStyles:
         # Настройка осей
         ax.set_xticks(range(len(correlation_matrix.columns)))
         ax.set_yticks(range(len(correlation_matrix.index)))
-        ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right')
+        ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right', va='top')
         ax.set_yticklabels(correlation_matrix.index)
         
         # Цветовая шкала
