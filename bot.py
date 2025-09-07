@@ -1540,7 +1540,7 @@ class ShansAi:
                     InlineKeyboardButton("All", callback_data=f"all_chart_{symbol}")
                 ],
                 [
-                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
+                    InlineKeyboardButton("💵 Dividends", callback_data=f"dividends_{symbol}")
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
