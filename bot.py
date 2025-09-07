@@ -680,6 +680,8 @@ class ShansAi:
             
             # Получаем данные по инфляции из okama для CNY активов
             inflation_data = None
+            self.logger.info(f"Currency: {currency}, inflation_ticker: {inflation_ticker}")
+            
             if currency == 'CNY' and inflation_ticker == 'CNY.INFL':
                 try:
                     import okama as ok
@@ -687,8 +689,11 @@ class ShansAi:
                     # Получаем месячные данные инфляции для соответствия основным данным
                     inflation_data = inflation_asset.wealth_index.resample('M').last()
                     self.logger.info(f"Got monthly inflation data for {inflation_ticker}: {len(inflation_data)} records")
+                    self.logger.info(f"Inflation data sample: {inflation_data.head()}")
                 except Exception as e:
                     self.logger.warning(f"Could not get inflation data for {inflation_ticker}: {e}")
+                    import traceback
+                    self.logger.warning(f"Inflation error traceback: {traceback.format_exc()}")
             
             # Создаем график с использованием стандартных стилей
             fig, ax = self.chart_styles.create_chart(figsize=(14, 8))
@@ -710,10 +715,12 @@ class ShansAi:
                     normalized_data = historical_data['close'] / historical_data['close'].iloc[0] * 1000
                     
                     # Получаем английское название символа для легенды
-                    symbol_name = symbol_info.get('enname', symbol_info.get('name', symbol))
-                    # Приоритет английскому названию
-                    if not symbol_name or symbol_name == symbol:
-                        symbol_name = symbol_info.get('name', symbol)
+                    symbol_name = symbol_info.get('name', symbol)
+                    # Приоритет английскому названию если доступно
+                    if 'enname' in symbol_info and symbol_info['enname'] and symbol_info['enname'].strip():
+                        symbol_name = symbol_info['enname']
+                    
+                    self.logger.info(f"Symbol {symbol}: name='{symbol_info.get('name', 'N/A')}', enname='{symbol_info.get('enname', 'N/A')}', final='{symbol_name}'")
                     
                     symbols_list.append(symbol)
                     
@@ -730,12 +737,15 @@ class ShansAi:
             if inflation_data is not None and not inflation_data.empty:
                 # Нормализуем инфляцию к базовому значению (1000)
                 normalized_inflation = inflation_data / inflation_data.iloc[0] * 1000
+                self.logger.info(f"Adding inflation line: {len(normalized_inflation)} points, range: {normalized_inflation.min():.2f} - {normalized_inflation.max():.2f}")
                 ax.plot(inflation_data.index, normalized_inflation, 
                        label=f"{inflation_ticker} - Inflation", 
                        linewidth=3, 
                        color='red',
                        alpha=0.8,
                        linestyle='--')
+            else:
+                self.logger.warning(f"Inflation data is None or empty: {inflation_data is None}, {inflation_data.empty if inflation_data is not None else 'N/A'}")
             
             # Формируем заголовок: только тикеры
             title_parts = []
