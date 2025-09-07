@@ -402,9 +402,52 @@ class ChartStyles:
     
     def create_dividends_chart(self, data, symbol, currency, **kwargs):
         """Создать график дивидендов"""
-        title = f'Дивиденды {symbol}'
-        ylabel = f'Сумма ({currency})'
-        return self.create_bar_chart(data, title, ylabel, bar_color='#94D2BD', **kwargs)
+        fig, ax = self.create_chart(**kwargs)
+        
+        # Конвертируем даты и группируем по годам
+        # Обрабатываем PeriodIndex (от Okama) и обычные даты
+        if hasattr(data.index, 'to_timestamp'):
+            # PeriodIndex от Okama
+            dates = data.index.to_timestamp()
+        else:
+            # Обычные даты
+            dates = [pd.to_datetime(date) for date in data.index]
+        
+        amounts = data.values
+        
+        # Создаем DataFrame с годами
+        df = pd.DataFrame({'date': dates, 'amount': amounts})
+        df['year'] = df['date'].dt.year
+        
+        # Группируем по годам и суммируем дивиденды
+        yearly_dividends = df.groupby('year')['amount'].sum()
+        
+        # Создаем столбчатый график
+        bars = ax.bar(yearly_dividends.index, yearly_dividends.values, 
+                     color='#94D2BD', alpha=0.7, width=0.8)
+        
+        # Получаем информацию об активе для заголовка
+        asset_name = symbol.split('.')[0] if '.' in symbol else symbol
+        
+        # Обновляем заголовок с нужным форматом
+        title = f"{symbol} | {asset_name} | {currency} | dividends"
+        ax.set_title(title, **self.title)
+        
+        # Убираем подписи осей
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        
+        # Настройка осей для отображения только годов
+        ax.set_xticks(yearly_dividends.index)
+        ax.set_xticklabels(yearly_dividends.index, rotation=45)
+        
+        # Применяем базовые стили
+        self._apply_base_style(fig, ax)
+        
+        # Добавляем копирайт
+        self.add_copyright(ax)
+        
+        return fig, ax
     
     def create_dividend_yield_chart(self, data, symbols, **kwargs):
         """Создать график дивидендной доходности"""
