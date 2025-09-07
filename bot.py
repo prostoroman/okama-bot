@@ -823,6 +823,67 @@ class ShansAi:
             text = text.replace(char, f'\\{char}')
         return text
 
+    def _format_describe_table(self, asset_list) -> str:
+        """Format ok.AssetList.describe() data as markdown table using tabulate"""
+        try:
+            if not TABULATE_AVAILABLE:
+                # Fallback to simple text formatting if tabulate is not available
+                return self._format_describe_table_simple(asset_list)
+            
+            # Get describe data
+            describe_data = asset_list.describe()
+            
+            if describe_data is None or describe_data.empty:
+                return "📊 Данные для сравнения недоступны"
+            
+            # Format as markdown table using tabulate
+            markdown_table = tabulate.tabulate(
+                describe_data, 
+                headers='keys', 
+                tablefmt='pipe',
+                floatfmt='.2f'
+            )
+            
+            return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
+            
+        except Exception as e:
+            self.logger.error(f"Error formatting describe table: {e}")
+            return "📊 Ошибка при формировании таблицы статистики"
+    
+    def _format_describe_table_simple(self, asset_list) -> str:
+        """Simple text formatting fallback for describe table"""
+        try:
+            describe_data = asset_list.describe()
+            
+            if describe_data is None or describe_data.empty:
+                return "📊 Данные для сравнения недоступны"
+            
+            # Simple text formatting
+            result = "📊 **Статистика активов:**\n\n"
+            
+            # Get column names (asset symbols)
+            columns = describe_data.columns.tolist()
+            
+            # Get row names (metrics)
+            rows = describe_data.index.tolist()
+            
+            # Create simple table
+            for row in rows:
+                result += f"**{row}:**\n"
+                for col in columns:
+                    value = describe_data.loc[row, col]
+                    if isinstance(value, (int, float)):
+                        result += f"  • {col}: {value:.2f}\n"
+                    else:
+                        result += f"  • {col}: {value}\n"
+                result += "\n"
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error in simple describe table formatting: {e}")
+            return "📊 Ошибка при формировании таблицы статистики"
+
     async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown', reply_markup=None):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
         try:
@@ -2242,6 +2303,14 @@ class ShansAi:
                 if currency in ['CNY', 'HKD']:
                     inflation_ticker = self._get_inflation_ticker_by_currency(currency)
                     caption += f"Инфляция: {inflation_ticker}\n"
+                
+                # Add describe table to caption
+                try:
+                    describe_table = self._format_describe_table(comparison)
+                    caption += f"\n{describe_table}\n"
+                except Exception as e:
+                    self.logger.error(f"Error adding describe table to caption: {e}")
+                    # Continue without table if there's an error
                 
                 # Chart analysis is only available via buttons
                 
