@@ -681,11 +681,14 @@ class ShansAi:
             # Получаем данные по инфляции из okama для CNY активов
             inflation_data = None
             self.logger.info(f"Currency: {currency}, inflation_ticker: {inflation_ticker}")
+            self.logger.info(f"Condition check: currency == 'CNY' = {currency == 'CNY'}, inflation_ticker == 'CNY.INFL' = {inflation_ticker == 'CNY.INFL'}")
             
             if currency == 'CNY' and inflation_ticker == 'CNY.INFL':
                 try:
                     import okama as ok
+                    self.logger.info(f"Creating okama Asset for {inflation_ticker}")
                     inflation_asset = ok.Asset(inflation_ticker)
+                    self.logger.info(f"Got inflation asset, wealth_index type: {type(inflation_asset.wealth_index)}")
                     # Получаем месячные данные инфляции для соответствия основным данным
                     inflation_data = inflation_asset.wealth_index.resample('M').last()
                     self.logger.info(f"Got monthly inflation data for {inflation_ticker}: {len(inflation_data)} records")
@@ -694,6 +697,8 @@ class ShansAi:
                     self.logger.warning(f"Could not get inflation data for {inflation_ticker}: {e}")
                     import traceback
                     self.logger.warning(f"Inflation error traceback: {traceback.format_exc()}")
+            else:
+                self.logger.info(f"Skipping inflation data: currency={currency}, inflation_ticker={inflation_ticker}")
             
             # Создаем график с использованием стандартных стилей
             fig, ax = self.chart_styles.create_chart(figsize=(14, 8))
@@ -780,7 +785,10 @@ class ShansAi:
             plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
             
             # Добавляем копирайт
-            self.chart_styles.add_copyright(fig)
+            try:
+                self.chart_styles.add_copyright(fig, ax)
+            except Exception as e:
+                self.logger.warning(f"Could not add copyright: {e}")
             
             plt.tight_layout()
             
