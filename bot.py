@@ -2487,13 +2487,44 @@ class ShansAi:
                     reply_markup=reply_markup
                 )
                 
-                # Send describe table in separate message for better markdown formatting
+                # Send describe table as image for better display
                 try:
-                    describe_table = self._format_describe_table(comparison)
-                    await self._send_message_safe(update, describe_table, parse_mode='Markdown')
+                    describe_data = comparison.describe()
+                    if describe_data is not None and not describe_data.empty:
+                        # Create table image
+                        fig, ax = chart_styles.create_table_image(
+                            describe_data, 
+                            title="📊 Статистика активов", 
+                            symbols=symbols
+                        )
+                        
+                        # Save table image to bytes
+                        table_buffer = io.BytesIO()
+                        chart_styles.save_figure(fig, table_buffer)
+                        table_buffer.seek(0)
+                        table_bytes = table_buffer.getvalue()
+                        
+                        # Clear matplotlib cache
+                        chart_styles.cleanup_figure(fig)
+                        
+                        # Send table as image
+                        await context.bot.send_photo(
+                            chat_id=update.effective_chat.id,
+                            photo=io.BytesIO(table_bytes),
+                            caption="📊 **Детальная статистика активов**\n\nТаблица содержит все основные метрики производительности и риска для сравнения активов."
+                        )
+                    else:
+                        await self._send_message_safe(update, "📊 Данные для сравнения недоступны")
+                        
                 except Exception as e:
-                    self.logger.error(f"Error sending describe table: {e}")
-                    # Continue without table if there's an error
+                    self.logger.error(f"Error sending describe table as image: {e}")
+                    # Fallback to text table
+                    try:
+                        describe_table = self._format_describe_table(comparison)
+                        await self._send_message_safe(update, describe_table, parse_mode='Markdown')
+                    except Exception as fallback_error:
+                        self.logger.error(f"Error sending fallback text table: {fallback_error}")
+                        await self._send_message_safe(update, "📊 Ошибка при создании таблицы статистики")
                 
                 # AI analysis is now only available via buttons
                 

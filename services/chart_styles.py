@@ -17,6 +17,8 @@ from datetime import datetime
 import pandas as pd
 import warnings
 import contextlib
+from matplotlib.patches import Rectangle
+import matplotlib.patches as mpatches
 
 logger = logging.getLogger(__name__)
 
@@ -669,6 +671,169 @@ class ChartStyles:
             plt.cla()
         except Exception as e:
             logger.error(f"Error cleaning up figure: {e}")
+    
+    def get_color_palette(self, n_colors):
+        """Получить палитру цветов"""
+        return plt.cm.Set3(np.linspace(0, 1, n_colors))
+    
+    def create_table_image(self, data, title="Статистика активов", symbols=None):
+        """Создать таблицу как изображение"""
+        try:
+            with suppress_cjk_warnings():
+                # Определяем размеры таблицы
+                n_rows, n_cols = data.shape
+                
+                # Адаптивные размеры в зависимости от количества данных
+                if n_cols <= 2:
+                    fig_width = 10
+                    fig_height = max(6, n_rows * 0.8 + 2)
+                elif n_cols <= 4:
+                    fig_width = 14
+                    fig_height = max(6, n_rows * 0.8 + 2)
+                else:
+                    fig_width = 16
+                    fig_height = max(6, n_rows * 0.8 + 2)
+                
+                fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+                ax.axis('tight')
+                ax.axis('off')
+                
+                # Подготавливаем данные для таблицы
+                table_data = []
+                headers = []
+                
+                # Заголовки колонок
+                for col in data.columns:
+                    if symbols and col in symbols:
+                        headers.append(f"`{col}`")
+                    else:
+                        headers.append(str(col))
+                
+                # Данные строк
+                for idx, row in data.iterrows():
+                    row_data = [str(idx)]  # Название метрики
+                    for col in data.columns:
+                        value = row[col]
+                        if pd.isna(value):
+                            row_data.append("N/A")
+                        elif isinstance(value, (int, float)):
+                            row_data.append(f"{value:.2f}")
+                        else:
+                            row_data.append(str(value))
+                    table_data.append(row_data)
+                
+                # Создаем таблицу
+                table = ax.table(cellText=table_data,
+                               colLabels=["Метрика"] + headers,
+                               cellLoc='center',
+                               loc='center',
+                               bbox=[0, 0, 1, 1])
+                
+                # Стилизация таблицы
+                table.auto_set_font_size(False)
+                table.set_fontsize(10)
+                
+                # Цветовая схема
+                header_color = '#4A90E2'  # Синий для заголовков
+                metric_color = '#F0F0F0'   # Светло-серый для метрик
+                data_color = '#FFFFFF'    # Белый для данных
+                
+                # Стилизация заголовков
+                for i in range(len(headers) + 1):
+                    table[(0, i)].set_facecolor(header_color)
+                    table[(0, i)].set_text_props(weight='bold', color='white')
+                
+                # Стилизация строк метрик
+                for i in range(1, len(table_data) + 1):
+                    table[(i, 0)].set_facecolor(metric_color)
+                    table[(i, 0)].set_text_props(weight='bold')
+                    
+                    # Стилизация данных
+                    for j in range(1, len(headers) + 1):
+                        table[(i, j)].set_facecolor(data_color)
+                        
+                        # Подсветка лучших значений для числовых метрик
+                        try:
+                            value = float(table_data[i-1][j])
+                            if not pd.isna(value):
+                                # Получаем все значения для этой колонки
+                                column_values = []
+                                for row in table_data:
+                                    try:
+                                        val = float(row[j])
+                                        if not pd.isna(val):
+                                            column_values.append(val)
+                                    except (ValueError, TypeError):
+                                        pass
+                                
+                                if column_values:
+                                    # Для положительных метрик (доходность) - зеленый для лучших
+                                    if 'return' in str(data.index[i-1]).lower() or 'cagr' in str(data.index[i-1]).lower():
+                                        if value == max(column_values):
+                                            table[(i, j)].set_facecolor('#E8F5E8')  # Светло-зеленый
+                                    # Для отрицательных метрик (риск, drawdown) - красный для худших
+                                    elif 'risk' in str(data.index[i-1]).lower() or 'drawdown' in str(data.index[i-1]).lower():
+                                        if value == min(column_values):
+                                            table[(i, j)].set_facecolor('#FFE8E8')  # Светло-красный
+                        except (ValueError, TypeError, IndexError):
+                            pass
+                
+                # Настройка границ
+                for i in range(len(table_data) + 1):
+                    for j in range(len(headers) + 1):
+                        table[(i, j)].set_edgecolor('#CCCCCC')
+                        table[(i, j)].set_linewidth(0.5)
+                
+                # Заголовок таблицы
+                fig.suptitle(title, fontsize=16, fontweight='bold', y=0.95)
+                
+                # Настройка макета
+                plt.tight_layout()
+                plt.subplots_adjust(top=0.9)
+                
+                return fig, ax
+                
+        except Exception as e:
+            logger.error(f"Error creating table image: {e}")
+            # Fallback: создаем простую таблицу
+            return self._create_simple_table_image(data, title, symbols)
+    
+    def _create_simple_table_image(self, data, title="Статистика активов", symbols=None):
+        """Простая таблица как изображение (fallback)"""
+        try:
+            with suppress_cjk_warnings():
+                fig, ax = plt.subplots(figsize=(12, 8))
+                ax.axis('off')
+                
+                # Простое текстовое представление
+                text_content = f"{title}\n\n"
+                
+                for idx, row in data.iterrows():
+                    text_content += f"{idx}:\n"
+                    for col in data.columns:
+                        value = row[col]
+                        if pd.isna(value):
+                            text_content += f"  {col}: N/A\n"
+                        elif isinstance(value, (int, float)):
+                            text_content += f"  {col}: {value:.2f}\n"
+                        else:
+                            text_content += f"  {col}: {value}\n"
+                    text_content += "\n"
+                
+                ax.text(0.05, 0.95, text_content, transform=ax.transAxes,
+                       fontsize=10, verticalalignment='top',
+                       bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+                
+                return fig, ax
+                
+        except Exception as e:
+            logger.error(f"Error creating simple table image: {e}")
+            # Последний fallback
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.text(0.5, 0.5, f"Ошибка создания таблицы: {str(e)}", 
+                   transform=ax.transAxes, ha='center', va='center')
+            ax.axis('off')
+            return fig, ax
 
 # Глобальный экземпляр
 chart_styles = ChartStyles()
