@@ -2550,6 +2550,9 @@ class ShansAi:
                 # Get portfolio information (raw object like /info)
                 portfolio_text = f"{portfolio}"
                 
+                # Escape Markdown characters to prevent parsing errors
+                portfolio_text = self._escape_markdown(portfolio_text)
+                
                 # Portfolio information is already set above as raw object
                 
                 # Generate portfolio symbol using PF namespace and okama's assigned symbol
@@ -2974,6 +2977,9 @@ class ShansAi:
                 
                 # Get portfolio information (raw object like /info)
                 portfolio_text = f"{portfolio}"
+                
+                # Escape Markdown characters to prevent parsing errors
+                portfolio_text = self._escape_markdown(portfolio_text)
                 
                 # Generate portfolio symbol using PF namespace and okama's assigned symbol
                 user_id = update.effective_user.id
