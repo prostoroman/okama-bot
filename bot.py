@@ -2262,18 +2262,23 @@ class ShansAi:
                 
                 # Store context for buttons - use clean portfolio symbols for current_symbols
                 clean_symbols = []
+                display_symbols = []
                 for i, symbol in enumerate(symbols):
                     if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
                         # This is a portfolio - use clean symbol from context
                         if i < len(portfolio_contexts):
-                            clean_symbols.append(portfolio_contexts[i]['symbol'])
+                            clean_symbols.append(portfolio_contexts[i]['symbol'].split(' (')[0])  # Extract clean symbol
+                            display_symbols.append(portfolio_contexts[i]['symbol'])  # Keep descriptive name
                         else:
                             clean_symbols.append(symbol)
+                            display_symbols.append(symbol)
                     else:
                         # This is a regular asset
                         clean_symbols.append(symbol)
+                        display_symbols.append(symbol)
                 
                 user_context['current_symbols'] = clean_symbols
+                user_context['display_symbols'] = display_symbols  # Store descriptive names for display
                 user_context['current_currency'] = currency
                 user_context['last_analysis_type'] = 'comparison'
                 user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
