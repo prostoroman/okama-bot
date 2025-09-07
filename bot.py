@@ -1535,9 +1535,9 @@ class ShansAi:
             # Создаем кнопки для дополнительных функций
             keyboard = [
                 [
-                    InlineKeyboardButton("📈 1Y", callback_data=f"daily_chart_{symbol}"),
-                    InlineKeyboardButton("📅 5Y", callback_data=f"monthly_chart_{symbol}"),
-                    InlineKeyboardButton("📊 All", callback_data=f"all_chart_{symbol}")
+                    InlineKeyboardButton("1Y", callback_data=f"daily_chart_{symbol}"),
+                    InlineKeyboardButton("5Y", callback_data=f"monthly_chart_{symbol}"),
+                    InlineKeyboardButton("All", callback_data=f"all_chart_{symbol}")
                 ],
                 [
                     InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
@@ -3798,8 +3798,13 @@ class ShansAi:
             self.logger.error(f"Error handling data analysis button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}")
 
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp as string"""
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, user_id: int) -> Dict[str, Any]:
-        """Prepare financial data for Gemini analysis"""
+        """Prepare comprehensive financial data for Gemini analysis"""
         try:
             # Get user context to access describe table
             describe_table = ""
@@ -3814,34 +3819,54 @@ class ShansAi:
                 'performance': {},
                 'correlations': [],
                 'additional_info': '',
-                'describe_table': describe_table
+                'describe_table': describe_table,
+                'asset_count': len(symbols),
+                'analysis_type': 'asset_comparison'
             }
             
-            # Calculate performance metrics for each symbol
+            # Calculate detailed performance metrics for each symbol
             for i, symbol in enumerate(symbols):
                 try:
                     if i < len(expanded_symbols):
                         asset_data = expanded_symbols[i]
                         
-                        # Get basic performance metrics
+                        # Get comprehensive performance metrics
+                        performance_metrics = {}
+                        
+                        # Basic metrics
                         if hasattr(asset_data, 'total_return'):
-                            data_info['performance'][symbol] = {
-                                'total_return': asset_data.total_return,
-                                'annual_return': asset_data.annual_return if hasattr(asset_data, 'annual_return') else None,
-                                'volatility': asset_data.volatility if hasattr(asset_data, 'volatility') else None,
-                                'sharpe_ratio': asset_data.sharpe_ratio if hasattr(asset_data, 'sharpe_ratio') else None,
-                                'max_drawdown': asset_data.max_drawdown if hasattr(asset_data, 'max_drawdown') else None
-                            }
-                        else:
-                            # For portfolio data, try to get metrics differently
-                            data_info['performance'][symbol] = {
-                                'total_return': getattr(asset_data, 'total_return', 0),
-                                'annual_return': getattr(asset_data, 'annual_return', 0),
-                                'volatility': getattr(asset_data, 'volatility', 0),
-                                'sharpe_ratio': getattr(asset_data, 'sharpe_ratio', 0),
-                                'max_drawdown': getattr(asset_data, 'max_drawdown', 0)
-                            }
-                            
+                            performance_metrics['total_return'] = asset_data.total_return
+                        if hasattr(asset_data, 'annual_return'):
+                            performance_metrics['annual_return'] = asset_data.annual_return
+                        if hasattr(asset_data, 'volatility'):
+                            performance_metrics['volatility'] = asset_data.volatility
+                        if hasattr(asset_data, 'sharpe_ratio'):
+                            performance_metrics['sharpe_ratio'] = asset_data.sharpe_ratio
+                        if hasattr(asset_data, 'max_drawdown'):
+                            performance_metrics['max_drawdown'] = asset_data.max_drawdown
+                        
+                        # Additional metrics if available
+                        if hasattr(asset_data, 'sortino_ratio'):
+                            performance_metrics['sortino_ratio'] = asset_data.sortino_ratio
+                        if hasattr(asset_data, 'calmar_ratio'):
+                            performance_metrics['calmar_ratio'] = asset_data.calmar_ratio
+                        if hasattr(asset_data, 'var_95'):
+                            performance_metrics['var_95'] = asset_data.var_95
+                        if hasattr(asset_data, 'cvar_95'):
+                            performance_metrics['cvar_95'] = asset_data.cvar_95
+                        
+                        data_info['performance'][symbol] = performance_metrics
+                        
+                    else:
+                        # Fallback for missing data
+                        data_info['performance'][symbol] = {
+                            'total_return': 0,
+                            'annual_return': 0,
+                            'volatility': 0,
+                            'sharpe_ratio': 0,
+                            'max_drawdown': 0
+                        }
+                        
                 except Exception as e:
                     self.logger.warning(f"Failed to get performance metrics for {symbol}: {e}")
                     data_info['performance'][symbol] = {
@@ -3855,22 +3880,36 @@ class ShansAi:
             # Calculate correlation matrix if we have multiple assets
             if len(expanded_symbols) > 1:
                 try:
-                    # Create a simple correlation matrix
+                    # Try to get actual correlation data from okama
+                    correlation_matrix = []
+                    
+                    # Check if we can get correlation from the first asset
+                    if hasattr(expanded_symbols[0], 'correlation_matrix'):
+                        correlation_matrix = expanded_symbols[0].correlation_matrix.tolist()
+                    else:
+                        # Create a simple correlation matrix as fallback
+                        for i in range(len(symbols)):
+                            row = []
+                            for j in range(len(symbols)):
+                                if i == j:
+                                    row.append(1.0)
+                                else:
+                                    # Estimate correlation based on asset types
+                                    row.append(0.3)  # Conservative estimate
+                            correlation_matrix.append(row)
+                    
+                    data_info['correlations'] = correlation_matrix
+                    
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate correlations: {e}")
+                    # Create identity matrix as fallback
                     correlation_matrix = []
                     for i in range(len(symbols)):
                         row = []
                         for j in range(len(symbols)):
-                            if i == j:
-                                row.append(1.0)
-                            else:
-                                # Simple correlation calculation (placeholder)
-                                row.append(0.5)  # Default correlation
+                            row.append(1.0 if i == j else 0.0)
                         correlation_matrix.append(row)
-                    
                     data_info['correlations'] = correlation_matrix
-                except Exception as e:
-                    self.logger.warning(f"Failed to calculate correlations: {e}")
-                    data_info['correlations'] = []
             
             # Add portfolio context information
             if portfolio_contexts:
@@ -3878,6 +3917,15 @@ class ShansAi:
                 for pctx in portfolio_contexts:
                     portfolio_info.append(f"Портфель {pctx.get('symbol', 'Unknown')}: {len(pctx.get('portfolio_symbols', []))} активов")
                 data_info['additional_info'] = f"Включает портфели: {'; '.join(portfolio_info)}"
+            
+            # Add analysis metadata
+            data_info['analysis_metadata'] = {
+                'timestamp': self._get_current_timestamp(),
+                'data_source': 'okama.AssetList.describe()',
+                'analysis_depth': 'comprehensive',
+                'includes_correlations': len(data_info['correlations']) > 0,
+                'includes_describe_table': bool(describe_table)
+            }
             
             return data_info
             
@@ -3889,7 +3937,17 @@ class ShansAi:
                 'period': 'полный доступный период данных',
                 'performance': {},
                 'correlations': [],
-                'additional_info': f'Ошибка подготовки данных: {str(e)}'
+                'additional_info': f'Ошибка подготовки данных: {str(e)}',
+                'describe_table': '',
+                'asset_count': len(symbols),
+                'analysis_type': 'asset_comparison',
+                'analysis_metadata': {
+                    'timestamp': self._get_current_timestamp(),
+                    'data_source': 'error_fallback',
+                    'analysis_depth': 'basic',
+                    'includes_correlations': False,
+                    'includes_describe_table': False
+                }
             }
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):

@@ -262,18 +262,46 @@ class GeminiService:
                     {
                         "parts": [
                             {
-                                "text": f"""Проанализируй следующие финансовые данные и дай подробный анализ:
+                                "text": f"""Ты — эксперт-финансовый аналитик с глубокими знаниями в области инвестиционного анализа и портфельного менеджмента.
+
+Проанализируй следующие финансовые данные и предоставь детальный профессиональный анализ:
 
 {data_description}
 
-Пожалуйста, предоставь:
-1. Общую оценку производительности активов
-2. Сравнительный анализ между активами
-3. Анализ рисков и волатильности
-4. Рекомендации по инвестированию
-5. Выводы о трендах и паттернах
+**ТРЕБОВАНИЯ К АНАЛИЗУ:**
 
-Отвечай на русском языке, структурированно и подробно."""
+1. **СРАВНИТЕЛЬНЫЙ АНАЛИЗ АКТИВОВ:**
+   - Сравни каждый актив по всем метрикам из таблицы describe
+   - Выдели лидеров и аутсайдеров по ключевым показателям
+   - Проанализируй различия в доходности, риске и эффективности
+
+2. **АНАЛИЗ РИСК-ДОХОДНОСТЬ:**
+   - Оцени соотношение риск-доходность для каждого актива
+   - Проанализируй коэффициенты Шарпа, Сортино и другие метрики эффективности
+   - Сравни максимальные просадки и волатильность
+
+3. **КОРРЕЛЯЦИОННЫЙ АНАЛИЗ:**
+   - Оцени степень корреляции между активами
+   - Определи возможности диверсификации
+   - Выяви потенциальные риски концентрации
+
+4. **ИНВЕСТИЦИОННЫЕ РЕКОМЕНДАЦИИ:**
+   - Дай конкретные рекомендации по каждому активу
+   - Предложи оптимальные веса для портфеля
+   - Укажи подходящие стратегии использования
+
+5. **СИЛЬНЫЕ И СЛАБЫЕ СТОРОНЫ:**
+   - Выдели преимущества каждого актива
+   - Укажи на недостатки и риски
+   - Предложи способы минимизации рисков
+
+**ФОРМАТ ОТВЕТА:**
+- Структурированный анализ с четкими разделами
+- Конкретные цифры и метрики из предоставленных данных
+- Практические рекомендации
+- Обоснованные выводы
+
+Отвечай на русском языке, профессионально и детально."""
                             }
                         ]
                     }
@@ -361,19 +389,31 @@ class GeminiService:
     
     def _prepare_data_description(self, data_info: Dict[str, Any]) -> str:
         """
-        Prepare data description for Gemini analysis
+        Prepare comprehensive data description for Gemini analysis
         
         Args:
             data_info: Dictionary containing financial data information
             
         Returns:
-            Formatted data description string
+            Formatted data description string with detailed comparison parameters
         """
+        # Handle None or invalid input
+        if not data_info or not isinstance(data_info, dict):
+            return "**Ошибка:** Данные для анализа недоступны\n\n" + "="*50 + "\n**ИНСТРУКЦИИ ДЛЯ АНАЛИЗА:**\nИспользуй все предоставленные данные для комплексного анализа:\n1. Сравни активы по всем метрикам из таблицы describe\n2. Проанализируй соотношение риск-доходность\n3. Оцени корреляции между активами\n4. Дай рекомендации по инвестированию\n5. Выдели сильные и слабые стороны каждого актива"
+        
         description_parts = []
         
         # Basic info
         if 'symbols' in data_info:
-            description_parts.append(f"**Анализируемые активы:** {', '.join(data_info['symbols'])}")
+            symbols_list = ', '.join(data_info['symbols'])
+            description_parts.append(f"**Анализируемые активы:** {symbols_list}")
+            description_parts.append(f"**Количество активов:** {len(data_info['symbols'])}")
+        
+        if 'asset_count' in data_info:
+            description_parts.append(f"**Общее количество активов:** {data_info['asset_count']}")
+        
+        if 'analysis_type' in data_info:
+            description_parts.append(f"**Тип анализа:** {data_info['analysis_type']}")
         
         if 'currency' in data_info:
             description_parts.append(f"**Валюта:** {data_info['currency']}")
@@ -381,35 +421,59 @@ class GeminiService:
         if 'period' in data_info:
             description_parts.append(f"**Период анализа:** {data_info['period']}")
         
-        # Performance metrics
-        if 'performance' in data_info:
+        # Analysis metadata
+        if 'analysis_metadata' in data_info:
+            metadata = data_info['analysis_metadata']
+            description_parts.append(f"**Источник данных:** {metadata.get('data_source', 'unknown')}")
+            description_parts.append(f"**Глубина анализа:** {metadata.get('analysis_depth', 'basic')}")
+            description_parts.append(f"**Включает корреляции:** {'Да' if metadata.get('includes_correlations', False) else 'Нет'}")
+            description_parts.append(f"**Включает таблицу describe:** {'Да' if metadata.get('includes_describe_table', False) else 'Нет'}")
+        
+        # Describe table data - это основная информация для анализа
+        if 'describe_table' in data_info and data_info['describe_table']:
+            description_parts.append("\n**📊 ДЕТАЛЬНАЯ СТАТИСТИКА АКТИВОВ (okama.AssetList.describe):**")
+            description_parts.append(data_info['describe_table'])
+        
+        # Performance metrics (дополнительные метрики)
+        if 'performance' in data_info and data_info['performance']:
             perf = data_info['performance']
-            description_parts.append("\n**Метрики производительности:**")
+            description_parts.append("\n**📈 ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ:**")
             
             for symbol, metrics in perf.items():
                 description_parts.append(f"\n**{symbol}:**")
-                if 'total_return' in metrics:
+                if 'total_return' in metrics and metrics['total_return'] is not None:
                     description_parts.append(f"  • Общая доходность: {metrics['total_return']:.2%}")
-                if 'annual_return' in metrics:
+                if 'annual_return' in metrics and metrics['annual_return'] is not None:
                     description_parts.append(f"  • Годовая доходность: {metrics['annual_return']:.2%}")
-                if 'volatility' in metrics:
+                if 'volatility' in metrics and metrics['volatility'] is not None:
                     description_parts.append(f"  • Волатильность: {metrics['volatility']:.2%}")
-                if 'sharpe_ratio' in metrics:
+                if 'sharpe_ratio' in metrics and metrics['sharpe_ratio'] is not None:
                     description_parts.append(f"  • Коэффициент Шарпа: {metrics['sharpe_ratio']:.2f}")
-                if 'max_drawdown' in metrics:
+                if 'max_drawdown' in metrics and metrics['max_drawdown'] is not None:
                     description_parts.append(f"  • Максимальная просадка: {metrics['max_drawdown']:.2%}")
         
         # Correlation matrix
-        if 'correlations' in data_info:
-            description_parts.append("\n**Корреляционная матрица:**")
-            for i, symbol1 in enumerate(data_info['symbols']):
-                for j, symbol2 in enumerate(data_info['symbols']):
+        if 'correlations' in data_info and data_info['correlations']:
+            description_parts.append("\n**🔗 КОРРЕЛЯЦИОННАЯ МАТРИЦА:**")
+            symbols = data_info.get('symbols', [])
+            for i, symbol1 in enumerate(symbols):
+                for j, symbol2 in enumerate(symbols):
                     if i < j:  # Only upper triangle
                         corr = data_info['correlations'][i][j]
                         description_parts.append(f"  • {symbol1} ↔ {symbol2}: {corr:.3f}")
         
         # Additional data
-        if 'additional_info' in data_info:
-            description_parts.append(f"\n**Дополнительная информация:** {data_info['additional_info']}")
+        if 'additional_info' in data_info and data_info['additional_info']:
+            description_parts.append(f"\n**ℹ️ ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ:** {data_info['additional_info']}")
+        
+        # Добавляем инструкции для AI
+        description_parts.append("\n" + "="*50)
+        description_parts.append("**ИНСТРУКЦИИ ДЛЯ АНАЛИЗА:**")
+        description_parts.append("Используй все предоставленные данные для комплексного анализа:")
+        description_parts.append("1. Сравни активы по всем метрикам из таблицы describe")
+        description_parts.append("2. Проанализируй соотношение риск-доходность")
+        description_parts.append("3. Оцени корреляции между активами")
+        description_parts.append("4. Дай рекомендации по инвестированию")
+        description_parts.append("5. Выдели сильные и слабые стороны каждого актива")
         
         return "\n".join(description_parts)
