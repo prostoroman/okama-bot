@@ -704,18 +704,11 @@ class ShansAi:
             else:
                 self.logger.info(f"Skipping inflation data: currency={currency}, inflation_ticker={inflation_ticker}")
             
-            # Создаем график с использованием стандартных стилей
-            fig, ax = self.chart_styles.create_chart(figsize=(14, 8))
-            
-            # Получаем стандартные цвета
-            import matplotlib.pyplot as plt
-            import matplotlib.dates as mdates
-            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-            
-            # Добавляем данные китайских символов
+            # Подготавливаем данные для стандартного метода сравнения
+            comparison_data = {}
             symbols_list = []
             
-            for i, (symbol, data_dict) in enumerate(chinese_data.items()):
+            for symbol, data_dict in chinese_data.items():
                 historical_data = data_dict['data']
                 symbol_info = data_dict['info']
                 
@@ -736,82 +729,55 @@ class ShansAi:
                     if len(symbol_name) > 30:
                         symbol_name = symbol_name[:27] + "..."
                     
-                    ax.plot(historical_data.index, normalized_data, 
-                           label=f"{symbol} - {symbol_name}", 
-                           linewidth=2.5, 
-                           color=colors[i % len(colors)],
-                           alpha=0.9)
+                    # Добавляем в данные для сравнения
+                    comparison_data[f"{symbol} - {symbol_name}"] = normalized_data
             
             # Добавляем данные по инфляции если доступны
             if inflation_data is not None and not inflation_data.empty:
                 # Нормализуем инфляцию к базовому значению (1000)
                 normalized_inflation = inflation_data / inflation_data.iloc[0] * 1000
                 self.logger.info(f"Adding inflation line: {len(normalized_inflation)} points, range: {normalized_inflation.min():.2f} - {normalized_inflation.max():.2f}")
-                ax.plot(inflation_data.index, normalized_inflation, 
-                       label=f"{inflation_ticker} - Inflation", 
-                       linewidth=3, 
-                       color='red',
-                       alpha=0.8,
-                       linestyle='--')
+                comparison_data[f"{inflation_ticker} - Inflation"] = normalized_inflation
             else:
                 self.logger.warning(f"Inflation data is None or empty: {inflation_data is None}, {inflation_data.empty if inflation_data is not None else 'N/A'}")
             
-            # Формируем заголовок: только тикеры
-            title_parts = []
-            title_parts.append("Comparison")
+            # Создаем DataFrame для стандартного метода сравнения
+            import pandas as pd
+            comparison_df = pd.DataFrame(comparison_data)
             
-            # Добавляем только тикеры
+            # Формируем заголовок
+            title_parts = ["Comparison"]
             if symbols_list:
                 symbols_str = ", ".join(symbols_list)
                 title_parts.append(symbols_str)
-            
-            # Добавляем валюту
             title_parts.append(f"Currency: {currency}")
-            
             title = ", ".join(title_parts)
             
-            # Настройка заголовка (скрываем xlabel и ylabel)
-            ax.set_title(title, fontsize=16, fontweight='semibold', pad=20)
-            # Скрываем подписи осей
-            ax.set_xlabel("")
-            ax.set_ylabel("")
-            
-            # Настройка легенды
-            ax.legend(loc='upper left', fontsize=10, frameon=True, 
-                     fancybox=True, shadow=True, framealpha=0.9)
-            
-            # Настройка сетки
-            ax.grid(True, alpha=0.25, linestyle='-', linewidth=0.7)
-            
-            # Форматирование дат - только года
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-            ax.xaxis.set_major_locator(mdates.YearLocator())
-            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-            
-            # Добавляем копирайт
-            try:
-                self.chart_styles.add_copyright(fig, ax)
-            except Exception as e:
-                self.logger.warning(f"Could not add copyright: {e}")
-            
-            plt.tight_layout()
+            # Используем стандартный метод создания графика сравнения
+            fig, ax = self.chart_styles.create_comparison_chart(
+                data=comparison_df,
+                symbols=list(comparison_data.keys()),
+                currency=currency,
+                title=title,
+                xlabel='',  # Скрываем подпись оси X
+                ylabel=''   # Скрываем подпись оси Y
+            )
             
             # Сохраняем график в bytes
             img_buffer = io.BytesIO()
-            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            fig.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Очищаем matplotlib
-            plt.close()
+            import matplotlib.pyplot as plt
+            plt.close(fig)
             
             # Создаем caption
-            caption = f"📈 Сравнение китайских символов: {', '.join(symbols)}\n\n"
+            caption = f"📈 Сравнение: {', '.join(symbols)}\n\n"
             caption += f"💱 Валюта: {currency} ({currency_info})\n"
             caption += f"📊 Инфляция: {inflation_ticker}\n"
-            caption += f"📈 Данные: Tushare API (месячные) + Okama (инфляция)\n"
-            caption += f"📏 Нормализация: база = 1000 (как в okama)\n"
-            caption += f"📅 Период: максимальный доступный (месячные данные)"
+
             
             # Отправляем график
             await context.bot.send_photo(
@@ -6102,11 +6068,63 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
+            # Filter out None values and empty strings
+            final_symbols = [s for s in symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            self.logger.info(f"Filtered symbols: {final_symbols}")
+            
             await self._send_callback_message(update, context, "📉 Создаю график просадок...")
             
-            # Create portfolio and generate drawdowns chart
-            portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
-            await self._create_portfolio_drawdowns_chart(update, context, portfolio, symbols, currency, weights)
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Debug logging
+                    self.logger.info(f"Validating symbol {i}: '{symbol}' (type: {type(symbol)})")
+                    
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    valid_symbols.append(symbol)
+                    if i < len(weights):
+                        valid_weights.append(weights[i])
+                    else:
+                        valid_weights.append(1.0 / len(final_symbols))
+                    self.logger.info(f"Symbol {symbol} validated successfully")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Create Portfolio with validated symbols
+            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio drawdowns by symbol: {e}")

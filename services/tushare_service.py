@@ -98,6 +98,15 @@ class TushareService:
             # Get stock basic info
             df = self.pro.stock_basic(exchange='', list_status='L')
             
+            # Debug: Check if DataFrame is empty or missing columns
+            if df.empty:
+                self.logger.error(f"stock_basic returned empty DataFrame for symbol {symbol_code}")
+                return {"error": "No stock data available"}
+            
+            if 'symbol' not in df.columns:
+                self.logger.error(f"stock_basic missing 'symbol' column. Available columns: {df.columns.tolist()}")
+                return {"error": "Missing symbol column"}
+            
             # Find matching stock
             stock_info = df[df['symbol'] == symbol_code]
             if stock_info.empty:
@@ -107,7 +116,7 @@ class TushareService:
             info = stock_info.iloc[0].to_dict()
             
             # Use English name if available, otherwise fall back to Chinese name
-            if 'enname' in info and info['enname']:
+            if 'enname' in info and info['enname'] and info['enname'].strip() and info['enname'] != 'N/A':
                 info['name'] = info['enname']
             
             # Get additional metrics
@@ -161,9 +170,9 @@ class TushareService:
             info = stock_info.iloc[0].to_dict()
             
             # Use English name if available, otherwise fall back to Chinese name
-            if 'enname' in info and info['enname']:
+            if 'enname' in info and info['enname'] and info['enname'].strip() and info['enname'] != 'N/A':
                 info['name'] = info['enname']
-            
+
             # Add missing fields for consistency
             info.update({
                 'exchange': 'HKEX',

@@ -190,7 +190,7 @@ class ChartStyles:
             plt.style.use(self.style['style'])
             
             # Убираем параметры, которые не поддерживаются plt.subplots
-            plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright']}
+            plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright', 'title', 'xlabel', 'ylabel']}
             
             if figsize is None:
                 if rows == 1 and cols == 1:
@@ -506,9 +506,13 @@ class ChartStyles:
             ax.plot(data.index, data[column].values, 
                    color=color, alpha=self.lines['alpha'], label=column)
         
-        title = f'Сравнение активов: {", ".join(symbols)}'
-        ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
-        self.apply_styling(ax, title=title, ylabel=ylabel)
+        # Извлекаем параметры из kwargs
+        title = kwargs.get('title', f'Сравнение активов: {", ".join(symbols)}')
+        xlabel = kwargs.get('xlabel', '')
+        ylabel = kwargs.get('ylabel', f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность')
+        
+        # Применяем стили
+        self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel)
         ax.tick_params(axis='x', rotation=45)
         
         return fig, ax
