@@ -3389,6 +3389,136 @@ class ShansAi:
             self.logger.error(f"Error in compare input handler: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода сравнения: {str(e)}")
 
+    def _safe_markdown(self, text: str) -> str:
+        """Safe Markdown cleaning to prevent parsing errors - simple version"""
+        try:
+            if not text or not isinstance(text, str):
+                return text or ""
+            
+            import re
+            
+            # Simple approach: fix most common issues that cause parsing errors
+            # Fix unclosed ** - count and balance them
+            bold_count = text.count('**')
+            if bold_count % 2 == 1:
+                # Remove last **
+                last_bold = text.rfind('**')
+                if last_bold != -1:
+                    text = text[:last_bold] + text[last_bold + 2:]
+                    self.logger.warning("Fixed unclosed bold marker")
+            
+            # Fix unclosed * - count and balance them
+            italic_count = text.count('*')
+            if italic_count % 2 == 1:
+                # Remove last *
+                last_italic = text.rfind('*')
+                if last_italic != -1:
+                    text = text[:last_italic] + text[last_italic + 1:]
+                    self.logger.warning("Fixed unclosed italic marker")
+            
+            # Fix unclosed ` - count and balance them
+            code_count = text.count('`')
+            if code_count % 2 == 1:
+                # Remove last `
+                last_code = text.rfind('`')
+                if last_code != -1:
+                    text = text[:last_code] + text[last_code + 1:]
+                    self.logger.warning("Fixed unclosed inline code")
+            
+            # Fix unclosed code blocks ``` - count and balance them
+            block_count = text.count('```')
+            if block_count % 2 == 1:
+                # Remove last ```
+                last_block = text.rfind('```')
+                if last_block != -1:
+                    text = text[:last_block] + text[last_block + 3:]
+                    self.logger.warning("Fixed unclosed code block")
+            
+            # Escape problematic underscores
+            text = re.sub(r'(?<!\*)_(?!\*)', r'\_', text)
+            
+            return text
+            
+        except Exception as e:
+            self.logger.warning(f"Error in safe markdown cleaning: {e}")
+            # Last resort: remove all markdown
+            import re
+            text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+            text = re.sub(r'\*(.*?)\*', r'\1', text)
+            text = re.sub(r'`(.*?)`', r'\1', text)
+            text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+            return text
+
+    def _clean_markdown(self, text: str) -> str:
+        """Clean and fix Markdown formatting to prevent parsing errors"""
+        try:
+            if not text or not isinstance(text, str):
+                return text or ""
+            
+            # Remove or fix common Markdown issues
+            import re
+            
+            # Fix unclosed bold/italic markers
+            # Count ** and * to ensure they're balanced
+            bold_count = text.count('**')
+            italic_count = text.count('*')
+            
+            # If odd number of **, remove the last one
+            if bold_count % 2 == 1:
+                # Find the last ** and remove it
+                last_bold = text.rfind('**')
+                if last_bold != -1:
+                    text = text[:last_bold] + text[last_bold + 2:]
+                    self.logger.warning("Fixed unclosed bold marker")
+            
+            # If odd number of *, remove the last one
+            if italic_count % 2 == 1:
+                # Find the last * and remove it
+                last_italic = text.rfind('*')
+                if last_italic != -1:
+                    text = text[:last_italic] + text[last_italic + 1:]
+                    self.logger.warning("Fixed unclosed italic marker")
+            
+            # Fix unclosed code blocks - remove the opening ``` and everything after it
+            code_block_count = text.count('```')
+            if code_block_count % 2 == 1:
+                # Find the last ``` and remove it and everything after it
+                last_code = text.rfind('```')
+                if last_code != -1:
+                    # Find the start of the line with the last ```
+                    line_start = text.rfind('\n', 0, last_code) + 1
+                    text = text[:line_start] + text[last_code + 3:]
+                    self.logger.warning("Fixed unclosed code block")
+            
+            # Fix unclosed inline code
+            inline_code_count = text.count('`')
+            if inline_code_count % 2 == 1:
+                # Remove the last `
+                last_inline = text.rfind('`')
+                if last_inline != -1:
+                    text = text[:last_inline] + text[last_inline + 1:]
+                    self.logger.warning("Fixed unclosed inline code")
+            
+            # Remove or escape problematic characters
+            # Escape underscores that are not part of markdown
+            text = re.sub(r'(?<!\*)_(?!\*)', r'\_', text)
+            
+            # Remove or fix problematic sequences
+            text = re.sub(r'\*\*\*\*+', '**', text)  # More than 2 asterisks
+            text = re.sub(r'\*\*\*', '**', text)     # 3 asterisks
+            
+            return text
+            
+        except Exception as e:
+            self.logger.warning(f"Error cleaning markdown: {e}")
+            # If cleaning fails, remove all markdown
+            import re
+            text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # Remove bold
+            text = re.sub(r'\*(.*?)\*', r'\1', text)      # Remove italic
+            text = re.sub(r'`(.*?)`', r'\1', text)        # Remove inline code
+            text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)  # Remove code blocks
+            return text
+
     async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить сообщение в callback query - исправлено для обработки None и разбивки длинных сообщений"""
         try:
@@ -3396,6 +3526,10 @@ class ShansAi:
             if update is None or context is None:
                 self.logger.error("Cannot send message: update or context is None")
                 return
+            
+            # Clean Markdown if parse_mode is Markdown
+            if parse_mode == 'Markdown':
+                text = self._safe_markdown(text)
             
             # Разбиваем длинные сообщения на части
             max_length = 4000  # Оставляем запас для безопасности
@@ -3439,6 +3573,10 @@ class ShansAi:
     async def _send_long_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить длинное сообщение по частям через callback query"""
         try:
+            # Clean Markdown if parse_mode is Markdown
+            if parse_mode == 'Markdown':
+                text = self._safe_markdown(text)
+            
             # Разбиваем текст на части
             parts = self._split_text_smart(text)
             
@@ -3448,6 +3586,10 @@ class ShansAi:
                     part_text = f"📄 **Часть {i+1} из {len(parts)}:**\n\n{part}"
                 else:
                     part_text = part
+                
+                # Clean Markdown for each part
+                if parse_mode == 'Markdown':
+                    part_text = self._safe_markdown(part_text)
                 
                 # Отправляем каждую часть
                 if hasattr(update, 'callback_query') and update.callback_query is not None:
