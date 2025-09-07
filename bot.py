@@ -2273,7 +2273,7 @@ class ShansAi:
                             clean_symbols.append(symbol)
                             display_symbols.append(symbol)
                     else:
-                        # This is a regular asset
+                        # This is a regular asset - use original symbol from portfolio_descriptions
                         clean_symbols.append(symbol)
                         display_symbols.append(symbol)
                 
@@ -3489,6 +3489,7 @@ class ShansAi:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
+            display_symbols = user_context.get('display_symbols', symbols)  # Use descriptive names for display
             currency = user_context.get('current_currency', 'USD')
             expanded_symbols = user_context.get('expanded_symbols', [])
             portfolio_contexts = user_context.get('portfolio_contexts', [])
@@ -3504,25 +3505,27 @@ class ShansAi:
             asset_list_items = []
             asset_names = []
             
-            # Add portfolios from context
-            for pctx in portfolio_contexts:
-                try:
-                    p = ok.Portfolio(
-                        pctx.get('portfolio_symbols', []),
-                        weights=pctx.get('portfolio_weights', []),
-                        ccy=pctx.get('portfolio_currency') or currency,
-                    )
-                    asset_list_items.append(p)
-                    asset_names.append(pctx.get('symbol', 'Portfolio'))
-                except Exception as pe:
-                    self.logger.warning(f"Failed to recreate portfolio for Risk/Return: {pe}")
-            
-            # Add individual assets
-            for symbol in symbols:
-                if symbol not in [pctx.get('symbol', '') for pctx in portfolio_contexts]:
-                    # This is an individual asset, not a portfolio
-                    asset_list_items.append(symbol)
-                    asset_names.append(symbol)
+            # Use display_symbols for proper naming - they already contain descriptive names
+            for i, symbol in enumerate(symbols):
+                if i < len(expanded_symbols):
+                    if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
+                        # This is a portfolio - recreate it
+                        if i < len(portfolio_contexts):
+                            pctx = portfolio_contexts[i]
+                            try:
+                                p = ok.Portfolio(
+                                    pctx.get('portfolio_symbols', []),
+                                    weights=pctx.get('portfolio_weights', []),
+                                    ccy=pctx.get('portfolio_currency') or currency,
+                                )
+                                asset_list_items.append(p)
+                                asset_names.append(display_symbols[i])  # Use descriptive name
+                            except Exception as pe:
+                                self.logger.warning(f"Failed to recreate portfolio for Risk/Return: {pe}")
+                    else:
+                        # This is a regular asset
+                        asset_list_items.append(symbol)
+                        asset_names.append(display_symbols[i])  # Use descriptive name
 
             if not asset_list_items:
                 await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для построения графика")
