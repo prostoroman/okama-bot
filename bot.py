@@ -824,7 +824,7 @@ class ShansAi:
         return text
 
     def _format_describe_table(self, asset_list) -> str:
-        """Format ok.AssetList.describe() data as markdown table using tabulate"""
+        """Format ok.AssetList.describe() data with adaptive formatting for Telegram"""
         try:
             if not TABULATE_AVAILABLE:
                 # Fallback to simple text formatting if tabulate is not available
@@ -836,30 +836,66 @@ class ShansAi:
             if describe_data is None or describe_data.empty:
                 return "📊 Данные для сравнения недоступны"
             
-            # Format as markdown table using tabulate with pipe format for better Telegram display
-            markdown_table = tabulate.tabulate(
-                describe_data, 
-                headers='keys', 
-                tablefmt='pipe',
-                floatfmt='.2f'
-            )
+            # Count columns (assets) to choose best format
+            num_assets = len(describe_data.columns)
             
-            return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
+            if num_assets <= 2:
+                # For 1-2 assets, use pipe format (most readable)
+                markdown_table = tabulate.tabulate(
+                    describe_data, 
+                    headers='keys', 
+                    tablefmt='pipe',
+                    floatfmt='.2f'
+                )
+                return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
+            
+            elif num_assets <= 4:
+                # For 3-4 assets, use simple format (compact but readable)
+                markdown_table = tabulate.tabulate(
+                    describe_data, 
+                    headers='keys', 
+                    tablefmt='simple',
+                    floatfmt='.2f'
+                )
+                return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
+            
+            else:
+                # For 5+ assets, use vertical format (most mobile-friendly)
+                return self._format_describe_table_vertical(describe_data)
             
         except Exception as e:
             self.logger.error(f"Error formatting describe table: {e}")
             return "📊 Ошибка при формировании таблицы статистики"
     
     def _format_describe_table_simple(self, asset_list) -> str:
-        """Simple text formatting fallback for describe table"""
+        """Simple text formatting fallback for describe table with adaptive formatting"""
         try:
             describe_data = asset_list.describe()
             
             if describe_data is None or describe_data.empty:
                 return "📊 Данные для сравнения недоступны"
             
-            # Simple text formatting with better structure
-            result = "📊 **Статистика активов:**\n\n"
+            # Count columns (assets) to choose best format
+            num_assets = len(describe_data.columns)
+            
+            if num_assets <= 2:
+                # For 1-2 assets, use simple table format
+                return self._format_simple_table(describe_data)
+            elif num_assets <= 4:
+                # For 3-4 assets, use compact table format
+                return self._format_compact_table(describe_data)
+            else:
+                # For 5+ assets, use vertical format
+                return self._format_describe_table_vertical(describe_data)
+            
+        except Exception as e:
+            self.logger.error(f"Error in simple describe table formatting: {e}")
+            return "📊 Ошибка при формировании таблицы статистики"
+    
+    def _format_simple_table(self, describe_data) -> str:
+        """Format as simple markdown table"""
+        try:
+            result = ["📊 **Статистика активов:**\n"]
             
             # Get column names (asset symbols)
             columns = describe_data.columns.tolist()
@@ -867,12 +903,11 @@ class ShansAi:
             # Get row names (metrics)
             rows = describe_data.index.tolist()
             
-            # Create a more structured table-like format
-            # Header row
-            header = "| Метрика | " + " | ".join(columns) + " |"
+            # Create simple table
+            header = "| Метрика | " + " | ".join([f"`{col}`" for col in columns]) + " |"
             separator = "|" + "|".join([" --- " for _ in range(len(columns) + 1)]) + "|"
             
-            result += f"```\n{header}\n{separator}\n"
+            result.append(f"```\n{header}\n{separator}")
             
             # Data rows
             for row in rows:
@@ -887,13 +922,82 @@ class ShansAi:
                     else:
                         row_data.append(str(value))
                 
-                result += "| " + " | ".join(row_data) + " |\n"
+                result.append("| " + " | ".join(row_data) + " |")
             
-            result += "```"
-            return result
+            result.append("```")
+            return "\n".join(result)
             
         except Exception as e:
-            self.logger.error(f"Error in simple describe table formatting: {e}")
+            self.logger.error(f"Error in simple table formatting: {e}")
+            return "📊 Ошибка при формировании таблицы"
+    
+    def _format_compact_table(self, describe_data) -> str:
+        """Format as compact table"""
+        try:
+            result = ["📊 **Статистика активов:**\n"]
+            
+            # Get column names (asset symbols)
+            columns = describe_data.columns.tolist()
+            
+            # Get row names (metrics)
+            rows = describe_data.index.tolist()
+            
+            # Create compact table
+            header = "Metric".ljust(20) + " | " + " | ".join([col.ljust(8) for col in columns])
+            separator = "-" * len(header)
+            
+            result.append(f"```\n{header}\n{separator}")
+            
+            # Data rows
+            for row in rows:
+                row_str = str(row).ljust(20) + " | "
+                values = []
+                for col in columns:
+                    value = describe_data.loc[row, col]
+                    if pd.isna(value):
+                        values.append("N/A".ljust(8))
+                    elif isinstance(value, (int, float)):
+                        values.append(f"{value:.2f}".ljust(8))
+                    else:
+                        values.append(str(value).ljust(8))
+                row_str += " | ".join(values)
+                result.append(row_str)
+            
+            result.append("```")
+            return "\n".join(result)
+            
+        except Exception as e:
+            self.logger.error(f"Error in compact table formatting: {e}")
+            return "📊 Ошибка при формировании таблицы"
+    
+    def _format_describe_table_vertical(self, describe_data) -> str:
+        """Format describe data in vertical format for mobile-friendly display"""
+        try:
+            result = ["📊 **Статистика активов:**\n"]
+            
+            # Get column names (asset symbols)
+            columns = describe_data.columns.tolist()
+            
+            # Get row names (metrics)
+            rows = describe_data.index.tolist()
+            
+            # Create vertical format - one metric per line
+            for row in rows:
+                result.append(f"📊 **{row}:**")
+                for col in columns:
+                    value = describe_data.loc[row, col]
+                    if pd.isna(value):
+                        result.append(f"  • `{col}`: N/A")
+                    elif isinstance(value, (int, float)):
+                        result.append(f"  • `{col}`: {value:.2f}")
+                    else:
+                        result.append(f"  • `{col}`: {value}")
+                result.append("")  # Empty line between metrics
+            
+            return "\n".join(result)
+            
+        except Exception as e:
+            self.logger.error(f"Error in vertical describe table formatting: {e}")
             return "📊 Ошибка при формировании таблицы статистики"
 
     async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown', reply_markup=None):
