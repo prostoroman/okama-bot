@@ -4730,39 +4730,48 @@ class ShansAi:
             import io
             
             def create_tushare_monthly_chart():
-                # Set backend for headless mode
-                import matplotlib
-                matplotlib.use('Agg')
-                
-                # Get monthly data from Tushare
-                monthly_data = self.tushare_service.get_monthly_data(symbol)
-                
-                if monthly_data.empty:
+                try:
+                    # Set backend for headless mode
+                    import matplotlib
+                    matplotlib.use('Agg')
+                    
+                    # Get monthly data from Tushare
+                    monthly_data = self.tushare_service.get_monthly_data(symbol)
+                    
+                    if monthly_data.empty:
+                        self.logger.warning(f"Monthly data is empty for {symbol}")
+                        return None
+                    
+                    # Prepare data for chart - set trade_date as index
+                    chart_data = monthly_data.set_index('trade_date')['close']
+                    
+                    # Determine currency based on exchange
+                    currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+                    
+                    # Create chart using ChartStyles
+                    fig, ax = chart_styles.create_price_chart(
+                        data=chart_data,
+                        symbol=symbol,
+                        currency=currency,
+                        period='месячный'
+                    )
+                    
+                    # Save to bytes
+                    buffer = io.BytesIO()
+                    fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+                    buffer.seek(0)
+                    chart_bytes = buffer.getvalue()
+                    buffer.close()
+                    plt.close(fig)
+                    
+                    self.logger.info(f"Monthly chart created successfully for {symbol}: {len(chart_bytes)} bytes")
+                    return chart_bytes
+                    
+                except Exception as e:
+                    self.logger.error(f"Error in create_tushare_monthly_chart for {symbol}: {e}")
+                    import traceback
+                    self.logger.error(f"Traceback: {traceback.format_exc()}")
                     return None
-                
-                # Prepare data for chart - set trade_date as index
-                chart_data = monthly_data.set_index('trade_date')['close']
-                
-                # Determine currency based on exchange
-                currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
-                
-                # Create chart using ChartStyles
-                fig, ax = chart_styles.create_price_chart(
-                    data=chart_data,
-                    symbol=symbol,
-                    currency=currency,
-                    period='месячный'
-                )
-                
-                # Save to bytes
-                buffer = io.BytesIO()
-                fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-                buffer.seek(0)
-                chart_bytes = buffer.getvalue()
-                buffer.close()
-                plt.close(fig)
-                
-                return chart_bytes
             
             # Run chart creation in thread to avoid blocking
             import concurrent.futures
@@ -4774,6 +4783,8 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error getting Tushare monthly chart for {symbol}: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     async def _get_dividend_table_image(self, symbol: str) -> Optional[bytes]:
