@@ -4345,17 +4345,47 @@ class ShansAi:
                             self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
                             performance_metrics['sortino_ratio'] = 0.0
                         
+                        # Additional metrics calculation
+                        try:
+                            # Calmar Ratio = Annual Return / Max Drawdown (absolute value)
+                            annual_return = performance_metrics.get('annual_return', 0)
+                            max_drawdown = performance_metrics.get('max_drawdown', 0)
+                            if max_drawdown != 0:
+                                calmar_ratio = annual_return / abs(max_drawdown)
+                                performance_metrics['calmar_ratio'] = calmar_ratio
+                                self.logger.info(f"Calmar ratio for {symbol}: {calmar_ratio:.4f}")
+                            else:
+                                performance_metrics['calmar_ratio'] = 0.0
+                            
+                            # VaR 95% and CVaR 95% calculation
+                            returns = performance_metrics.get('_returns')
+                            if returns is not None and len(returns) > 0:
+                                # VaR 95% - 5th percentile of returns (worst 5% of returns)
+                                var_95 = returns.quantile(0.05)
+                                performance_metrics['var_95'] = var_95
+                                
+                                # CVaR 95% - Expected value of returns below VaR 95%
+                                returns_below_var = returns[returns <= var_95]
+                                if len(returns_below_var) > 0:
+                                    cvar_95 = returns_below_var.mean()
+                                    performance_metrics['cvar_95'] = cvar_95
+                                else:
+                                    performance_metrics['cvar_95'] = var_95
+                                
+                                self.logger.info(f"VaR 95% for {symbol}: {var_95:.4f}, CVaR 95%: {performance_metrics['cvar_95']:.4f}")
+                            else:
+                                performance_metrics['var_95'] = 0.0
+                                performance_metrics['cvar_95'] = 0.0
+                                
+                        except Exception as e:
+                            self.logger.warning(f"Failed to calculate additional metrics for {symbol}: {e}")
+                            performance_metrics['calmar_ratio'] = 0.0
+                            performance_metrics['var_95'] = 0.0
+                            performance_metrics['cvar_95'] = 0.0
+                        
                         # Clean up temporary data
                         if '_returns' in performance_metrics:
                             del performance_metrics['_returns']
-                        
-                        # Additional metrics if available
-                        if hasattr(asset_data, 'calmar_ratio'):
-                            performance_metrics['calmar_ratio'] = asset_data.calmar_ratio
-                        if hasattr(asset_data, 'var_95'):
-                            performance_metrics['var_95'] = asset_data.var_95
-                        if hasattr(asset_data, 'cvar_95'):
-                            performance_metrics['cvar_95'] = asset_data.cvar_95
                         
                         data_info['performance'][symbol] = performance_metrics
                         
@@ -4367,7 +4397,10 @@ class ShansAi:
                             'volatility': 0,
                             'sharpe_ratio': 0,
                             'sortino_ratio': 0,
-                            'max_drawdown': 0
+                            'max_drawdown': 0,
+                            'calmar_ratio': 0,
+                            'var_95': 0,
+                            'cvar_95': 0
                         }
                         
                 except Exception as e:
@@ -4378,7 +4411,10 @@ class ShansAi:
                         'volatility': 0,
                         'sharpe_ratio': 0,
                         'sortino_ratio': 0,
-                        'max_drawdown': 0
+                        'max_drawdown': 0,
+                        'calmar_ratio': 0,
+                        'var_95': 0,
+                        'cvar_95': 0
                     }
             
             # Calculate correlation matrix if we have multiple assets
@@ -4647,18 +4683,44 @@ class ShansAi:
                         self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
                         detailed_metrics['sortino_ratio'] = 0.0
                     
+                    # Additional metrics calculation
+                    try:
+                        # Calmar Ratio = Annual Return / Max Drawdown (absolute value)
+                        annual_return = detailed_metrics.get('annual_return', 0)
+                        max_drawdown = detailed_metrics.get('max_drawdown', 0)
+                        if max_drawdown != 0:
+                            calmar_ratio = annual_return / abs(max_drawdown)
+                            detailed_metrics['calmar_ratio'] = calmar_ratio
+                        else:
+                            detailed_metrics['calmar_ratio'] = 0.0
+                        
+                        # VaR 95% and CVaR 95% calculation
+                        returns = detailed_metrics.get('_returns')
+                        if returns is not None and len(returns) > 0:
+                            # VaR 95% - 5th percentile of returns (worst 5% of returns)
+                            var_95 = returns.quantile(0.05)
+                            detailed_metrics['var_95'] = var_95
+                            
+                            # CVaR 95% - Expected value of returns below VaR 95%
+                            returns_below_var = returns[returns <= var_95]
+                            if len(returns_below_var) > 0:
+                                cvar_95 = returns_below_var.mean()
+                                detailed_metrics['cvar_95'] = cvar_95
+                            else:
+                                detailed_metrics['cvar_95'] = var_95
+                        else:
+                            detailed_metrics['var_95'] = 0.0
+                            detailed_metrics['cvar_95'] = 0.0
+                            
+                    except Exception as e:
+                        self.logger.warning(f"Failed to calculate additional metrics for {symbol}: {e}")
+                        detailed_metrics['calmar_ratio'] = 0.0
+                        detailed_metrics['var_95'] = 0.0
+                        detailed_metrics['cvar_95'] = 0.0
+                    
                     # Clean up temporary data
                     if '_returns' in detailed_metrics:
                         del detailed_metrics['_returns']
-                    
-                    # Additional metrics if available
-                    if asset_data is not None:
-                        if hasattr(asset_data, 'calmar_ratio'):
-                            detailed_metrics['calmar_ratio'] = asset_data.calmar_ratio
-                        if hasattr(asset_data, 'var_95'):
-                            detailed_metrics['var_95'] = asset_data.var_95
-                        if hasattr(asset_data, 'cvar_95'):
-                            detailed_metrics['cvar_95'] = asset_data.cvar_95
                     
                     metrics_data['detailed_metrics'][symbol] = detailed_metrics
                         
@@ -4670,7 +4732,10 @@ class ShansAi:
                         'volatility': 0.0,
                         'sharpe_ratio': 0.0,
                         'sortino_ratio': 0.0,
-                        'max_drawdown': 0.0
+                        'max_drawdown': 0.0,
+                        'calmar_ratio': 0.0,
+                        'var_95': 0.0,
+                        'cvar_95': 0.0
                     }
             
             # Calculate correlations if we have multiple assets
