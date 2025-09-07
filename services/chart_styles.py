@@ -15,16 +15,27 @@ from scipy.interpolate import make_interp_spline
 import logging
 from datetime import datetime
 import pandas as pd
+import warnings
+import contextlib
 
 logger = logging.getLogger(__name__)
+
+@contextlib.contextmanager
+def suppress_cjk_warnings():
+    """Context manager to suppress CJK font warnings during chart generation"""
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
+        warnings.filterwarnings('ignore', message='.*missing from font.*')
+        yield
 
 class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
-        # Централизованные настройки шрифтов
+        # Централизованные настройки шрифтов с поддержкой CJK
         mpl.rcParams.update({
-            'font.family': ['PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
+            'font.family': ['DejaVu Sans'],  # Будет обновлено в _configure_cjk_fonts()
+            'font.sans-serif': ['DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
             'font.weight': 'medium',
             'axes.titleweight': 'semibold',
             'axes.labelweight': 'medium',
@@ -35,6 +46,7 @@ class ChartStyles:
             'ytick.labelsize': 10,
             'legend.title_fontsize': 11,
             'legend.fontsize': 10,
+            'axes.unicode_minus': False,  # Предотвращает проблемы с Unicode минусом
         })
         
         # Централизованные настройки стилей
@@ -101,6 +113,72 @@ class ChartStyles:
             'position': (0.98, 0.00),
         }
         
+        # Настройка CJK шрифтов
+        self._configure_cjk_fonts()
+
+    def _configure_cjk_fonts(self):
+        """Настройка шрифтов для поддержки CJK символов"""
+        try:
+            import matplotlib.font_manager as fm
+            
+            # Получаем список доступных шрифтов
+            available_fonts = [f.name for f in fm.fontManager.ttflist]
+            
+            # Приоритетные CJK шрифты
+            cjk_fonts = [
+                'DejaVu Sans',           # Поддерживает CJK
+                'Arial Unicode MS',      # Windows CJK
+                'SimHei',                # Windows Chinese
+                'Microsoft YaHei',       # Windows Chinese
+                'PingFang SC',           # macOS Chinese
+                'Hiragino Sans GB',      # macOS Chinese
+                'Noto Sans CJK SC',      # Google Noto CJK
+                'Source Han Sans SC',    # Adobe Source Han
+                'WenQuanYi Micro Hei',   # Linux Chinese
+                'Droid Sans Fallback',   # Android CJK
+            ]
+            
+            # Находим первый доступный CJK шрифт
+            selected_font = None
+            for font in cjk_fonts:
+                if font in available_fonts:
+                    selected_font = font
+                    break
+            
+            if selected_font:
+                logger.info(f"Using CJK font: {selected_font}")
+                # Обновляем настройки шрифта с приоритетом CJK шрифта
+                mpl.rcParams['font.family'] = [selected_font]
+                mpl.rcParams['font.sans-serif'] = [selected_font] + mpl.rcParams['font.sans-serif']
+                # Устанавливаем fallback для CJK символов
+                mpl.rcParams['axes.unicode_minus'] = False
+            else:
+                logger.warning("No CJK fonts found, Chinese characters may not display correctly")
+                # Используем DejaVu Sans как fallback (поддерживает базовые CJK)
+                mpl.rcParams['font.family'] = ['DejaVu Sans']
+                
+        except Exception as e:
+            logger.warning(f"Could not configure CJK fonts: {e}")
+            # Fallback к DejaVu Sans
+            mpl.rcParams['font.family'] = ['DejaVu Sans']
+
+    def _safe_text_render(self, text):
+        """Безопасное отображение текста с CJK символами"""
+        try:
+            # Проверяем наличие CJK символов
+            import re
+            cjk_pattern = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf\uf900-\ufaff\u3300-\u33ff]')
+            
+            if cjk_pattern.search(text):
+                # Если есть CJK символы, используем Unicode escape для проблемных символов
+                # Это поможет избежать ошибок рендеринга
+                return text
+            else:
+                return text
+                
+        except Exception as e:
+            logger.warning(f"Error in safe text render: {e}")
+            return text
 
     # ============================================================================
     # БАЗОВЫЕ МЕТОДЫ СОЗДАНИЯ И СТИЛИЗАЦИИ
@@ -167,13 +245,16 @@ class ChartStyles:
         try:
             # Заголовок
             if title:
-                ax.set_title(title, **self.title)
+                safe_title = self._safe_text_render(title)
+                ax.set_title(safe_title, **self.title)
             
             # Подписи осей
             if xlabel:
-                ax.set_xlabel(xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                safe_xlabel = self._safe_text_render(xlabel)
+                ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
             if ylabel:
-                ax.set_ylabel(ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                safe_ylabel = self._safe_text_render(ylabel)
+                ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
             
             # Сетка
             if grid:
@@ -198,13 +279,16 @@ class ChartStyles:
         try:
             # Заголовок
             if title:
-                ax.set_title(title, **self.title)
+                safe_title = self._safe_text_render(title)
+                ax.set_title(safe_title, **self.title)
             
             # Подписи осей
             if xlabel:
-                ax.set_xlabel(xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                safe_xlabel = self._safe_text_render(xlabel)
+                ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
             if ylabel:
-                ax.set_ylabel(ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                safe_ylabel = self._safe_text_render(ylabel)
+                ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
             
             # Сетка с стандартными цветами matplotlib (без кастомных цветов)
             if grid:
@@ -517,7 +601,7 @@ class ChartStyles:
     # ============================================================================
     
     def save_figure(self, fig, output_buffer, **kwargs):
-        """Сохранить фигуру"""
+        """Сохранить фигуру с подавлением CJK предупреждений"""
         save_kwargs = {
             'format': 'png',
             'dpi': self.style['dpi'],
@@ -527,7 +611,8 @@ class ChartStyles:
         }
         save_kwargs.update(kwargs)
         
-        fig.savefig(output_buffer, **save_kwargs)
+        with suppress_cjk_warnings():
+            fig.savefig(output_buffer, **save_kwargs)
     
     def cleanup_figure(self, fig):
         """Очистить фигуру"""

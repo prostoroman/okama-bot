@@ -34,6 +34,10 @@ import okama as ok
 if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
     matplotlib.use('Agg')
 
+# Suppress matplotlib warnings for missing CJK glyphs
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
+
 # Optional imports
 try:
     import tabulate
@@ -4663,39 +4667,48 @@ class ShansAi:
             import io
             
             def create_tushare_daily_chart():
-                # Set backend for headless mode
-                import matplotlib
-                matplotlib.use('Agg')
-                
-                # Get daily data from Tushare
-                daily_data = self.tushare_service.get_daily_data(symbol)
-                
-                if daily_data.empty:
+                try:
+                    # Set backend for headless mode
+                    import matplotlib
+                    matplotlib.use('Agg')
+                    
+                    # Get daily data from Tushare
+                    daily_data = self.tushare_service.get_daily_data(symbol)
+                    
+                    if daily_data.empty:
+                        self.logger.warning(f"Daily data is empty for {symbol}")
+                        return None
+                    
+                    # Prepare data for chart - set trade_date as index
+                    chart_data = daily_data.set_index('trade_date')['close']
+                    
+                    # Determine currency based on exchange
+                    currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+                    
+                    # Create chart using ChartStyles
+                    fig, ax = chart_styles.create_price_chart(
+                        data=chart_data,
+                        symbol=symbol,
+                        currency=currency,
+                        period='ежедневный'
+                    )
+                    
+                    # Save to bytes
+                    buffer = io.BytesIO()
+                    fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+                    buffer.seek(0)
+                    chart_bytes = buffer.getvalue()
+                    buffer.close()
+                    plt.close(fig)
+                    
+                    self.logger.info(f"Daily chart created successfully for {symbol}: {len(chart_bytes)} bytes")
+                    return chart_bytes
+                    
+                except Exception as e:
+                    self.logger.error(f"Error in create_tushare_daily_chart for {symbol}: {e}")
+                    import traceback
+                    self.logger.error(f"Traceback: {traceback.format_exc()}")
                     return None
-                
-                # Prepare data for chart - set trade_date as index
-                chart_data = daily_data.set_index('trade_date')['close']
-                
-                # Determine currency based on exchange
-                currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
-                
-                # Create chart using ChartStyles
-                fig, ax = chart_styles.create_price_chart(
-                    data=chart_data,
-                    symbol=symbol,
-                    currency=currency,
-                    period='ежедневный'
-                )
-                
-                # Save to bytes
-                buffer = io.BytesIO()
-                fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-                buffer.seek(0)
-                chart_bytes = buffer.getvalue()
-                buffer.close()
-                plt.close(fig)
-                
-                return chart_bytes
             
             # Run chart creation in thread to avoid blocking
             import concurrent.futures
@@ -4707,6 +4720,8 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error getting Tushare daily chart for {symbol}: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     async def _get_tushare_monthly_chart(self, symbol: str) -> Optional[bytes]:

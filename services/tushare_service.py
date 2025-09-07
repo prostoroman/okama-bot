@@ -53,6 +53,17 @@ class TushareService:
                 return exchange
         return None
     
+    def _is_index_symbol(self, symbol: str) -> bool:
+        """Check if symbol is an index (not a stock)"""
+        # Known index symbols
+        index_symbols = {
+            '000001.SH',  # Shanghai Composite Index
+            '399001.SZ',  # Shenzhen Component Index
+            '399005.SZ',  # Shenzhen Small & Medium Enterprise Board Index
+            '399006.SZ',  # ChiNext Index
+        }
+        return symbol in index_symbols
+    
     def get_symbol_info(self, symbol: str) -> Dict[str, Any]:
         """Get basic information about a symbol"""
         try:
@@ -263,12 +274,21 @@ class TushareService:
                     end_date=end_date
                 )
             else:
-                # Mainland China data - use the original symbol format
-                df = self.pro.daily(
-                    ts_code=symbol,  # Use full symbol like 600026.SH
-                    start_date=start_date,
-                    end_date=end_date
-                )
+                # Check if this is an index symbol
+                if self._is_index_symbol(symbol):
+                    # Use index_daily for index symbols
+                    df = self.pro.index_daily(
+                        ts_code=symbol,  # Use full symbol like 000001.SH
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                else:
+                    # Mainland China stock data - use the original symbol format
+                    df = self.pro.daily(
+                        ts_code=symbol,  # Use full symbol like 600026.SH
+                        start_date=start_date,
+                        end_date=end_date
+                    )
             
             if df.empty:
                 return pd.DataFrame()
@@ -296,21 +316,37 @@ class TushareService:
             if not start_date:
                 start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y%m%d')
             
-            # Use regular monthly method for all exchanges (including HKEX)
-            df = self.pro.monthly(
-                ts_code=symbol,  # Use full symbol like 600026.SH or 00001.HK
-                start_date=start_date,
-                end_date=end_date
-            )
-            
-            if df.empty:
-                return pd.DataFrame()
-            
-            # Convert date column
-            df['trade_date'] = pd.to_datetime(df['trade_date'], format='%Y%m%d')
-            df = df.sort_values('trade_date')
-            
-            return df
+            # Check if this is an index symbol
+            if self._is_index_symbol(symbol):
+                # For indices, we need to use daily data and resample to monthly
+                # since Tushare doesn't have a direct monthly index data endpoint
+                daily_df = self.get_daily_data(symbol, start_date, end_date)
+                if daily_df.empty:
+                    return pd.DataFrame()
+                
+                # Resample to monthly (last trading day of each month)
+                daily_df = daily_df.set_index('trade_date')
+                monthly_df = daily_df.resample('ME').last()  # Use 'ME' instead of deprecated 'M'
+                monthly_df = monthly_df.reset_index()
+                monthly_df['trade_date'] = monthly_df['trade_date'].dt.strftime('%Y%m%d')
+                
+                return monthly_df
+            else:
+                # Use regular monthly method for stocks
+                df = self.pro.monthly(
+                    ts_code=symbol,  # Use full symbol like 600026.SH or 00001.HK
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                
+                if df.empty:
+                    return pd.DataFrame()
+                
+                # Convert date column
+                df['trade_date'] = pd.to_datetime(df['trade_date'], format='%Y%m%d')
+                df = df.sort_values('trade_date')
+                
+                return df
             
         except Exception as e:
             self.logger.error(f"Error getting monthly data for {symbol}: {e}")
