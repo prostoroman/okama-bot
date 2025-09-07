@@ -3374,18 +3374,19 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода сравнения: {str(e)}")
 
     async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
-        """Отправить сообщение в callback query - исправлено для обработки None и длинных сообщений"""
+        """Отправить сообщение в callback query - исправлено для обработки None и разбивки длинных сообщений"""
         try:
             # Проверяем, что update и context не None
             if update is None or context is None:
                 self.logger.error("Cannot send message: update or context is None")
                 return
             
-            # Обрезаем текст до максимальной длины Telegram (4096 символов)
-            max_length = 4096
+            # Разбиваем длинные сообщения на части
+            max_length = 4000  # Оставляем запас для безопасности
             if len(text) > max_length:
-                text = text[:max_length-50] + "\n\n... (сообщение обрезано из-за длины)"
-                self.logger.warning(f"Message truncated from {len(text)+50} to {len(text)} characters")
+                self.logger.info(f"Splitting long message ({len(text)} chars) into multiple parts")
+                await self._send_long_callback_message(update, context, text, parse_mode)
+                return
             
             if hasattr(update, 'callback_query') and update.callback_query is not None:
                 # Для callback query используем context.bot.send_message
@@ -3418,6 +3419,106 @@ class ShansAi:
                     )
             except Exception as fallback_error:
                 self.logger.error(f"Fallback message sending also failed: {fallback_error}")
+
+    async def _send_long_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
+        """Отправить длинное сообщение по частям через callback query"""
+        try:
+            # Разбиваем текст на части
+            parts = self._split_text_smart(text)
+            
+            for i, part in enumerate(parts):
+                # Добавляем индикатор части для многочастных сообщений
+                if len(parts) > 1:
+                    part_text = f"📄 **Часть {i+1} из {len(parts)}:**\n\n{part}"
+                else:
+                    part_text = part
+                
+                # Отправляем каждую часть
+                if hasattr(update, 'callback_query') and update.callback_query is not None:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=update.callback_query.message.chat_id,
+                            text=part_text,
+                            parse_mode=parse_mode
+                        )
+                    except Exception as part_error:
+                        self.logger.error(f"Error sending message part {i+1}: {part_error}")
+                        # Fallback для этой части
+                        await self._send_message_safe(update, part_text, parse_mode)
+                elif hasattr(update, 'message') and update.message is not None:
+                    await self._send_message_safe(update, part_text, parse_mode)
+                
+                # Небольшая пауза между частями для избежания rate limiting
+                if i < len(parts) - 1:  # Не делаем паузу после последней части
+                    import asyncio
+                    await asyncio.sleep(0.5)
+                    
+        except Exception as e:
+            self.logger.error(f"Error sending long callback message: {e}")
+            # Fallback: отправляем обрезанную версию
+            try:
+                if hasattr(update, 'callback_query') and update.callback_query is not None:
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=f"❌ Ошибка разбивки сообщения: {text[:1000]}..."
+                    )
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback long message sending also failed: {fallback_error}")
+
+    def _split_text_smart(self, text: str) -> list:
+        """Умное разбиение текста на части с учетом структуры"""
+        max_length = 4000
+        if len(text) <= max_length:
+            return [text]
+        
+        parts = []
+        current_part = ""
+        
+        # Разбиваем по строкам для лучшего сохранения структуры
+        lines = text.split('\n')
+        
+        for line in lines:
+            # Если добавление строки не превышает лимит
+            if len(current_part) + len(line) + 1 <= max_length:
+                if current_part:
+                    current_part += '\n' + line
+                else:
+                    current_part = line
+            else:
+                # Если текущая часть не пустая, сохраняем её
+                if current_part:
+                    parts.append(current_part)
+                    current_part = ""
+                
+                # Если одна строка слишком длинная, разбиваем её
+                if len(line) > max_length:
+                    # Разбиваем длинную строку по словам
+                    words = line.split(' ')
+                    temp_line = ""
+                    for word in words:
+                        if len(temp_line) + len(word) + 1 <= max_length:
+                            if temp_line:
+                                temp_line += ' ' + word
+                            else:
+                                temp_line = word
+                        else:
+                            if temp_line:
+                                parts.append(temp_line)
+                                temp_line = word
+                            else:
+                                # Если одно слово слишком длинное, обрезаем его
+                                parts.append(word[:max_length])
+                                temp_line = word[max_length:]
+                    if temp_line:
+                        current_part = temp_line
+                else:
+                    current_part = line
+        
+        # Добавляем последнюю часть
+        if current_part:
+            parts.append(current_part)
+        
+        return parts
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
