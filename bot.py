@@ -2013,9 +2013,9 @@ class ShansAi:
                         # Use the original symbol for description to maintain consistency
                         portfolio_descriptions.append(f"{symbol} ({', '.join(portfolio_symbols)})")
                         
-                        # Store portfolio context for buttons - use clean portfolio symbol
+                        # Store portfolio context for buttons - use descriptive name for display
                         portfolio_contexts.append({
-                            'symbol': symbol,  # Clean portfolio symbol without asset list
+                            'symbol': f"{symbol} ({', '.join(portfolio_symbols)})",  # Descriptive name with asset composition
                             'portfolio_symbols': portfolio_symbols,
                             'portfolio_weights': portfolio_weights,
                             'portfolio_currency': portfolio_currency,
