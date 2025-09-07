@@ -2483,11 +2483,20 @@ class ShansAi:
                     InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
                 ])
                 
+                # Add AI analysis buttons if services are available
+                ai_buttons = []
+                if self.gemini_service and self.gemini_service.is_available():
+                    ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
+                if self.yandexgpt_service and self.yandexgpt_service.is_available():
+                    ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
+                
+                if ai_buttons:
+                    keyboard.append(ai_buttons)
+                
                 # Add chart analysis button if Gemini is available
                 if self.gemini_service and self.gemini_service.is_available():
                     keyboard.append([
-                        InlineKeyboardButton("AI-анализ графика", callback_data="chart_analysis_compare"),
-                        InlineKeyboardButton("AI-анализ данных", callback_data="data_analysis_compare")
+                        InlineKeyboardButton("Анализ графика Gemini", callback_data="chart_analysis_compare")
                     ])
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -3696,6 +3705,9 @@ class ShansAi:
             elif callback_data == 'data_analysis_compare':
                 self.logger.info("Data analysis button clicked")
                 await self._handle_data_analysis_compare_button(update, context)
+            elif callback_data == 'yandexgpt_analysis_compare':
+                self.logger.info("YandexGPT analysis button clicked")
+                await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif callback_data == 'metrics_compare':
                 self.logger.info("Metrics button clicked")
                 await self._handle_metrics_compare_button(update, context)
@@ -4373,13 +4385,37 @@ class ShansAi:
             # Calculate detailed performance metrics for each symbol
             for i, symbol in enumerate(symbols):
                 try:
-                    if i < len(expanded_symbols):
-                        asset_data = expanded_symbols[i]
+                    # Get the actual asset/portfolio object from portfolio_contexts
+                    asset_data = None
+                    if i < len(portfolio_contexts):
+                        portfolio_context = portfolio_contexts[i]
+                        portfolio_object = portfolio_context.get('portfolio_object')
                         
-                        # Get comprehensive performance metrics
-                        detailed_metrics = {}
-                        
-                        # Calculate metrics from price data
+                        if portfolio_object is not None:
+                            # This is a portfolio - use portfolio object
+                            asset_data = portfolio_object
+                        else:
+                            # This is a regular asset - create Asset object
+                            asset_symbol = portfolio_context.get('portfolio_symbols', [symbol])[0]
+                            try:
+                                asset_data = ok.Asset(asset_symbol)
+                            except Exception as e:
+                                self.logger.warning(f"Failed to create Asset object for {asset_symbol}: {e}")
+                                asset_data = None
+                    
+                    if asset_data is None:
+                        # Fallback: try to create Asset from symbol
+                        try:
+                            asset_data = ok.Asset(symbol)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to create Asset object for {symbol}: {e}")
+                            asset_data = None
+                    
+                    # Get comprehensive performance metrics
+                    detailed_metrics = {}
+                    
+                    if asset_data is not None:
+                        # Calculate metrics from asset/portfolio data
                         try:
                             # Get price data for calculations
                             if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
@@ -4388,6 +4424,8 @@ class ShansAi:
                                 prices = asset_data.close_daily
                             elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
                                 prices = asset_data.adj_close
+                            elif hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
+                                prices = asset_data.wealth_index
                             else:
                                 prices = None
                             
@@ -4453,85 +4491,82 @@ class ShansAi:
                             detailed_metrics['volatility'] = 0.0
                             detailed_metrics['max_drawdown'] = 0.0
                             detailed_metrics['_returns'] = None
+                    else:
+                        # No asset data available
+                        detailed_metrics['total_return'] = 0.0
+                        detailed_metrics['annual_return'] = 0.0
+                        detailed_metrics['volatility'] = 0.0
+                        detailed_metrics['max_drawdown'] = 0.0
+                        detailed_metrics['_returns'] = None
                         
-                        # Sharpe ratio calculation
-                        try:
-                            if hasattr(asset_data, 'get_sharpe_ratio'):
-                                sharpe_ratio = asset_data.get_sharpe_ratio(rf_return=0.02)
-                                detailed_metrics['sharpe_ratio'] = float(sharpe_ratio)
-                            elif hasattr(asset_data, 'sharpe_ratio'):
-                                detailed_metrics['sharpe_ratio'] = asset_data.sharpe_ratio
+                    # Sharpe ratio calculation
+                    try:
+                        if asset_data is not None and hasattr(asset_data, 'get_sharpe_ratio'):
+                            sharpe_ratio = asset_data.get_sharpe_ratio(rf_return=0.02)
+                            detailed_metrics['sharpe_ratio'] = float(sharpe_ratio)
+                        elif asset_data is not None and hasattr(asset_data, 'sharpe_ratio'):
+                            detailed_metrics['sharpe_ratio'] = asset_data.sharpe_ratio
+                        else:
+                            # Manual Sharpe ratio calculation
+                            annual_return = detailed_metrics.get('annual_return', 0)
+                            volatility = detailed_metrics.get('volatility', 0)
+                            if volatility > 0:
+                                sharpe_ratio = (annual_return - 0.02) / volatility
+                                detailed_metrics['sharpe_ratio'] = sharpe_ratio
                             else:
-                                # Manual Sharpe ratio calculation
-                                annual_return = detailed_metrics.get('annual_return', 0)
-                                volatility = detailed_metrics.get('volatility', 0)
-                                if volatility > 0:
-                                    sharpe_ratio = (annual_return - 0.02) / volatility
-                                    detailed_metrics['sharpe_ratio'] = sharpe_ratio
-                                else:
-                                    detailed_metrics['sharpe_ratio'] = 0.0
-                        except Exception as e:
-                            self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
-                            detailed_metrics['sharpe_ratio'] = 0.0
-                        
-                        # Sortino ratio calculation
-                        try:
-                            if hasattr(asset_data, 'sortino_ratio'):
-                                detailed_metrics['sortino_ratio'] = asset_data.sortino_ratio
-                            else:
-                                # Manual Sortino ratio calculation
-                                annual_return = detailed_metrics.get('annual_return', 0)
-                                returns = detailed_metrics.get('_returns')
-                                
-                                if returns is not None and len(returns) > 0:
-                                    # Calculate downside deviation (only negative returns)
-                                    negative_returns = returns[returns < 0]
-                                    if len(negative_returns) > 0:
-                                        downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
-                                        if downside_deviation > 0:
-                                            sortino_ratio = (annual_return - 0.02) / downside_deviation
-                                            detailed_metrics['sortino_ratio'] = sortino_ratio
-                                        else:
-                                            detailed_metrics['sortino_ratio'] = 0.0
+                                detailed_metrics['sharpe_ratio'] = 0.0
+                    except Exception as e:
+                        self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
+                        detailed_metrics['sharpe_ratio'] = 0.0
+                    
+                    # Sortino ratio calculation
+                    try:
+                        if asset_data is not None and hasattr(asset_data, 'sortino_ratio'):
+                            detailed_metrics['sortino_ratio'] = asset_data.sortino_ratio
+                        else:
+                            # Manual Sortino ratio calculation
+                            annual_return = detailed_metrics.get('annual_return', 0)
+                            returns = detailed_metrics.get('_returns')
+                            
+                            if returns is not None and len(returns) > 0:
+                                # Calculate downside deviation (only negative returns)
+                                negative_returns = returns[returns < 0]
+                                if len(negative_returns) > 0:
+                                    downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                    if downside_deviation > 0:
+                                        sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                        detailed_metrics['sortino_ratio'] = sortino_ratio
                                     else:
-                                        # No negative returns, use volatility as fallback
-                                        volatility = detailed_metrics.get('volatility', 0)
-                                        if volatility > 0:
-                                            sortino_ratio = (annual_return - 0.02) / volatility
-                                            detailed_metrics['sortino_ratio'] = sortino_ratio
-                                        else:
-                                            detailed_metrics['sortino_ratio'] = 0.0
+                                        detailed_metrics['sortino_ratio'] = 0.0
                                 else:
-                                    # Fallback to Sharpe ratio if no returns data
-                                    detailed_metrics['sortino_ratio'] = detailed_metrics.get('sharpe_ratio', 0.0)
-                        except Exception as e:
-                            self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
-                            detailed_metrics['sortino_ratio'] = 0.0
-                        
-                        # Clean up temporary data
-                        if '_returns' in detailed_metrics:
-                            del detailed_metrics['_returns']
-                        
-                        # Additional metrics if available
+                                    # No negative returns, use volatility as fallback
+                                    volatility = detailed_metrics.get('volatility', 0)
+                                    if volatility > 0:
+                                        sortino_ratio = (annual_return - 0.02) / volatility
+                                        detailed_metrics['sortino_ratio'] = sortino_ratio
+                                    else:
+                                        detailed_metrics['sortino_ratio'] = 0.0
+                            else:
+                                # Fallback to Sharpe ratio if no returns data
+                                detailed_metrics['sortino_ratio'] = detailed_metrics.get('sharpe_ratio', 0.0)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
+                        detailed_metrics['sortino_ratio'] = 0.0
+                    
+                    # Clean up temporary data
+                    if '_returns' in detailed_metrics:
+                        del detailed_metrics['_returns']
+                    
+                    # Additional metrics if available
+                    if asset_data is not None:
                         if hasattr(asset_data, 'calmar_ratio'):
                             detailed_metrics['calmar_ratio'] = asset_data.calmar_ratio
                         if hasattr(asset_data, 'var_95'):
                             detailed_metrics['var_95'] = asset_data.var_95
                         if hasattr(asset_data, 'cvar_95'):
                             detailed_metrics['cvar_95'] = asset_data.cvar_95
-                        
-                        metrics_data['detailed_metrics'][symbol] = detailed_metrics
-                        
-                    else:
-                        # Fallback for missing data
-                        metrics_data['detailed_metrics'][symbol] = {
-                            'total_return': 0.0,
-                            'annual_return': 0.0,
-                            'volatility': 0.0,
-                            'sharpe_ratio': 0.0,
-                            'sortino_ratio': 0.0,
-                            'max_drawdown': 0.0
-                        }
+                    
+                    metrics_data['detailed_metrics'][symbol] = detailed_metrics
                         
                 except Exception as e:
                     self.logger.warning(f"Failed to get detailed metrics for {symbol}: {e}")
@@ -4545,16 +4580,50 @@ class ShansAi:
                     }
             
             # Calculate correlations if we have multiple assets
-            if len(expanded_symbols) > 1:
+            if len(symbols) > 1:
                 try:
-                    # Try to get actual correlation data from okama
+                    # Try to create AssetList for correlation calculation
                     correlation_matrix = []
                     
-                    # Check if we can get correlation from the first asset
-                    if hasattr(expanded_symbols[0], 'correlation_matrix'):
-                        correlation_matrix = expanded_symbols[0].correlation_matrix.tolist()
-                    else:
+                    # Create AssetList from symbols for correlation calculation
+                    try:
+                        # Get clean symbols for correlation calculation
+                        clean_symbols = []
+                        for i, symbol in enumerate(symbols):
+                            if i < len(portfolio_contexts):
+                                portfolio_context = portfolio_contexts[i]
+                                portfolio_symbols = portfolio_context.get('portfolio_symbols', [symbol])
+                                clean_symbols.extend(portfolio_symbols)
+                            else:
+                                clean_symbols.append(symbol)
+                        
+                        # Remove duplicates while preserving order
+                        clean_symbols = list(dict.fromkeys(clean_symbols))
+                        
+                        if len(clean_symbols) > 1:
+                            # Create AssetList for correlation calculation
+                            asset_list = ok.AssetList(clean_symbols)
+                            if hasattr(asset_list, 'correlation_matrix'):
+                                correlation_matrix = asset_list.correlation_matrix.tolist()
+                            else:
+                                # Fallback correlation matrix
+                                correlation_matrix = []
+                                for i in range(len(clean_symbols)):
+                                    row = []
+                                    for j in range(len(clean_symbols)):
+                                        if i == j:
+                                            row.append(1.0)
+                                        else:
+                                            row.append(0.3)  # Conservative estimate
+                                    correlation_matrix.append(row)
+                        else:
+                            # Single asset - identity matrix
+                            correlation_matrix = [[1.0]]
+                    
+                    except Exception as e:
+                        self.logger.warning(f"Failed to calculate correlations with AssetList: {e}")
                         # Create a simple correlation matrix as fallback
+                        correlation_matrix = []
                         for i in range(len(symbols)):
                             row = []
                             for j in range(len(symbols)):
