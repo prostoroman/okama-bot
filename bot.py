@@ -1462,8 +1462,9 @@ class ShansAi:
             # Создаем кнопки для дополнительных функций
             keyboard = [
                 [
-                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"daily_chart_{symbol}"),
-                    InlineKeyboardButton("📅 Месячный график", callback_data=f"monthly_chart_{symbol}")
+                    InlineKeyboardButton("📈 1Y", callback_data=f"daily_chart_{symbol}"),
+                    InlineKeyboardButton("📅 5Y", callback_data=f"monthly_chart_{symbol}"),
+                    InlineKeyboardButton("📊 All", callback_data=f"all_chart_{symbol}")
                 ],
                 [
                     InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
@@ -1510,8 +1511,9 @@ class ShansAi:
             # Создаем кнопки для дополнительных функций
             keyboard = [
                 [
-                    InlineKeyboardButton("📈 Ежедневный график", callback_data=f"tushare_daily_chart_{symbol}"),
-                    InlineKeyboardButton("📅 Месячный график", callback_data=f"tushare_monthly_chart_{symbol}")
+                    InlineKeyboardButton("📈 1Y", callback_data=f"tushare_daily_chart_{symbol}"),
+                    InlineKeyboardButton("📅 5Y", callback_data=f"tushare_monthly_chart_{symbol}"),
+                    InlineKeyboardButton("📊 All", callback_data=f"tushare_all_chart_{symbol}")
                 ],
                 [
                     InlineKeyboardButton("💵 Дивиденды", callback_data=f"tushare_dividends_{symbol}")
@@ -1544,14 +1546,25 @@ class ShansAi:
                 # Берем последние 252 торговых дня (примерно год)
                 filtered_data = daily_data.tail(252)
                 
-                # Используем ChartStyles для создания графика
+                # Получаем информацию об активе для заголовка
+                asset_name = getattr(asset, 'name', symbol)
                 currency = getattr(asset, 'currency', '')
+                
+                # Используем ChartStyles для создания графика
                 fig, ax = chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
-                    period='последний год'
+                    period='1Y'
                 )
+                
+                # Обновляем заголовок с нужным форматом
+                title = f"{symbol} | {asset_name} | {currency} | 1Y"
+                ax.set_title(title, **chart_styles.title)
+                
+                # Убираем подписи осей
+                ax.set_xlabel('')
+                ax.set_ylabel('')
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
@@ -3255,6 +3268,10 @@ class ShansAi:
                 symbol = callback_data.replace('monthly_chart_', '')
                 self.logger.info(f"Monthly chart button clicked for symbol: {symbol}")
                 await self._handle_monthly_chart_button(update, context, symbol)
+            elif callback_data.startswith('all_chart_'):
+                symbol = callback_data.replace('all_chart_', '')
+                self.logger.info(f"All chart button clicked for symbol: {symbol}")
+                await self._handle_all_chart_button(update, context, symbol)
             elif callback_data.startswith('info_dividends_'):
                 symbol = callback_data.replace('info_dividends_', '')
                 self.logger.info(f"Info dividends button clicked for symbol: {symbol}")
@@ -3272,6 +3289,10 @@ class ShansAi:
                 symbol = callback_data.replace('tushare_monthly_chart_', '')
                 self.logger.info(f"Tushare monthly chart button clicked for symbol: {symbol}")
                 await self._handle_tushare_monthly_chart_button(update, context, symbol)
+            elif callback_data.startswith('tushare_all_chart_'):
+                symbol = callback_data.replace('tushare_all_chart_', '')
+                self.logger.info(f"Tushare all chart button clicked for symbol: {symbol}")
+                await self._handle_tushare_all_chart_button(update, context, symbol)
             elif callback_data.startswith('tushare_dividends_'):
                 symbol = callback_data.replace('tushare_dividends_', '')
                 self.logger.info(f"Tushare dividends button clicked for symbol: {symbol}")
@@ -4349,46 +4370,68 @@ class ShansAi:
     async def _handle_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle daily chart button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "📈 Создаю ежедневный график...")
+            await self._send_callback_message(update, context, "📈 Создаю график за 1 год...")
             
             # Получаем ежедневный график за 1 год
             daily_chart = await self._get_daily_chart(symbol)
             
             if daily_chart:
-                caption = f"📈 Ежедневный график {symbol}\n\n"
+                caption = f"📈 График за 1 год {symbol}\n\n"
                 
                 await update.callback_query.message.reply_photo(
                     photo=daily_chart,
                     caption=self._truncate_caption(caption)
                 )
             else:
-                await self._send_callback_message(update, context, "❌ Не удалось получить ежедневный график")
+                await self._send_callback_message(update, context, "❌ Не удалось получить график за 1 год")
                 
         except Exception as e:
             self.logger.error(f"Error handling daily chart button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при создании ежедневного графика: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика за 1 год: {str(e)}")
 
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle monthly chart button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "📅 Создаю месячный график...")
+            await self._send_callback_message(update, context, "📅 Создаю график за 5 лет...")
             
-            # Получаем месячный график=
+            # Получаем месячный график за 5 лет
             monthly_chart = await self._get_monthly_chart(symbol)
             
             if monthly_chart:
-                caption = f"📅 Месячный график {symbol}\n\n"
+                caption = f"📅 График за 5 лет {symbol}\n\n"
                 
                 await update.callback_query.message.reply_photo(
                     photo=monthly_chart,
                     caption=self._truncate_caption(caption)
                 )
             else:
-                await self._send_callback_message(update, context, "❌ Не удалось получить месячный график")
+                await self._send_callback_message(update, context, "❌ Не удалось получить график за 5 лет")
                 
         except Exception as e:
             self.logger.error(f"Error handling monthly chart button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при создании месячного графика: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика за 5 лет: {str(e)}")
+
+    async def _handle_all_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle all chart button click for single asset"""
+        try:
+            await self._send_callback_message(update, context, "📊 Создаю график за весь период...")
+            
+            # Получаем график за весь период
+            all_chart = await self._get_all_chart(symbol)
+            
+            if all_chart:
+                caption = f"📊 График за весь период {symbol}\n\n"
+                
+                await update.callback_query.message.reply_photo(
+                    photo=all_chart,
+                    caption=self._truncate_caption(caption)
+                )
+            else:
+                await self._send_callback_message(update, context, "❌ Не удалось получить график за весь период")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling all chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика за весь период: {str(e)}")
 
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle dividends button click for single asset"""
@@ -4475,7 +4518,7 @@ class ShansAi:
     async def _handle_tushare_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare daily chart button click"""
         try:
-            await self._send_callback_message(update, context, "📈 Создаю ежедневный график...")
+            await self._send_callback_message(update, context, "📈 Создаю график за 1 год...")
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
@@ -4488,7 +4531,7 @@ class ShansAi:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id,
                     photo=io.BytesIO(chart_bytes),
-                    caption=self._truncate_caption(f"📈 Ежедневный график {symbol}")
+                    caption=self._truncate_caption(f"📈 График за 1 год {symbol}")
                 )
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
@@ -4500,7 +4543,7 @@ class ShansAi:
     async def _handle_tushare_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare monthly chart button click"""
         try:
-            await self._send_callback_message(update, context, "📅 Создаю месячный график...")
+            await self._send_callback_message(update, context, "📅 Создаю график за 5 лет...")
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
@@ -4513,7 +4556,7 @@ class ShansAi:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id,
                     photo=io.BytesIO(chart_bytes),
-                    caption=self._truncate_caption(f"📅 Месячный график {symbol}")
+                    caption=self._truncate_caption(f"📅 График за 5 лет {symbol}")
                 )
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
@@ -4521,6 +4564,102 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling Tushare monthly chart button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика: {str(e)}")
+
+    async def _handle_tushare_all_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle Tushare all chart button click"""
+        try:
+            await self._send_callback_message(update, context, "📊 Создаю график за весь период...")
+            
+            if not self.tushare_service:
+                await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
+                return
+            
+            # Get all chart from Tushare
+            chart_bytes = await self._get_tushare_all_chart(symbol)
+            
+            if chart_bytes:
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=io.BytesIO(chart_bytes),
+                    caption=self._truncate_caption(f"📊 График за весь период {symbol}")
+                )
+            else:
+                await self._send_callback_message(update, context, "❌ Не удалось создать график")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling Tushare all chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика: {str(e)}")
+
+    async def _get_tushare_all_chart(self, symbol: str) -> Optional[bytes]:
+        """Get chart from Tushare data for all available period"""
+        try:
+            import io
+            
+            def create_tushare_all_chart():
+                try:
+                    # Set backend for headless mode
+                    import matplotlib
+                    matplotlib.use('Agg')
+                    
+                    # Get monthly data from Tushare (for all period)
+                    monthly_data = self.tushare_service.get_monthly_data(symbol)
+                    
+                    if monthly_data.empty:
+                        self.logger.warning(f"Monthly data is empty for {symbol}")
+                        return None
+                    
+                    # Prepare data for chart - set trade_date as index
+                    chart_data = monthly_data.set_index('trade_date')['close']
+                    
+                    # Determine currency based on exchange
+                    currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+                    
+                    # Get asset name from symbol
+                    asset_name = symbol.split('.')[0]
+                    
+                    # Create chart using ChartStyles
+                    fig, ax = chart_styles.create_price_chart(
+                        data=chart_data,
+                        symbol=symbol,
+                        currency=currency,
+                        period='All'
+                    )
+                    
+                    # Обновляем заголовок с нужным форматом
+                    title = f"{symbol} | {asset_name} | {currency} | All"
+                    ax.set_title(title, **chart_styles.title)
+                    
+                    # Убираем подписи осей
+                    ax.set_xlabel('')
+                    ax.set_ylabel('')
+                    
+                    # Save to bytes
+                    output = io.BytesIO()
+                    chart_styles.save_figure(fig, output)
+                    output.seek(0)
+                    
+                    # Cleanup
+                    chart_styles.cleanup_figure(fig)
+                    
+                    return output.getvalue()
+                    
+                except Exception as e:
+                    self.logger.error(f"Error in create_tushare_all_chart for {symbol}: {e}")
+                    import traceback
+                    self.logger.error(f"Traceback: {traceback.format_exc()}")
+                    return None
+            
+            # Run chart creation in thread to avoid blocking
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(create_tushare_all_chart)
+                chart_bytes = future.result(timeout=30)
+            
+            return chart_bytes
+            
+        except Exception as e:
+            self.logger.error(f"Error getting Tushare all chart for {symbol}: {e}")
+            return None
 
     async def _handle_tushare_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare dividends button click"""
@@ -4559,7 +4698,7 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
-        """Получить месячный график используя ChartStyles"""
+        """Получить месячный график за последние 5 лет используя ChartStyles"""
         try:
             import io
             
@@ -4573,14 +4712,28 @@ class ShansAi:
                 # Получаем месячные данные
                 monthly_data = asset.close_monthly
                 
-                # Используем ChartStyles для создания графика
+                # Берем последние 60 месяцев (5 лет)
+                filtered_data = monthly_data.tail(60)
+                
+                # Получаем информацию об активе для заголовка
+                asset_name = getattr(asset, 'name', symbol)
                 currency = getattr(asset, 'currency', '')
+                
+                # Используем ChartStyles для создания графика
                 fig, ax = chart_styles.create_price_chart(
-                    data=monthly_data,
+                    data=filtered_data,
                     symbol=symbol,
                     currency=currency,
-                    period='месячный'
+                    period='5Y'
                 )
+                
+                # Обновляем заголовок с нужным форматом
+                title = f"{symbol} | {asset_name} | {currency} | 5Y"
+                ax.set_title(title, **chart_styles.title)
+                
+                # Убираем подписи осей
+                ax.set_xlabel('')
+                ax.set_ylabel('')
                 
                 # Сохраняем в bytes
                 output = io.BytesIO()
@@ -4602,6 +4755,63 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error getting monthly chart for {symbol}: {e}")
+            return None
+
+    async def _get_all_chart(self, symbol: str) -> Optional[bytes]:
+        """Получить график за весь доступный период используя ChartStyles"""
+        try:
+            import io
+            
+            def create_all_chart():
+                # Устанавливаем backend для headless режима
+                import matplotlib
+                matplotlib.use('Agg')
+                
+                asset = ok.Asset(symbol)
+                
+                # Получаем месячные данные за весь период
+                monthly_data = asset.close_monthly
+                
+                # Получаем информацию об активе для заголовка
+                asset_name = getattr(asset, 'name', symbol)
+                currency = getattr(asset, 'currency', '')
+                
+                # Используем ChartStyles для создания графика
+                fig, ax = chart_styles.create_price_chart(
+                    data=monthly_data,
+                    symbol=symbol,
+                    currency=currency,
+                    period='All'
+                )
+                
+                # Обновляем заголовок с нужным форматом
+                title = f"{symbol} | {asset_name} | {currency} | All"
+                ax.set_title(title, **chart_styles.title)
+                
+                # Убираем подписи осей
+                ax.set_xlabel('')
+                ax.set_ylabel('')
+                
+                # Сохраняем в bytes
+                output = io.BytesIO()
+                chart_styles.save_figure(fig, output)
+                output.seek(0)
+                
+                # Очистка
+                chart_styles.cleanup_figure(fig)
+                
+                return output.getvalue()
+            
+            # Выполняем с таймаутом
+            chart_data = await asyncio.wait_for(
+                asyncio.to_thread(create_all_chart),
+                timeout=30.0
+            )
+            
+            return chart_data
+            
+        except Exception as e:
+            self.logger.error(f"Error getting all chart for {symbol}: {e}")
             return None
 
     async def _get_dividend_chart(self, symbol: str) -> Optional[bytes]:
@@ -4666,27 +4876,40 @@ class ShansAi:
                     # Prepare data for chart - set trade_date as index
                     chart_data = daily_data.set_index('trade_date')['close']
                     
+                    # Take last 252 trading days (approximately 1 year)
+                    filtered_data = chart_data.tail(252)
+                    
                     # Determine currency based on exchange
                     currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
                     
+                    # Get asset name from symbol
+                    asset_name = symbol.split('.')[0]
+                    
                     # Create chart using ChartStyles
                     fig, ax = chart_styles.create_price_chart(
-                        data=chart_data,
+                        data=filtered_data,
                         symbol=symbol,
                         currency=currency,
-                        period='ежедневный'
+                        period='1Y'
                     )
                     
-                    # Save to bytes
-                    buffer = io.BytesIO()
-                    fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-                    buffer.seek(0)
-                    chart_bytes = buffer.getvalue()
-                    buffer.close()
-                    plt.close(fig)
+                    # Обновляем заголовок с нужным форматом
+                    title = f"{symbol} | {asset_name} | {currency} | 1Y"
+                    ax.set_title(title, **chart_styles.title)
                     
-                    self.logger.info(f"Daily chart created successfully for {symbol}: {len(chart_bytes)} bytes")
-                    return chart_bytes
+                    # Убираем подписи осей
+                    ax.set_xlabel('')
+                    ax.set_ylabel('')
+                    
+                    # Save to bytes
+                    output = io.BytesIO()
+                    chart_styles.save_figure(fig, output)
+                    output.seek(0)
+                    
+                    # Cleanup
+                    chart_styles.cleanup_figure(fig)
+                    
+                    return output.getvalue()
                     
                 except Exception as e:
                     self.logger.error(f"Error in create_tushare_daily_chart for {symbol}: {e}")
@@ -4729,27 +4952,40 @@ class ShansAi:
                     # Prepare data for chart - set trade_date as index
                     chart_data = monthly_data.set_index('trade_date')['close']
                     
+                    # Take last 60 months (5 years)
+                    filtered_data = chart_data.tail(60)
+                    
                     # Determine currency based on exchange
                     currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
                     
+                    # Get asset name from symbol
+                    asset_name = symbol.split('.')[0]
+                    
                     # Create chart using ChartStyles
                     fig, ax = chart_styles.create_price_chart(
-                        data=chart_data,
+                        data=filtered_data,
                         symbol=symbol,
                         currency=currency,
-                        period='месячный'
+                        period='5Y'
                     )
                     
-                    # Save to bytes
-                    buffer = io.BytesIO()
-                    fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-                    buffer.seek(0)
-                    chart_bytes = buffer.getvalue()
-                    buffer.close()
-                    plt.close(fig)
+                    # Обновляем заголовок с нужным форматом
+                    title = f"{symbol} | {asset_name} | {currency} | 5Y"
+                    ax.set_title(title, **chart_styles.title)
                     
-                    self.logger.info(f"Monthly chart created successfully for {symbol}: {len(chart_bytes)} bytes")
-                    return chart_bytes
+                    # Убираем подписи осей
+                    ax.set_xlabel('')
+                    ax.set_ylabel('')
+                    
+                    # Save to bytes
+                    output = io.BytesIO()
+                    chart_styles.save_figure(fig, output)
+                    output.seek(0)
+                    
+                    # Cleanup
+                    chart_styles.cleanup_figure(fig)
+                    
+                    return output.getvalue()
                     
                 except Exception as e:
                     self.logger.error(f"Error in create_tushare_monthly_chart for {symbol}: {e}")
