@@ -452,6 +452,8 @@ class GeminiService:
                     description_parts.append(f"  • Волатильность: {metrics['volatility']:.2%}")
                 if 'sharpe_ratio' in metrics and metrics['sharpe_ratio'] is not None:
                     description_parts.append(f"  • Коэффициент Шарпа: {metrics['sharpe_ratio']:.2f}")
+                if 'sortino_ratio' in metrics and metrics['sortino_ratio'] is not None:
+                    description_parts.append(f"  • Коэффициент Сортино: {metrics['sortino_ratio']:.2f}")
                 if 'max_drawdown' in metrics and metrics['max_drawdown'] is not None:
                     description_parts.append(f"  • Максимальная просадка: {metrics['max_drawdown']:.2%}")
         

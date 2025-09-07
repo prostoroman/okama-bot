@@ -4051,14 +4051,66 @@ class ShansAi:
                             performance_metrics['annual_return'] = asset_data.annual_return
                         if hasattr(asset_data, 'volatility'):
                             performance_metrics['volatility'] = asset_data.volatility
-                        if hasattr(asset_data, 'sharpe_ratio'):
-                            performance_metrics['sharpe_ratio'] = asset_data.sharpe_ratio
                         if hasattr(asset_data, 'max_drawdown'):
                             performance_metrics['max_drawdown'] = asset_data.max_drawdown
                         
+                        # Sharpe ratio using okama method with risk-free rate
+                        try:
+                            if hasattr(asset_data, 'get_sharpe_ratio'):
+                                sharpe_ratio = asset_data.get_sharpe_ratio(rf_return=0.02)
+                                performance_metrics['sharpe_ratio'] = float(sharpe_ratio)
+                            elif hasattr(asset_data, 'sharpe_ratio'):
+                                performance_metrics['sharpe_ratio'] = asset_data.sharpe_ratio
+                            else:
+                                # Manual Sharpe ratio calculation
+                                annual_return = performance_metrics.get('annual_return', 0)
+                                volatility = performance_metrics.get('volatility', 0)
+                                if volatility > 0:
+                                    sharpe_ratio = (annual_return - 0.02) / volatility
+                                    performance_metrics['sharpe_ratio'] = sharpe_ratio
+                                else:
+                                    performance_metrics['sharpe_ratio'] = 0.0
+                        except Exception as e:
+                            self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
+                            performance_metrics['sharpe_ratio'] = 0.0
+                        
+                        # Sortino ratio calculation
+                        try:
+                            if hasattr(asset_data, 'sortino_ratio'):
+                                performance_metrics['sortino_ratio'] = asset_data.sortino_ratio
+                            else:
+                                # Manual Sortino ratio calculation
+                                annual_return = performance_metrics.get('annual_return', 0)
+                                if hasattr(asset_data, 'returns'):
+                                    returns = asset_data.returns
+                                    if returns is not None and len(returns) > 0:
+                                        # Calculate downside deviation (only negative returns)
+                                        negative_returns = returns[returns < 0]
+                                        if len(negative_returns) > 0:
+                                            downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                            if downside_deviation > 0:
+                                                sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                                performance_metrics['sortino_ratio'] = sortino_ratio
+                                            else:
+                                                performance_metrics['sortino_ratio'] = 0.0
+                                        else:
+                                            # No negative returns, use volatility as fallback
+                                            volatility = performance_metrics.get('volatility', 0)
+                                            if volatility > 0:
+                                                sortino_ratio = (annual_return - 0.02) / volatility
+                                                performance_metrics['sortino_ratio'] = sortino_ratio
+                                            else:
+                                                performance_metrics['sortino_ratio'] = 0.0
+                                    else:
+                                        performance_metrics['sortino_ratio'] = 0.0
+                                else:
+                                    # Fallback to Sharpe ratio if no returns data
+                                    performance_metrics['sortino_ratio'] = performance_metrics.get('sharpe_ratio', 0.0)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
+                            performance_metrics['sortino_ratio'] = 0.0
+                        
                         # Additional metrics if available
-                        if hasattr(asset_data, 'sortino_ratio'):
-                            performance_metrics['sortino_ratio'] = asset_data.sortino_ratio
                         if hasattr(asset_data, 'calmar_ratio'):
                             performance_metrics['calmar_ratio'] = asset_data.calmar_ratio
                         if hasattr(asset_data, 'var_95'):
@@ -4075,6 +4127,7 @@ class ShansAi:
                             'annual_return': 0,
                             'volatility': 0,
                             'sharpe_ratio': 0,
+                            'sortino_ratio': 0,
                             'max_drawdown': 0
                         }
                         
@@ -4085,6 +4138,7 @@ class ShansAi:
                         'annual_return': 0,
                         'volatility': 0,
                         'sharpe_ratio': 0,
+                        'sortino_ratio': 0,
                         'max_drawdown': 0
                     }
             
