@@ -2476,8 +2476,8 @@ class ShansAi:
                 # Add Metrics button for detailed statistics
                 keyboard.append([
                     InlineKeyboardButton("📊 Metrics", callback_data="metrics_compare")
-                ])
-                
+                    ])
+
                 # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
                 keyboard.append([
                     InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
@@ -4307,7 +4307,8 @@ class ShansAi:
                 'additional_info': '',
                 'describe_table': describe_table,
                 'asset_count': len(symbols),
-                'analysis_type': 'asset_comparison'
+                'analysis_type': 'asset_comparison',
+                'asset_names': {}  # Dictionary to store asset names
             }
             
             # Calculate detailed performance metrics for each symbol
@@ -4315,6 +4316,18 @@ class ShansAi:
                 try:
                     if i < len(expanded_symbols):
                         asset_data = expanded_symbols[i]
+                        
+                        # Get asset name
+                        asset_name = symbol  # Default to symbol
+                        try:
+                            if hasattr(asset_data, 'name') and asset_data.name:
+                                asset_name = asset_data.name
+                            elif hasattr(asset_data, 'symbol') and asset_data.symbol:
+                                asset_name = asset_data.symbol
+                        except Exception as e:
+                            self.logger.warning(f"Failed to get asset name for {symbol}: {e}")
+                        
+                        data_info['asset_names'][symbol] = asset_name
                         
                         # Get comprehensive performance metrics
                         performance_metrics = {}
@@ -4533,7 +4546,7 @@ class ShansAi:
                         
                     else:
                         # Fallback for missing data
-                        data_info['performance'][symbol] = {
+                            data_info['performance'][symbol] = {
                             'total_return': 0,
                             'annual_return': 0,
                             'volatility': 0,
@@ -4543,8 +4556,8 @@ class ShansAi:
                             'calmar_ratio': 0,
                             'var_95': 0,
                             'cvar_95': 0
-                        }
-                        
+                            }
+                            
                 except Exception as e:
                     self.logger.warning(f"Failed to get performance metrics for {symbol}: {e}")
                     data_info['performance'][symbol] = {
@@ -4651,7 +4664,8 @@ class ShansAi:
                 'describe_table': describe_table,
                 'asset_count': len(symbols),
                 'analysis_type': 'metrics_export',
-                'timestamp': self._get_current_timestamp()
+                'timestamp': self._get_current_timestamp(),
+                'asset_names': {}  # Dictionary to store asset names
             }
             
             # Calculate detailed performance metrics for each symbol
@@ -4682,6 +4696,19 @@ class ShansAi:
                         except Exception as e:
                             self.logger.warning(f"Failed to create Asset object for {symbol}: {e}")
                             asset_data = None
+                    
+                    # Get asset name
+                    asset_name = symbol  # Default to symbol
+                    try:
+                        if asset_data is not None:
+                            if hasattr(asset_data, 'name') and asset_data.name:
+                                asset_name = asset_data.name
+                            elif hasattr(asset_data, 'symbol') and asset_data.symbol:
+                                asset_name = asset_data.symbol
+                    except Exception as e:
+                        self.logger.warning(f"Failed to get asset name for {symbol}: {e}")
+                    
+                    metrics_data['asset_names'][symbol] = asset_name
                     
                     # Get comprehensive performance metrics
                     detailed_metrics = {}
@@ -4982,12 +5009,22 @@ class ShansAi:
                 ws_summary = wb.create_sheet("Summary", 0)
                 
                 # Summary data
+                asset_names = metrics_data.get('asset_names', {})
+                
+                # Create assets list with names if available
+                assets_with_names = []
+                for symbol in symbols:
+                    if symbol in asset_names and asset_names[symbol] != symbol:
+                        assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                    else:
+                        assets_with_names.append(symbol)
+                
                 summary_data = [
                     ["Metric", "Value"],
                     ["Analysis Date", metrics_data['timestamp']],
                     ["Currency", currency],
                     ["Assets Count", len(symbols)],
-                    ["Assets", ", ".join(symbols)],
+                    ["Assets", ", ".join(assets_with_names)],
                     ["Period", metrics_data['period']]
                 ]
                 
@@ -5008,10 +5045,13 @@ class ShansAi:
                 # Prepare detailed metrics data
                 detailed_metrics = metrics_data.get('detailed_metrics', {})
                 
-                # Create headers
+                # Create headers with asset names
                 headers = ["Metric"]
                 for symbol in symbols:
-                    headers.append(symbol)
+                    if symbol in asset_names and asset_names[symbol] != symbol:
+                        headers.append(f"{symbol} ({asset_names[symbol]})")
+                    else:
+                        headers.append(symbol)
                 
                 ws_metrics.append(headers)
                 
@@ -5064,14 +5104,24 @@ class ShansAi:
                 if metrics_data.get('correlations'):
                     ws_corr = wb.create_sheet("Correlation Matrix", 2)
                     
-                    # Add headers
-                    corr_headers = [""] + symbols
+                    # Add headers with asset names
+                    corr_headers = [""]
+                    for symbol in symbols:
+                        if symbol in asset_names and asset_names[symbol] != symbol:
+                            corr_headers.append(f"{symbol} ({asset_names[symbol]})")
+                        else:
+                            corr_headers.append(symbol)
                     ws_corr.append(corr_headers)
                     
                     # Add correlation data
                     correlations = metrics_data['correlations']
                     for i, symbol in enumerate(symbols):
-                        row = [symbol]
+                        # Use asset name for row header
+                        row_header = symbol
+                        if symbol in asset_names and asset_names[symbol] != symbol:
+                            row_header = f"{symbol} ({asset_names[symbol]})"
+                        
+                        row = [row_header]
                         for j in range(len(symbols)):
                             try:
                                 corr_value = correlations[i][j]

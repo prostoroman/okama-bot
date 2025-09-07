@@ -387,8 +387,17 @@ Format responses professionally with clear sections, bullet points, and relevant
             symbols = data_info.get('symbols', [])
             currency = data_info.get('currency', 'USD')
             period = data_info.get('period', 'полный доступный период данных')
+            asset_names = data_info.get('asset_names', {})
             
-            description_parts.append(f"**Анализируемые активы:** {', '.join(symbols)}")
+            # Create list with asset names if available
+            assets_with_names = []
+            for symbol in symbols:
+                if symbol in asset_names and asset_names[symbol] != symbol:
+                    assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                else:
+                    assets_with_names.append(symbol)
+            
+            description_parts.append(f"**Анализируемые активы:** {', '.join(assets_with_names)}")
             description_parts.append(f"**Валюта:** {currency}")
             description_parts.append(f"**Период анализа:** {period}")
             description_parts.append(f"**Количество активов:** {len(symbols)}")
@@ -397,7 +406,12 @@ Format responses professionally with clear sections, bullet points, and relevant
             if 'performance' in data_info and data_info['performance']:
                 description_parts.append("\n**📈 МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ:**")
                 for symbol, metrics in data_info['performance'].items():
-                    description_parts.append(f"\n**{symbol}:**")
+                    # Use asset name if available
+                    display_name = symbol
+                    if symbol in asset_names and asset_names[symbol] != symbol:
+                        display_name = f"{symbol} ({asset_names[symbol]})"
+                    
+                    description_parts.append(f"\n**{display_name}:**")
                     if 'total_return' in metrics and metrics['total_return'] is not None:
                         description_parts.append(f"  • Общая доходность: {metrics['total_return']:.2%}")
                     if 'annual_return' in metrics and metrics['annual_return'] is not None:
@@ -421,7 +435,17 @@ Format responses professionally with clear sections, bullet points, and relevant
                     for j, symbol2 in enumerate(symbols):
                         if i < len(correlations) and j < len(correlations[i]):
                             corr = correlations[i][j]
-                            description_parts.append(f"  • {symbol1} ↔ {symbol2}: {corr:.3f}")
+                            
+                            # Use asset names if available
+                            name1 = symbol1
+                            if symbol1 in asset_names and asset_names[symbol1] != symbol1:
+                                name1 = f"{symbol1} ({asset_names[symbol1]})"
+                            
+                            name2 = symbol2
+                            if symbol2 in asset_names and asset_names[symbol2] != symbol2:
+                                name2 = f"{symbol2} ({asset_names[symbol2]})"
+                            
+                            description_parts.append(f"  • {name1} ↔ {name2}: {corr:.3f}")
             
             # Describe table data
             if 'describe_table' in data_info and data_info['describe_table']:

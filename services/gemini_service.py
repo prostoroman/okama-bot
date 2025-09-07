@@ -408,9 +408,20 @@ class GeminiService:
         
         # Basic info
         if 'symbols' in data_info:
-            symbols_list = ', '.join(data_info['symbols'])
+            symbols = data_info['symbols']
+            asset_names = data_info.get('asset_names', {})
+            
+            # Create list with asset names if available
+            assets_with_names = []
+            for symbol in symbols:
+                if symbol in asset_names and asset_names[symbol] != symbol:
+                    assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                else:
+                    assets_with_names.append(symbol)
+            
+            symbols_list = ', '.join(assets_with_names)
             description_parts.append(f"**Анализируемые активы:** {symbols_list}")
-            description_parts.append(f"**Количество активов:** {len(data_info['symbols'])}")
+            description_parts.append(f"**Количество активов:** {len(symbols)}")
         
         if 'asset_count' in data_info:
             description_parts.append(f"**Общее количество активов:** {data_info['asset_count']}")
@@ -440,10 +451,16 @@ class GeminiService:
         # Performance metrics (дополнительные метрики)
         if 'performance' in data_info and data_info['performance']:
             perf = data_info['performance']
+            asset_names = data_info.get('asset_names', {})
             description_parts.append("\n**📈 ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ:**")
             
             for symbol, metrics in perf.items():
-                description_parts.append(f"\n**{symbol}:**")
+                # Use asset name if available
+                display_name = symbol
+                if symbol in asset_names and asset_names[symbol] != symbol:
+                    display_name = f"{symbol} ({asset_names[symbol]})"
+                
+                description_parts.append(f"\n**{display_name}:**")
                 if 'total_return' in metrics and metrics['total_return'] is not None:
                     description_parts.append(f"  • Общая доходность: {metrics['total_return']:.2%}")
                 if 'annual_return' in metrics and metrics['annual_return'] is not None:
@@ -461,11 +478,23 @@ class GeminiService:
         if 'correlations' in data_info and data_info['correlations']:
             description_parts.append("\n**🔗 КОРРЕЛЯЦИОННАЯ МАТРИЦА:**")
             symbols = data_info.get('symbols', [])
+            asset_names = data_info.get('asset_names', {})
+            
             for i, symbol1 in enumerate(symbols):
                 for j, symbol2 in enumerate(symbols):
                     if i < j:  # Only upper triangle
                         corr = data_info['correlations'][i][j]
-                        description_parts.append(f"  • {symbol1} ↔ {symbol2}: {corr:.3f}")
+                        
+                        # Use asset names if available
+                        name1 = symbol1
+                        if symbol1 in asset_names and asset_names[symbol1] != symbol1:
+                            name1 = f"{symbol1} ({asset_names[symbol1]})"
+                        
+                        name2 = symbol2
+                        if symbol2 in asset_names and asset_names[symbol2] != symbol2:
+                            name2 = f"{symbol2} ({asset_names[symbol2]})"
+                        
+                        description_parts.append(f"  • {name1} ↔ {name2}: {corr:.3f}")
         
         # Additional data
         if 'additional_info' in data_info and data_info['additional_info']:
