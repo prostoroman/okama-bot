@@ -310,7 +310,7 @@ class GeminiService:
                     "temperature": 0.7,
                     "topK": 40,
                     "topP": 0.95,
-                    "maxOutputTokens": 2048,
+                    "maxOutputTokens": 3000,  # Увеличено для более детального анализа
                 }
             }
             
@@ -367,9 +367,17 @@ class GeminiService:
                 if 'text' in part:
                     full_analysis_text += part['text'] + "\n"
             
+            # Обрезаем анализ если он слишком длинный для Telegram
+            analysis_text = full_analysis_text.strip()
+            max_length = 4000  # Оставляем запас для дополнительной информации
+            
+            if len(analysis_text) > max_length:
+                analysis_text = analysis_text[:max_length-50] + "\n\n... (анализ обрезан из-за длины)"
+                logger.warning(f"Analysis truncated from {len(full_analysis_text)} to {len(analysis_text)} characters")
+            
             return {
                 'success': True,
-                'analysis': full_analysis_text.strip(),
+                'analysis': analysis_text,
                 'full_analysis': full_analysis_text.strip(),
                 'analysis_type': 'data'
             }

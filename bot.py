@@ -3270,12 +3270,18 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода сравнения: {str(e)}")
 
     async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
-        """Отправить сообщение в callback query - исправлено для обработки None"""
+        """Отправить сообщение в callback query - исправлено для обработки None и длинных сообщений"""
         try:
             # Проверяем, что update и context не None
             if update is None or context is None:
                 self.logger.error("Cannot send message: update or context is None")
                 return
+            
+            # Обрезаем текст до максимальной длины Telegram (4096 символов)
+            max_length = 4096
+            if len(text) > max_length:
+                text = text[:max_length-50] + "\n\n... (сообщение обрезано из-за длины)"
+                self.logger.warning(f"Message truncated from {len(text)+50} to {len(text)} characters")
             
             if hasattr(update, 'callback_query') and update.callback_query is not None:
                 # Для callback query используем context.bot.send_message
