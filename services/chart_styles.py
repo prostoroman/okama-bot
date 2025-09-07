@@ -676,7 +676,7 @@ class ChartStyles:
         """Получить палитру цветов"""
         return plt.cm.Set3(np.linspace(0, 1, n_colors))
     
-    def create_table_image(self, data, title="Статистика активов", symbols=None):
+    def create_table_image(self, data, title="", symbols=None):
         """Создать таблицу как изображение"""
         try:
             with suppress_cjk_warnings():

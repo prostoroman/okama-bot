@@ -2487,44 +2487,13 @@ class ShansAi:
                     reply_markup=reply_markup
                 )
                 
-                # Send describe table as image for better display
+                # Send describe table in separate message for better markdown formatting
                 try:
-                    describe_data = comparison.describe()
-                    if describe_data is not None and not describe_data.empty:
-                        # Create table image
-                        fig, ax = chart_styles.create_table_image(
-                            describe_data, 
-                            title="📊 Статистика активов", 
-                            symbols=symbols
-                        )
-                        
-                        # Save table image to bytes
-                        table_buffer = io.BytesIO()
-                        chart_styles.save_figure(fig, table_buffer)
-                        table_buffer.seek(0)
-                        table_bytes = table_buffer.getvalue()
-                        
-                        # Clear matplotlib cache
-                        chart_styles.cleanup_figure(fig)
-                        
-                        # Send table as image
-                        await context.bot.send_photo(
-                            chat_id=update.effective_chat.id,
-                            photo=io.BytesIO(table_bytes),
-                            caption="📊 **Детальная статистика активов**\n\nТаблица содержит все основные метрики производительности и риска для сравнения активов."
-                        )
-                    else:
-                        await self._send_message_safe(update, "📊 Данные для сравнения недоступны")
-                        
+                    describe_table = self._format_describe_table(comparison)
+                    await self._send_message_safe(update, describe_table, parse_mode='Markdown')
                 except Exception as e:
-                    self.logger.error(f"Error sending describe table as image: {e}")
-                    # Fallback to text table
-                    try:
-                        describe_table = self._format_describe_table(comparison)
-                        await self._send_message_safe(update, describe_table, parse_mode='Markdown')
-                    except Exception as fallback_error:
-                        self.logger.error(f"Error sending fallback text table: {fallback_error}")
-                        await self._send_message_safe(update, "📊 Ошибка при создании таблицы статистики")
+                    self.logger.error(f"Error sending describe table: {e}")
+                    # Continue without table if there's an error
                 
                 # AI analysis is now only available via buttons
                 
@@ -4075,17 +4044,82 @@ class ShansAi:
                         # Get comprehensive performance metrics
                         performance_metrics = {}
                         
-                        # Basic metrics
-                        if hasattr(asset_data, 'total_return'):
-                            performance_metrics['total_return'] = asset_data.total_return
-                        if hasattr(asset_data, 'annual_return'):
-                            performance_metrics['annual_return'] = asset_data.annual_return
-                        if hasattr(asset_data, 'volatility'):
-                            performance_metrics['volatility'] = asset_data.volatility
-                        if hasattr(asset_data, 'max_drawdown'):
-                            performance_metrics['max_drawdown'] = asset_data.max_drawdown
+                        # Calculate metrics from price data
+                        try:
+                            # Get price data for calculations
+                            if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                prices = asset_data.close_monthly
+                            elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                prices = asset_data.close_daily
+                            elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
+                                prices = asset_data.adj_close
+                            else:
+                                prices = None
+                            
+                            if prices is not None and len(prices) > 1:
+                                # Calculate returns from prices
+                                returns = prices.pct_change().dropna()
+                                
+                                # Basic metrics
+                                if hasattr(asset_data, 'total_return'):
+                                    performance_metrics['total_return'] = asset_data.total_return
+                                else:
+                                    # Calculate total return from first and last price
+                                    total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
+                                    performance_metrics['total_return'] = total_return
+                                
+                                # Annual return (CAGR)
+                                if hasattr(asset_data, 'annual_return'):
+                                    performance_metrics['annual_return'] = asset_data.annual_return
+                                else:
+                                    # Calculate CAGR
+                                    periods = len(prices)
+                                    years = periods / 12.0  # Assuming monthly data
+                                    if years > 0:
+                                        cagr = ((prices.iloc[-1] / prices.iloc[0]) ** (1.0 / years)) - 1
+                                        performance_metrics['annual_return'] = cagr
+                                    else:
+                                        performance_metrics['annual_return'] = 0.0
+                                
+                                # Volatility
+                                if hasattr(asset_data, 'volatility'):
+                                    performance_metrics['volatility'] = asset_data.volatility
+                                else:
+                                    # Calculate annualized volatility
+                                    volatility = returns.std() * (12 ** 0.5)  # Annualized for monthly data
+                                    performance_metrics['volatility'] = volatility
+                                
+                                # Max drawdown
+                                if hasattr(asset_data, 'max_drawdown'):
+                                    performance_metrics['max_drawdown'] = asset_data.max_drawdown
+                                else:
+                                    # Calculate max drawdown
+                                    cumulative = (1 + returns).cumprod()
+                                    running_max = cumulative.expanding().max()
+                                    drawdown = (cumulative - running_max) / running_max
+                                    max_drawdown = drawdown.min()
+                                    performance_metrics['max_drawdown'] = max_drawdown
+                                
+                                # Store returns for Sortino calculation
+                                performance_metrics['_returns'] = returns
+                                
+                            else:
+                                # Fallback values if no price data
+                                performance_metrics['total_return'] = 0.0
+                                performance_metrics['annual_return'] = 0.0
+                                performance_metrics['volatility'] = 0.0
+                                performance_metrics['max_drawdown'] = 0.0
+                                performance_metrics['_returns'] = None
                         
-                        # Sharpe ratio using okama method with risk-free rate
+                        except Exception as e:
+                            self.logger.warning(f"Failed to calculate basic metrics for {symbol}: {e}")
+                            performance_metrics['total_return'] = 0.0
+                            performance_metrics['annual_return'] = 0.0
+                            performance_metrics['volatility'] = 0.0
+                            performance_metrics['max_drawdown'] = 0.0
+                            performance_metrics['_returns'] = None
+                        
+                        # Sharpe ratio calculation
                         try:
                             if hasattr(asset_data, 'get_sharpe_ratio'):
                                 sharpe_ratio = asset_data.get_sharpe_ratio(rf_return=0.02)
@@ -4112,34 +4146,36 @@ class ShansAi:
                             else:
                                 # Manual Sortino ratio calculation
                                 annual_return = performance_metrics.get('annual_return', 0)
-                                if hasattr(asset_data, 'returns'):
-                                    returns = asset_data.returns
-                                    if returns is not None and len(returns) > 0:
-                                        # Calculate downside deviation (only negative returns)
-                                        negative_returns = returns[returns < 0]
-                                        if len(negative_returns) > 0:
-                                            downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
-                                            if downside_deviation > 0:
-                                                sortino_ratio = (annual_return - 0.02) / downside_deviation
-                                                performance_metrics['sortino_ratio'] = sortino_ratio
-                                            else:
-                                                performance_metrics['sortino_ratio'] = 0.0
+                                returns = performance_metrics.get('_returns')
+                                
+                                if returns is not None and len(returns) > 0:
+                                    # Calculate downside deviation (only negative returns)
+                                    negative_returns = returns[returns < 0]
+                                    if len(negative_returns) > 0:
+                                        downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                        if downside_deviation > 0:
+                                            sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                            performance_metrics['sortino_ratio'] = sortino_ratio
                                         else:
-                                            # No negative returns, use volatility as fallback
-                                            volatility = performance_metrics.get('volatility', 0)
-                                            if volatility > 0:
-                                                sortino_ratio = (annual_return - 0.02) / volatility
-                                                performance_metrics['sortino_ratio'] = sortino_ratio
-                                            else:
-                                                performance_metrics['sortino_ratio'] = 0.0
+                                            performance_metrics['sortino_ratio'] = 0.0
                                     else:
-                                        performance_metrics['sortino_ratio'] = 0.0
+                                        # No negative returns, use volatility as fallback
+                                        volatility = performance_metrics.get('volatility', 0)
+                                        if volatility > 0:
+                                            sortino_ratio = (annual_return - 0.02) / volatility
+                                            performance_metrics['sortino_ratio'] = sortino_ratio
+                                        else:
+                                            performance_metrics['sortino_ratio'] = 0.0
                                 else:
                                     # Fallback to Sharpe ratio if no returns data
                                     performance_metrics['sortino_ratio'] = performance_metrics.get('sharpe_ratio', 0.0)
                         except Exception as e:
                             self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
                             performance_metrics['sortino_ratio'] = 0.0
+                        
+                        # Clean up temporary data
+                        if '_returns' in performance_metrics:
+                            del performance_metrics['_returns']
                         
                         # Additional metrics if available
                         if hasattr(asset_data, 'calmar_ratio'):

@@ -480,5 +480,6 @@ class GeminiService:
         description_parts.append("3. Оцени корреляции между активами")
         description_parts.append("4. Дай рекомендации по инвестированию")
         description_parts.append("5. Выдели сильные и слабые стороны каждого актива")
+        description_parts.append("В ответе не нужно дублировать таблицу describe и корреляционную матрицу, постарайся уложиться в 4000 символов")
         
         return "\n".join(description_parts)
