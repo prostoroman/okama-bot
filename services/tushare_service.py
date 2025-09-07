@@ -332,21 +332,36 @@ class TushareService:
                 
                 return monthly_df
             else:
-                # Use regular monthly method for stocks
-                df = self.pro.monthly(
-                    ts_code=symbol,  # Use full symbol like 600026.SH or 00001.HK
-                    start_date=start_date,
-                    end_date=end_date
-                )
-                
-                if df.empty:
-                    return pd.DataFrame()
-                
-                # Convert date column
-                df['trade_date'] = pd.to_datetime(df['trade_date'], format='%Y%m%d')
-                df = df.sort_values('trade_date')
-                
-                return df
+                # For Hong Kong stocks, use daily data and resample to monthly
+                # since Tushare doesn't have a direct monthly endpoint for HKEX
+                if exchange == 'HKEX':
+                    daily_df = self.get_daily_data(symbol, start_date, end_date)
+                    if daily_df.empty:
+                        return pd.DataFrame()
+                    
+                    # Resample to monthly (last trading day of each month)
+                    daily_df = daily_df.set_index('trade_date')
+                    monthly_df = daily_df.resample('ME').last()  # Use 'ME' instead of deprecated 'M'
+                    monthly_df = monthly_df.reset_index()
+                    monthly_df['trade_date'] = monthly_df['trade_date'].dt.strftime('%Y%m%d')
+                    
+                    return monthly_df
+                else:
+                    # Use regular monthly method for mainland China stocks
+                    df = self.pro.monthly(
+                        ts_code=symbol,  # Use full symbol like 600026.SH
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+                    
+                    if df.empty:
+                        return pd.DataFrame()
+                    
+                    # Convert date column
+                    df['trade_date'] = pd.to_datetime(df['trade_date'], format='%Y%m%d')
+                    df = df.sort_values('trade_date')
+                    
+                    return df
             
         except Exception as e:
             self.logger.error(f"Error getting monthly data for {symbol}: {e}")
