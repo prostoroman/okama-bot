@@ -273,6 +273,175 @@ Format responses professionally with clear sections, bullet points, and relevant
             print(f"❌ Error in ask_question: {e}")
             return f"Ошибка при получении AI ответа: {str(e)}"
     
+    def analyze_data(self, data_info: Dict) -> Optional[Dict]:
+        """Analyze financial data using YandexGPT"""
+        try:
+            if not self.api_key or not self.folder_id:
+                return {
+                    'error': 'YandexGPT service not configured',
+                    'success': False
+                }
+            
+            # Prepare data description for analysis
+            data_description = self._prepare_data_description(data_info)
+            
+            # Create analysis prompt
+            analysis_prompt = f"""
+Ты - эксперт-финансовый аналитик с многолетним опытом работы на финансовых рынках. 
+Твоя задача - провести комплексный анализ предоставленных финансовых данных и дать профессиональные рекомендации.
+
+ДАННЫЕ ДЛЯ АНАЛИЗА:
+{data_description}
+
+ТРЕБОВАНИЯ К АНАЛИЗУ:
+1. Проведи детальный анализ каждого актива по всем доступным метрикам
+2. Сравни активы между собой по ключевым показателям
+3. Оцени соотношение риск-доходность для каждого актива
+4. Проанализируй корреляции между активами
+5. Дай конкретные рекомендации по инвестированию
+6. Выдели сильные и слабые стороны каждого актива
+7. Предложи оптимальную стратегию распределения активов
+
+ФОРМАТ ОТВЕТА:
+- Используй структурированный подход с четкими разделами
+- Приводи конкретные цифры и метрики
+- Давай практические рекомендации
+- Используй профессиональную финансовую терминологию
+- Будь объективным и обоснованным в выводах
+
+Отвечай на русском языке.
+"""
+            
+            response = self._call_yandex_api(
+                system_prompt="Ты - эксперт-финансовый аналитик. Проводишь профессиональный анализ финансовых данных.",
+                user_prompt=analysis_prompt,
+                temperature=0.7,
+                max_tokens=2000
+            )
+            
+            return {
+                'success': True,
+                'analysis': response,
+                'full_analysis': response,
+                'analysis_type': 'data'
+            }
+            
+        except Exception as e:
+            return {
+                'error': f'YandexGPT data analysis failed: {str(e)}',
+                'success': False
+            }
+    
+    def analyze_chart(self, image_bytes: bytes) -> Optional[Dict]:
+        """Analyze financial chart using YandexGPT with vision"""
+        try:
+            if not self.api_key or not self.folder_id:
+                return {
+                    'error': 'YandexGPT service not configured',
+                    'success': False
+                }
+            
+            # Create chart analysis prompt
+            analysis_prompt = """
+Проанализируй этот финансовый график и дай профессиональную оценку:
+
+1. Определи тип графика (цена, доходность, корреляция и т.д.)
+2. Проанализируй основные тренды и паттерны
+3. Выдели ключевые уровни поддержки и сопротивления
+4. Оцени технические индикаторы если они видны
+5. Дай прогноз развития ситуации
+6. Предложи торговые или инвестиционные стратегии
+
+Отвечай на русском языке, используй профессиональную терминологию.
+"""
+            
+            response = self._call_yandex_api_with_vision(
+                model_name="yandexgpt",
+                question=analysis_prompt,
+                image_bytes=image_bytes,
+                image_description="Financial chart with price data and technical indicators"
+            )
+            
+            return {
+                'success': True,
+                'analysis': response,
+                'full_analysis': response,
+                'analysis_type': 'chart'
+            }
+            
+        except Exception as e:
+            return {
+                'error': f'YandexGPT chart analysis failed: {str(e)}',
+                'success': False
+            }
+    
+    def _prepare_data_description(self, data_info: Dict) -> str:
+        """Prepare data description for YandexGPT analysis"""
+        try:
+            if not data_info or not isinstance(data_info, dict):
+                return "**Ошибка:** Данные для анализа недоступны"
+            
+            description_parts = []
+            
+            # Basic info
+            symbols = data_info.get('symbols', [])
+            currency = data_info.get('currency', 'USD')
+            period = data_info.get('period', 'полный доступный период данных')
+            
+            description_parts.append(f"**Анализируемые активы:** {', '.join(symbols)}")
+            description_parts.append(f"**Валюта:** {currency}")
+            description_parts.append(f"**Период анализа:** {period}")
+            description_parts.append(f"**Количество активов:** {len(symbols)}")
+            
+            # Performance metrics
+            if 'performance' in data_info and data_info['performance']:
+                description_parts.append("\n**📈 МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ:**")
+                for symbol, metrics in data_info['performance'].items():
+                    description_parts.append(f"\n**{symbol}:**")
+                    if 'total_return' in metrics and metrics['total_return'] is not None:
+                        description_parts.append(f"  • Общая доходность: {metrics['total_return']:.2%}")
+                    if 'annual_return' in metrics and metrics['annual_return'] is not None:
+                        description_parts.append(f"  • Годовая доходность: {metrics['annual_return']:.2%}")
+                    if 'volatility' in metrics and metrics['volatility'] is not None:
+                        description_parts.append(f"  • Волатильность: {metrics['volatility']:.2%}")
+                    if 'sharpe_ratio' in metrics and metrics['sharpe_ratio'] is not None:
+                        description_parts.append(f"  • Коэффициент Шарпа: {metrics['sharpe_ratio']:.2f}")
+                    if 'sortino_ratio' in metrics and metrics['sortino_ratio'] is not None:
+                        description_parts.append(f"  • Коэффициент Сортино: {metrics['sortino_ratio']:.2f}")
+                    if 'max_drawdown' in metrics and metrics['max_drawdown'] is not None:
+                        description_parts.append(f"  • Максимальная просадка: {metrics['max_drawdown']:.2%}")
+            
+            # Correlation matrix
+            if 'correlations' in data_info and data_info['correlations']:
+                description_parts.append("\n**🔗 КОРРЕЛЯЦИОННАЯ МАТРИЦА:**")
+                symbols = data_info.get('symbols', [])
+                correlations = data_info['correlations']
+                
+                for i, symbol1 in enumerate(symbols):
+                    for j, symbol2 in enumerate(symbols):
+                        if i < len(correlations) and j < len(correlations[i]):
+                            corr = correlations[i][j]
+                            description_parts.append(f"  • {symbol1} ↔ {symbol2}: {corr:.3f}")
+            
+            # Describe table data
+            if 'describe_table' in data_info and data_info['describe_table']:
+                description_parts.append("\n**📊 ДЕТАЛЬНАЯ СТАТИСТИКА АКТИВОВ:**")
+                description_parts.append(data_info['describe_table'])
+            
+            # Additional info
+            if 'additional_info' in data_info and data_info['additional_info']:
+                description_parts.append(f"\n**📋 ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ:**")
+                description_parts.append(data_info['additional_info'])
+            
+            return "\n".join(description_parts)
+            
+        except Exception as e:
+            return f"**Ошибка подготовки данных:** {str(e)}"
+    
+    def is_available(self) -> bool:
+        """Check if YandexGPT service is available"""
+        return bool(self.api_key and self.folder_id)
+
     def ask_question_with_vision(self, question: str, image_bytes: bytes, image_description: str = "") -> str:
         """Ask a question to YandexGPT with image analysis capability"""
         print(f"🔍 YandexGPTService.ask_question_with_vision called with question: {question[:100]}...")

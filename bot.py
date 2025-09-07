@@ -4031,6 +4031,61 @@ class ShansAi:
             self.logger.error(f"Error handling data analysis button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown')
 
+    async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle YandexGPT analysis button click for comparison charts"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            symbols = user_context.get('current_symbols', [])
+            currency = user_context.get('current_currency', 'USD')
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+
+            # Validate that we have symbols to compare
+            if not expanded_symbols:
+                await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.", parse_mode='Markdown')
+                return
+
+            # Check if YandexGPT service is available
+            if not self.yandexgpt_service or not self.yandexgpt_service.is_available():
+                await self._send_callback_message(update, context, "❌ Сервис YandexGPT недоступен. Проверьте настройки API.", parse_mode='Markdown')
+                return
+
+            await self._send_callback_message(update, context, "🤖 Анализирую данные с помощью YandexGPT...", parse_mode='Markdown')
+
+            # Prepare data for analysis
+            try:
+                data_info = await self._prepare_data_for_analysis(symbols, currency, expanded_symbols, portfolio_contexts, user_id)
+                
+                if data_info:
+                    # Perform YandexGPT analysis
+                    yandexgpt_analysis = self.yandexgpt_service.analyze_data(data_info)
+                    
+                    if yandexgpt_analysis and yandexgpt_analysis.get('success'):
+                        analysis_text = yandexgpt_analysis.get('analysis', '')
+                        
+                        if analysis_text:
+                            analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                            analysis_text += f"💰 **Валюта:** {currency}\n"
+                            analysis_text += f"📅 **Период:** полный доступный период данных\n"
+                            analysis_text += f"🤖 **AI сервис:** YandexGPT"
+                            
+                            await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown')
+                        else:
+                            await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown')
+                            
+                    else:
+                        error_msg = yandexgpt_analysis.get('error', 'Неизвестная ошибка') if yandexgpt_analysis else 'Анализ не выполнен'
+                        await self._send_callback_message(update, context, f"❌ Ошибка анализа данных YandexGPT: {error_msg}", parse_mode='Markdown')
+                    
+            except Exception as data_error:
+                self.logger.error(f"Error preparing data for YandexGPT analysis: {data_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа YandexGPT: {str(data_error)}", parse_mode='Markdown')
+
+        except Exception as e:
+            self.logger.error(f"Error handling YandexGPT analysis button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown')
+
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle metrics button click for comparison charts - export detailed statistics to Excel"""
         try:
@@ -4127,12 +4182,18 @@ class ShansAi:
                             # Get price data for calculations
                             if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
                                 prices = asset_data.close_monthly
+                                data_type = "monthly"
                             elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
                                 prices = asset_data.close_daily
+                                data_type = "daily"
                             elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
                                 prices = asset_data.adj_close
+                                data_type = "adjusted"
                             else:
                                 prices = None
+                                data_type = "none"
+                            
+                            self.logger.info(f"Data preparation for {symbol}: type={data_type}, prices_length={len(prices) if prices is not None else 0}")
                             
                             if prices is not None and len(prices) > 1:
                                 # Calculate returns from prices
@@ -4150,22 +4211,45 @@ class ShansAi:
                                 if hasattr(asset_data, 'annual_return'):
                                     performance_metrics['annual_return'] = asset_data.annual_return
                                 else:
-                                    # Calculate CAGR
+                                    # Calculate CAGR based on data frequency
                                     periods = len(prices)
-                                    years = periods / 12.0  # Assuming monthly data
+                                    
+                                    # Determine data frequency and calculate years accordingly
+                                    if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                        # Monthly data
+                                        years = periods / 12.0
+                                    elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                        # Daily data - use 252 trading days per year
+                                        years = periods / 252.0
+                                    else:
+                                        # Default to monthly assumption
+                                        years = periods / 12.0
+                                    
                                     if years > 0:
                                         cagr = ((prices.iloc[-1] / prices.iloc[0]) ** (1.0 / years)) - 1
                                         performance_metrics['annual_return'] = cagr
+                                        self.logger.info(f"CAGR calculation for {symbol}: periods={periods}, years={years:.2f}, cagr={cagr:.4f}")
                                     else:
                                         performance_metrics['annual_return'] = 0.0
+                                        self.logger.warning(f"CAGR calculation failed for {symbol}: years={years}")
                                 
                                 # Volatility
                                 if hasattr(asset_data, 'volatility'):
                                     performance_metrics['volatility'] = asset_data.volatility
                                 else:
-                                    # Calculate annualized volatility
-                                    volatility = returns.std() * (12 ** 0.5)  # Annualized for monthly data
+                                    # Calculate annualized volatility based on data frequency
+                                    if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                        # Monthly data - annualize by sqrt(12)
+                                        volatility = returns.std() * (12 ** 0.5)
+                                    elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                        # Daily data - annualize by sqrt(252)
+                                        volatility = returns.std() * (252 ** 0.5)
+                                    else:
+                                        # Default to monthly assumption
+                                        volatility = returns.std() * (12 ** 0.5)
+                                    
                                     performance_metrics['volatility'] = volatility
+                                    self.logger.info(f"Volatility calculation for {symbol}: data_type={data_type}, volatility={volatility:.4f}")
                                 
                                 # Max drawdown
                                 if hasattr(asset_data, 'max_drawdown'):
@@ -4230,7 +4314,17 @@ class ShansAi:
                                     # Calculate downside deviation (only negative returns)
                                     negative_returns = returns[returns < 0]
                                     if len(negative_returns) > 0:
-                                        downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                        # Annualize downside deviation based on data frequency
+                                        if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                            # Monthly data - annualize by sqrt(12)
+                                            downside_deviation = negative_returns.std() * (12 ** 0.5)
+                                        elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                            # Daily data - annualize by sqrt(252)
+                                            downside_deviation = negative_returns.std() * (252 ** 0.5)
+                                        else:
+                                            # Default to monthly assumption
+                                            downside_deviation = negative_returns.std() * (12 ** 0.5)
+                                        
                                         if downside_deviation > 0:
                                             sortino_ratio = (annual_return - 0.02) / downside_deviation
                                             performance_metrics['sortino_ratio'] = sortino_ratio
