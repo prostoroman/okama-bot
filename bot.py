@@ -876,6 +876,10 @@ class ShansAi:
             
             # Проверяем длину строки
             if len(text) <= 4000:
+                self.logger.info(f"Sending message with reply_markup: {reply_markup is not None}")
+                if reply_markup:
+                    self.logger.info(f"Reply markup type: {type(reply_markup)}")
+                    self.logger.info(f"Reply markup content: {reply_markup.to_dict() if hasattr(reply_markup, 'to_dict') else 'No to_dict method'}")
                 await update.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
             else:
                 # Для длинных сообщений с кнопками отправляем первую часть с кнопками
@@ -3040,8 +3044,16 @@ class ShansAi:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
+                # Log button creation for debugging
+                self.logger.info(f"Created keyboard with {len(keyboard)} buttons for portfolio {portfolio_symbol}")
+                for i, button_row in enumerate(keyboard):
+                    for j, button in enumerate(button_row):
+                        self.logger.info(f"Button [{i}][{j}]: '{button.text}' -> '{button.callback_data}'")
+                
                 # Send portfolio information with buttons (no chart)
+                self.logger.info(f"Sending portfolio message with buttons for portfolio {portfolio_symbol}")
                 await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
+                self.logger.info(f"Portfolio message sent successfully for portfolio {portfolio_symbol}")
                 
                 # Store portfolio data in context
                 user_id = update.effective_user.id
