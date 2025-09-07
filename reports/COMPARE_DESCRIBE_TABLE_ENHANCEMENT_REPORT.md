@@ -54,16 +54,16 @@ def _format_describe_table_simple(self, asset_list) -> str:
 ```
 
 ### 2. Integration into Compare Command
-**Location:** `bot.py` lines 2307-2313
+**Location:** `bot.py` lines 2356-2362
 
-**Added to Caption Creation:**
+**Sent as Separate Message:**
 ```python
-# Add describe table to caption
+# Send describe table in separate message for better markdown formatting
 try:
     describe_table = self._format_describe_table(comparison)
-    caption += f"\n{describe_table}\n"
+    await self._send_message_safe(update, describe_table, parse_mode='Markdown')
 except Exception as e:
-    self.logger.error(f"Error adding describe table to caption: {e}")
+    self.logger.error(f"Error sending describe table: {e}")
     # Continue without table if there's an error
 ```
 
@@ -113,9 +113,10 @@ The table includes comprehensive financial metrics:
 - Real data from SPY.US and QQQ.US used for testing
 
 ### Example Output
+**Separate Message with Markdown Table:**
 ```
 📊 **Статистика активов:**
-```
+
 |    | property               | period             | SPY.US | QQQ.US | inflation |
 |---:|:-----------------------|:-------------------|:-------|:-------|:----------|
 |  0 | Compound return        | YTD                | 0.08   | 0.11    | 0.02      |
@@ -133,15 +134,14 @@ The table includes comprehensive financial metrics:
 | 12 | Last asset date        |                    | 2025-09| 2025-09 | 2025-07  |
 | 13 | Common last data date  |                    | 2025-07| 2025-07 | 2025-07  |
 ```
-```
 
 ## Usage
 
 ### Command Usage
 Users can now use the `/compare` command and automatically receive:
 
-1. **Comparison chart** - Visual representation of asset performance
-2. **Statistical table** - Comprehensive metrics in markdown format
+1. **Comparison chart** - Visual representation of asset performance with caption
+2. **Separate statistical message** - Comprehensive metrics in properly formatted markdown table
 3. **Analysis buttons** - Additional analysis options (drawdowns, dividends, correlation, etc.)
 
 ### Example Commands
@@ -154,10 +154,12 @@ Users can now use the `/compare` command and automatically receive:
 ## Benefits
 
 1. **Enhanced Information** - Users get comprehensive statistical data alongside visual charts
-2. **Professional Formatting** - Clean markdown tables with proper alignment
-3. **Robust Implementation** - Multiple fallback options ensure reliability
-4. **Easy Integration** - Seamlessly integrated into existing compare command
-5. **Error Resilience** - Continues working even if table formatting fails
+2. **Proper Markdown Display** - Tables display correctly in separate messages without caption limitations
+3. **Professional Formatting** - Clean markdown tables with proper alignment and formatting
+4. **Robust Implementation** - Multiple fallback options ensure reliability
+5. **Easy Integration** - Seamlessly integrated into existing compare command
+6. **Error Resilience** - Continues working even if table formatting fails
+7. **Better User Experience** - Clear separation between visual chart and statistical data
 
 ## Technical Details
 

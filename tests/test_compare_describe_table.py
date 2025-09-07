@@ -56,8 +56,8 @@ class TestCompareDescribeTable(unittest.TestCase):
             self.assertIn("📊", result)
             self.assertIn("Статистика активов", result)
             
-            # Check that result contains markdown table formatting
-            self.assertIn("```", result)
+            # Check that result contains markdown table formatting (without code blocks)
+            self.assertNotIn("```", result)  # Should not have code blocks in separate message
             
             print(f"Formatted table result:\n{result}")
             

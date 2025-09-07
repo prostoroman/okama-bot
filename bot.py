@@ -844,7 +844,7 @@ class ShansAi:
                 floatfmt='.2f'
             )
             
-            return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
+            return f"📊 **Статистика активов:**\n\n{markdown_table}"
             
         except Exception as e:
             self.logger.error(f"Error formatting describe table: {e}")
@@ -2304,13 +2304,7 @@ class ShansAi:
                     inflation_ticker = self._get_inflation_ticker_by_currency(currency)
                     caption += f"Инфляция: {inflation_ticker}\n"
                 
-                # Add describe table to caption
-                try:
-                    describe_table = self._format_describe_table(comparison)
-                    caption += f"\n{describe_table}\n"
-                except Exception as e:
-                    self.logger.error(f"Error adding describe table to caption: {e}")
-                    # Continue without table if there's an error
+                # Describe table will be sent in separate message
                 
                 # Chart analysis is only available via buttons
                 
@@ -2358,6 +2352,14 @@ class ShansAi:
                     caption=self._truncate_caption(caption),
                     reply_markup=reply_markup
                 )
+                
+                # Send describe table in separate message for better markdown formatting
+                try:
+                    describe_table = self._format_describe_table(comparison)
+                    await self._send_message_safe(update, describe_table, parse_mode='Markdown')
+                except Exception as e:
+                    self.logger.error(f"Error sending describe table: {e}")
+                    # Continue without table if there's an error
                 
                 # AI analysis is now only available via buttons
                 
