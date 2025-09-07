@@ -836,7 +836,7 @@ class ShansAi:
             if describe_data is None or describe_data.empty:
                 return "📊 Данные для сравнения недоступны"
             
-            # Format as markdown table using tabulate
+            # Format as markdown table using tabulate with pipe format for better Telegram display
             markdown_table = tabulate.tabulate(
                 describe_data, 
                 headers='keys', 
@@ -844,7 +844,7 @@ class ShansAi:
                 floatfmt='.2f'
             )
             
-            return f"📊 **Статистика активов:**\n\n{markdown_table}"
+            return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
             
         except Exception as e:
             self.logger.error(f"Error formatting describe table: {e}")
@@ -858,7 +858,7 @@ class ShansAi:
             if describe_data is None or describe_data.empty:
                 return "📊 Данные для сравнения недоступны"
             
-            # Simple text formatting
+            # Simple text formatting with better structure
             result = "📊 **Статистика активов:**\n\n"
             
             # Get column names (asset symbols)
@@ -867,17 +867,29 @@ class ShansAi:
             # Get row names (metrics)
             rows = describe_data.index.tolist()
             
-            # Create simple table
+            # Create a more structured table-like format
+            # Header row
+            header = "| Метрика | " + " | ".join(columns) + " |"
+            separator = "|" + "|".join([" --- " for _ in range(len(columns) + 1)]) + "|"
+            
+            result += f"```\n{header}\n{separator}\n"
+            
+            # Data rows
             for row in rows:
-                result += f"**{row}:**\n"
+                row_data = [str(row)]
                 for col in columns:
                     value = describe_data.loc[row, col]
                     if isinstance(value, (int, float)):
-                        result += f"  • {col}: {value:.2f}\n"
+                        if pd.isna(value):
+                            row_data.append("N/A")
+                        else:
+                            row_data.append(f"{value:.2f}")
                     else:
-                        result += f"  • {col}: {value}\n"
-                result += "\n"
+                        row_data.append(str(value))
+                
+                result += "| " + " | ".join(row_data) + " |\n"
             
+            result += "```"
             return result
             
         except Exception as e:
@@ -1846,7 +1858,12 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 saved_portfolios = user_context.get('saved_portfolios', {})
                 
+                # Get random examples for user
+                examples = self.get_random_examples(3)
+                examples_text = ", ".join(examples)
+                
                 help_text = "📊 Сравнение\n\n"
+                help_text += f"Примеры активов: {examples_text}\n\n"
 
                 # Add saved portfolios information
                 if saved_portfolios:
