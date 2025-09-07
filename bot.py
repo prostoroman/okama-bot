@@ -2279,6 +2279,14 @@ class ShansAi:
                 user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
                 user_context['expanded_symbols'] = expanded_symbols  # Store expanded symbols
                 
+                # Store describe table for AI analysis
+                try:
+                    describe_table = self._format_describe_table(comparison)
+                    user_context['describe_table'] = describe_table
+                except Exception as e:
+                    self.logger.error(f"Error storing describe table: {e}")
+                    user_context['describe_table'] = "📊 Данные для анализа недоступны"
+                
                 # Create comparison chart
                 fig, ax = chart_styles.create_comparison_chart(
                     comparison.wealth_indexes, symbols, currency
@@ -3731,7 +3739,7 @@ class ShansAi:
 
             # Prepare data for analysis
             try:
-                data_info = await self._prepare_data_for_analysis(symbols, currency, expanded_symbols, portfolio_contexts)
+                data_info = await self._prepare_data_for_analysis(symbols, currency, expanded_symbols, portfolio_contexts, user_id)
                 
                 # Analyze data with Gemini
                 data_analysis = self.gemini_service.analyze_data(data_info)
@@ -3761,16 +3769,23 @@ class ShansAi:
             self.logger.error(f"Error handling data analysis button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}")
 
-    async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list) -> Dict[str, Any]:
+    async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, user_id: int) -> Dict[str, Any]:
         """Prepare financial data for Gemini analysis"""
         try:
+            # Get user context to access describe table
+            describe_table = ""
+            if user_id:
+                user_context = self._get_user_context(user_id)
+                describe_table = user_context.get('describe_table', '')
+            
             data_info = {
                 'symbols': symbols,
                 'currency': currency,
                 'period': 'полный доступный период данных',
                 'performance': {},
                 'correlations': [],
-                'additional_info': ''
+                'additional_info': '',
+                'describe_table': describe_table
             }
             
             # Calculate performance metrics for each symbol
