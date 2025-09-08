@@ -15,41 +15,16 @@ from scipy.interpolate import make_interp_spline
 import logging
 from datetime import datetime
 import pandas as pd
-<<<<<<< HEAD
 
 logger = logging.getLogger(__name__)
 
-=======
-import warnings
-import contextlib
-from matplotlib.patches import Rectangle
-import matplotlib.patches as mpatches
-
-logger = logging.getLogger(__name__)
-
-@contextlib.contextmanager
-def suppress_cjk_warnings():
-    """Context manager to suppress CJK font warnings during chart generation"""
-    with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
-        warnings.filterwarnings('ignore', message='.*missing from font.*')
-        yield
-
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
-<<<<<<< HEAD
         # Централизованные настройки шрифтов
         mpl.rcParams.update({
             'font.family': ['PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
-=======
-        # Централизованные настройки шрифтов с поддержкой CJK
-        mpl.rcParams.update({
-            'font.family': ['DejaVu Sans'],  # Будет обновлено в _configure_cjk_fonts()
-            'font.sans-serif': ['DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             'font.weight': 'medium',
             'axes.titleweight': 'semibold',
             'axes.labelweight': 'medium',
@@ -60,10 +35,6 @@ class ChartStyles:
             'ytick.labelsize': 10,
             'legend.title_fontsize': 11,
             'legend.fontsize': 10,
-<<<<<<< HEAD
-=======
-            'axes.unicode_minus': False,  # Предотвращает проблемы с Unicode минусом
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         })
         
         # Централизованные настройки стилей
@@ -123,86 +94,13 @@ class ChartStyles:
         
         # Централизованные настройки копирайта
         self.copyright = {
-<<<<<<< HEAD
             'text': 'shans.ai | okama',
-=======
-            'text': 'shans.ai',
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             'fontsize': 10,
             'color': '#2E3440',  # строгий графитовый
             'alpha': 0.55,
             'position': (0.98, 0.00),
         }
         
-<<<<<<< HEAD
-=======
-        # Настройка CJK шрифтов
-        self._configure_cjk_fonts()
-
-    def _configure_cjk_fonts(self):
-        """Настройка шрифтов для поддержки CJK символов"""
-        try:
-            import matplotlib.font_manager as fm
-            
-            # Получаем список доступных шрифтов
-            available_fonts = [f.name for f in fm.fontManager.ttflist]
-            
-            # Приоритетные CJK шрифты
-            cjk_fonts = [
-                'DejaVu Sans',           # Поддерживает CJK
-                'Arial Unicode MS',      # Windows CJK
-                'SimHei',                # Windows Chinese
-                'Microsoft YaHei',       # Windows Chinese
-                'PingFang SC',           # macOS Chinese
-                'Hiragino Sans GB',      # macOS Chinese
-                'Noto Sans CJK SC',      # Google Noto CJK
-                'Source Han Sans SC',    # Adobe Source Han
-                'WenQuanYi Micro Hei',   # Linux Chinese
-                'Droid Sans Fallback',   # Android CJK
-            ]
-            
-            # Находим первый доступный CJK шрифт
-            selected_font = None
-            for font in cjk_fonts:
-                if font in available_fonts:
-                    selected_font = font
-                    break
-            
-            if selected_font:
-                logger.info(f"Using CJK font: {selected_font}")
-                # Обновляем настройки шрифта с приоритетом CJK шрифта
-                mpl.rcParams['font.family'] = [selected_font]
-                mpl.rcParams['font.sans-serif'] = [selected_font] + mpl.rcParams['font.sans-serif']
-                # Устанавливаем fallback для CJK символов
-                mpl.rcParams['axes.unicode_minus'] = False
-            else:
-                logger.warning("No CJK fonts found, Chinese characters may not display correctly")
-                # Используем DejaVu Sans как fallback (поддерживает базовые CJK)
-                mpl.rcParams['font.family'] = ['DejaVu Sans']
-                
-        except Exception as e:
-            logger.warning(f"Could not configure CJK fonts: {e}")
-            # Fallback к DejaVu Sans
-            mpl.rcParams['font.family'] = ['DejaVu Sans']
-
-    def _safe_text_render(self, text):
-        """Безопасное отображение текста с CJK символами"""
-        try:
-            # Проверяем наличие CJK символов
-            import re
-            cjk_pattern = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf\uf900-\ufaff\u3300-\u33ff]')
-            
-            if cjk_pattern.search(text):
-                # Если есть CJK символы, используем Unicode escape для проблемных символов
-                # Это поможет избежать ошибок рендеринга
-                return text
-            else:
-                return text
-                
-        except Exception as e:
-            logger.warning(f"Error in safe text render: {e}")
-            return text
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
     # ============================================================================
     # БАЗОВЫЕ МЕТОДЫ СОЗДАНИЯ И СТИЛИЗАЦИИ
@@ -214,11 +112,7 @@ class ChartStyles:
             plt.style.use(self.style['style'])
             
             # Убираем параметры, которые не поддерживаются plt.subplots
-<<<<<<< HEAD
             plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright']}
-=======
-            plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright', 'title', 'xlabel', 'ylabel']}
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
             if figsize is None:
                 if rows == 1 and cols == 1:
@@ -273,7 +167,6 @@ class ChartStyles:
         try:
             # Заголовок
             if title:
-<<<<<<< HEAD
                 ax.set_title(title, **self.title)
             
             # Подписи осей
@@ -281,18 +174,6 @@ class ChartStyles:
                 ax.set_xlabel(xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
             if ylabel:
                 ax.set_ylabel(ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-=======
-                safe_title = self._safe_text_render(title)
-                ax.set_title(safe_title, **self.title)
-            
-            # Подписи осей
-            if xlabel:
-                safe_xlabel = self._safe_text_render(xlabel)
-                ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-            if ylabel:
-                safe_ylabel = self._safe_text_render(ylabel)
-                ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
             # Сетка
             if grid:
@@ -317,7 +198,6 @@ class ChartStyles:
         try:
             # Заголовок
             if title:
-<<<<<<< HEAD
                 ax.set_title(title, **self.title)
             
             # Подписи осей
@@ -325,18 +205,6 @@ class ChartStyles:
                 ax.set_xlabel(xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
             if ylabel:
                 ax.set_ylabel(ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-=======
-                safe_title = self._safe_text_render(title)
-                ax.set_title(safe_title, **self.title)
-            
-            # Подписи осей
-            if xlabel:
-                safe_xlabel = self._safe_text_render(xlabel)
-                ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-            if ylabel:
-                safe_ylabel = self._safe_text_render(ylabel)
-                ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
             # Сетка с стандартными цветами matplotlib (без кастомных цветов)
             if grid:
@@ -450,58 +318,9 @@ class ChartStyles:
     
     def create_dividends_chart(self, data, symbol, currency, **kwargs):
         """Создать график дивидендов"""
-<<<<<<< HEAD
         title = f'Дивиденды {symbol}'
         ylabel = f'Сумма ({currency})'
         return self.create_bar_chart(data, title, ylabel, bar_color='#94D2BD', **kwargs)
-=======
-        fig, ax = self.create_chart(**kwargs)
-        
-        # Конвертируем даты и группируем по годам
-        # Обрабатываем PeriodIndex (от Okama) и обычные даты
-        if hasattr(data.index, 'to_timestamp'):
-            # PeriodIndex от Okama
-            dates = data.index.to_timestamp()
-        else:
-            # Обычные даты
-            dates = [pd.to_datetime(date) for date in data.index]
-        
-        amounts = data.values
-        
-        # Создаем DataFrame с годами
-        df = pd.DataFrame({'date': dates, 'amount': amounts})
-        df['year'] = df['date'].dt.year
-        
-        # Группируем по годам и суммируем дивиденды
-        yearly_dividends = df.groupby('year')['amount'].sum()
-        
-        # Создаем столбчатый график
-        bars = ax.bar(yearly_dividends.index, yearly_dividends.values, 
-                     color='#94D2BD', alpha=0.7, width=0.8)
-        
-        # Получаем информацию об активе для заголовка
-        asset_name = symbol.split('.')[0] if '.' in symbol else symbol
-        
-        # Обновляем заголовок с нужным форматом
-        title = f"{symbol} | {asset_name} | {currency} | dividends"
-        ax.set_title(title, **self.title)
-        
-        # Убираем подписи осей
-        ax.set_xlabel('')
-        ax.set_ylabel('')
-        
-        # Настройка осей для отображения только годов
-        ax.set_xticks(yearly_dividends.index)
-        ax.set_xticklabels(yearly_dividends.index, rotation=45)
-        
-        # Применяем базовые стили
-        self._apply_base_style(fig, ax)
-        
-        # Добавляем копирайт
-        self.add_copyright(ax)
-        
-        return fig, ax
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     
     def create_dividend_yield_chart(self, data, symbols, **kwargs):
         """Создать график дивидендной доходности"""
@@ -603,19 +422,9 @@ class ChartStyles:
             ax.plot(data.index, data[column].values, 
                    color=color, alpha=self.lines['alpha'], label=column)
         
-<<<<<<< HEAD
         title = f'Сравнение активов: {", ".join(symbols)}'
         ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
         self.apply_styling(ax, title=title, ylabel=ylabel)
-=======
-        # Извлекаем параметры из kwargs
-        title = kwargs.get('title', f'Сравнение активов: {", ".join(symbols)}')
-        xlabel = kwargs.get('xlabel', '')
-        ylabel = kwargs.get('ylabel', f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность')
-        
-        # Применяем стили
-        self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel)
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         ax.tick_params(axis='x', rotation=45)
         
         return fig, ax
@@ -629,11 +438,7 @@ class ChartStyles:
         # Настройка осей
         ax.set_xticks(range(len(correlation_matrix.columns)))
         ax.set_yticks(range(len(correlation_matrix.index)))
-<<<<<<< HEAD
         ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right')
-=======
-        ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right', va='top')
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         ax.set_yticklabels(correlation_matrix.index)
         
         # Цветовая шкала
@@ -712,11 +517,7 @@ class ChartStyles:
     # ============================================================================
     
     def save_figure(self, fig, output_buffer, **kwargs):
-<<<<<<< HEAD
         """Сохранить фигуру"""
-=======
-        """Сохранить фигуру с подавлением CJK предупреждений"""
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         save_kwargs = {
             'format': 'png',
             'dpi': self.style['dpi'],
@@ -726,12 +527,7 @@ class ChartStyles:
         }
         save_kwargs.update(kwargs)
         
-<<<<<<< HEAD
         fig.savefig(output_buffer, **save_kwargs)
-=======
-        with suppress_cjk_warnings():
-            fig.savefig(output_buffer, **save_kwargs)
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     
     def cleanup_figure(self, fig):
         """Очистить фигуру"""
@@ -741,172 +537,6 @@ class ChartStyles:
             plt.cla()
         except Exception as e:
             logger.error(f"Error cleaning up figure: {e}")
-<<<<<<< HEAD
-=======
-    
-    def get_color_palette(self, n_colors):
-        """Получить палитру цветов"""
-        return plt.cm.Set3(np.linspace(0, 1, n_colors))
-    
-    def create_table_image(self, data, title="", symbols=None):
-        """Создать таблицу как изображение"""
-        try:
-            with suppress_cjk_warnings():
-                # Определяем размеры таблицы
-                n_rows, n_cols = data.shape
-                
-                # Адаптивные размеры в зависимости от количества данных
-                if n_cols <= 2:
-                    fig_width = 10
-                    fig_height = max(6, n_rows * 0.8 + 2)
-                elif n_cols <= 4:
-                    fig_width = 14
-                    fig_height = max(6, n_rows * 0.8 + 2)
-                else:
-                    fig_width = 16
-                    fig_height = max(6, n_rows * 0.8 + 2)
-                
-                fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-                ax.axis('tight')
-                ax.axis('off')
-                
-                # Подготавливаем данные для таблицы
-                table_data = []
-                headers = []
-                
-                # Заголовки колонок
-                for col in data.columns:
-                    if symbols and col in symbols:
-                        headers.append(f"`{col}`")
-                    else:
-                        headers.append(str(col))
-                
-                # Данные строк
-                for idx, row in data.iterrows():
-                    row_data = [str(idx)]  # Название метрики
-                    for col in data.columns:
-                        value = row[col]
-                        if pd.isna(value):
-                            row_data.append("N/A")
-                        elif isinstance(value, (int, float)):
-                            row_data.append(f"{value:.2f}")
-                        else:
-                            row_data.append(str(value))
-                    table_data.append(row_data)
-                
-                # Создаем таблицу
-                table = ax.table(cellText=table_data,
-                               colLabels=["Метрика"] + headers,
-                               cellLoc='center',
-                               loc='center',
-                               bbox=[0, 0, 1, 1])
-                
-                # Стилизация таблицы
-                table.auto_set_font_size(False)
-                table.set_fontsize(10)
-                
-                # Цветовая схема
-                header_color = '#4A90E2'  # Синий для заголовков
-                metric_color = '#F0F0F0'   # Светло-серый для метрик
-                data_color = '#FFFFFF'    # Белый для данных
-                
-                # Стилизация заголовков
-                for i in range(len(headers) + 1):
-                    table[(0, i)].set_facecolor(header_color)
-                    table[(0, i)].set_text_props(weight='bold', color='white')
-                
-                # Стилизация строк метрик
-                for i in range(1, len(table_data) + 1):
-                    table[(i, 0)].set_facecolor(metric_color)
-                    table[(i, 0)].set_text_props(weight='bold')
-                    
-                    # Стилизация данных
-                    for j in range(1, len(headers) + 1):
-                        table[(i, j)].set_facecolor(data_color)
-                        
-                        # Подсветка лучших значений для числовых метрик
-                        try:
-                            value = float(table_data[i-1][j])
-                            if not pd.isna(value):
-                                # Получаем все значения для этой колонки
-                                column_values = []
-                                for row in table_data:
-                                    try:
-                                        val = float(row[j])
-                                        if not pd.isna(val):
-                                            column_values.append(val)
-                                    except (ValueError, TypeError):
-                                        pass
-                                
-                                if column_values:
-                                    # Для положительных метрик (доходность) - зеленый для лучших
-                                    if 'return' in str(data.index[i-1]).lower() or 'cagr' in str(data.index[i-1]).lower():
-                                        if value == max(column_values):
-                                            table[(i, j)].set_facecolor('#E8F5E8')  # Светло-зеленый
-                                    # Для отрицательных метрик (риск, drawdown) - красный для худших
-                                    elif 'risk' in str(data.index[i-1]).lower() or 'drawdown' in str(data.index[i-1]).lower():
-                                        if value == min(column_values):
-                                            table[(i, j)].set_facecolor('#FFE8E8')  # Светло-красный
-                        except (ValueError, TypeError, IndexError):
-                            pass
-                
-                # Настройка границ
-                for i in range(len(table_data) + 1):
-                    for j in range(len(headers) + 1):
-                        table[(i, j)].set_edgecolor('#CCCCCC')
-                        table[(i, j)].set_linewidth(0.5)
-                
-                # Заголовок таблицы
-                fig.suptitle(title, fontsize=16, fontweight='bold', y=0.95)
-                
-                # Настройка макета
-                plt.tight_layout()
-                plt.subplots_adjust(top=0.9)
-                
-                return fig, ax
-                
-        except Exception as e:
-            logger.error(f"Error creating table image: {e}")
-            # Fallback: создаем простую таблицу
-            return self._create_simple_table_image(data, title, symbols)
-    
-    def _create_simple_table_image(self, data, title="Статистика активов", symbols=None):
-        """Простая таблица как изображение (fallback)"""
-        try:
-            with suppress_cjk_warnings():
-                fig, ax = plt.subplots(figsize=(12, 8))
-                ax.axis('off')
-                
-                # Простое текстовое представление
-                text_content = f"{title}\n\n"
-                
-                for idx, row in data.iterrows():
-                    text_content += f"{idx}:\n"
-                    for col in data.columns:
-                        value = row[col]
-                        if pd.isna(value):
-                            text_content += f"  {col}: N/A\n"
-                        elif isinstance(value, (int, float)):
-                            text_content += f"  {col}: {value:.2f}\n"
-                        else:
-                            text_content += f"  {col}: {value}\n"
-                    text_content += "\n"
-                
-                ax.text(0.05, 0.95, text_content, transform=ax.transAxes,
-                       fontsize=10, verticalalignment='top',
-                       bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
-                
-                return fig, ax
-                
-        except Exception as e:
-            logger.error(f"Error creating simple table image: {e}")
-            # Последний fallback
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.text(0.5, 0.5, f"Ошибка создания таблицы: {str(e)}", 
-                   transform=ax.transAxes, ha='center', va='center')
-            ax.axis('off')
-            return fig, ax
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
 # Глобальный экземпляр
 chart_styles = ChartStyles()
