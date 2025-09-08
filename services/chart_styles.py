@@ -546,13 +546,18 @@ class ChartStyles:
         """Создать график сравнения активов"""
         fig, ax = self.create_chart(**kwargs)
         
-        # Обработка PeriodIndex
+        # Обработка PeriodIndex и object индексов
         try:
-            if hasattr(data, 'index') and hasattr(data.index, 'dtype') and str(data.index.dtype).startswith('period'):
-                data = data.copy()
-                data.index = data.index.to_timestamp()
-        except Exception:
-            pass
+            if hasattr(data, 'index'):
+                if hasattr(data.index, 'dtype') and str(data.index.dtype).startswith('period'):
+                    data = data.copy()
+                    data.index = data.index.to_timestamp()
+                elif data.index.dtype == 'object':
+                    # Конвертируем object индекс в datetime
+                    data = data.copy()
+                    data.index = pd.to_datetime(data.index)
+        except Exception as e:
+            logger.warning(f"Error processing data index: {e}")
         
         # Рисуем данные
         for i, column in enumerate(data.columns):
@@ -861,12 +866,26 @@ class ChartStyles:
                 if hasattr(date_index, 'to_timestamp'):
                     date_index = date_index.to_timestamp()
                 else:
-                    date_index = pd.to_datetime(date_index)
+                    # Попробуем конвертировать в datetime
+                    try:
+                        date_index = pd.to_datetime(date_index)
+                    except Exception as e:
+                        logger.warning(f"Could not convert date_index to datetime: {e}")
+                        # Fallback к стандартному поведению
+                        ax.tick_params(axis='x', rotation=45)
+                        return
             
             # Определяем количество точек данных
             num_points = len(date_index)
             
-            # Выбираем интервал в зависимости от количества данных
+            # Вычисляем временной диапазон для более точной настройки
+            if num_points > 1:
+                date_range = (date_index.max() - date_index.min()).days
+                years_span = date_range / 365.25
+            else:
+                years_span = 1
+            
+            # Выбираем интервал в зависимости от количества данных и временного диапазона
             if num_points <= 10:
                 # Мало данных - показываем все месяцы
                 ax.xaxis.set_major_locator(mdates.MonthLocator())
@@ -883,9 +902,17 @@ class ChartStyles:
                 # Квартальные данные - показываем каждый квартал
                 ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            else:
-                # Очень много данных - показываем каждый год
+            elif years_span <= 5:
+                # Много данных, но короткий период - показываем каждый год
                 ax.xaxis.set_major_locator(mdates.YearLocator())
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+            elif years_span <= 15:
+                # Средний период - показываем каждый 2-й год
+                ax.xaxis.set_major_locator(mdates.YearLocator(2))
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+            else:
+                # Длинный период - показываем каждый 5-й год
+                ax.xaxis.set_major_locator(mdates.YearLocator(5))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
             
             # Поворачиваем подписи дат для лучшей читаемости
