@@ -859,7 +859,7 @@ class ChartStyles:
             
             # Выбираем интервал в зависимости от количества данных
             if num_points <= 10:
-                # Мало данных - показываем все
+                # Мало данных - показываем все месяцы
                 ax.xaxis.set_major_locator(mdates.MonthLocator())
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
             elif num_points <= 30:
@@ -867,7 +867,11 @@ class ChartStyles:
                 ax.xaxis.set_major_locator(mdates.MonthLocator())
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
             elif num_points <= 60:
-                # Много данных - показываем каждый квартал
+                # Месячные данные - показываем каждый месяц с интервалом
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))  # Каждый 2-й месяц
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            elif num_points <= 120:
+                # Квартальные данные - показываем каждый квартал
                 ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
             else:
