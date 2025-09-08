@@ -4101,7 +4101,9 @@ class ShansAi:
                     
                     # Gemini provides comprehensive analysis, no need for additional sections
                     
-                    analysis_text += f"🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                    # Use asset_names if available, otherwise fallback to symbols
+                    display_assets = asset_names if asset_names else symbols
+                    analysis_text += f"🔍 **Анализируемые активы:** {', '.join(display_assets)}\n"
                     analysis_text += f"💰 **Валюта:** {currency}\n"
                     analysis_text += f"📅 **Период:** полный доступный период данных"
                     
@@ -4152,7 +4154,18 @@ class ShansAi:
                     analysis_text = data_analysis.get('analysis', '')
                     
                     if analysis_text:
-                        analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                        # Get asset names from data_info for display
+                        asset_names = data_info.get('asset_names', {}) if 'data_info' in locals() else {}
+                        
+                        # Create list with asset names if available
+                        assets_with_names = []
+                        for symbol in symbols:
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                            else:
+                                assets_with_names.append(symbol)
+                        
+                        analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(assets_with_names)}\n"
                         analysis_text += f"💰 **Валюта:** {currency}\n"
                         analysis_text += f"📅 **Период:** полный доступный период данных\n"
                         analysis_text += f"📊 **Тип анализа:** Данные (не изображение)"
@@ -4207,7 +4220,18 @@ class ShansAi:
                         analysis_text = yandexgpt_analysis.get('analysis', '')
                         
                         if analysis_text:
-                            analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                            # Get asset names from data_info for display
+                            asset_names = data_info.get('asset_names', {})
+                            
+                            # Create list with asset names if available
+                            assets_with_names = []
+                            for symbol in symbols:
+                                if symbol in asset_names and asset_names[symbol] != symbol:
+                                    assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                                else:
+                                    assets_with_names.append(symbol)
+                            
+                            analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(assets_with_names)}\n"
                             analysis_text += f"💰 **Валюта:** {currency}\n"
                             analysis_text += f"📅 **Период:** полный доступный период данных\n"
                             analysis_text += f"🤖 **AI сервис:** YandexGPT"
@@ -4254,13 +4278,24 @@ class ShansAi:
                     excel_buffer = self._create_metrics_excel(metrics_data, symbols, currency)
                     
                     if excel_buffer:
+                        # Get asset names from metrics_data for display
+                        asset_names = metrics_data.get('asset_names', {})
+                        
+                        # Create list with asset names if available
+                        assets_with_names = []
+                        for symbol in symbols:
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                            else:
+                                assets_with_names.append(symbol)
+                        
                         # Send Excel file
                         await context.bot.send_document(
                             chat_id=update.effective_chat.id,
                             document=io.BytesIO(excel_buffer.getvalue()),
                             filename=f"metrics_{'_'.join(symbols[:3])}_{currency}.xlsx",
                             caption=f"📊 **Детальная статистика активов**\n\n"
-                                   f"🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                                   f"🔍 **Анализируемые активы:** {', '.join(assets_with_names)}\n"
                                    f"💰 **Валюта:** {currency}\n"
                                    f"📅 **Дата создания:** {self._get_current_timestamp()}\n\n"
                                    f"📋 **Содержит:**\n"
