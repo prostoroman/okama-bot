@@ -32,7 +32,6 @@ def suppress_cjk_warnings():
         warnings.filterwarnings('ignore', message='.*missing from font.*')
         yield
 
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
@@ -184,11 +183,10 @@ class ChartStyles:
         except Exception as e:
             logger.warning(f"Error in safe text render: {e}")
             return text
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
-    # ============================================================================
+    # ======
     # БАЗОВЫЕ МЕТОДЫ СОЗДАНИЯ И СТИЛИЗАЦИИ
-    # ============================================================================
+    # ======
     
     def create_chart(self, rows=1, cols=1, figsize=None, **kwargs):
         """Универсальный метод создания фигуры с применением стилей"""
@@ -285,15 +283,6 @@ class ChartStyles:
         try:
             # Заголовок
             if title:
-<<<<<<< HEAD
-                ax.set_title(title, **self.title)
-            
-            # Подписи осей
-            if xlabel:
-                ax.set_xlabel(xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-            if ylabel:
-                ax.set_ylabel(ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-=======
                 safe_title = self._safe_text_render(title)
                 ax.set_title(safe_title, **self.title)
             
@@ -304,7 +293,6 @@ class ChartStyles:
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
                 ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
             # Сетка с стандартными цветами matplotlib (без кастомных цветов)
             if grid:
@@ -346,9 +334,9 @@ class ChartStyles:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         return colors[index % len(colors)]
     
-    # ============================================================================
+    # ======
     # УНИВЕРСАЛЬНЫЕ МЕТОДЫ СОЗДАНИЯ ГРАФИКОВ
-    # ============================================================================
+    # ======
     
     def create_line_chart(self, data, title, ylabel, xlabel='', **kwargs):
         """Создать линейный график"""
@@ -405,9 +393,9 @@ class ChartStyles:
         ax.tick_params(axis='x', rotation=45)
         return fig, ax
     
-    # ============================================================================
+    # ======
     # СПЕЦИАЛИЗИРОВАННЫЕ МЕТОДЫ
-    # ============================================================================
+    # ======
     
     def create_price_chart(self, data, symbol, currency, period='', **kwargs):
         """Создать график цен актива"""
@@ -418,11 +406,9 @@ class ChartStyles:
     
     def create_dividends_chart(self, data, symbol, currency, **kwargs):
         """Создать график дивидендов"""
-<<<<<<< HEAD
         title = f'Дивиденды {symbol}'
         ylabel = f'Сумма ({currency})'
         return self.create_bar_chart(data, title, ylabel, bar_color='#94D2BD', **kwargs)
-=======
         fig, ax = self.create_chart(**kwargs)
         
         # Конвертируем даты и группируем по годам
@@ -469,7 +455,6 @@ class ChartStyles:
         self.add_copyright(ax)
         
         return fig, ax
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     
     def create_dividend_yield_chart(self, data, symbols, **kwargs):
         """Создать график дивидендной доходности"""
@@ -571,11 +556,9 @@ class ChartStyles:
             ax.plot(data.index, data[column].values, 
                    color=color, alpha=self.lines['alpha'], label=column)
         
-<<<<<<< HEAD
         title = f'Сравнение активов: {", ".join(symbols)}'
         ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
         self.apply_styling(ax, title=title, ylabel=ylabel)
-=======
         # Извлекаем параметры из kwargs
         title = kwargs.get('title', f'Сравнение активов: {", ".join(symbols)}')
         xlabel = kwargs.get('xlabel', '')
@@ -583,7 +566,6 @@ class ChartStyles:
         
         # Применяем стили
         self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel)
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         ax.tick_params(axis='x', rotation=45)
         
         return fig, ax
@@ -597,11 +579,8 @@ class ChartStyles:
         # Настройка осей
         ax.set_xticks(range(len(correlation_matrix.columns)))
         ax.set_yticks(range(len(correlation_matrix.index)))
-<<<<<<< HEAD
         ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right')
-=======
         ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right', va='top')
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         ax.set_yticklabels(correlation_matrix.index)
         
         # Цветовая шкала
@@ -669,22 +648,19 @@ class ChartStyles:
         
         return fig, ax
     
-    # ============================================================================
+    # ======
     # СПЕЦИАЛЬНЫЕ СТИЛИ
-    # ============================================================================
+    # ======
     
     
     
-    # ============================================================================
+    # ======
     # УТИЛИТЫ
-    # ============================================================================
+    # ======
     
     def save_figure(self, fig, output_buffer, **kwargs):
-<<<<<<< HEAD
         """Сохранить фигуру"""
-=======
         """Сохранить фигуру с подавлением CJK предупреждений"""
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         save_kwargs = {
             'format': 'png',
             'dpi': self.style['dpi'],
@@ -694,12 +670,9 @@ class ChartStyles:
         }
         save_kwargs.update(kwargs)
         
-<<<<<<< HEAD
         fig.savefig(output_buffer, **save_kwargs)
-=======
         with suppress_cjk_warnings():
             fig.savefig(output_buffer, **save_kwargs)
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     
     def cleanup_figure(self, fig):
         """Очистить фигуру"""
@@ -709,8 +682,6 @@ class ChartStyles:
             plt.cla()
         except Exception as e:
             logger.error(f"Error cleaning up figure: {e}")
-<<<<<<< HEAD
-=======
     
     def get_color_palette(self, n_colors):
         """Получить палитру цветов"""
@@ -874,7 +845,6 @@ class ChartStyles:
                    transform=ax.transAxes, ha='center', va='center')
             ax.axis('off')
             return fig, ax
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
 # Глобальный экземпляр
 chart_styles = ChartStyles()
