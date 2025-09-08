@@ -1517,7 +1517,7 @@ class ShansAi:
         self._update_user_context(user_id, 
                                 last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []))
         
-        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
+        await self._send_ephemeral_message(update, context, f"📊 Получаю информацию об активе {symbol}...", delete_after=3)
         
         try:
             # Get the resolved symbol from asset service
@@ -1609,7 +1609,7 @@ class ShansAi:
         self._update_user_context(user_id, 
                                 last_assets=[symbol] + user_context.get('last_assets', []))
         
-        await self._send_message_safe(update, f"📊 Получаю информацию об активе {symbol}...")
+        await self._send_ephemeral_message(update, context, f"📊 Получаю информацию об активе {symbol}...", delete_after=3)
         
         try:
             # Get the resolved symbol from asset service
@@ -2711,7 +2711,7 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_message_safe(update, f"Создаю портфель: {', '.join(symbols)}...")
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
             
             # Create portfolio using okama
             
@@ -3184,7 +3184,7 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_message_safe(update, f"Создаю портфель: {', '.join(symbols)}...")
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
             
             # Create portfolio using okama
             self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
@@ -3518,6 +3518,50 @@ class ShansAi:
             text = re.sub(r'`(.*?)`', r'\1', text)        # Remove inline code
             text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)  # Remove code blocks
             return text
+
+    async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
+        """Отправить исчезающее сообщение, которое удаляется через указанное время"""
+        try:
+            # Проверяем, что update и context не None
+            if update is None or context is None:
+                self.logger.error("Cannot send ephemeral message: update or context is None")
+                return
+            
+            # Clean Markdown if parse_mode is Markdown
+            if parse_mode == 'Markdown':
+                text = self._safe_markdown(text)
+            
+            chat_id = None
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                chat_id = update.callback_query.message.chat_id
+            elif hasattr(update, 'message') and update.message is not None:
+                chat_id = update.message.chat_id
+            else:
+                self.logger.error("Cannot send ephemeral message: no chat_id available")
+                return
+            
+            # Отправляем сообщение
+            message = await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode
+            )
+            
+            # Планируем удаление сообщения через указанное время
+            async def delete_message():
+                try:
+                    await asyncio.sleep(delete_after)
+                    await context.bot.delete_message(chat_id=chat_id, message_id=message.message_id)
+                except Exception as delete_error:
+                    self.logger.warning(f"Could not delete ephemeral message: {delete_error}")
+            
+            # Запускаем удаление в фоне
+            asyncio.create_task(delete_message())
+            
+        except Exception as e:
+            self.logger.error(f"Error sending ephemeral message: {e}")
+            # Fallback: отправляем обычное сообщение
+            await self._send_callback_message(update, context, text, parse_mode)
 
     async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить сообщение в callback query - исправлено для обработки None и разбивки длинных сообщений"""
@@ -3891,7 +3935,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_callback_message(update, context, "📊 Создаю график Risk / Return (CAGR)…")
+            await self._send_ephemeral_message(update, context, "📊 Создаю график Risk / Return (CAGR)…", delete_after=3)
 
             # Prepare assets for comparison
             asset_list_items = []
@@ -4141,7 +4185,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен. Проверьте настройки Gemini API.", parse_mode='Markdown')
                 return
 
-            await self._send_callback_message(update, context, "🤖 Анализирую данные с помощью Gemini AI...", parse_mode='Markdown')
+            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные с помощью Gemini AI...", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
@@ -4206,7 +4250,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис YandexGPT недоступен. Проверьте настройки API.", parse_mode='Markdown')
                 return
 
-            await self._send_callback_message(update, context, "🤖 Анализирую данные с помощью YandexGPT...", parse_mode='Markdown')
+            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные с помощью YandexGPT...", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
@@ -4267,7 +4311,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_callback_message(update, context, "📊 Подготавливаю детальную статистику...", parse_mode='Markdown')
+            await self._send_ephemeral_message(update, context, "📊 Подготавливаю детальную статистику...", parse_mode='Markdown', delete_after=3)
 
             # Create comprehensive metrics data
             try:
@@ -5272,7 +5316,7 @@ class ShansAi:
             currency = user_context.get('current_currency', 'USD')
             
             self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}")
-            await self._send_callback_message(update, context, "📉 Создаю график drawdowns...")
+            await self._send_ephemeral_message(update, context, "📉 Создаю график drawdowns...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -5281,7 +5325,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_callback_message(update, context, "📉 Создаю график drawdowns для смешанного сравнения...")
+                await self._send_ephemeral_message(update, context, "📉 Создаю график drawdowns для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList
@@ -5503,7 +5547,7 @@ class ShansAi:
             currency = user_context.get('current_currency', 'USD')
             
             self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}")
-            await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности...")
+            await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -5512,7 +5556,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_callback_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...")
+                await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList
@@ -5684,7 +5728,7 @@ class ShansAi:
             currency = user_context.get('current_currency', 'USD')
             
             self.logger.info(f"Creating correlation matrix for symbols: {symbols}, currency: {currency}")
-            await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу...")
+            await self._send_ephemeral_message(update, context, "🔗 Создаю корреляционную матрицу...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -5693,7 +5737,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_callback_message(update, context, "🔗 Создаю корреляционную матрицу для смешанного сравнения...")
+                await self._send_ephemeral_message(update, context, "🔗 Создаю корреляционную матрицу для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_correlation_matrix(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList
@@ -5847,7 +5891,7 @@ class ShansAi:
     async def _handle_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle daily chart button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "📈 Создаю график за 1 год...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю график за 1 год...", delete_after=3)
             
             # Получаем ежедневный график за 1 год
             daily_chart = await self._get_daily_chart(symbol)
@@ -5869,7 +5913,7 @@ class ShansAi:
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle monthly chart button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "📅 Создаю график за 5 лет...")
+            await self._send_ephemeral_message(update, context, "📅 Создаю график за 5 лет...", delete_after=3)
             
             # Получаем месячный график за 5 лет
             monthly_chart = await self._get_monthly_chart(symbol)
@@ -5891,7 +5935,7 @@ class ShansAi:
     async def _handle_all_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle all chart button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "📊 Создаю график за весь период...")
+            await self._send_ephemeral_message(update, context, "📊 Создаю график за весь период...", delete_after=3)
             
             # Получаем график за весь период
             all_chart = await self._get_all_chart(symbol)
@@ -5995,7 +6039,7 @@ class ShansAi:
     async def _handle_tushare_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare daily chart button click"""
         try:
-            await self._send_callback_message(update, context, "📈 Создаю график за 1 год...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю график за 1 год...", delete_after=3)
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
@@ -6020,7 +6064,7 @@ class ShansAi:
     async def _handle_tushare_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare monthly chart button click"""
         try:
-            await self._send_callback_message(update, context, "📅 Создаю график за 5 лет...")
+            await self._send_ephemeral_message(update, context, "📅 Создаю график за 5 лет...", delete_after=3)
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
@@ -6045,7 +6089,7 @@ class ShansAi:
     async def _handle_tushare_all_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare all chart button click"""
         try:
-            await self._send_callback_message(update, context, "📊 Создаю график за весь период...")
+            await self._send_ephemeral_message(update, context, "📊 Создаю график за весь период...", delete_after=3)
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
@@ -6682,7 +6726,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating risk metrics for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
+            await self._send_ephemeral_message(update, context, "📊 Анализирую риски портфеля...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -6758,7 +6802,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_callback_message(update, context, "📊 Анализирую риски портфеля...")
+            await self._send_ephemeral_message(update, context, "📊 Анализирую риски портфеля...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -6863,7 +6907,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating Monte Carlo forecast for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
+            await self._send_ephemeral_message(update, context, "🎲 Создаю прогноз Monte Carlo...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -6939,7 +6983,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_callback_message(update, context, "🎲 Создаю прогноз Monte Carlo...")
+            await self._send_ephemeral_message(update, context, "🎲 Создаю прогноз Monte Carlo...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -7044,7 +7088,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating forecast for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "📈 Создаю прогноз с процентилями...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю прогноз с процентилями...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -7120,7 +7164,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_callback_message(update, context, "📈 Создаю прогноз с процентилями...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю прогноз с процентилями...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -7796,7 +7840,7 @@ class ShansAi:
             
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
-            await self._send_callback_message(update, context, "📉 Создаю график просадок...")
+            await self._send_ephemeral_message(update, context, "📉 Создаю график просадок...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -7897,7 +7941,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating drawdowns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "📉 Создаю график просадок...")
+            await self._send_ephemeral_message(update, context, "📉 Создаю график просадок...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -8079,7 +8123,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating returns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "💰 Создаю график доходности...")
+            await self._send_ephemeral_message(update, context, "💰 Создаю график доходности...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -8154,7 +8198,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_callback_message(update, context, "💰 Создаю график доходности...")
+            await self._send_ephemeral_message(update, context, "💰 Создаю график доходности...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -8351,7 +8395,7 @@ class ShansAi:
                 self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating wealth chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "📈 Создаю график накопленной доходности...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -8500,7 +8544,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_callback_message(update, context, "📈 Создаю график накопленной доходности...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
             
             # Create portfolio and generate wealth chart
             portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
@@ -8553,7 +8597,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating rolling CAGR chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю график Rolling CAGR...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -8628,7 +8672,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_callback_message(update, context, "📈 Создаю график Rolling CAGR...")
+            await self._send_ephemeral_message(update, context, "📈 Создаю график Rolling CAGR...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -8813,7 +8857,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating compare assets chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
+            await self._send_ephemeral_message(update, context, "📊 Создаю график сравнения с активами...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -8889,7 +8933,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_callback_message(update, context, "📊 Создаю график сравнения с активами...")
+            await self._send_ephemeral_message(update, context, "📊 Создаю график сравнения с активами...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -9097,7 +9141,7 @@ class ShansAi:
                 total_symbols = len(symbols_df)
                 
                 # Show progress message
-                await self._send_callback_message(update, context, f"📊 Создаю Excel файл...")
+                await self._send_ephemeral_message(update, context, f"📊 Создаю Excel файл...", delete_after=3)
                 
                 # Create Excel file in memory
                 excel_buffer = io.BytesIO()
@@ -9131,7 +9175,7 @@ class ShansAi:
                 return
             
             # Show progress message
-            await self._send_callback_message(update, context, f"📊 Создаю Excel файл для {namespace}...")
+            await self._send_ephemeral_message(update, context, f"📊 Создаю Excel файл для {namespace}...", delete_after=3)
             
             # Get ALL symbols data from Tushare (no limit for Excel export)
             symbols_data = self.tushare_service.get_exchange_symbols_full(namespace)
