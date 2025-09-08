@@ -794,9 +794,10 @@ class ShansAi:
             self.logger.error(f"Error creating hybrid Chinese comparison: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при создании гибридного сравнения: {str(e)}")
     
-    # ==
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
+    # =======================
     # Вспомогательные функции для истории
-    # ==
+    # =======================
 
 
 
@@ -1003,6 +1004,7 @@ class ShansAi:
             return "📊 Ошибка при формировании таблицы статистики"
 
     async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown', reply_markup=None):
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
         try:
             # Проверяем, что update и message не None
@@ -1297,6 +1299,7 @@ class ShansAi:
         
         await self._send_message_safe(update, help_text)
     
+<<<<<<< HEAD
     async def _show_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
         """Единый метод для показа символов в пространстве имен"""
         try:
@@ -1306,12 +1309,14 @@ class ShansAi:
                 error_msg = f"❌ Пространство имен '{namespace}' не найдено или пусто"
                 if is_callback:
                     # Для callback сообщений отправляем через context.bot
+=======
     async def _show_tushare_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
         """Show symbols for Chinese exchanges using Tushare"""
         try:
             if not self.tushare_service:
                 error_msg = "❌ Сервис Tushare недоступен"
                 if is_callback:
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
                         text=error_msg
@@ -1320,6 +1325,7 @@ class ShansAi:
                     await self._send_message_safe(update, error_msg)
                 return
             
+<<<<<<< HEAD
             # Show statistics first
             total_symbols = len(symbols_df)
             response = f"📊 Пространство имен: {namespace}\n\n"
@@ -1389,6 +1395,7 @@ class ShansAi:
             error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
             if is_callback:
                 # Для callback сообщений отправляем через context.bot
+=======
             # Get symbols from Tushare
             try:
                 symbols_data = self.tushare_service.get_exchange_symbols(namespace)
@@ -1474,6 +1481,7 @@ class ShansAi:
         except Exception as e:
             error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
             if is_callback:
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 await context.bot.send_message(
                     chat_id=update.callback_query.message.chat_id,
                     text=error_msg
@@ -1481,8 +1489,10 @@ class ShansAi:
             else:
                 await self._send_message_safe(update, error_msg)
     
+<<<<<<< HEAD
 
 
+=======
     async def _show_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
         """Единый метод для показа символов в пространстве имен"""
         try:
@@ -1569,6 +1579,7 @@ class ShansAi:
     
 
 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1602,6 +1613,7 @@ class ShansAi:
             
             resolved_symbol = resolved['symbol']
             
+<<<<<<< HEAD
             # Получаем сырой вывод объекта ok.Asset
             try:
                 asset = ok.Asset(resolved_symbol)
@@ -1623,6 +1635,7 @@ class ShansAi:
             
             # Отправляем информацию с кнопками
             await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+=======
             # Determine data source
             data_source = self.determine_data_source(resolved_symbol)
             
@@ -1632,6 +1645,7 @@ class ShansAi:
             else:
                 # Use Okama for other exchanges
                 await self._handle_okama_info(update, resolved_symbol)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
         except Exception as e:
             self.logger.error(f"Error in info command for {symbol}: {e}")
@@ -1668,7 +1682,9 @@ class ShansAi:
             await self._handle_compare_input(update, context, text)
             return
         
+<<<<<<< HEAD
         # Treat text as asset symbol and process with /info logic
+=======
         # Check if text contains multiple symbols (space or comma separated)
         # This allows users to send "SPY.US QQQ.US" directly as a comparison request
         symbols = []
@@ -1699,6 +1715,7 @@ class ShansAi:
             return
         
         # Treat text as single asset symbol and process with /info logic
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         symbol = text.upper()
         
         # Update user context
@@ -1716,6 +1733,7 @@ class ShansAi:
             
             resolved_symbol = resolved['symbol']
             
+<<<<<<< HEAD
             # Получаем сырой вывод объекта ok.Asset
             try:
                 asset = ok.Asset(resolved_symbol)
@@ -1737,6 +1755,7 @@ class ShansAi:
             
             # Отправляем информацию с кнопками
             await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+=======
             # Determine data source
             data_source = self.determine_data_source(resolved_symbol)
             
@@ -1746,11 +1765,14 @@ class ShansAi:
             else:
                 # Use Okama for other exchanges
                 await self._handle_okama_info(update, resolved_symbol)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
         except Exception as e:
             self.logger.error(f"Error in handle_message for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
+<<<<<<< HEAD
+=======
     async def _handle_okama_info(self, update: Update, symbol: str):
         """Handle info display for Okama assets"""
         try:
@@ -1830,6 +1852,7 @@ class ShansAi:
             self.logger.error(f"Error in _handle_tushare_info for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
         """Получить ежедневный график за последний год используя ChartStyles"""
         try:
@@ -1848,20 +1871,25 @@ class ShansAi:
                 # Берем последние 252 торговых дня (примерно год)
                 filtered_data = daily_data.tail(252)
                 
+<<<<<<< HEAD
                 # Используем ChartStyles для создания графика
                 currency = getattr(asset, 'currency', '')
+=======
                 # Получаем информацию об активе для заголовка
                 asset_name = getattr(asset, 'name', symbol)
                 currency = getattr(asset, 'currency', '')
                 
                 # Используем ChartStyles для создания графика
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 fig, ax = chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
+<<<<<<< HEAD
                     period='последний год'
                 )
                 
+=======
                     period='1Y'
                 )
                 
@@ -1873,6 +1901,7 @@ class ShansAi:
                 ax.set_xlabel('')
                 ax.set_ylabel('')
                 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 # Сохраняем в bytes
                 output = io.BytesIO()
                 chart_styles.save_figure(fig, output)
@@ -1903,25 +1932,34 @@ class ShansAi:
 
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+<<<<<<< HEAD
         """Handle /namespace command"""
+=======
         """Handle /list command"""
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         try:
             
             if not context.args:
                 # Show available namespaces
                 namespaces = ok.namespaces
                 
+<<<<<<< HEAD
                 response = "📚 Доступные пространства имен (namespaces):\n\n"
                 response += f"• Всего: {len(namespaces)}\n\n"
                 
+=======
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 # Prepare data for tabulate
                 headers = ["Код", "Описание", "Категория"]
                 namespace_data = []
                 
                 # Categorize namespaces for better organization
                 categories = {
+<<<<<<< HEAD
                     'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE'],
+=======
                     'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE', 'SSE', 'SZSE', 'BSE', 'HKEX'],
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                     'Индексы': ['INDX'],
                     'Валюты': ['FX', 'CBR'],
                     'Товары': ['COMM'],
@@ -1943,8 +1981,10 @@ class ShansAi:
                     
                     namespace_data.append([namespace, description, category])
                 
+<<<<<<< HEAD
                 # Sort by category and then by namespace
                 namespace_data.sort(key=lambda x: (x[2], x[0]))
+=======
                 # Add Chinese exchanges manually (not in ok.namespaces)
                 chinese_exchanges = {
                     'SSE': 'Shanghai Stock Exchange',
@@ -1959,6 +1999,7 @@ class ShansAi:
                 # Sort by category and then by namespace
                 namespace_data.sort(key=lambda x: (x[2], x[0]))
                 response = "📚 Доступные пространства имен (namespaces): {len(namespaces)}\n\n"
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
                 # Create table using tabulate or fallback to simple format
                 if TABULATE_AVAILABLE:
@@ -1973,8 +2014,11 @@ class ShansAi:
                         response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
                     response += "\n"
                 
+<<<<<<< HEAD
                 response += "💡 Используйте `/namespace <код>` для просмотра символов в конкретном пространстве"
+=======
                 response += "💡 Используйте `/list <код>` для просмотра символов в конкретном пространстве"
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
                 # Создаем кнопки для основных пространств имен
                 keyboard = []
@@ -1993,6 +2037,8 @@ class ShansAi:
                     InlineKeyboardButton("🇳🇱 XAMS", callback_data="namespace_XAMS")
                 ])
                 
+<<<<<<< HEAD
+=======
                 # Китайские биржи
                 keyboard.append([
                     InlineKeyboardButton("🇨🇳 SSE", callback_data="namespace_SSE"),
@@ -2004,6 +2050,7 @@ class ShansAi:
                     InlineKeyboardButton("🇭🇰 HKEX", callback_data="namespace_HKEX")
                 ])
                 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 # Индексы и валюты
                 keyboard.append([
                     InlineKeyboardButton("📊 INDX", callback_data="namespace_INDX"),
@@ -2018,12 +2065,15 @@ class ShansAi:
                     InlineKeyboardButton("🏠 RE", callback_data="namespace_RE")
                 ])
                 
+<<<<<<< HEAD
                 # Портфели и депозиты
                 keyboard.append([
                     InlineKeyboardButton("💼 PF", callback_data="namespace_PF"),
+=======
                 # Инфляция и депозиты
                 keyboard.append([
                     InlineKeyboardButton("📈 INFL", callback_data="namespace_INFL"),
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                     InlineKeyboardButton("💰 PIF", callback_data="namespace_PIF"),
                     InlineKeyboardButton("🏦 RATE", callback_data="namespace_RATE")
                 ])
@@ -2036,6 +2086,7 @@ class ShansAi:
                 # Show symbols in specific namespace
                 namespace = context.args[0].upper()
                 
+<<<<<<< HEAD
                 try:
                     symbols_df = ok.symbols_in_namespace(namespace)
                     
@@ -2074,8 +2125,10 @@ class ShansAi:
                     
                 except Exception as e:
                     await self._send_message_safe(update, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
+=======
                 # Use the unified method that handles both okama and tushare
                 await self._show_namespace_symbols(update, context, namespace, is_callback=False)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                     
         except ImportError:
             await self._send_message_safe(update, "❌ Библиотека okama не установлена")
@@ -2083,6 +2136,8 @@ class ShansAi:
             self.logger.error(f"Error in namespace command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
+<<<<<<< HEAD
+=======
     async def gemini_status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /gemini_status command - check Gemini API status"""
         try:
@@ -2132,6 +2187,7 @@ class ShansAi:
             self.logger.error(f"Error in gemini_status command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при проверке статуса: {str(e)}")
 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
         try:
@@ -2141,13 +2197,16 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 saved_portfolios = user_context.get('saved_portfolios', {})
                 
+<<<<<<< HEAD
                 help_text = "📊 Сравнение\n\n"
+=======
                 # Get random examples for user
                 examples = self.get_random_examples(3)
                 examples_text = ", ".join(examples)
                 
                 help_text = "📊 Сравнение\n\n"
                 help_text += f"Примеры активов: {examples_text}\n\n"
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
                 # Add saved portfolios information
                 if saved_portfolios:
@@ -2169,8 +2228,11 @@ class ShansAi:
                     
                 help_text += "\n\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
+<<<<<<< HEAD
+=======
                 help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (гибридный подход)\n"
                 help_text += "• `600000.SH 000001.SZ` - сравнение китайских акций (гибридный подход)\n"
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 help_text += "• `portfolio_5642.PF portfolio_5642.PF` - сравнение двух портефелей\n"
                 help_text += "• `portfolio_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
                 help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
@@ -2205,12 +2267,14 @@ class ShansAi:
             else:
                 # Handle space-separated symbols (original behavior)
                 symbols = []
+<<<<<<< HEAD
                 for symbol in context.args:
                     # Preserve original case for portfolio symbols, uppercase for regular assets
                     if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
                         symbols.append(symbol)  # Keep original case for portfolios
                     else:
                         symbols.append(symbol.upper())  # Uppercase for regular assets
+=======
                 for arg in context.args:
                     # Check if argument contains multiple symbols separated by spaces
                     if ' ' in arg and not any(portfolio_indicator in arg.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
@@ -2228,6 +2292,7 @@ class ShansAi:
                                 symbols.append(symbol)  # Keep original case for portfolios
                             else:
                                 symbols.append(symbol.upper())  # Uppercase for regular assets
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 self.logger.info(f"Parsed space-separated symbols: {symbols}")
             
             # Clean up symbols (remove empty strings and whitespace)
@@ -2320,12 +2385,15 @@ class ShansAi:
                         # Use the original symbol for description to maintain consistency
                         portfolio_descriptions.append(f"{symbol} ({', '.join(portfolio_symbols)})")
                         
+<<<<<<< HEAD
                         # Store portfolio context for buttons - use clean portfolio symbol
                         portfolio_contexts.append({
                             'symbol': symbol,  # Clean portfolio symbol without asset list
+=======
                         # Store portfolio context for buttons - use descriptive name for display
                         portfolio_contexts.append({
                             'symbol': f"{symbol} ({', '.join(portfolio_symbols)})",  # Descriptive name with asset composition
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                             'portfolio_symbols': portfolio_symbols,
                             'portfolio_weights': portfolio_weights,
                             'portfolio_currency': portfolio_currency,
@@ -2397,6 +2465,7 @@ class ShansAi:
                     currency_info = f"автоматически определена по портфелю ({original_first_symbol})"
                     self.logger.info(f"Using portfolio currency for {original_first_symbol}: {currency}")
                 else:
+<<<<<<< HEAD
                     # Try to get currency info for the first asset
                     if '.' in first_symbol:
                         namespace = first_symbol.split('.')[1]
@@ -2424,8 +2493,10 @@ class ShansAi:
                     else:
                         currency = "USD"  # Default to USD
                         currency_info = "по умолчанию (USD)"
+=======
                     # Use our new currency detection function
                     currency, currency_info = self._get_currency_by_symbol(first_symbol)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                     
                     self.logger.info(f"Auto-detected currency for {first_symbol}: {currency}")
                 
@@ -2515,11 +2586,13 @@ class ShansAi:
                                 currency = "USD"
                                 currency_info = "по умолчанию (USD)"
                     
+<<<<<<< HEAD
                     # Create comparison using ok.AssetList (proper way to compare portfolios with assets)
                     try:
                         self.logger.info(f"Creating AssetList with {len(assets_for_comparison)} assets/portfolios")
                         comparison = ok.AssetList(assets_for_comparison, ccy=currency)
                         self.logger.info("Successfully created AssetList comparison")
+=======
                     # Check if we have Chinese symbols that need special handling
                     chinese_symbols = []
                     okama_symbols = []
@@ -2557,6 +2630,7 @@ class ShansAi:
                         inflation_ticker = self._get_inflation_ticker_by_currency(currency)
                         comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
                         self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                     except Exception as asset_list_error:
                         self.logger.error(f"Error creating AssetList: {asset_list_error}")
                         await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(asset_list_error)}")
@@ -2565,10 +2639,12 @@ class ShansAi:
                 else:
                     # Regular comparison without portfolios
                     self.logger.info("Creating regular comparison without portfolios")
+<<<<<<< HEAD
                     comparison = ok.AssetList(symbols, ccy=currency)
                 
                 # Store context for buttons - use clean portfolio symbols for current_symbols
                 clean_symbols = []
+=======
                     
                     # Check if we have Chinese symbols that need special handling
                     chinese_symbols = []
@@ -2609,10 +2685,12 @@ class ShansAi:
                 # Store context for buttons - use clean portfolio symbols for current_symbols
                 clean_symbols = []
                 display_symbols = []
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 for i, symbol in enumerate(symbols):
                     if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
                         # This is a portfolio - use clean symbol from context
                         if i < len(portfolio_contexts):
+<<<<<<< HEAD
                             clean_symbols.append(portfolio_contexts[i]['symbol'])
                         else:
                             clean_symbols.append(symbol)
@@ -2621,6 +2699,7 @@ class ShansAi:
                         clean_symbols.append(symbol)
                 
                 user_context['current_symbols'] = clean_symbols
+=======
                             clean_symbols.append(portfolio_contexts[i]['symbol'].split(' (')[0])  # Extract clean symbol
                             display_symbols.append(portfolio_contexts[i]['symbol'])  # Keep descriptive name
                         else:
@@ -2633,11 +2712,14 @@ class ShansAi:
                 
                 user_context['current_symbols'] = clean_symbols
                 user_context['display_symbols'] = display_symbols  # Store descriptive names for display
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 user_context['current_currency'] = currency
                 user_context['last_analysis_type'] = 'comparison'
                 user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
                 user_context['expanded_symbols'] = expanded_symbols  # Store expanded symbols
                 
+<<<<<<< HEAD
+=======
                 # Store describe table for AI analysis
                 try:
                     describe_table = self._format_describe_table(comparison)
@@ -2646,6 +2728,7 @@ class ShansAi:
                     self.logger.error(f"Error storing describe table: {e}")
                     user_context['describe_table'] = "📊 Данные для анализа недоступны"
                 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 # Create comparison chart
                 fig, ax = chart_styles.create_comparison_chart(
                     comparison.wealth_indexes, symbols, currency
@@ -2660,12 +2743,14 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
+<<<<<<< HEAD
                 # Create caption
                 caption = f"📊 Сравнение активов\n\n"
                 caption += f"🔍 Сравниваемые активы: {', '.join(symbols)}\n"
                 caption += f"💰 Валюта: {currency} ({currency_info})\n"
                 caption += f"📅 Период: полный доступный период данных\n\n"
                 caption += f"💡 График показывает накопленную доходность активов с учетом реинвестирования дивидендов"
+=======
                 # Chart analysis is now only available via buttons
                 
                 # Create caption
@@ -2680,6 +2765,7 @@ class ShansAi:
                 # Describe table will be sent in separate message
                 
                 # Chart analysis is only available via buttons
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
                 # Create keyboard with analysis buttons conditionally
                 # Determine composition: portfolios vs assets
@@ -2704,16 +2790,21 @@ class ShansAi:
                         InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
                     ])
 
+<<<<<<< HEAD
+=======
                 # Add Metrics button for detailed statistics
                 keyboard.append([
                     InlineKeyboardButton("📊 Metrics", callback_data="metrics_compare")
                     ])
 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
                 keyboard.append([
                     InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
                 ])
                 
+<<<<<<< HEAD
+=======
                 # Add AI analysis buttons if services are available
                 ai_buttons = []
                 if self.gemini_service and self.gemini_service.is_available():
@@ -2730,6 +2821,7 @@ class ShansAi:
                         InlineKeyboardButton("Анализ графика Gemini", callback_data="chart_analysis_compare")
                     ])
                 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 # Send comparison chart with buttons
@@ -2740,10 +2832,13 @@ class ShansAi:
                     reply_markup=reply_markup
                 )
                 
+<<<<<<< HEAD
                 # Note: AI analysis is now handled by the button callbacks using context data
+=======
                 # Table statistics now available via Metrics button
                 
                 # AI analysis is now only available via buttons
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
             except Exception as e:
                 self.logger.error(f"Error creating comparison: {e}")
@@ -3016,9 +3111,12 @@ class ShansAi:
                 # Get portfolio information (raw object like /info)
                 portfolio_text = f"{portfolio}"
                 
+<<<<<<< HEAD
+=======
                 # Escape Markdown characters to prevent parsing errors
                 portfolio_text = self._escape_markdown(portfolio_text)
                 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 # Portfolio information is already set above as raw object
                 
                 # Generate portfolio symbol using PF namespace and okama's assigned symbol
@@ -3103,6 +3201,8 @@ class ShansAi:
                     portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
                     portfolio_text += f"✅ Портфель с такими же активами и пропорциями уже существует\n"
                     portfolio_text += f"💾 Используется ранее сохраненный портфель"
+<<<<<<< HEAD
+=======
                     
                     # Update portfolio count without incrementing
                     portfolio_count = user_context.get('portfolio_count', 0)
@@ -3842,6 +3942,7 @@ class ShansAi:
                 if i < len(parts) - 1:  # Не делаем паузу после последней части
                     import asyncio
                     await asyncio.sleep(0.5)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                     
                     # Update portfolio count without incrementing
                     portfolio_count = user_context.get('portfolio_count', 0)
@@ -4079,6 +4180,7 @@ class ShansAi:
                 )
                 
         except Exception as e:
+<<<<<<< HEAD
             self.logger.error(f"Error in portfolio command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при выполнении команды портфеля: {str(e)}")
 
@@ -4399,16 +4501,20 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error sending callback message: {e}")
             # Fallback: попробуем отправить через context.bot
+=======
             self.logger.error(f"Error sending long callback message: {e}")
             # Fallback: отправляем обрезанную версию
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             try:
                 if hasattr(update, 'callback_query') and update.callback_query is not None:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
+<<<<<<< HEAD
                         text=f"❌ Ошибка отправки: {text[:500]}..."
                     )
             except Exception as fallback_error:
                 self.logger.error(f"Fallback message sending also failed: {fallback_error}")
+=======
                         text=f"❌ Ошибка разбивки сообщения: {text[:1000]}..."
                     )
             except Exception as fallback_error:
@@ -4468,6 +4574,7 @@ class ShansAi:
             parts.append(current_part)
         
         return parts
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
@@ -4529,10 +4636,13 @@ class ShansAi:
                 symbol = callback_data.replace('monthly_chart_', '')
                 self.logger.info(f"Monthly chart button clicked for symbol: {symbol}")
                 await self._handle_monthly_chart_button(update, context, symbol)
+<<<<<<< HEAD
+=======
             elif callback_data.startswith('all_chart_'):
                 symbol = callback_data.replace('all_chart_', '')
                 self.logger.info(f"All chart button clicked for symbol: {symbol}")
                 await self._handle_all_chart_button(update, context, symbol)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             elif callback_data.startswith('info_dividends_'):
                 symbol = callback_data.replace('info_dividends_', '')
                 self.logger.info(f"Info dividends button clicked for symbol: {symbol}")
@@ -4542,6 +4652,8 @@ class ShansAi:
                 symbol = callback_data.replace('dividends_', '')
                 self.logger.info(f"Dividends button clicked for symbol: {symbol}")
                 await self._handle_single_dividends_button(update, context, symbol)
+<<<<<<< HEAD
+=======
             elif callback_data.startswith('tushare_daily_chart_'):
                 symbol = callback_data.replace('tushare_daily_chart_', '')
                 self.logger.info(f"Tushare daily chart button clicked for symbol: {symbol}")
@@ -4558,6 +4670,7 @@ class ShansAi:
                 symbol = callback_data.replace('tushare_dividends_', '')
                 self.logger.info(f"Tushare dividends button clicked for symbol: {symbol}")
                 await self._handle_tushare_dividends_button(update, context, symbol)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             elif callback_data.startswith('portfolio_risk_metrics_'):
                 portfolio_symbol = callback_data.replace('portfolio_risk_metrics_', '')
                 self.logger.info(f"Portfolio risk metrics button clicked for portfolio: {portfolio_symbol}")
@@ -4632,6 +4745,8 @@ class ShansAi:
             elif callback_data == 'risk_return_compare':
                 self.logger.info("Risk / Return button clicked")
                 await self._handle_risk_return_compare_button(update, context)
+<<<<<<< HEAD
+=======
             elif callback_data == 'chart_analysis_compare':
                 self.logger.info("Chart analysis button clicked")
                 await self._handle_chart_analysis_compare_button(update, context)
@@ -4644,6 +4759,7 @@ class ShansAi:
             elif callback_data == 'metrics_compare':
                 self.logger.info("Metrics button clicked")
                 await self._handle_metrics_compare_button(update, context)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             elif callback_data.startswith('namespace_'):
                 namespace = callback_data.replace('namespace_', '')
                 self.logger.info(f"Namespace button clicked for: {namespace}")
@@ -4662,6 +4778,7 @@ class ShansAi:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
                 
+<<<<<<< HEAD
         except Exception as e:
             self.logger.error(f"Error in button callback: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при обработке кнопки: {str(e)}")
@@ -4802,6 +4919,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling Risk / Return button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при построении Risk / Return: {str(e)}")
+=======
         except Exception as e:
             self.logger.error(f"Error in button callback: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при обработке кнопки: {str(e)}")
@@ -6220,6 +6338,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating metrics Excel: {e}")
             return None
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
@@ -6814,35 +6933,45 @@ class ShansAi:
     async def _handle_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle daily chart button click for single asset"""
         try:
+<<<<<<< HEAD
             await self._send_callback_message(update, context, "📈 Создаю ежедневный график...")
+=======
             await self._send_callback_message(update, context, "📈 Создаю график за 1 год...")
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
             # Получаем ежедневный график за 1 год
             daily_chart = await self._get_daily_chart(symbol)
             
             if daily_chart:
+<<<<<<< HEAD
                 caption = f"📈 Ежедневный график {symbol}\n\n"
+=======
                 caption = f"📈 График за 1 год {symbol}\n\n"
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
                 await update.callback_query.message.reply_photo(
                     photo=daily_chart,
                     caption=self._truncate_caption(caption)
                 )
             else:
+<<<<<<< HEAD
                 await self._send_callback_message(update, context, "❌ Не удалось получить ежедневный график")
                 
         except Exception as e:
             self.logger.error(f"Error handling daily chart button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании ежедневного графика: {str(e)}")
+=======
                 await self._send_callback_message(update, context, "❌ Не удалось получить график за 1 год")
                 
         except Exception as e:
             self.logger.error(f"Error handling daily chart button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика за 1 год: {str(e)}")
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle monthly chart button click for single asset"""
         try:
+<<<<<<< HEAD
             await self._send_callback_message(update, context, "📅 Создаю месячный график...")
             
             # Получаем месячный график=
@@ -6850,6 +6979,7 @@ class ShansAi:
             
             if monthly_chart:
                 caption = f"📅 Месячный график {symbol}\n\n"
+=======
             await self._send_callback_message(update, context, "📅 Создаю график за 5 лет...")
             
             # Получаем месячный график за 5 лет
@@ -6857,17 +6987,20 @@ class ShansAi:
             
             if monthly_chart:
                 caption = f"📅 График за 5 лет {symbol}\n\n"
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
                 await update.callback_query.message.reply_photo(
                     photo=monthly_chart,
                     caption=self._truncate_caption(caption)
                 )
             else:
+<<<<<<< HEAD
                 await self._send_callback_message(update, context, "❌ Не удалось получить месячный график")
                 
         except Exception as e:
             self.logger.error(f"Error handling monthly chart button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании месячного графика: {str(e)}")
+=======
                 await self._send_callback_message(update, context, "❌ Не удалось получить график за 5 лет")
                 
         except Exception as e:
@@ -6895,6 +7028,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling all chart button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика за весь период: {str(e)}")
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle dividends button click for single asset"""
@@ -6978,8 +7112,10 @@ class ShansAi:
             self.logger.error(f"Error handling dividends button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
+<<<<<<< HEAD
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
         """Получить месячный график используя ChartStyles"""
+=======
     async def _handle_tushare_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare daily chart button click"""
         try:
@@ -7164,6 +7300,7 @@ class ShansAi:
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
         """Получить месячный график за последние 5 лет используя ChartStyles"""
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         try:
             import io
             
@@ -7177,6 +7314,7 @@ class ShansAi:
                 # Получаем месячные данные
                 monthly_data = asset.close_monthly
                 
+<<<<<<< HEAD
                 # Используем ChartStyles для создания графика
                 currency = getattr(asset, 'currency', '')
                 fig, ax = chart_styles.create_price_chart(
@@ -7186,6 +7324,7 @@ class ShansAi:
                     period='месячный'
                 )
                 
+=======
                 # Берем последние 60 месяцев (5 лет)
                 filtered_data = monthly_data.tail(60)
                 
@@ -7209,6 +7348,7 @@ class ShansAi:
                 ax.set_xlabel('')
                 ax.set_ylabel('')
                 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 # Сохраняем в bytes
                 output = io.BytesIO()
                 chart_styles.save_figure(fig, output)
@@ -7231,6 +7371,8 @@ class ShansAi:
             self.logger.error(f"Error getting monthly chart for {symbol}: {e}")
             return None
 
+<<<<<<< HEAD
+=======
     async def _get_all_chart(self, symbol: str) -> Optional[bytes]:
         """Получить график за весь доступный период используя ChartStyles"""
         try:
@@ -7288,6 +7430,7 @@ class ShansAi:
             self.logger.error(f"Error getting all chart for {symbol}: {e}")
             return None
 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     async def _get_dividend_chart(self, symbol: str) -> Optional[bytes]:
         """Получить график дивидендов с копирайтом"""
         try:
@@ -7329,6 +7472,8 @@ class ShansAi:
             self.logger.error(f"Error getting dividend chart for {symbol}: {e}")
             return None
 
+<<<<<<< HEAD
+=======
     async def _get_tushare_daily_chart(self, symbol: str) -> Optional[bytes]:
         """Get daily chart from Tushare data"""
         try:
@@ -7481,6 +7626,7 @@ class ShansAi:
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     async def _get_dividend_table_image(self, symbol: str) -> Optional[bytes]:
         """Получить изображение таблицы дивидендов с копирайтом"""
         try:
@@ -7729,8 +7875,11 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling risk metrics button: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
+<<<<<<< HEAD
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
+=======
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}", parse_mode='Markdown')
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
     async def _handle_portfolio_risk_metrics_by_symbol(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
         """Handle portfolio risk metrics button click by portfolio symbol"""
@@ -7815,8 +7964,11 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling portfolio risk metrics by symbol: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
+<<<<<<< HEAD
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
+=======
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}", parse_mode='Markdown')
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
     async def _handle_monte_carlo_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle Monte Carlo button click for portfolio"""
@@ -8786,11 +8938,13 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
+<<<<<<< HEAD
             await self._send_callback_message(update, context, "📉 Создаю график просадок...")
             
             # Create portfolio and generate drawdowns chart
             portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, symbols, currency, weights)
+=======
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
             if not final_symbols:
@@ -8848,6 +9002,7 @@ class ShansAi:
             # Create Portfolio with validated symbols
             portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio drawdowns by symbol: {e}")
@@ -10067,6 +10222,7 @@ class ShansAi:
     async def _handle_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle namespace button click - show symbols in specific namespace"""
         try:
+<<<<<<< HEAD
             
             self.logger.info(f"Handling namespace button for: {namespace}")
             
@@ -10107,10 +10263,12 @@ class ShansAi:
                 
             except Exception as e:
                 await self._send_callback_message(update, context, f"❌ Ошибка при получении символов для '{namespace}': {str(e)}")
+=======
             self.logger.info(f"Handling namespace button for: {namespace}")
             
             # Use the unified method that handles both okama and tushare
             await self._show_namespace_symbols(update, context, namespace, is_callback=True)
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 
         except ImportError:
             await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
@@ -10121,10 +10279,12 @@ class ShansAi:
     async def _handle_excel_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle Excel export button click for namespace"""
         try:
+<<<<<<< HEAD
             
             self.logger.info(f"Handling Excel export for namespace: {namespace}")
             
             # Get symbols in namespace
+=======
             self.logger.info(f"Handling Excel export for namespace: {namespace}")
             
             # Check if it's a Chinese exchange
@@ -10134,6 +10294,7 @@ class ShansAi:
                 return
             
             # Get symbols in namespace for non-Chinese exchanges
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             try:
                 symbols_df = ok.symbols_in_namespace(namespace)
                 
@@ -10171,6 +10332,8 @@ class ShansAi:
             self.logger.error(f"Error in Excel namespace button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
+<<<<<<< HEAD
+=======
     async def _handle_tushare_excel_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle Excel export for Chinese exchanges using Tushare"""
         try:
@@ -10245,6 +10408,7 @@ class ShansAi:
             self.logger.error(f"Error in Tushare Excel export for {namespace}: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
 
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
     async def _handle_clear_all_portfolios_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle clear all portfolios button click"""
         try:
@@ -10293,9 +10457,12 @@ class ShansAi:
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("info", self.info_command))
+<<<<<<< HEAD
         application.add_handler(CommandHandler("namespace", self.namespace_command))
+=======
         application.add_handler(CommandHandler("list", self.namespace_command))
         application.add_handler(CommandHandler("gemini_status", self.gemini_status_command))
+>>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))
