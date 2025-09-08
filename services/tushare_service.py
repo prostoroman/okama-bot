@@ -350,7 +350,8 @@ class TushareService:
                     
                     # Resample to monthly (last trading day of each month)
                     daily_df = daily_df.set_index('trade_date')
-                    monthly_df = daily_df.resample('ME').last()  # Use 'ME' instead of deprecated 'M'
+                    # Use monthly resampling for HK stocks
+                    monthly_df = daily_df.resample('ME').last()  # Monthly data
                     monthly_df = monthly_df.reset_index()
                     monthly_df['trade_date'] = monthly_df['trade_date'].dt.strftime('%Y%m%d')
                     

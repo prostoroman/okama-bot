@@ -4155,7 +4155,7 @@ class ShansAi:
                     
                     if analysis_text:
                         # Get asset names from data_info for display
-                        asset_names = data_info.get('asset_names', {}) if 'data_info' in locals() else {}
+                        asset_names = data_info.get('asset_names', {})
                         
                         # Create list with asset names if available
                         assets_with_names = []

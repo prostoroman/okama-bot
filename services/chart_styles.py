@@ -560,6 +560,9 @@ class ChartStyles:
         self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel)
         ax.tick_params(axis='x', rotation=45)
         
+        # Автоматически настраиваем интервал между датами на оси X
+        self._optimize_x_axis_ticks(ax, data.index)
+        
         return fig, ax
     
     def create_correlation_matrix_chart(self, correlation_matrix, **kwargs):
@@ -834,6 +837,51 @@ class ChartStyles:
                    transform=ax.transAxes, ha='center', va='center')
             ax.axis('off')
             return fig, ax
+
+    def _optimize_x_axis_ticks(self, ax, date_index):
+        """Оптимизировать отображение дат на оси X в зависимости от количества данных"""
+        try:
+            import matplotlib.dates as mdates
+            import pandas as pd
+            
+            if len(date_index) == 0:
+                return
+            
+            # Конвертируем индекс в datetime если необходимо
+            if not isinstance(date_index, pd.DatetimeIndex):
+                if hasattr(date_index, 'to_timestamp'):
+                    date_index = date_index.to_timestamp()
+                else:
+                    date_index = pd.to_datetime(date_index)
+            
+            # Определяем количество точек данных
+            num_points = len(date_index)
+            
+            # Выбираем интервал в зависимости от количества данных
+            if num_points <= 10:
+                # Мало данных - показываем все
+                ax.xaxis.set_major_locator(mdates.MonthLocator())
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            elif num_points <= 30:
+                # Среднее количество - показываем каждый месяц
+                ax.xaxis.set_major_locator(mdates.MonthLocator())
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            elif num_points <= 60:
+                # Много данных - показываем каждый квартал
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            else:
+                # Очень много данных - показываем каждый год
+                ax.xaxis.set_major_locator(mdates.YearLocator())
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+            
+            # Поворачиваем подписи дат для лучшей читаемости
+            ax.tick_params(axis='x', rotation=45)
+            
+        except Exception as e:
+            logger.warning(f"Error optimizing x-axis ticks: {e}")
+            # Fallback к стандартному поведению
+            ax.tick_params(axis='x', rotation=45)
 
 # Глобальный экземпляр
 chart_styles = ChartStyles()
