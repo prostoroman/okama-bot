@@ -11,7 +11,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any, Union
 import io
 from datetime import datetime
-import tempfile
 
 # Load environment variables from config.env
 try:
@@ -26,7 +25,6 @@ except ImportError:
 # Third-party imports
 import matplotlib
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import pandas as pd
 import okama as ok
 
@@ -68,7 +66,6 @@ from config import Config
 from services.yandexgpt_service import YandexGPTService
 from services.tushare_service import TushareService
 from services.gemini_service import GeminiService
-from services.simple_chart_analysis import SimpleChartAnalysisService
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -124,12 +121,6 @@ class ShansAi:
             self.logger.warning(f"Gemini service not initialized: {e}")
         
         # Initialize simple chart analysis as fallback
-        try:
-            self.simple_analysis_service = SimpleChartAnalysisService()
-            self.logger.info("Simple chart analysis service initialized as fallback")
-        except Exception as e:
-            self.simple_analysis_service = None
-            self.logger.warning(f"Simple analysis service not initialized: {e}")
         
         # Known working asset symbols for suggestions
         self.known_assets = {
