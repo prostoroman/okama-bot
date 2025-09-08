@@ -2614,9 +2614,13 @@ class ShansAi:
         """Handle /portfolio command for creating portfolio with weights"""
         try:
             if not context.args:
+                # Get random examples for user
+                examples = self.get_random_examples(3)
+                examples_text = ", ".join(examples)
                 
                 await self._send_message_safe(update, 
                     f"📊 Команда /portfolio - Создание портфеля\n\n"
+                    f"Примеры случайных активов: {examples_text}\n\n"
                     f"Введите список активов с указанием долей:\n"
                     f"Примеры:\n"
                     f"• SPY.US:0.5 QQQ.US:0.3 BND.US:0.2\n"
@@ -2775,8 +2779,11 @@ class ShansAi:
                 # Get portfolio information (raw object like /info)
                 portfolio_text = f"{portfolio}"
                 
-                # Escape Markdown characters to prevent parsing errors
-                portfolio_text = self._escape_markdown(portfolio_text)
+                # Remove dtype: object from the output
+                portfolio_text = portfolio_text.replace("dtype: object", "")
+                
+                # Clean up any extra escaping that might have been added
+                portfolio_text = portfolio_text.replace("\\", "")
                 
                 # Portfolio information is already set above as raw object
                 
@@ -2808,14 +2815,15 @@ class ShansAi:
                 
                 # Add buttons with wealth chart as first
                 keyboard = [
-                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💰 Доходность", callback_data=f"portfolio_returns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Накопленная доходность", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💰 Доходность по годам", callback_data=f"portfolio_returns_{portfolio_symbol}")],
                     [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
                     [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}")],
                     [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")]
+                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -3230,14 +3238,15 @@ class ShansAi:
                 
                 # Add buttons with wealth chart as first
                 keyboard = [
-                    [InlineKeyboardButton("📈 График накопленной доходности", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💰 Доходность", callback_data=f"portfolio_returns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Накопленная доходность", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💰 Доходность по годам", callback_data=f"portfolio_returns_{portfolio_symbol}")],
                     [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
                     [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}")],
                     [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")]
+                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -3863,6 +3872,10 @@ class ShansAi:
                 portfolio_symbol = callback_data.replace('portfolio_drawdowns_', '')
                 self.logger.info(f"Portfolio drawdowns button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_drawdowns_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith('portfolio_dividends_'):
+                portfolio_symbol = callback_data.replace('portfolio_dividends_', '')
+                self.logger.info(f"Portfolio dividends button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_dividends_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('compare_assets_'):
                 symbols = callback_data.replace('compare_assets_', '').split(',')
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
@@ -7217,37 +7230,315 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при создании прогноза: {str(e)}")
 
     async def _create_risk_metrics_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str):
-        """Create and send risk metrics report for portfolio"""
+        """Create and send risk metrics report for portfolio as Excel file"""
         try:
-            # Get portfolio description
-            portfolio_description = portfolio.describe()
+            await self._send_ephemeral_message(update, context, "📊 Подготавливаю детальную статистику...", parse_mode='Markdown', delete_after=3)
+
+            # Prepare comprehensive metrics data
+            metrics_data = self._prepare_portfolio_metrics_data(portfolio, symbols, currency)
             
-            # Create header
-            risk_text = f"📊 **Анализ риск метрик портфеля**\n\n"
-            risk_text += f"🎯 **Активы:** {', '.join(symbols)}\n"
-            risk_text += f"💰 **Валюта:** {currency}\n\n"
-            risk_text += "─" * 50 + "\n\n"
-            
-            # Parse and explain each metric
-            metrics_explained = self._explain_risk_metrics(portfolio_description, portfolio)
-            
-            # Add metrics with better formatting
-            for metric_name, explanation in metrics_explained.items():
-                risk_text += f"{metric_name}\n"
-                risk_text += f"{explanation}\n\n"
-                risk_text += "─" * 30 + "\n\n"
-            
-            # Add general risk assessment
-            risk_text += "🎯 **ОБЩАЯ ОЦЕНКА РИСКА**\n"
-            risk_text += "─" * 50 + "\n\n"
-            risk_text += self._assess_portfolio_risk(portfolio_description, portfolio)
-            
-            # Send text report
-            await self._send_callback_message(update, context, risk_text)
-            
+            if metrics_data:
+                # Create Excel file
+                excel_buffer = self._create_portfolio_metrics_excel(metrics_data, symbols, currency)
+                
+                if excel_buffer:
+                    # Send Excel file
+                    await context.bot.send_document(
+                        chat_id=update.effective_chat.id,
+                        document=io.BytesIO(excel_buffer.getvalue()),
+                        filename=f"portfolio_risk_metrics_{'_'.join(symbols[:3])}_{currency}.xlsx",
+                        caption=f"📊 **Детальная статистика портфеля**\n\n"
+                               f"🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
+                               f"💰 **Валюта:** {currency}\n"
+                               f"📅 **Дата создания:** {self._get_current_timestamp()}\n\n"
+                               f"📋 **Содержит:**\n"
+                               f"• Основные метрики производительности\n"
+                               f"• Коэффициенты Шарпа и Сортино\n"
+                               f"• Анализ рисков и доходности\n"
+                               f"• Детальная статистика портфеля"
+                    )
+                else:
+                    await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла")
+                    
+            else:
+                await self._send_callback_message(update, context, "❌ Не удалось подготовить данные для экспорта")
+                
         except Exception as e:
             self.logger.error(f"Error creating risk metrics report: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании отчета о рисках: {str(e)}")
+
+    def _prepare_portfolio_metrics_data(self, portfolio, symbols: list, currency: str) -> Dict[str, Any]:
+        """Prepare comprehensive metrics data for portfolio Excel export"""
+        try:
+            metrics_data = {
+                'timestamp': self._get_current_timestamp(),
+                'currency': currency,
+                'symbols': symbols,
+                'period': 'MAX',
+                'detailed_metrics': {},
+                'portfolio_metrics': {}
+            }
+            
+            # Portfolio-level metrics
+            portfolio_metrics = {}
+            
+            # Basic portfolio metrics
+            try:
+                if hasattr(portfolio, 'mean_return_annual'):
+                    portfolio_metrics['annual_return'] = float(portfolio.mean_return_annual) * 100
+                if hasattr(portfolio, 'volatility_annual'):
+                    portfolio_metrics['volatility'] = float(portfolio.volatility_annual) * 100
+                if hasattr(portfolio, 'sharpe_ratio'):
+                    portfolio_metrics['sharpe_ratio'] = float(portfolio.sharpe_ratio)
+                if hasattr(portfolio, 'sortino_ratio'):
+                    portfolio_metrics['sortino_ratio'] = float(portfolio.sortino_ratio)
+                if hasattr(portfolio, 'max_drawdown'):
+                    portfolio_metrics['max_drawdown'] = float(portfolio.max_drawdown) * 100
+                if hasattr(portfolio, 'calmar_ratio'):
+                    portfolio_metrics['calmar_ratio'] = float(portfolio.calmar_ratio)
+                if hasattr(portfolio, 'var_95'):
+                    portfolio_metrics['var_95'] = float(portfolio.var_95) * 100
+                if hasattr(portfolio, 'cvar_95'):
+                    portfolio_metrics['cvar_95'] = float(portfolio.cvar_95) * 100
+            except Exception as e:
+                self.logger.warning(f"Could not get some portfolio metrics: {e}")
+            
+            metrics_data['portfolio_metrics'] = portfolio_metrics
+            
+            # Individual asset metrics
+            for symbol in symbols:
+                try:
+                    asset = ok.Asset(symbol)
+                    asset_metrics = {}
+                    
+                    if hasattr(asset, 'mean_return_annual'):
+                        asset_metrics['annual_return'] = float(asset.mean_return_annual) * 100
+                    if hasattr(asset, 'volatility_annual'):
+                        asset_metrics['volatility'] = float(asset.volatility_annual) * 100
+                    if hasattr(asset, 'sharpe_ratio'):
+                        asset_metrics['sharpe_ratio'] = float(asset.sharpe_ratio)
+                    if hasattr(asset, 'sortino_ratio'):
+                        asset_metrics['sortino_ratio'] = float(asset.sortino_ratio)
+                    if hasattr(asset, 'max_drawdown'):
+                        asset_metrics['max_drawdown'] = float(asset.max_drawdown) * 100
+                    if hasattr(asset, 'calmar_ratio'):
+                        asset_metrics['calmar_ratio'] = float(asset.calmar_ratio)
+                    if hasattr(asset, 'var_95'):
+                        asset_metrics['var_95'] = float(asset.var_95) * 100
+                    if hasattr(asset, 'cvar_95'):
+                        asset_metrics['cvar_95'] = float(asset.cvar_95) * 100
+                    
+                    metrics_data['detailed_metrics'][symbol] = asset_metrics
+                    
+                except Exception as e:
+                    self.logger.warning(f"Could not get metrics for {symbol}: {e}")
+                    metrics_data['detailed_metrics'][symbol] = {}
+            
+            return metrics_data
+            
+        except Exception as e:
+            self.logger.error(f"Error preparing portfolio metrics data: {e}")
+            return None
+
+    def _create_portfolio_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
+        """Create Excel file with portfolio metrics"""
+        try:
+            buffer = io.BytesIO()
+            
+            if EXCEL_AVAILABLE:
+                # Create Excel file with openpyxl
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                from openpyxl.utils import get_column_letter
+                
+                wb = Workbook()
+                
+                # Remove default sheet
+                wb.remove(wb.active)
+                
+                # Create Summary sheet
+                ws_summary = wb.create_sheet("Summary", 0)
+                
+                # Summary data
+                summary_data = [
+                    ["Metric", "Value"],
+                    ["Analysis Date", metrics_data['timestamp']],
+                    ["Currency", currency],
+                    ["Assets Count", len(symbols)],
+                    ["Assets", ", ".join(symbols)],
+                    ["Period", metrics_data['period']]
+                ]
+                
+                for row in summary_data:
+                    ws_summary.append(row)
+                
+                # Style summary sheet
+                header_font = Font(bold=True, color="FFFFFF")
+                header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                
+                for cell in ws_summary[1]:
+                    cell.font = header_font
+                    cell.fill = header_fill
+                
+                # Create Portfolio Metrics sheet
+                ws_portfolio = wb.create_sheet("Portfolio Metrics", 1)
+                
+                # Portfolio metrics data
+                portfolio_metrics = metrics_data.get('portfolio_metrics', {})
+                
+                portfolio_data = [
+                    ["Metric", "Value"],
+                    ["Annual Return (%)", portfolio_metrics.get('annual_return', 0.0)],
+                    ["Volatility (%)", portfolio_metrics.get('volatility', 0.0)],
+                    ["Sharpe Ratio", portfolio_metrics.get('sharpe_ratio', 0.0)],
+                    ["Sortino Ratio", portfolio_metrics.get('sortino_ratio', 0.0)],
+                    ["Max Drawdown (%)", portfolio_metrics.get('max_drawdown', 0.0)],
+                    ["Calmar Ratio", portfolio_metrics.get('calmar_ratio', 0.0)],
+                    ["VaR 95% (%)", portfolio_metrics.get('var_95', 0.0)],
+                    ["CVaR 95% (%)", portfolio_metrics.get('cvar_95', 0.0)]
+                ]
+                
+                for row in portfolio_data:
+                    ws_portfolio.append(row)
+                
+                # Style portfolio sheet
+                for cell in ws_portfolio[1]:
+                    cell.font = header_font
+                    cell.fill = header_fill
+                
+                # Create Detailed Metrics sheet
+                ws_metrics = wb.create_sheet("Asset Metrics", 2)
+                
+                # Prepare detailed metrics data
+                detailed_metrics = metrics_data.get('detailed_metrics', {})
+                
+                # Create headers
+                headers = ["Metric"] + symbols
+                ws_metrics.append(headers)
+                
+                # Define metrics to include
+                metric_names = [
+                    ("Annual Return (%)", "annual_return"),
+                    ("Volatility (%)", "volatility"),
+                    ("Sharpe Ratio", "sharpe_ratio"),
+                    ("Sortino Ratio", "sortino_ratio"),
+                    ("Max Drawdown (%)", "max_drawdown"),
+                    ("Calmar Ratio", "calmar_ratio"),
+                    ("VaR 95% (%)", "var_95"),
+                    ("CVaR 95% (%)", "cvar_95")
+                ]
+                
+                # Add data rows
+                for metric_name, metric_key in metric_names:
+                    row = [metric_name]
+                    for symbol in symbols:
+                        value = detailed_metrics.get(symbol, {}).get(metric_key, 0.0)
+                        if isinstance(value, (int, float)):
+                            row.append(round(value, 4))
+                        else:
+                            row.append(value)
+                    ws_metrics.append(row)
+                
+                # Style metrics sheet
+                for cell in ws_metrics[1]:
+                    cell.font = header_font
+                    cell.fill = header_fill
+                
+                # Auto-adjust column widths
+                for ws in [ws_summary, ws_portfolio, ws_metrics]:
+                    for column in ws.columns:
+                        max_length = 0
+                        column_letter = get_column_letter(column[0].column)
+                        for cell in column:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        adjusted_width = min(max_length + 2, 20)
+                        ws.column_dimensions[column_letter].width = adjusted_width
+                
+                # Save to buffer
+                wb.save(buffer)
+                buffer.seek(0)
+                
+            else:
+                # Fallback to CSV format
+                import csv
+                import io as csv_io
+                
+                # Create CSV content
+                csv_content = []
+                
+                # Summary
+                csv_content.append(["SUMMARY"])
+                csv_content.append(["Metric", "Value"])
+                csv_content.append(["Analysis Date", metrics_data['timestamp']])
+                csv_content.append(["Currency", currency])
+                csv_content.append(["Assets Count", len(symbols)])
+                csv_content.append(["Assets", ", ".join(symbols)])
+                csv_content.append([])
+                
+                # Portfolio metrics
+                csv_content.append(["PORTFOLIO METRICS"])
+                portfolio_metrics = metrics_data.get('portfolio_metrics', {})
+                csv_content.append(["Metric", "Value"])
+                for metric_name, metric_key in [
+                    ("Annual Return (%)", "annual_return"),
+                    ("Volatility (%)", "volatility"),
+                    ("Sharpe Ratio", "sharpe_ratio"),
+                    ("Sortino Ratio", "sortino_ratio"),
+                    ("Max Drawdown (%)", "max_drawdown"),
+                    ("Calmar Ratio", "calmar_ratio"),
+                    ("VaR 95% (%)", "var_95"),
+                    ("CVaR 95% (%)", "cvar_95")
+                ]:
+                    value = portfolio_metrics.get(metric_key, 0.0)
+                    csv_content.append([metric_name, value])
+                csv_content.append([])
+                
+                # Detailed metrics
+                csv_content.append(["ASSET METRICS"])
+                detailed_metrics = metrics_data.get('detailed_metrics', {})
+                
+                headers = ["Metric"] + symbols
+                csv_content.append(headers)
+                
+                metric_names = [
+                    ("Annual Return (%)", "annual_return"),
+                    ("Volatility (%)", "volatility"),
+                    ("Sharpe Ratio", "sharpe_ratio"),
+                    ("Sortino Ratio", "sortino_ratio"),
+                    ("Max Drawdown (%)", "max_drawdown"),
+                    ("Calmar Ratio", "calmar_ratio"),
+                    ("VaR 95% (%)", "var_95"),
+                    ("CVaR 95% (%)", "cvar_95")
+                ]
+                
+                for metric_name, metric_key in metric_names:
+                    row = [metric_name]
+                    for symbol in symbols:
+                        value = detailed_metrics.get(symbol, {}).get(metric_key, 0.0)
+                        if isinstance(value, (int, float)):
+                            row.append(round(value, 4))
+                        else:
+                            row.append(value)
+                    csv_content.append(row)
+                
+                # Write CSV to buffer
+                csv_buffer = csv_io.StringIO()
+                writer = csv.writer(csv_buffer)
+                for row in csv_content:
+                    writer.writerow(row)
+                
+                buffer.write(csv_buffer.getvalue().encode('utf-8'))
+                buffer.seek(0)
+            
+            return buffer
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio metrics Excel: {e}")
+            return None
 
     def _explain_risk_metrics(self, portfolio_description, portfolio) -> dict:
         """Explain each risk metric in detail"""
@@ -8071,6 +8362,72 @@ class ShansAi:
             self.logger.error(f"Error creating portfolio drawdowns chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
 
+    async def _create_portfolio_dividends_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
+        """Create and send portfolio dividends chart"""
+        try:
+            self.logger.info(f"Creating portfolio dividends chart for portfolio: {symbols}")
+            
+            # Check if portfolio has dividend yield data
+            try:
+                dividend_yield_data = portfolio.dividend_yield
+                if dividend_yield_data is None or dividend_yield_data.empty:
+                    await self._send_callback_message(update, context, "❌ Данные о дивидендах не содержат информацию для отображения.")
+                    return
+            except Exception as e:
+                self.logger.warning(f"Could not access dividend yield data: {e}")
+                await self._send_callback_message(update, context, "❌ Данные о дивидендах не содержат информацию для отображения.")
+                return
+            
+            # Generate dividends chart using okama
+            dividend_yield_data.plot()
+            
+            # Get the current figure from matplotlib (created by okama)
+            current_fig = plt.gcf()
+            
+            # Apply chart styles to the current figure
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                
+                # Apply styling with chart_styles
+                chart_styles.apply_styling(
+                    ax,
+                    title=f'Дивидендная доходность портфеля\n{", ".join(symbols)}',
+                    ylabel='Дивидендная доходность (%)',
+                    xlabel='',
+                    grid=True,
+                    legend=True,
+                    copyright=True
+                )
+            
+            # Save the figure
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(current_fig, img_buffer)
+            img_buffer.seek(0)
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(current_fig)
+            
+            # Build caption
+            caption = f"💵 Дивидендная доходность портфеля: {', '.join(symbols)}\n\n"
+            caption += f"📊 Параметры:\n"
+            caption += f"• Валюта: {currency}\n"
+            caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
+            caption += f"💡 График показывает:\n"
+            caption += f"• Дивидендную доходность портфеля\n"
+            caption += f"• Динамику выплат дивидендов\n"
+            caption += f"• Стабильность доходности"
+            
+            # Send the chart
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption)
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio dividends chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика дивидендов: {str(e)}")
+
     async def _handle_portfolio_returns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle portfolio returns button click"""
         try:
@@ -8164,6 +8521,92 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling portfolio returns button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика доходности: {str(e)}")
+
+    async def _handle_portfolio_dividends_by_symbol(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
+        """Handle portfolio dividends button click by portfolio symbol"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio dividends by symbol for user {user_id}, portfolio: {portfolio_symbol}")
+            
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            if portfolio_symbol not in saved_portfolios:
+                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
+                return
+            
+            portfolio_info = saved_portfolios[portfolio_symbol]
+            symbols = portfolio_info.get('symbols', [])
+            weights = portfolio_info.get('weights', [])
+            currency = portfolio_info.get('currency', 'USD')
+            
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            
+            if not symbols:
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
+                return
+            
+            # Filter out None values and empty strings
+            final_symbols = [s for s in symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            self.logger.info(f"Filtered symbols: {final_symbols}")
+            
+            await self._send_ephemeral_message(update, context, "💵 Создаю график дивидендной доходности...", delete_after=3)
+            
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Debug logging
+                    self.logger.info(f"Validating symbol {i}: '{symbol}' (type: {type(symbol)})")
+                    
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    valid_symbols.append(symbol)
+                    if i < len(weights):
+                        valid_weights.append(weights[i])
+                    else:
+                        valid_weights.append(1.0 / len(final_symbols))
+                    self.logger.info(f"Symbol {symbol} validated successfully")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Create Portfolio with validated symbols
+            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            await self._create_portfolio_dividends_chart(update, context, portfolio, final_symbols, currency, weights)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio dividends by symbol: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика дивидендов: {str(e)}")
 
     async def _handle_portfolio_returns_by_symbol(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
         """Handle portfolio returns button click by portfolio symbol"""
@@ -8461,7 +8904,7 @@ class ShansAi:
             chart_styles.cleanup_figure(fig)
             
             # Build caption
-            caption = f"📈 График накопленной доходности портфеля: {', '.join(symbols)}\n\n"
+            caption = f"📈 Накопленная доходность: {', '.join(symbols)}\n\n"
             caption += f"📊 Параметры:\n"
             caption += f"• Валюта: {currency}\n"
             caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
@@ -8495,10 +8938,19 @@ class ShansAi:
                         else:
                             raise ValueError(f"Cannot convert {final_value} to float")
                 
-                caption += f"📈 Накопленная доходность: {final_value:.2f} {currency}"
+                caption += f"📈 Накопленная доходность: {final_value:.2f} {currency}\n\n"
+                
+                # Add period information
+                try:
+                    period_length = portfolio.period_length
+                    caption += f"Накопленная доходность дополни за {period_length}"
+                except Exception as e:
+                    self.logger.warning(f"Could not get period length: {e}")
+                    caption += f"Накопленная доходность дополни за весь доступный период"
             except Exception as e:
                 self.logger.warning(f"Could not get final portfolio value: {e}")
-                caption += f"📈 Накопленная доходность: недоступна"
+                caption += f"📈 Накопленная доходность: недоступна\n\n"
+                caption += f"Накопленная доходность дополни за весь доступный период"
             
             # Send the chart
             await context.bot.send_photo(

@@ -486,15 +486,24 @@ class ChartStyles:
     
     def create_portfolio_wealth_chart(self, data, symbols, currency, **kwargs):
         """Создать график накопленной доходности портфеля"""
-        title = f'Накопленная доходность портфеля\n{", ".join(symbols)}'
-        ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
-        return self.create_line_chart(data, title, ylabel, **kwargs)
+        # Create title with asset percentages and currency
+        asset_percentages = []
+        for i, symbol in enumerate(symbols):
+            # Extract symbol name without namespace
+            symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+            asset_percentages.append(symbol_name)
+        
+        title = f'Накопленная доходность\n{", ".join(asset_percentages)} | {currency}'
+        ylabel = ''  # No y-axis label
+        xlabel = ''  # No x-axis label
+        return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
     def create_portfolio_returns_chart(self, data, symbols, currency, **kwargs):
         """Создать график годовой доходности портфеля"""
-        title = f'Годовая доходность портфеля\n{", ".join(symbols)}'
-        ylabel = f'Доходность ({currency}) (%)'
-        return self.create_bar_chart(data, title, ylabel, **kwargs)
+        title = f'Доходность по годам\n{", ".join(symbols)}'
+        ylabel = ''  # No y-axis label
+        xlabel = ''  # No x-axis label
+        return self.create_bar_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
     def create_portfolio_drawdowns_chart(self, data, symbols, currency, **kwargs):
         """Создать график просадок портфеля"""
