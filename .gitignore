@@ -1,7 +1,23 @@
-# Environment variables
+# Environment variables and API keys
 .env
 .env.local
 .env.*.local
+config.env
+*.env
+*_key.txt
+*_token.txt
+api_keys.txt
+secrets.txt
+
+# Google Cloud credentials and API keys
+config_files/google_vision_credentials.json
+config_files/gemini_credentials.json
+*.json
+*api_key*
+*token*
+*secret*
+*credential*
+
 
 # Python
 __pycache__/
@@ -58,3 +74,5 @@ charts/
 test_*.py
 *_test.py
 config.env
+# Allow test files in tests directory
+!tests/test_*.py
