@@ -612,7 +612,7 @@ class ShansAi:
             'EUR': 'EU.INFL',
             'GBP': 'GB.INFL',
             'CNY': 'CNY.INFL',  # Китайская инфляция
-            'HKD': 'US.INFL'    # Гонконгская инфляция (приводим к USD)
+            'HKD': 'HK.INFL'    # Гонконгская инфляция
         }
         return inflation_mapping.get(currency, 'US.INFL')
     
@@ -690,12 +690,12 @@ class ShansAi:
                     f"❌ Не удалось получить данные для китайских символов: {', '.join(symbols)}")
                 return
             
-            # Получаем данные по инфляции из okama для CNY активов
+            # Получаем данные по инфляции из okama для CNY и HKD активов
             inflation_data = None
             self.logger.info(f"Currency: {currency}, inflation_ticker: {inflation_ticker}")
-            self.logger.info(f"Condition check: currency == 'CNY' = {currency == 'CNY'}, inflation_ticker == 'CNY.INFL' = {inflation_ticker == 'CNY.INFL'}")
+            self.logger.info(f"Condition check: currency in ['CNY', 'HKD'] = {currency in ['CNY', 'HKD']}, inflation_ticker in ['CNY.INFL', 'HK.INFL'] = {inflation_ticker in ['CNY.INFL', 'HK.INFL']}")
             
-            if currency == 'CNY' and inflation_ticker == 'CNY.INFL':
+            if currency in ['CNY', 'HKD'] and inflation_ticker in ['CNY.INFL', 'HK.INFL']:
                 try:
                     import okama as ok
                     self.logger.info(f"Creating okama Asset for {inflation_ticker}")
