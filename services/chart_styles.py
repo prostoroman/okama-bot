@@ -15,13 +15,10 @@ from scipy.interpolate import make_interp_spline
 import logging
 from datetime import datetime
 import pandas as pd
-<<<<<<< HEAD
-
-logger = logging.getLogger(__name__)
-
-=======
 import warnings
 import contextlib
+
+logger = logging.getLogger(__name__)
 from matplotlib.patches import Rectangle
 import matplotlib.patches as mpatches
 
@@ -40,16 +37,10 @@ class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
-<<<<<<< HEAD
-        # Централизованные настройки шрифтов
-        mpl.rcParams.update({
-            'font.family': ['PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
-=======
         # Централизованные настройки шрифтов с поддержкой CJK
         mpl.rcParams.update({
             'font.family': ['DejaVu Sans'],  # Будет обновлено в _configure_cjk_fonts()
             'font.sans-serif': ['DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             'font.weight': 'medium',
             'axes.titleweight': 'semibold',
             'axes.labelweight': 'medium',
@@ -60,10 +51,7 @@ class ChartStyles:
             'ytick.labelsize': 10,
             'legend.title_fontsize': 11,
             'legend.fontsize': 10,
-<<<<<<< HEAD
-=======
             'axes.unicode_minus': False,  # Предотвращает проблемы с Unicode минусом
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
         })
         
         # Централизованные настройки стилей
@@ -123,19 +111,13 @@ class ChartStyles:
         
         # Централизованные настройки копирайта
         self.copyright = {
-<<<<<<< HEAD
-            'text': 'shans.ai | okama',
-=======
             'text': 'shans.ai',
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             'fontsize': 10,
             'color': '#2E3440',  # строгий графитовый
             'alpha': 0.55,
             'position': (0.98, 0.00),
         }
         
-<<<<<<< HEAD
-=======
         # Настройка CJK шрифтов
         self._configure_cjk_fonts()
 
@@ -214,11 +196,7 @@ class ChartStyles:
             plt.style.use(self.style['style'])
             
             # Убираем параметры, которые не поддерживаются plt.subplots
-<<<<<<< HEAD
-            plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright']}
-=======
             plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright', 'title', 'xlabel', 'ylabel']}
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
             if figsize is None:
                 if rows == 1 and cols == 1:
@@ -273,15 +251,6 @@ class ChartStyles:
         try:
             # Заголовок
             if title:
-<<<<<<< HEAD
-                ax.set_title(title, **self.title)
-            
-            # Подписи осей
-            if xlabel:
-                ax.set_xlabel(xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-            if ylabel:
-                ax.set_ylabel(ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
-=======
                 safe_title = self._safe_text_render(title)
                 ax.set_title(safe_title, **self.title)
             
@@ -292,7 +261,6 @@ class ChartStyles:
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
                 ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
             
             # Сетка
             if grid:

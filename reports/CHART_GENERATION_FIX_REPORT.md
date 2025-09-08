@@ -1,6 +1,5 @@
 # Chart Generation Fix Report
 
-<<<<<<< HEAD
 ## Overview
 
 **Date:** September 4, 2025  

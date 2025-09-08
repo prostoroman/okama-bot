@@ -273,8 +273,6 @@ Format responses professionally with clear sections, bullet points, and relevant
             print(f"❌ Error in ask_question: {e}")
             return f"Ошибка при получении AI ответа: {str(e)}"
     
-<<<<<<< HEAD
-=======
     def analyze_data(self, data_info: Dict) -> Optional[Dict]:
         """Analyze financial data using YandexGPT"""
         try:

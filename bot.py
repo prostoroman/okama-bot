@@ -551,8 +551,6 @@ class ShansAi:
         
         return "; ".join(summary) if summary else "Новый пользователь"
     
-<<<<<<< HEAD
-=======
     def _get_currency_by_symbol(self, symbol: str) -> tuple[str, str]:
         """
         Определить валюту по символу с учетом китайских бирж
@@ -817,9 +815,6 @@ class ShansAi:
             for chunk in self._split_text(text):
                 await update.message.reply_text(chunk)
     
-<<<<<<< HEAD
-    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = None, reply_markup=None):
-=======
     def _escape_markdown(self, text: str) -> str:
         """Escape special Markdown characters"""
         if not text:
@@ -1028,13 +1023,10 @@ class ShansAi:
             
             # Проверяем длину строки
             if len(text) <= 4000:
-<<<<<<< HEAD
-=======
                 self.logger.info(f"Sending message with reply_markup: {reply_markup is not None}")
                 if reply_markup:
                     self.logger.info(f"Reply markup type: {type(reply_markup)}")
                     self.logger.info(f"Reply markup content: {reply_markup.to_dict() if hasattr(reply_markup, 'to_dict') else 'No to_dict method'}")
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
                 await update.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
             else:
                 # Для длинных сообщений с кнопками отправляем первую часть с кнопками
@@ -1244,12 +1236,8 @@ class ShansAi:
 /info [тикер] [период] — базовая информация об активе с графиком и анализом
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
-<<<<<<< HEAD
-/namespace [название] — список пространств имен или символы в пространстве
-=======
 /list [название] — список пространств имен или символы в пространстве
 /gemini_status — проверка статуса Gemini API для анализа графиков
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -1296,18 +1284,6 @@ class ShansAi:
         await self._send_message_safe(update, help_text)
     
     async def show_namespace_help(self, update: Update):
-<<<<<<< HEAD
-        """Показать справку по команде /namespace"""
-        help_text = """📚 Команда /namespace - Пространства имен
-
-Используйте команду `/namespace` для просмотра всех доступных пространств имен.
-
-• `/namespace US` - американские акции
-• `/namespace MOEX` - российские акции
-• `/namespace INDX` - мировые индексы
-• `/namespace FX` - валютные пары
-• `/namespace COMM` - товарные активы
-=======
         """Показать справку по команде /list"""
         help_text = """📚 Команда /list - Пространства имен
 
@@ -1318,7 +1294,6 @@ class ShansAi:
 • `/list INDX` - мировые индексы
 • `/list FX` - валютные пары
 • `/list COMM` - товарные активы
->>>>>>> d7dfcce813a9cd840698ccb6294e230d9c7a310e
 
 """
         
