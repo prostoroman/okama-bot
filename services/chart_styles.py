@@ -473,8 +473,15 @@ class ChartStyles:
         # Рисуем данные
         for i, column in enumerate(data.columns):
             color = self.get_color(i)
+            # Создаем читаемое название для легенды
+            if column in symbols:
+                # Если название колонки совпадает с символом, используем его
+                label = column
+            else:
+                # Иначе используем название колонки как есть
+                label = column
             ax.plot(x_values, data[column].values,
-                    color=color, alpha=self.lines['alpha'], label=column)
+                    color=color, alpha=self.lines['alpha'], label=label)
         
         title = f'Дивидендная доходность портфеля\n{", ".join(symbols)}'
         ylabel = 'Дивидендная доходность (%)'

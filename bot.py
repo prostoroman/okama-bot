@@ -8354,7 +8354,7 @@ class ShansAi:
             
             # Check if portfolio has dividend yield data
             try:
-                dividend_yield_data = portfolio.dividend_yield
+                dividend_yield_data = portfolio.dividend_yield_with_assets
                 if dividend_yield_data is None or dividend_yield_data.empty:
                     await self._send_callback_message(update, context, "❌ Данные о дивидендах не содержат информацию для отображения.")
                     return
