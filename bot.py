@@ -2844,16 +2844,16 @@ class ShansAi:
                 portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
                 portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
                 
-                # Add buttons with wealth chart as first
+                # Add buttons in 2 columns
                 keyboard = [
-                    [InlineKeyboardButton("📈 Накопленная доходность", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💰 Доходность по годам", callback_data=f"portfolio_returns_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
-                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
+                     InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
+                     InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
+                     InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
+                     InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
                     [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -3384,16 +3384,16 @@ class ShansAi:
                 portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}`\n"
                 portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
                 
-                # Add buttons with wealth chart as first
+                # Add buttons in 2 columns
                 keyboard = [
-                    [InlineKeyboardButton("📈 Накопленная доходность", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💰 Доходность по годам", callback_data=f"portfolio_returns_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
-                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 Rolling CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
+                     InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
+                     InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
+                     InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
+                     InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
                     [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -8561,16 +8561,42 @@ class ShansAi:
             if current_fig.axes:
                 ax = current_fig.axes[0]
                 
+                # Make simulation lines thinner
+                for line in ax.get_lines():
+                    line.set_linewidth(0.5)
+                    line.set_alpha(0.6)
+                
+                # Get portfolio weights for title
+                weights = portfolio.weights if hasattr(portfolio, 'weights') else None
+                if weights:
+                    asset_with_weights = []
+                    for i, symbol in enumerate(symbols):
+                        symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                        weight = weights[i] if i < len(weights) else 0.0
+                        asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                    title = f'Прогноз Monte Carlo\n{", ".join(asset_with_weights)}'
+                else:
+                    title = f'Прогноз Monte Carlo\n{", ".join(symbols)}'
                 
                 # Apply standard chart styling with centralized style
                 chart_styles.apply_styling(
                     ax,
-                    title=f'Прогноз Monte Carlo\n{", ".join(symbols)}',
-                    ylabel='Накопленная доходность',
+                    title=title,
+                    ylabel='',  # No y-axis label
+                    xlabel='',  # No x-axis label
                     grid=True,
                     legend=False,
                     copyright=True
                 )
+                
+                # Add custom legend with forecast period and currency
+                from matplotlib.patches import Patch
+                legend_elements = [
+                    Patch(facecolor='gray', alpha=0.6, label=f'Симуляции (20 траекторий)'),
+                    Patch(facecolor='blue', alpha=0.8, label=f'Период: 10 лет'),
+                    Patch(facecolor='green', alpha=0.8, label=f'Валюта: {currency}')
+                ]
+                ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
             
             # Save the figure
             img_buffer = io.BytesIO()

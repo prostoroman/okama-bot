@@ -108,8 +108,8 @@ class ChartStyles:
         
         # Централизованные настройки копирайта
         self.copyright = {
-            'text': 'shans.ai',
-            'fontsize': 10,
+            'text': 'shans.ai | source: okama, tushare',
+            'fontsize': 9,
             'color': '#2E3440',  # строгий графитовый
             'alpha': 0.55,
             'position': (0.98, 0.00),
@@ -563,6 +563,12 @@ class ChartStyles:
     
     def create_portfolio_returns_chart(self, data, symbols, currency, weights=None, **kwargs):
         """Создать график годовой доходности портфеля"""
+        fig, ax = self.create_chart(**kwargs)
+        
+        # Создаем столбчатый график с цветовым кодированием
+        colors = ['#FF6B6B' if val < 0 else '#51CF66' for val in data.values]  # красный для отрицательных, зеленый для положительных
+        bars = ax.bar(data.index, data.values, color=colors, alpha=0.8)
+        
         if weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
@@ -570,12 +576,19 @@ class ChartStyles:
                 symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
                 weight = weights[i] if i < len(weights) else 0.0
                 asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
-            title = f'Доходность по годам\n{", ".join(asset_with_weights)}'
+            title = f'Годовая доходность портфеля\n{", ".join(asset_with_weights)}'
         else:
-            title = f'Доходность по годам\n{", ".join(symbols)}'
+            title = f'Годовая доходность портфеля\n{", ".join(symbols)}'
+        
+        # Убираем подписи осей
         ylabel = ''  # No y-axis label
         xlabel = ''  # No x-axis label
-        return self.create_bar_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
+        
+        # Применяем стили
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=False, copyright=True)
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
     
     def create_portfolio_drawdowns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
         """Создать график просадок портфеля"""
@@ -636,9 +649,9 @@ class ChartStyles:
                 symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
                 weight = weights[i] if i < len(weights) else 0.0
                 asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
-            title = f'Скользящий CAGR портфеля\n{", ".join(asset_with_weights)}'
+            title = f'Скользящая CAGR портфеля\n{", ".join(asset_with_weights)}'
         else:
-            title = f'Скользящий CAGR портфеля\n{", ".join(symbols)}'
+            title = f'Скользящая CAGR портфеля\n{", ".join(symbols)}'
         ylabel = f'CAGR ({currency}) (%)'
         return self.create_line_chart(data, title, ylabel, **kwargs)
     
