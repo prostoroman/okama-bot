@@ -56,6 +56,12 @@ class TestComprehensiveRegression(unittest.TestCase):
         self.mock_context.bot.edit_message_text = AsyncMock()
         self.mock_context.bot.edit_message_reply_markup = AsyncMock()
         
+        # Setup mock update.message for _send_message_safe
+        self.mock_update.message = Mock()
+        self.mock_update.message.reply_text = AsyncMock()
+        self.mock_update.message.reply_photo = AsyncMock()
+        self.mock_update.message.reply_document = AsyncMock()
+        
         # Setup mock query for callbacks
         self.mock_query.data = "test_callback"
         self.mock_query.answer = AsyncMock()

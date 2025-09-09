@@ -519,28 +519,46 @@ class ChartStyles:
         
         return fig, ax
     
-    def create_portfolio_wealth_chart(self, data, symbols, currency, **kwargs):
+    def create_portfolio_wealth_chart(self, data, symbols, currency, weights=None, **kwargs):
         """Создать график накопленной доходности портфеля"""
         # Create title with asset percentages and currency
-        asset_percentages = []
-        for i, symbol in enumerate(symbols):
-            # Extract symbol name without namespace
-            symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
-            asset_percentages.append(symbol_name)
+        if weights:
+            asset_with_weights = []
+            for i, symbol in enumerate(symbols):
+                # Extract symbol name without namespace
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            title = f'Накопленная доходность\n{", ".join(asset_with_weights)} | {currency}'
+        else:
+            asset_percentages = []
+            for i, symbol in enumerate(symbols):
+                # Extract symbol name without namespace
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                asset_percentages.append(symbol_name)
+            title = f'Накопленная доходность\n{", ".join(asset_percentages)} | {currency}'
         
-        title = f'Накопленная доходность\n{", ".join(asset_percentages)} | {currency}'
         ylabel = ''  # No y-axis label
         xlabel = ''  # No x-axis label
         return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
-    def create_portfolio_returns_chart(self, data, symbols, currency, **kwargs):
+    def create_portfolio_returns_chart(self, data, symbols, currency, weights=None, **kwargs):
         """Создать график годовой доходности портфеля"""
-        title = f'Доходность по годам\n{", ".join(symbols)}'
+        if weights:
+            asset_with_weights = []
+            for i, symbol in enumerate(symbols):
+                # Extract symbol name without namespace
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            title = f'Доходность по годам\n{", ".join(asset_with_weights)}'
+        else:
+            title = f'Доходность по годам\n{", ".join(symbols)}'
         ylabel = ''  # No y-axis label
         xlabel = ''  # No x-axis label
         return self.create_bar_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
-    def create_portfolio_drawdowns_chart(self, data, symbols, currency, **kwargs):
+    def create_portfolio_drawdowns_chart(self, data, symbols, currency, weights=None, **kwargs):
         """Создать график просадок портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -559,7 +577,16 @@ class ChartStyles:
                 ax.plot(cleaned_data.index, cleaned_data[column].values * 100,
                        color=color, alpha=self.lines['alpha'], label=column)
         
-        title = f'Просадки портфеля\n{", ".join(symbols)}'
+        if weights:
+            asset_with_weights = []
+            for i, symbol in enumerate(symbols):
+                # Extract symbol name without namespace
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            title = f'Просадки портфеля\n{", ".join(asset_with_weights)}'
+        else:
+            title = f'Просадки портфеля\n{", ".join(symbols)}'
         ylabel = f'Просадка ({currency}) (%)'
         
         # Apply drawdown-specific styling with standard grid colors and date labels above
@@ -567,13 +594,22 @@ class ChartStyles:
         
         return fig, ax
     
-    def create_portfolio_rolling_cagr_chart(self, data, symbols, currency, **kwargs):
+    def create_portfolio_rolling_cagr_chart(self, data, symbols, currency, weights=None, **kwargs):
         """Создать график скользящего CAGR портфеля"""
-        title = f'Скользящий CAGR портфеля\n{", ".join(symbols)}'
+        if weights:
+            asset_with_weights = []
+            for i, symbol in enumerate(symbols):
+                # Extract symbol name without namespace
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            title = f'Скользящий CAGR портфеля\n{", ".join(asset_with_weights)}'
+        else:
+            title = f'Скользящий CAGR портфеля\n{", ".join(symbols)}'
         ylabel = f'CAGR ({currency}) (%)'
         return self.create_line_chart(data, title, ylabel, **kwargs)
     
-    def create_portfolio_compare_assets_chart(self, data, symbols, currency, **kwargs):
+    def create_portfolio_compare_assets_chart(self, data, symbols, currency, weights=None, **kwargs):
         """Создать график сравнения портфеля с активами"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -593,7 +629,16 @@ class ChartStyles:
                 lines[i].set_alpha(0.8)
                 lines[i].set_color(self.get_color(i-1))
         
-        title = f'Портфель vs Активы\n{", ".join(symbols)}'
+        if weights:
+            asset_with_weights = []
+            for i, symbol in enumerate(symbols):
+                # Extract symbol name without namespace
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            title = f'Портфель vs Активы\n{", ".join(asset_with_weights)}'
+        else:
+            title = f'Портфель vs Активы\n{", ".join(symbols)}'
         ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
         self.apply_styling(ax, title=title, ylabel=ylabel)
         return fig, ax

@@ -25,6 +25,7 @@ class TestSuiteRunner:
         self.reporter = TestReporter()
         self.test_modules = {
             'comprehensive': 'test_comprehensive_regression',
+            'simple': 'test_simple_regression',
             'portfolio_risk': 'test_portfolio_risk_metrics_fix',
             'additional_metrics': 'test_additional_metrics_calculation',
             'hk_comparison': 'test_hk_comparison_debug',
@@ -144,7 +145,7 @@ class TestSuiteRunner:
 def main():
     """Главная функция"""
     parser = argparse.ArgumentParser(description='Запускатор тестов для okama-bot')
-    parser.add_argument('--test', choices=['comprehensive', 'portfolio_risk', 'additional_metrics', 'hk_comparison'],
+    parser.add_argument('--test', choices=['comprehensive', 'simple', 'portfolio_risk', 'additional_metrics', 'hk_comparison', 'test_command'],
                        help='Запустить конкретный тест')
     parser.add_argument('--all', action='store_true', help='Запустить все тесты')
     parser.add_argument('--regression', action='store_true', help='Запустить регрессионные тесты')

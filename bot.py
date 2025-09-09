@@ -1278,7 +1278,7 @@ class ShansAi:
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
 /my — просмотр сохраненных портфелей
 /list [название] — список пространств имен или символы в пространстве
-/test [тип] — запуск тестов (quick/regression/all/comprehensive)
+/test [тип] — запуск тестов (simple/quick/regression/all/comprehensive)
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -3143,10 +3143,10 @@ class ShansAi:
             await self._send_message_safe(update, "🧪 Запуск тестов... Пожалуйста, подождите...")
             
             # Получаем тип тестов из аргументов команды
-            test_type = "quick"  # По умолчанию быстрые тесты
+            test_type = "simple"  # По умолчанию простые тесты
             if context.args:
                 arg = context.args[0].lower()
-                if arg in ["all", "regression", "quick", "comprehensive"]:
+                if arg in ["all", "regression", "quick", "comprehensive", "simple"]:
                     test_type = arg
             
             # Запускаем тесты
@@ -3910,6 +3910,30 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 symbols = user_context.get('current_symbols', [])
                 await self._handle_correlation_button(update, context, symbols)
+            elif callback_data == "risk_metrics" or callback_data == "risk_metrics_compare" or callback_data == "compare_risk_metrics":
+                self.logger.info("Risk metrics button clicked")
+                
+                # Get data from user context
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('current_symbols', [])
+                await self._handle_risk_metrics_button(update, context, symbols)
+            elif callback_data == "monte_carlo" or callback_data == "monte_carlo_compare" or callback_data == "compare_monte_carlo":
+                self.logger.info("Monte Carlo button clicked")
+                
+                # Get data from user context
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('current_symbols', [])
+                await self._handle_monte_carlo_button(update, context, symbols)
+            elif callback_data == "forecast" or callback_data == "forecast_compare" or callback_data == "compare_forecast":
+                self.logger.info("Forecast button clicked")
+                
+                # Get data from user context
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('current_symbols', [])
+                await self._handle_forecast_button(update, context, symbols)
             elif callback_data.startswith('info_daily_chart_'):
                 symbol = self.clean_symbol(callback_data.replace('info_daily_chart_', ''))
                 self.logger.info(f"Info daily chart button clicked for symbol: {symbol}")
@@ -9143,34 +9167,22 @@ class ShansAi:
         try:
             self.logger.info(f"Creating portfolio returns chart for portfolio: {symbols}")
             
-            # Generate annual returns chart using okama
-            # portfolio.annual_return_ts.plot(kind="bar")
-            returns_data = portfolio.annual_return_ts.plot(kind="bar")
+            # Generate annual returns data
+            returns_data = portfolio.annual_return_ts
             
-            # Get the current figure from matplotlib (created by okama)
-            current_fig = plt.gcf()
+            # Create portfolio returns chart with chart_styles
+            fig, ax = chart_styles.create_portfolio_returns_chart(
+                data=returns_data, symbols=symbols, currency=currency, weights=weights
+            )
             
-            # Apply chart styles to the current figure
-            if current_fig.axes:
-                ax = current_fig.axes[0]
-                
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_styling(
-                    ax,
-                    title=f'Годовая доходность портфеля\n{", ".join(symbols)}',
-                    ylabel='Доходность (%)',
-                    grid=True,
-                    legend=False,
-                    copyright=True
-                )
-            
-            # Save the figure
+            # Save chart to bytes with memory optimization
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(current_fig, img_buffer)
+            chart_styles.save_figure(fig, img_buffer)
             img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(current_fig)
+            chart_styles.cleanup_figure(fig)
             
             # Get returns statistics
             try:
@@ -9191,11 +9203,16 @@ class ShansAi:
                 else:
                     cagr_value = cagr
                 
-                # Build enhanced caption
-                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols)}\n\n"
+                # Build enhanced caption with weights in title
+                symbols_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                
+                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
                 caption += f"📊 Параметры:\n"
-                caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
+                caption += f"• Валюта: {currency}\n\n"
                 
                 # Add returns statistics
                 caption += f"📈 Статистика доходности:\n"
@@ -9210,11 +9227,16 @@ class ShansAi:
                 
             except Exception as e:
                 self.logger.warning(f"Could not get returns statistics: {e}")
-                # Fallback to basic caption
-                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols)}\n\n"
+                # Fallback to basic caption with weights in title
+                symbols_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                
+                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
                 caption += f"📊 Параметры:\n"
-                caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
+                caption += f"• Валюта: {currency}\n\n"
                 caption += f"💡 График показывает:\n"
                 caption += f"• Годовую доходность по годам\n"
                 caption += f"• Волатильность доходности\n"
@@ -9336,7 +9358,7 @@ class ShansAi:
             
             # Create portfolio chart with chart_styles using optimized method
             fig, ax = chart_styles.create_portfolio_wealth_chart(
-                data=wealth_index, symbols=symbols, currency=currency
+                data=wealth_index, symbols=symbols, currency=currency, weights=weights
             )
             
             # Save chart to bytes with memory optimization
@@ -9348,11 +9370,16 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
-            # Build caption
-            caption = f"📈 Накопленная доходность: {', '.join(symbols)}\n\n"
+            # Build caption with weights in title
+            symbols_with_weights = []
+            for i, symbol in enumerate(symbols):
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            
+            caption = f"📈 Накопленная доходность: {', '.join(symbols_with_weights)}\n\n"
             caption += f"📊 Параметры:\n"
             caption += f"• Валюта: {currency}\n"
-            caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
             caption += f"• Период: MAX (весь доступный период)\n\n"
             
             # Get final portfolio value safely
