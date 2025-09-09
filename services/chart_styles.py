@@ -565,9 +565,17 @@ class ChartStyles:
         """Создать график годовой доходности портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
+        # Обработка индекса для совместимости с matplotlib
+        x_positions = np.arange(len(data))
+        x_labels = [str(label) for label in data.index]
+        
         # Создаем столбчатый график с цветовым кодированием
         colors = ['#FF6B6B' if val < 0 else '#51CF66' for val in data.values]  # красный для отрицательных, зеленый для положительных
-        bars = ax.bar(data.index, data.values, color=colors, alpha=0.8)
+        bars = ax.bar(x_positions, data.values, color=colors, alpha=0.8)
+        
+        # Устанавливаем подписи на оси X
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(x_labels, rotation=45)
         
         if weights:
             asset_with_weights = []
@@ -586,7 +594,6 @@ class ChartStyles:
         
         # Применяем стили
         self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=False, copyright=True)
-        ax.tick_params(axis='x', rotation=45)
         
         return fig, ax
     
