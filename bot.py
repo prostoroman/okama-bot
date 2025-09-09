@@ -4340,6 +4340,98 @@ class ShansAi:
             self.logger.error(f"Error handling chart analysis button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown')
 
+    async def _handle_efficient_frontier_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle Efficient Frontier button for all comparison types"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            symbols = user_context.get('current_symbols', [])
+            display_symbols = user_context.get('display_symbols', symbols)  # Use descriptive names for display
+            currency = user_context.get('current_currency', 'USD')
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+
+            # Validate that we have symbols to compare
+            if not expanded_symbols:
+                await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
+                return
+
+            await self._send_ephemeral_message(update, context, "📈 Создаю график эффективной границы…", delete_after=3)
+
+            # Prepare assets for comparison
+            asset_list_items = []
+            asset_names = []
+            
+            # Use display_symbols for proper naming - they already contain descriptive names
+            for i, symbol in enumerate(symbols):
+                if i < len(expanded_symbols):
+                    if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
+                        # This is a portfolio - recreate it
+                        if i < len(portfolio_contexts):
+                            pctx = portfolio_contexts[i]
+                            try:
+                                p = ok.Portfolio(
+                                    pctx.get('portfolio_symbols', []),
+                                    weights=pctx.get('portfolio_weights', []),
+                                    ccy=pctx.get('portfolio_currency') or currency,
+                                )
+                                asset_list_items.append(p)
+                                asset_names.append(display_symbols[i])  # Use descriptive name
+                            except Exception as pe:
+                                self.logger.warning(f"Failed to recreate portfolio for Efficient Frontier: {pe}")
+                    else:
+                        # This is a regular asset
+                        asset_list_items.append(symbol)
+                        asset_names.append(display_symbols[i])  # Use descriptive name
+
+            if not asset_list_items:
+                await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для построения графика")
+                return
+
+            # Create AssetList with selected assets/portfolios
+            img_buffer = None
+            try:
+                asset_list = ok.AssetList(asset_list_items, ccy=currency)
+                
+                # Create Efficient Frontier
+                ef = ok.EfficientFrontier(asset_list, ccy=currency)
+                
+                # Plot transition map
+                ef.plot_transition_map(x_axe='risk')
+                current_fig = plt.gcf()
+                
+                # Apply styling
+                if current_fig.axes:
+                    ax = current_fig.axes[0]
+                    chart_styles.apply_styling(
+                        ax,
+                        title=f"Эффективная граница\n{', '.join(asset_names)}",
+                        xlabel='Риск (%)',
+                        ylabel='Доходность (%)',
+                        grid=True,
+                        legend=True,
+                        copyright=True
+                    )
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(current_fig, img_buffer)
+                img_buffer.seek(0)
+                chart_styles.cleanup_figure(current_fig)
+            except Exception as plot_error:
+                self.logger.error(f"Efficient Frontier plot failed: {plot_error}")
+                await self._send_callback_message(update, context, f"❌ Не удалось построить график эффективной границы: {str(plot_error)}")
+                return
+
+            # Send image
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}")
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error handling Efficient Frontier button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при построении эффективной границы: {str(e)}")
+
     async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle data analysis button click for comparison charts"""
         try:
@@ -8764,7 +8856,7 @@ class ShansAi:
             
             # Create drawdowns chart using chart_styles
             fig, ax = chart_styles.create_portfolio_drawdowns_chart(
-                data=drawdowns_data, symbols=symbols, currency=currency
+                data=drawdowns_data, symbols=symbols, currency=currency, weights=weights
             )
             
             # Save the figure using chart_styles
