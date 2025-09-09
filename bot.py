@@ -8746,7 +8746,7 @@ class ShansAi:
             
             # Create Portfolio with validated symbols
             portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
-            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
+            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights, portfolio_symbol)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio drawdowns by symbol: {e}")
@@ -8845,13 +8845,13 @@ class ShansAi:
             # Create Portfolio with validated symbols
             portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
             
-            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights)
+            await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights, "Портфель")
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio drawdowns button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
 
-    async def _create_portfolio_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
+    async def _create_portfolio_drawdowns_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list, portfolio_name: str = None):
         """Create and send portfolio drawdowns chart"""
         try:
             self.logger.info(f"Creating portfolio drawdowns chart for portfolio: {symbols}")
@@ -8861,7 +8861,7 @@ class ShansAi:
             
             # Create drawdowns chart using chart_styles
             fig, ax = chart_styles.create_portfolio_drawdowns_chart(
-                data=drawdowns_data, symbols=symbols, currency=currency, weights=weights
+                data=drawdowns_data, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_name
             )
             
             # Save the figure using chart_styles
@@ -8929,7 +8929,7 @@ class ShansAi:
             self.logger.error(f"Error creating portfolio drawdowns chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
 
-    async def _create_portfolio_dividends_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
+    async def _create_portfolio_dividends_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list, portfolio_name: str = None):
         """Create and send portfolio dividends chart"""
         try:
             self.logger.info(f"Creating portfolio dividends chart for portfolio: {symbols}")
@@ -8972,7 +8972,7 @@ class ShansAi:
             
             # Create dividends chart using chart_styles
             fig, ax = chart_styles.create_dividend_yield_chart(
-                data=dividend_yield_data, symbols=symbols
+                data=dividend_yield_data, symbols=symbols, weights=weights, portfolio_name=portfolio_name
             )
             
             # Save the figure using chart_styles
@@ -9181,7 +9181,7 @@ class ShansAi:
             
             # Create Portfolio with validated symbols
             portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
-            await self._create_portfolio_dividends_chart(update, context, portfolio, final_symbols, currency, weights)
+            await self._create_portfolio_dividends_chart(update, context, portfolio, final_symbols, currency, weights, portfolio_symbol)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio dividends by symbol: {e}")

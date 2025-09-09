@@ -451,13 +451,27 @@ class ChartStyles:
         
         return fig, ax
     
-    def create_dividend_yield_chart(self, data, symbols, **kwargs):
+    def create_dividend_yield_chart(self, data, symbols, weights=None, portfolio_name=None, **kwargs):
         """Создать график дивидендной доходности портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
         # Обработка данных - конвертируем Series в DataFrame если необходимо
         if isinstance(data, pd.Series):
-            data = pd.DataFrame({symbols[0] if symbols else 'Portfolio': data})
+            # Используем название портфеля если передано, иначе создаем из символов
+            if portfolio_name:
+                column_name = portfolio_name
+            else:
+                # Создаем название портфеля из символов и весов
+                if weights:
+                    asset_with_weights = []
+                    for i, symbol in enumerate(symbols):
+                        symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                        weight = weights[i] if i < len(weights) else 0.0
+                        asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                    column_name = ", ".join(asset_with_weights)
+                else:
+                    column_name = ", ".join(symbols)
+            data = pd.DataFrame({column_name: data})
         
         # Обработка PeriodIndex
         x_index = data.index
@@ -473,21 +487,26 @@ class ChartStyles:
         # Рисуем данные
         for i, column in enumerate(data.columns):
             color = self.get_color(i)
-            # Создаем читаемое название для легенды
-            if column in symbols:
-                # Если название колонки совпадает с символом, используем его
-                label = column
-            else:
-                # Иначе используем название колонки как есть
-                label = column
             ax.plot(x_values, data[column].values,
-                    color=color, alpha=self.lines['alpha'], label=label)
+                    color=color, alpha=self.lines['alpha'], label=column)
         
-        title = f'Дивидендная доходность портфеля\n{", ".join(symbols)}'
-        ylabel = 'Дивидендная доходность (%)'
+        # Создаем заголовок с весами
+        if weights:
+            asset_with_weights = []
+            for i, symbol in enumerate(symbols):
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            title = f'Дивидендная доходность портфеля\n{", ".join(asset_with_weights)}'
+        else:
+            title = f'Дивидендная доходность портфеля\n{", ".join(symbols)}'
+        
+        # Убираем подписи осей
+        ylabel = ''  # No y-axis label
+        xlabel = ''  # No x-axis label
         
         # Применяем общие стили
-        self.apply_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True)
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=True, copyright=True)
         ax.tick_params(axis='x', rotation=45)
         
         return fig, ax
@@ -558,13 +577,27 @@ class ChartStyles:
         xlabel = ''  # No x-axis label
         return self.create_bar_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
-    def create_portfolio_drawdowns_chart(self, data, symbols, currency, weights=None, **kwargs):
+    def create_portfolio_drawdowns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
         """Создать график просадок портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
         # Обработка данных
         if isinstance(data, pd.Series):
-            data = pd.DataFrame({symbols[0] if symbols else 'Portfolio': data})
+            # Используем название портфеля если передано, иначе создаем из символов
+            if portfolio_name:
+                column_name = portfolio_name
+            else:
+                # Создаем название портфеля из символов и весов
+                if weights:
+                    asset_with_weights = []
+                    for i, symbol in enumerate(symbols):
+                        symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                        weight = weights[i] if i < len(weights) else 0.0
+                        asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                    column_name = ", ".join(asset_with_weights)
+                else:
+                    column_name = ", ".join(symbols)
+            data = pd.DataFrame({column_name: data})
         
         cleaned_data = data.copy()
         if hasattr(cleaned_data.index, 'dtype') and str(cleaned_data.index.dtype).startswith('period'):
