@@ -1038,12 +1038,35 @@ class ShansAi:
                 if reply_markup:
                     self.logger.info(f"Reply markup type: {type(reply_markup)}")
                     self.logger.info(f"Reply markup content: {reply_markup.to_dict() if hasattr(reply_markup, 'to_dict') else 'No to_dict method'}")
-                await update.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+                
+                # Попробуем отправить с parse_mode, если не получится - без него
+                try:
+                    await update.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+                except Exception as parse_error:
+                    self.logger.warning(f"Failed to send with parse_mode '{parse_mode}': {parse_error}")
+                    # Попробуем без parse_mode, но с кнопками
+                    try:
+                        await update.message.reply_text(text, reply_markup=reply_markup)
+                    except Exception as no_parse_error:
+                        self.logger.warning(f"Failed to send with reply_markup: {no_parse_error}")
+                        # Последняя попытка - только текст
+                        await update.message.reply_text(text)
             else:
                 # Для длинных сообщений с кнопками отправляем первую часть с кнопками
                 if reply_markup:
                     first_part = text[:4000]
-                    await update.message.reply_text(first_part, parse_mode=parse_mode, reply_markup=reply_markup)
+                    try:
+                        await update.message.reply_text(first_part, parse_mode=parse_mode, reply_markup=reply_markup)
+                    except Exception as long_parse_error:
+                        self.logger.warning(f"Failed to send long message with parse_mode '{parse_mode}': {long_parse_error}")
+                        # Попробуем без parse_mode, но с кнопками
+                        try:
+                            await update.message.reply_text(first_part, reply_markup=reply_markup)
+                        except Exception as long_no_parse_error:
+                            self.logger.warning(f"Failed to send long message with reply_markup: {long_no_parse_error}")
+                            # Последняя попытка - только текст
+                            await update.message.reply_text(first_part)
+                    
                     # Остальную часть отправляем без кнопок
                     remaining_text = text[4000:]
                     if remaining_text:
@@ -1052,10 +1075,16 @@ class ShansAi:
                     await self.send_long_message(update, text)
         except Exception as e:
             self.logger.error(f"Error in _send_message_safe: {e}")
-            # Fallback: попробуем отправить как обычный текст
+            # Fallback: попробуем отправить как обычный текст, но сохраним кнопки
             try:
                 if hasattr(update, 'message') and update.message is not None:
-                    await update.message.reply_text(f"Ошибка форматирования: {str(text)[:1000]}...")
+                    # Попробуем отправить без parse_mode, но с кнопками
+                    try:
+                        await update.message.reply_text(f"Ошибка форматирования: {str(text)[:1000]}...", reply_markup=reply_markup)
+                    except Exception as markdown_error:
+                        self.logger.warning(f"Failed to send with reply_markup, trying without: {markdown_error}")
+                        # Если не получилось с кнопками, попробуем без них
+                        await update.message.reply_text(f"Ошибка форматирования: {str(text)[:1000]}...")
             except Exception as fallback_error:
                 self.logger.error(f"Fallback message sending failed: {fallback_error}")
                 try:
@@ -1247,7 +1276,9 @@ class ShansAi:
 /info [тикер] [период] — базовая информация об активе с графиком и анализом
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
+/my — просмотр сохраненных портфелей
 /list [название] — список пространств имен или символы в пространстве
+/test [тип] — запуск тестов (quick/regression/all/comprehensive)
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -3104,6 +3135,123 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in portfolio command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при выполнении команды портфеля: {str(e)}")
+
+    async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /test command - запускает тесты и выводит результат"""
+        try:
+            # Отправляем сообщение о начале тестирования
+            await self._send_message_safe(update, "🧪 Запуск тестов... Пожалуйста, подождите...")
+            
+            # Получаем тип тестов из аргументов команды
+            test_type = "quick"  # По умолчанию быстрые тесты
+            if context.args:
+                arg = context.args[0].lower()
+                if arg in ["all", "regression", "quick", "comprehensive"]:
+                    test_type = arg
+            
+            # Запускаем тесты
+            result = await self._run_tests(test_type)
+            
+            # Форматируем результат в markdown
+            result_message = self._format_test_results(result, test_type)
+            
+            # Отправляем результат
+            await self._send_message_safe(update, result_message, parse_mode='Markdown')
+            
+        except Exception as e:
+            self.logger.error(f"Error in test_command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при запуске тестов: {str(e)}")
+    
+    async def _run_tests(self, test_type: str = "quick") -> dict:
+        """Запускает тесты и возвращает результат"""
+        import subprocess
+        import time
+        
+        start_time = time.time()
+        
+        try:
+            # Определяем команду для запуска тестов
+            cmd = [sys.executable, "tests/test_runner.py", f"--{test_type}"]
+            
+            # Запускаем тесты
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                cwd=os.getcwd(),
+                timeout=300  # 5 минут таймаут
+            )
+            
+            duration = time.time() - start_time
+            
+            return {
+                'success': result.returncode == 0,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'duration': duration,
+                'test_type': test_type
+            }
+            
+        except subprocess.TimeoutExpired:
+            return {
+                'success': False,
+                'stdout': '',
+                'stderr': 'Тесты превысили время ожидания (5 минут)',
+                'duration': time.time() - start_time,
+                'test_type': test_type
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'stdout': '',
+                'stderr': str(e),
+                'duration': time.time() - start_time,
+                'test_type': test_type
+            }
+    
+    def _format_test_results(self, result: dict, test_type: str) -> str:
+        """Форматирует результаты тестов в markdown"""
+        status_emoji = "✅" if result['success'] else "❌"
+        status_text = "Пройдены" if result['success'] else "Провалены"
+        
+        # Базовое сообщение
+        message = f"""
+{status_emoji} **Результаты тестирования**
+
+**Тип тестов:** `{test_type}`
+**Статус:** {status_text}
+**Время выполнения:** {result['duration']:.1f} сек
+"""
+        
+        # Добавляем вывод тестов (ограничиваем длину)
+        if result['stdout']:
+            stdout_lines = result['stdout'].split('\n')
+            # Берем последние 20 строк для краткости
+            relevant_lines = stdout_lines[-20:] if len(stdout_lines) > 20 else stdout_lines
+            
+            message += f"\n**Вывод тестов:**\n```\n"
+            message += '\n'.join(relevant_lines)
+            message += "\n```"
+        
+        # Добавляем ошибки если есть
+        if result['stderr']:
+            stderr_lines = result['stderr'].split('\n')
+            # Берем последние 10 строк ошибок
+            error_lines = stderr_lines[-10:] if len(stderr_lines) > 10 else stderr_lines
+            
+            message += f"\n**Ошибки:**\n```\n"
+            message += '\n'.join(error_lines)
+            message += "\n```"
+        
+        # Добавляем инструкции
+        if not result['success']:
+            message += f"\n**💡 Для подробной информации запустите:**\n`python tests/test_runner.py --{test_type} --verbose`"
+        
+        # Ограничиваем длину сообщения
+        if len(message) > 3500:
+            message = message[:3500] + "\n\n... (сообщение обрезано)"
+        
+        return message
 
     async def _handle_portfolio_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle portfolio input from user message"""
@@ -10033,6 +10181,7 @@ class ShansAi:
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))
+        application.add_handler(CommandHandler("test", self.test_command))
         
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
