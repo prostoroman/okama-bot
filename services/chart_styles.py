@@ -455,6 +455,10 @@ class ChartStyles:
         """Создать график дивидендной доходности портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
+        # Обработка данных - конвертируем Series в DataFrame если необходимо
+        if isinstance(data, pd.Series):
+            data = pd.DataFrame({symbols[0] if symbols else 'Portfolio': data})
+        
         # Обработка PeriodIndex
         x_index = data.index
         try:
