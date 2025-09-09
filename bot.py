@@ -2500,6 +2500,11 @@ class ShansAi:
                     InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
                 ])
                 
+                # Add Efficient Frontier button for all comparisons
+                keyboard.append([
+                    InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
+                ])
+                
                 # Add AI analysis buttons if services are available
                 ai_buttons = []
                 if self.gemini_service and self.gemini_service.is_available():
