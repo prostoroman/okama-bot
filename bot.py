@@ -4411,8 +4411,8 @@ class ShansAi:
                     chart_styles.apply_styling(
                         ax,
                         title=f"Эффективная граница\n{', '.join(asset_names)}",
-                        xlabel='Риск (%)',
-                        ylabel='Доходность (%)',
+                        xlabel='Риск (волатильность)',
+                        ylabel='Вес (%)',
                         grid=True,
                         legend=True,
                         copyright=True
