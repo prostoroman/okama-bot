@@ -8279,34 +8279,19 @@ class ShansAi:
         try:
             self.logger.info(f"Creating portfolio drawdowns chart for portfolio: {symbols}")
             
-            # Generate drawdowns chart using okama
-            # portfolio.drawdowns.plot()
-            drawdowns_data = portfolio.drawdowns.plot()
+            # Get drawdowns data from portfolio
+            drawdowns_data = portfolio.drawdowns
             
-            # Get the current figure from matplotlib (created by okama)
-            current_fig = plt.gcf()
+            # Create drawdowns chart using chart_styles
+            fig, ax = chart_styles.create_portfolio_drawdowns_chart(
+                data=drawdowns_data, symbols=symbols, currency=currency
+            )
             
-            # Apply chart styles to the current figure
-            if current_fig.axes:
-                ax = current_fig.axes[0]
-                
-                # Apply drawdown-specific styling with standard grid colors and date labels above
-                chart_styles.apply_drawdown_styling(
-                    ax,
-                    title=f'Просадки портфеля\n{", ".join(symbols)}',
-                    ylabel='Просадка (%)',
-                    grid=True,
-                    legend=False,
-                    copyright=True
-                )
-            
-            # Save the figure
+            # Save the figure using chart_styles
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(current_fig, img_buffer)
+            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.cleanup_figure(fig)
             img_buffer.seek(0)
-            
-            # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(current_fig)
             
             # Get drawdowns statistics
             try:
@@ -8378,34 +8363,16 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о дивидендах не содержат информацию для отображения.")
                 return
             
-            # Generate dividends chart using okama
-            dividend_yield_data.plot()
+            # Create dividends chart using chart_styles
+            fig, ax = chart_styles.create_dividend_yield_chart(
+                data=dividend_yield_data, symbols=symbols
+            )
             
-            # Get the current figure from matplotlib (created by okama)
-            current_fig = plt.gcf()
-            
-            # Apply chart styles to the current figure
-            if current_fig.axes:
-                ax = current_fig.axes[0]
-                
-                # Apply styling with chart_styles
-                chart_styles.apply_styling(
-                    ax,
-                    title=f'Дивидендная доходность портфеля\n{", ".join(symbols)}',
-                    ylabel='Дивидендная доходность (%)',
-                    xlabel='',
-                    grid=True,
-                    legend=True,
-                    copyright=True
-                )
-            
-            # Save the figure
+            # Save the figure using chart_styles
             img_buffer = io.BytesIO()
-            chart_styles.save_figure(current_fig, img_buffer)
+            chart_styles.save_figure(fig, img_buffer)
+            chart_styles.cleanup_figure(fig)
             img_buffer.seek(0)
-            
-            # Clear matplotlib cache to free memory
-            chart_styles.cleanup_figure(current_fig)
             
             # Build caption
             caption = f"💵 Дивидендная доходность портфеля: {', '.join(symbols)}\n\n"
