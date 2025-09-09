@@ -452,10 +452,34 @@ class ChartStyles:
         return fig, ax
     
     def create_dividend_yield_chart(self, data, symbols, **kwargs):
-        """Создать график дивидендной доходности"""
-        title = f'Дивидендная доходность: {", ".join(symbols)}'
+        """Создать график дивидендной доходности портфеля"""
+        fig, ax = self.create_chart(**kwargs)
+        
+        # Обработка PeriodIndex
+        x_index = data.index
+        try:
+            if isinstance(x_index, pd.PeriodIndex):
+                x_values = x_index.to_timestamp().to_pydatetime()
+            else:
+                x_values = [pd.to_datetime(x_val).to_pydatetime() if hasattr(x_val, 'to_timestamp') else x_val 
+                           for x_val in x_index]
+        except Exception:
+            x_values = np.arange(len(x_index))
+        
+        # Рисуем данные
+        for i, column in enumerate(data.columns):
+            color = self.get_color(i)
+            ax.plot(x_values, data[column].values,
+                    color=color, alpha=self.lines['alpha'], label=column)
+        
+        title = f'Дивидендная доходность портфеля\n{", ".join(symbols)}'
         ylabel = 'Дивидендная доходность (%)'
-        return self.create_multi_line_chart(data, title, ylabel, **kwargs)
+        
+        # Применяем общие стили
+        self.apply_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True)
+        ax.tick_params(axis='x', rotation=45)
+        
+        return fig, ax
     
     def create_drawdowns_chart(self, data, symbols, currency, **kwargs):
         """Создать график просадок"""
@@ -507,9 +531,30 @@ class ChartStyles:
     
     def create_portfolio_drawdowns_chart(self, data, symbols, currency, **kwargs):
         """Создать график просадок портфеля"""
+        fig, ax = self.create_chart(**kwargs)
+        
+        # Обработка данных
+        if isinstance(data, pd.Series):
+            data = pd.DataFrame({symbols[0] if symbols else 'Portfolio': data})
+        
+        cleaned_data = data.copy()
+        if hasattr(cleaned_data.index, 'dtype') and str(cleaned_data.index.dtype).startswith('period'):
+            cleaned_data.index = cleaned_data.index.to_timestamp()
+        
+        # Рисуем данные
+        for i, column in enumerate(cleaned_data.columns):
+            if column in cleaned_data.columns and not cleaned_data[column].empty:
+                color = self.get_color(i)
+                ax.plot(cleaned_data.index, cleaned_data[column].values * 100,
+                       color=color, alpha=self.lines['alpha'], label=column)
+        
         title = f'Просадки портфеля\n{", ".join(symbols)}'
         ylabel = f'Просадка ({currency}) (%)'
-        return self.create_line_chart(data, title, ylabel, **kwargs)
+        
+        # Apply drawdown-specific styling with standard grid colors and date labels above
+        self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True)
+        
+        return fig, ax
     
     def create_portfolio_rolling_cagr_chart(self, data, symbols, currency, **kwargs):
         """Создать график скользящего CAGR портфеля"""

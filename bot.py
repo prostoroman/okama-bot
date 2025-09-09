@@ -8059,14 +8059,14 @@ class ShansAi:
                     copyright=True
                 )
             
-            # Save the figure
+            # Save the figure using chart_styles
             img_buffer = io.BytesIO()
-            current_fig.savefig(img_buffer, format='PNG', dpi=96, bbox_inches='tight')
+            chart_styles.save_figure(current_fig, img_buffer)
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            plt.close(current_fig)
+            chart_styles.cleanup_figure(current_fig)
             
             # Send the chart
             await context.bot.send_photo(
