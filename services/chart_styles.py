@@ -1006,6 +1006,51 @@ class ChartStyles:
             ax.axis('off')
             return fig, ax
 
+    def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, **kwargs):
+        """Применить стили к графику монте-карло"""
+        try:
+            # Make simulation lines thinner
+            for line in ax.get_lines():
+                line.set_linewidth(0.5)
+                line.set_alpha(0.6)
+            
+            # Get portfolio weights for title
+            if weights:
+                asset_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                title = f'Прогноз Monte Carlo\n{", ".join(asset_with_weights)}'
+            else:
+                title = f'Прогноз Monte Carlo\n{", ".join(symbols)}'
+            
+            # Apply base styling
+            self._apply_base_style(fig, ax)
+            
+            # Apply standard chart styling
+            self.apply_styling(
+                ax,
+                title=title,
+                ylabel='',  # No y-axis label
+                xlabel='',  # No x-axis label
+                grid=True,
+                legend=False,
+                copyright=True
+            )
+            
+            # Add custom legend with forecast period and currency
+            from matplotlib.patches import Patch
+            legend_elements = [
+                Patch(facecolor='gray', alpha=0.6, label=f'Симуляции (20 траекторий)'),
+                Patch(facecolor='blue', alpha=0.8, label=f'Период: 10 лет'),
+                Patch(facecolor='green', alpha=0.8, label=f'Валюта: {currency}')
+            ]
+            ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
+            
+        except Exception as e:
+            logger.error(f"Error applying Monte Carlo chart styles: {e}")
+
     def _optimize_x_axis_ticks(self, ax, date_index):
         """Оптимизировать отображение дат на оси X в зависимости от количества данных"""
         try:

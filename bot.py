@@ -8557,55 +8557,26 @@ class ShansAi:
             # Get the current figure from matplotlib (created by okama)
             current_fig = plt.gcf()
 
-            # Apply chart styles to the current figure
+            # Apply chart styles to the current figure using chart_styles
             if current_fig.axes:
                 ax = current_fig.axes[0]
                 
-                # Make simulation lines thinner
-                for line in ax.get_lines():
-                    line.set_linewidth(0.5)
-                    line.set_alpha(0.6)
-                
-                # Get portfolio weights for title
+                # Get portfolio weights
                 weights = portfolio.weights if hasattr(portfolio, 'weights') else None
-                if weights:
-                    asset_with_weights = []
-                    for i, symbol in enumerate(symbols):
-                        symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
-                        weight = weights[i] if i < len(weights) else 0.0
-                        asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
-                    title = f'Прогноз Monte Carlo\n{", ".join(asset_with_weights)}'
-                else:
-                    title = f'Прогноз Monte Carlo\n{", ".join(symbols)}'
                 
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_styling(
-                    ax,
-                    title=title,
-                    ylabel='',  # No y-axis label
-                    xlabel='',  # No x-axis label
-                    grid=True,
-                    legend=False,
-                    copyright=True
+                # Apply Monte Carlo chart styling using chart_styles
+                chart_styles.create_monte_carlo_chart(
+                    current_fig, ax, symbols, currency, weights
                 )
-                
-                # Add custom legend with forecast period and currency
-                from matplotlib.patches import Patch
-                legend_elements = [
-                    Patch(facecolor='gray', alpha=0.6, label=f'Симуляции (20 траекторий)'),
-                    Patch(facecolor='blue', alpha=0.8, label=f'Период: 10 лет'),
-                    Patch(facecolor='green', alpha=0.8, label=f'Валюта: {currency}')
-                ]
-                ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
             
-            # Save the figure
+            # Save the figure using chart_styles
             img_buffer = io.BytesIO()
-            current_fig.savefig(img_buffer, format='PNG', dpi=96, bbox_inches='tight')
+            chart_styles.save_figure(current_fig, img_buffer)
             img_buffer.seek(0)
             img_bytes = img_buffer.getvalue()
             
             # Clear matplotlib cache to free memory
-            plt.close(current_fig)
+            chart_styles.cleanup_figure(current_fig)
             
             # Send the chart
             await context.bot.send_photo(
@@ -9346,20 +9317,11 @@ class ShansAi:
                     weight = weights[i] if i < len(weights) else 0.0
                     symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
                 
-                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
-                caption += f"📊 Параметры:\n"
-                caption += f"• Валюта: {currency}\n\n"
-                
-                # Add returns statistics
-                caption += f"📈 Статистика доходности:\n"
+                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"                
                 caption += f"• Средняя месячная доходность: {mean_return_monthly:.2%}\n"
                 caption += f"• Средняя годовая доходность: {mean_return_annual:.2%}\n"
                 caption += f"• CAGR (Compound Annual Growth Rate): {cagr_value:.2%}\n\n"
-                
-                caption += f"💡 График показывает:\n"
-                caption += f"• Годовую доходность по годам\n"
-                caption += f"• Волатильность доходности\n"
-                caption += f"• Тренды доходности портфеля"
+                caption += f"• Валюта: {currency}\n\n"
                 
             except Exception as e:
                 self.logger.warning(f"Could not get returns statistics: {e}")
@@ -9513,10 +9475,7 @@ class ShansAi:
                 weight = weights[i] if i < len(weights) else 0.0
                 symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
             
-            caption = f"📈 Накопленная доходность: {', '.join(symbols_with_weights)}\n\n"
-            caption += f"📊 Параметры:\n"
-            caption += f"• Валюта: {currency}\n"
-            caption += f"• Период: MAX (весь доступный период)\n\n"
+
             
             # Get final portfolio value safely
             try:
@@ -9546,20 +9505,16 @@ class ShansAi:
                         else:
                             raise ValueError(f"Cannot convert {final_value} to float")
                 
-                caption += f"📈 Накопленная доходность: {final_value:.2f} {currency}\n\n"
-                
                 # Add period information
                 try:
                     period_length = portfolio.period_length
-                    caption += f"Накопленная доходность дополни за {period_length}"
                 except Exception as e:
                     self.logger.warning(f"Could not get period length: {e}")
-                    caption += f"Накопленная доходность дополни за весь доступный период"
             except Exception as e:
                 self.logger.warning(f"Could not get final portfolio value: {e}")
-                caption += f"📈 Накопленная доходность: недоступна\n\n"
-                caption += f"Накопленная доходность дополни за весь доступный период"
             
+            caption = f"Накопленная доходность: {', '.join(symbols_with_weights)}: {final_value:.2f} {currency}, {period_length}"
+
             # Send the chart
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
