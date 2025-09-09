@@ -146,6 +146,22 @@ class ShansAi:
         self.context_enabled: Dict[int, bool] = {}          # chat_id -> bool
         self.MAX_HISTORY_MESSAGES = 20
         self.MAX_TELEGRAM_CHUNK = 4000
+
+    def clean_symbol(self, symbol: str) -> str:
+        """Очищает символ от случайных символов и нормализует его"""
+        if not symbol:
+            return symbol
+            
+        # Удаляем обратные слеши и другие проблемные символы
+        cleaned = symbol.replace('\\', '').replace('/', '').replace('"', '').replace("'", '')
+        
+        # Удаляем лишние пробелы
+        cleaned = cleaned.strip()
+        
+        # Удаляем множественные пробелы
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        
+        return cleaned
         
 
 
@@ -1501,7 +1517,7 @@ class ShansAi:
                 f"Просто отправьте название инструмента")
             return
         
-        symbol = context.args[0].upper()
+        symbol = self.clean_symbol(context.args[0]).upper()
         
         # Update user context
         user_id = update.effective_user.id
@@ -1538,7 +1554,7 @@ class ShansAi:
         if not update.message or not update.message.text:
             return
         
-        text = update.message.text.strip()
+        text = self.clean_symbol(update.message.text.strip())
         if not text:
             return
         
@@ -1570,7 +1586,7 @@ class ShansAi:
         if ',' in text:
             # Handle comma-separated symbols
             for symbol_part in text.split(','):
-                symbol_part = symbol_part.strip()
+                symbol_part = self.clean_symbol(symbol_part.strip())
                 if symbol_part:
                     if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
                         symbols.append(symbol_part)
@@ -1579,7 +1595,7 @@ class ShansAi:
         elif ' ' in text:
             # Handle space-separated symbols
             for symbol in text.split():
-                symbol = symbol.strip()
+                symbol = self.clean_symbol(symbol.strip())
                 if symbol:
                     if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
                         symbols.append(symbol)
@@ -1594,7 +1610,7 @@ class ShansAi:
             return
         
         # Treat text as single asset symbol and process with /info logic
-        symbol = text.upper()
+        symbol = self.clean_symbol(text).upper()
         
         # Update user context
         self._update_user_context(user_id, 
@@ -1892,7 +1908,7 @@ class ShansAi:
                 
             else:
                 # Show symbols in specific namespace
-                namespace = context.args[0].upper()
+                namespace = self.clean_symbol(context.args[0]).upper()
                 
                 # Use the unified method that handles both okama and tushare
                 await self._show_namespace_symbols(update, context, namespace, is_callback=False)
@@ -2004,7 +2020,7 @@ class ShansAi:
 
             # Extract symbols from command arguments
             # Support multiple formats: space-separated, comma-separated, and comma+space
-            raw_args = ' '.join(context.args)  # Join all arguments into one string
+            raw_args = self.clean_symbol(' '.join(context.args))  # Join all arguments into one string
             
             # Enhanced parsing logic for multiple formats
             if ',' in raw_args:
@@ -2013,7 +2029,7 @@ class ShansAi:
                 symbols = []
                 for symbol_part in raw_args.split(','):
                     # Handle cases like "SPY.US, QQQ.US" (comma + space)
-                    symbol_part = symbol_part.strip()
+                    symbol_part = self.clean_symbol(symbol_part.strip())
                     if symbol_part:  # Only add non-empty symbols
                         # Preserve original case for portfolio symbols, uppercase for regular assets
                         if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
@@ -2029,12 +2045,12 @@ class ShansAi:
                     if ' ' in arg and not any(portfolio_indicator in arg.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
                         # Split by spaces for regular assets
                         for symbol in arg.split():
-                            symbol = symbol.strip()
+                            symbol = self.clean_symbol(symbol.strip())
                             if symbol:
                                 symbols.append(symbol.upper())
                     else:
                         # Single symbol or portfolio
-                        symbol = arg.strip()
+                        symbol = self.clean_symbol(arg.strip())
                         if symbol:
                             # Preserve original case for portfolio symbols, uppercase for regular assets
                             if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
@@ -3124,7 +3140,7 @@ class ShansAi:
             for arg in text.split():
                 if ':' in arg:
                     symbol_part, weight_part = arg.split(':', 1)
-                    original_symbol = symbol_part.strip()
+                    original_symbol = self.clean_symbol(symbol_part.strip())
                     # Преобразуем символ в верхний регистр
                     symbol = original_symbol.upper()
                     
@@ -3345,14 +3361,14 @@ class ShansAi:
             self._update_user_context(user_id, waiting_for_compare=False)
             
             # Parse input text similar to compare_command logic
-            raw_args = text.strip()
+            raw_args = self.clean_symbol(text.strip())
             
             # Enhanced parsing logic for multiple formats
             if ',' in raw_args:
                 # Handle comma-separated symbols (with or without spaces)
                 symbols = []
                 for symbol_part in raw_args.split(','):
-                    symbol_part = symbol_part.strip()
+                    symbol_part = self.clean_symbol(symbol_part.strip())
                     if symbol_part:
                         if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
                             symbols.append(symbol_part)
@@ -3363,6 +3379,7 @@ class ShansAi:
                 # Handle space-separated symbols
                 symbols = []
                 for symbol in raw_args.split():
+                    symbol = self.clean_symbol(symbol)
                     if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
                         symbols.append(symbol)
                     else:
@@ -7279,60 +7296,369 @@ class ShansAi:
                 'portfolio_metrics': {}
             }
             
-            # Portfolio-level metrics
+            # Portfolio-level metrics - calculate manually to ensure proper values
             portfolio_metrics = {}
             
-            # Basic portfolio metrics
             try:
-                if hasattr(portfolio, 'mean_return_annual'):
-                    portfolio_metrics['annual_return'] = float(portfolio.mean_return_annual) * 100
-                if hasattr(portfolio, 'volatility_annual'):
-                    portfolio_metrics['volatility'] = float(portfolio.volatility_annual) * 100
-                if hasattr(portfolio, 'sharpe_ratio'):
-                    portfolio_metrics['sharpe_ratio'] = float(portfolio.sharpe_ratio)
-                if hasattr(portfolio, 'sortino_ratio'):
-                    portfolio_metrics['sortino_ratio'] = float(portfolio.sortino_ratio)
-                if hasattr(portfolio, 'max_drawdown'):
-                    portfolio_metrics['max_drawdown'] = float(portfolio.max_drawdown) * 100
-                if hasattr(portfolio, 'calmar_ratio'):
-                    portfolio_metrics['calmar_ratio'] = float(portfolio.calmar_ratio)
-                if hasattr(portfolio, 'var_95'):
-                    portfolio_metrics['var_95'] = float(portfolio.var_95) * 100
-                if hasattr(portfolio, 'cvar_95'):
-                    portfolio_metrics['cvar_95'] = float(portfolio.cvar_95) * 100
+                # Get portfolio returns data
+                if hasattr(portfolio, 'returns'):
+                    returns = portfolio.returns
+                elif hasattr(portfolio, 'get_returns'):
+                    returns = portfolio.get_returns()
+                else:
+                    # Fallback: calculate returns from price data
+                    if hasattr(portfolio, 'prices'):
+                        prices = portfolio.prices
+                        returns = prices.pct_change().dropna()
+                    else:
+                        returns = None
+                
+                if returns is not None and len(returns) > 0:
+                    # Annual Return (CAGR)
+                    if hasattr(portfolio, 'mean_return_annual'):
+                        try:
+                            portfolio_metrics['annual_return'] = float(portfolio.mean_return_annual) * 100
+                        except:
+                            # Calculate manually
+                            total_return = (1 + returns).prod() - 1
+                            years = len(returns) / 12  # Assuming monthly data
+                            cagr = (1 + total_return) ** (1 / years) - 1
+                            portfolio_metrics['annual_return'] = cagr * 100
+                    else:
+                        # Calculate manually
+                        total_return = (1 + returns).prod() - 1
+                        years = len(returns) / 12  # Assuming monthly data
+                        cagr = (1 + total_return) ** (1 / years) - 1
+                        portfolio_metrics['annual_return'] = cagr * 100
+                    
+                    # Volatility
+                    if hasattr(portfolio, 'volatility_annual'):
+                        try:
+                            portfolio_metrics['volatility'] = float(portfolio.volatility_annual) * 100
+                        except:
+                            # Calculate manually
+                            volatility = returns.std() * (12 ** 0.5)  # Annualized for monthly data
+                            portfolio_metrics['volatility'] = volatility * 100
+                    else:
+                        # Calculate manually
+                        volatility = returns.std() * (12 ** 0.5)  # Annualized for monthly data
+                        portfolio_metrics['volatility'] = volatility * 100
+                    
+                    # Sharpe Ratio
+                    if hasattr(portfolio, 'sharpe_ratio'):
+                        try:
+                            portfolio_metrics['sharpe_ratio'] = float(portfolio.sharpe_ratio)
+                        except:
+                            # Calculate manually
+                            annual_return = portfolio_metrics['annual_return'] / 100
+                            volatility = portfolio_metrics['volatility'] / 100
+                            if volatility > 0:
+                                sharpe_ratio = (annual_return - 0.02) / volatility
+                                portfolio_metrics['sharpe_ratio'] = sharpe_ratio
+                            else:
+                                portfolio_metrics['sharpe_ratio'] = 0.0
+                    else:
+                        # Calculate manually
+                        annual_return = portfolio_metrics['annual_return'] / 100
+                        volatility = portfolio_metrics['volatility'] / 100
+                        if volatility > 0:
+                            sharpe_ratio = (annual_return - 0.02) / volatility
+                            portfolio_metrics['sharpe_ratio'] = sharpe_ratio
+                        else:
+                            portfolio_metrics['sharpe_ratio'] = 0.0
+                    
+                    # Sortino Ratio
+                    if hasattr(portfolio, 'sortino_ratio'):
+                        try:
+                            portfolio_metrics['sortino_ratio'] = float(portfolio.sortino_ratio)
+                        except:
+                            # Calculate manually
+                            annual_return = portfolio_metrics['annual_return'] / 100
+                            negative_returns = returns[returns < 0]
+                            if len(negative_returns) > 0:
+                                downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                if downside_deviation > 0:
+                                    sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                    portfolio_metrics['sortino_ratio'] = sortino_ratio
+                                else:
+                                    portfolio_metrics['sortino_ratio'] = 0.0
+                            else:
+                                # No negative returns, use volatility as fallback
+                                volatility = portfolio_metrics['volatility'] / 100
+                                if volatility > 0:
+                                    sortino_ratio = (annual_return - 0.02) / volatility
+                                    portfolio_metrics['sortino_ratio'] = sortino_ratio
+                                else:
+                                    portfolio_metrics['sortino_ratio'] = 0.0
+                    else:
+                        # Calculate manually
+                        annual_return = portfolio_metrics['annual_return'] / 100
+                        negative_returns = returns[returns < 0]
+                        if len(negative_returns) > 0:
+                            downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                            if downside_deviation > 0:
+                                sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                portfolio_metrics['sortino_ratio'] = sortino_ratio
+                            else:
+                                portfolio_metrics['sortino_ratio'] = 0.0
+                        else:
+                            # No negative returns, use volatility as fallback
+                            volatility = portfolio_metrics['volatility'] / 100
+                            if volatility > 0:
+                                sortino_ratio = (annual_return - 0.02) / volatility
+                                portfolio_metrics['sortino_ratio'] = sortino_ratio
+                            else:
+                                portfolio_metrics['sortino_ratio'] = 0.0
+                    
+                    # Max Drawdown
+                    if hasattr(portfolio, 'max_drawdown'):
+                        try:
+                            portfolio_metrics['max_drawdown'] = float(portfolio.max_drawdown) * 100
+                        except:
+                            # Calculate manually
+                            cumulative = (1 + returns).cumprod()
+                            running_max = cumulative.expanding().max()
+                            drawdown = (cumulative - running_max) / running_max
+                            max_drawdown = drawdown.min()
+                            portfolio_metrics['max_drawdown'] = max_drawdown * 100
+                    else:
+                        # Calculate manually
+                        cumulative = (1 + returns).cumprod()
+                        running_max = cumulative.expanding().max()
+                        drawdown = (cumulative - running_max) / running_max
+                        max_drawdown = drawdown.min()
+                        portfolio_metrics['max_drawdown'] = max_drawdown * 100
+                    
+                    # Calmar Ratio
+                    annual_return = portfolio_metrics['annual_return'] / 100
+                    max_drawdown = portfolio_metrics['max_drawdown'] / 100
+                    if max_drawdown != 0:
+                        calmar_ratio = annual_return / abs(max_drawdown)
+                        portfolio_metrics['calmar_ratio'] = calmar_ratio
+                    else:
+                        portfolio_metrics['calmar_ratio'] = 0.0
+                    
+                    # VaR 95% and CVaR 95%
+                    var_95 = returns.quantile(0.05)
+                    portfolio_metrics['var_95'] = var_95 * 100
+                    
+                    returns_below_var = returns[returns <= var_95]
+                    if len(returns_below_var) > 0:
+                        cvar_95 = returns_below_var.mean()
+                        portfolio_metrics['cvar_95'] = cvar_95 * 100
+                    else:
+                        portfolio_metrics['cvar_95'] = var_95 * 100
+                        
+                else:
+                    # No returns data available
+                    portfolio_metrics = {
+                        'annual_return': 0.0,
+                        'volatility': 0.0,
+                        'sharpe_ratio': 0.0,
+                        'sortino_ratio': 0.0,
+                        'max_drawdown': 0.0,
+                        'calmar_ratio': 0.0,
+                        'var_95': 0.0,
+                        'cvar_95': 0.0
+                    }
+                    
             except Exception as e:
-                self.logger.warning(f"Could not get some portfolio metrics: {e}")
+                self.logger.warning(f"Could not calculate portfolio metrics: {e}")
+                portfolio_metrics = {
+                    'annual_return': 0.0,
+                    'volatility': 0.0,
+                    'sharpe_ratio': 0.0,
+                    'sortino_ratio': 0.0,
+                    'max_drawdown': 0.0,
+                    'calmar_ratio': 0.0,
+                    'var_95': 0.0,
+                    'cvar_95': 0.0
+                }
             
             metrics_data['portfolio_metrics'] = portfolio_metrics
             
-            # Individual asset metrics
+            # Individual asset metrics - use the same calculation logic as in _prepare_comprehensive_metrics
             for symbol in symbols:
                 try:
                     asset = ok.Asset(symbol)
                     asset_metrics = {}
                     
-                    if hasattr(asset, 'mean_return_annual'):
-                        asset_metrics['annual_return'] = float(asset.mean_return_annual) * 100
-                    if hasattr(asset, 'volatility_annual'):
-                        asset_metrics['volatility'] = float(asset.volatility_annual) * 100
-                    if hasattr(asset, 'sharpe_ratio'):
-                        asset_metrics['sharpe_ratio'] = float(asset.sharpe_ratio)
-                    if hasattr(asset, 'sortino_ratio'):
-                        asset_metrics['sortino_ratio'] = float(asset.sortino_ratio)
-                    if hasattr(asset, 'max_drawdown'):
-                        asset_metrics['max_drawdown'] = float(asset.max_drawdown) * 100
-                    if hasattr(asset, 'calmar_ratio'):
-                        asset_metrics['calmar_ratio'] = float(asset.calmar_ratio)
-                    if hasattr(asset, 'var_95'):
-                        asset_metrics['var_95'] = float(asset.var_95) * 100
-                    if hasattr(asset, 'cvar_95'):
-                        asset_metrics['cvar_95'] = float(asset.cvar_95) * 100
+                    # Get asset returns data
+                    if hasattr(asset, 'returns'):
+                        returns = asset.returns
+                    elif hasattr(asset, 'get_returns'):
+                        returns = asset.get_returns()
+                    else:
+                        # Fallback: calculate returns from price data
+                        if hasattr(asset, 'prices'):
+                            prices = asset.prices
+                            returns = prices.pct_change().dropna()
+                        else:
+                            returns = None
+                    
+                    if returns is not None and len(returns) > 0:
+                        # Annual Return (CAGR)
+                        if hasattr(asset, 'mean_return_annual'):
+                            try:
+                                asset_metrics['annual_return'] = float(asset.mean_return_annual) * 100
+                            except:
+                                # Calculate manually
+                                total_return = (1 + returns).prod() - 1
+                                years = len(returns) / 12  # Assuming monthly data
+                                cagr = (1 + total_return) ** (1 / years) - 1
+                                asset_metrics['annual_return'] = cagr * 100
+                        else:
+                            # Calculate manually
+                            total_return = (1 + returns).prod() - 1
+                            years = len(returns) / 12  # Assuming monthly data
+                            cagr = (1 + total_return) ** (1 / years) - 1
+                            asset_metrics['annual_return'] = cagr * 100
+                        
+                        # Volatility
+                        if hasattr(asset, 'volatility_annual'):
+                            try:
+                                asset_metrics['volatility'] = float(asset.volatility_annual) * 100
+                            except:
+                                # Calculate manually
+                                volatility = returns.std() * (12 ** 0.5)  # Annualized for monthly data
+                                asset_metrics['volatility'] = volatility * 100
+                        else:
+                            # Calculate manually
+                            volatility = returns.std() * (12 ** 0.5)  # Annualized for monthly data
+                            asset_metrics['volatility'] = volatility * 100
+                        
+                        # Sharpe Ratio
+                        if hasattr(asset, 'sharpe_ratio'):
+                            try:
+                                asset_metrics['sharpe_ratio'] = float(asset.sharpe_ratio)
+                            except:
+                                # Calculate manually
+                                annual_return = asset_metrics['annual_return'] / 100
+                                volatility = asset_metrics['volatility'] / 100
+                                if volatility > 0:
+                                    sharpe_ratio = (annual_return - 0.02) / volatility
+                                    asset_metrics['sharpe_ratio'] = sharpe_ratio
+                                else:
+                                    asset_metrics['sharpe_ratio'] = 0.0
+                        else:
+                            # Calculate manually
+                            annual_return = asset_metrics['annual_return'] / 100
+                            volatility = asset_metrics['volatility'] / 100
+                            if volatility > 0:
+                                sharpe_ratio = (annual_return - 0.02) / volatility
+                                asset_metrics['sharpe_ratio'] = sharpe_ratio
+                            else:
+                                asset_metrics['sharpe_ratio'] = 0.0
+                        
+                        # Sortino Ratio
+                        if hasattr(asset, 'sortino_ratio'):
+                            try:
+                                asset_metrics['sortino_ratio'] = float(asset.sortino_ratio)
+                            except:
+                                # Calculate manually
+                                annual_return = asset_metrics['annual_return'] / 100
+                                negative_returns = returns[returns < 0]
+                                if len(negative_returns) > 0:
+                                    downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                    if downside_deviation > 0:
+                                        sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                        asset_metrics['sortino_ratio'] = sortino_ratio
+                                    else:
+                                        asset_metrics['sortino_ratio'] = 0.0
+                                else:
+                                    # No negative returns, use volatility as fallback
+                                    volatility = asset_metrics['volatility'] / 100
+                                    if volatility > 0:
+                                        sortino_ratio = (annual_return - 0.02) / volatility
+                                        asset_metrics['sortino_ratio'] = sortino_ratio
+                                    else:
+                                        asset_metrics['sortino_ratio'] = 0.0
+                        else:
+                            # Calculate manually
+                            annual_return = asset_metrics['annual_return'] / 100
+                            negative_returns = returns[returns < 0]
+                            if len(negative_returns) > 0:
+                                downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                if downside_deviation > 0:
+                                    sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                    asset_metrics['sortino_ratio'] = sortino_ratio
+                                else:
+                                    asset_metrics['sortino_ratio'] = 0.0
+                            else:
+                                # No negative returns, use volatility as fallback
+                                volatility = asset_metrics['volatility'] / 100
+                                if volatility > 0:
+                                    sortino_ratio = (annual_return - 0.02) / volatility
+                                    asset_metrics['sortino_ratio'] = sortino_ratio
+                                else:
+                                    asset_metrics['sortino_ratio'] = 0.0
+                        
+                        # Max Drawdown
+                        if hasattr(asset, 'max_drawdown'):
+                            try:
+                                asset_metrics['max_drawdown'] = float(asset.max_drawdown) * 100
+                            except:
+                                # Calculate manually
+                                cumulative = (1 + returns).cumprod()
+                                running_max = cumulative.expanding().max()
+                                drawdown = (cumulative - running_max) / running_max
+                                max_drawdown = drawdown.min()
+                                asset_metrics['max_drawdown'] = max_drawdown * 100
+                        else:
+                            # Calculate manually
+                            cumulative = (1 + returns).cumprod()
+                            running_max = cumulative.expanding().max()
+                            drawdown = (cumulative - running_max) / running_max
+                            max_drawdown = drawdown.min()
+                            asset_metrics['max_drawdown'] = max_drawdown * 100
+                        
+                        # Calmar Ratio
+                        annual_return = asset_metrics['annual_return'] / 100
+                        max_drawdown = asset_metrics['max_drawdown'] / 100
+                        if max_drawdown != 0:
+                            calmar_ratio = annual_return / abs(max_drawdown)
+                            asset_metrics['calmar_ratio'] = calmar_ratio
+                        else:
+                            asset_metrics['calmar_ratio'] = 0.0
+                        
+                        # VaR 95% and CVaR 95%
+                        var_95 = returns.quantile(0.05)
+                        asset_metrics['var_95'] = var_95 * 100
+                        
+                        returns_below_var = returns[returns <= var_95]
+                        if len(returns_below_var) > 0:
+                            cvar_95 = returns_below_var.mean()
+                            asset_metrics['cvar_95'] = cvar_95 * 100
+                        else:
+                            asset_metrics['cvar_95'] = var_95 * 100
+                            
+                    else:
+                        # No returns data available
+                        asset_metrics = {
+                            'annual_return': 0.0,
+                            'volatility': 0.0,
+                            'sharpe_ratio': 0.0,
+                            'sortino_ratio': 0.0,
+                            'max_drawdown': 0.0,
+                            'calmar_ratio': 0.0,
+                            'var_95': 0.0,
+                            'cvar_95': 0.0
+                        }
                     
                     metrics_data['detailed_metrics'][symbol] = asset_metrics
                     
                 except Exception as e:
                     self.logger.warning(f"Could not get metrics for {symbol}: {e}")
-                    metrics_data['detailed_metrics'][symbol] = {}
+                    metrics_data['detailed_metrics'][symbol] = {
+                        'annual_return': 0.0,
+                        'volatility': 0.0,
+                        'sharpe_ratio': 0.0,
+                        'sortino_ratio': 0.0,
+                        'max_drawdown': 0.0,
+                        'calmar_ratio': 0.0,
+                        'var_95': 0.0,
+                        'cvar_95': 0.0
+                    }
             
             return metrics_data
             
