@@ -1009,6 +1009,13 @@ class ChartStyles:
     def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, **kwargs):
         """Применить стили к графику монте-карло"""
         try:
+            # Set figure size to standard chart size
+            fig.set_size_inches(self.style['figsize'])
+            fig.set_dpi(self.style['dpi'])
+            
+            # Force layout update
+            fig.tight_layout()
+            
             # Make simulation lines thinner
             for line in ax.get_lines():
                 line.set_linewidth(0.5)
