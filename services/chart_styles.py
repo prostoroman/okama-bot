@@ -1016,10 +1016,10 @@ class ChartStyles:
             # Force layout update
             fig.tight_layout()
             
-            # Make simulation lines thinner
+            # Make simulation lines slightly thicker
             for line in ax.get_lines():
-                line.set_linewidth(0.5)
-                line.set_alpha(0.6)
+                line.set_linewidth(0.8)
+                line.set_alpha(0.7)
             
             # Get portfolio weights for title
             if weights:
@@ -1045,6 +1045,10 @@ class ChartStyles:
                 legend=False,
                 copyright=True
             )
+            
+            # Hide x-axis label completely
+            ax.set_xlabel('')
+            ax.tick_params(axis='x', labelbottom=False)
             
             # Add custom legend with forecast period and currency
             from matplotlib.patches import Patch
