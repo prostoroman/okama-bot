@@ -1248,7 +1248,6 @@ class ShansAi:
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
 /list [название] — список пространств имен или символы в пространстве
-/gemini_status — проверка статуса Gemini API для анализа графиков
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -1648,24 +1647,27 @@ class ShansAi:
             try:
                 asset = ok.Asset(symbol)
                 info_text = f"{asset}"
-            except Exception as e:
-                info_text = f"Ошибка при получении информации об активе: {str(e)}"
-            
-            # Создаем кнопки для дополнительных функций
-            keyboard = [
-                [
-                    InlineKeyboardButton("1Y", callback_data=f"daily_chart_{symbol}"),
-                    InlineKeyboardButton("5Y", callback_data=f"monthly_chart_{symbol}"),
-                    InlineKeyboardButton("All", callback_data=f"all_chart_{symbol}")
-                ],
-                [
-                    InlineKeyboardButton("💵 Dividends", callback_data=f"dividends_{symbol}")
+                
+                # Создаем кнопки для дополнительных функций только если данные получены успешно
+                keyboard = [
+                    [
+                        InlineKeyboardButton("1Y", callback_data=f"daily_chart_{symbol}"),
+                        InlineKeyboardButton("5Y", callback_data=f"monthly_chart_{symbol}"),
+                        InlineKeyboardButton("All", callback_data=f"all_chart_{symbol}")
+                    ],
+                    [
+                        InlineKeyboardButton("💵 Dividends", callback_data=f"dividends_{symbol}")
+                    ]
                 ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            # Отправляем информацию с кнопками
-            await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Отправляем информацию с кнопками
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                
+            except Exception as e:
+                # При ошибке получения данных актива отправляем только сообщение об ошибке без кнопок
+                error_text = f"❌ Ошибка при получении информации об активе: {str(e)}"
+                await self._send_message_safe(update, error_text)
             
         except Exception as e:
             self.logger.error(f"Error in _handle_okama_info for {symbol}: {e}")
@@ -1682,7 +1684,23 @@ class ShansAi:
             symbol_info = self.tushare_service.get_symbol_info(symbol)
             
             if 'error' in symbol_info:
-                await self._send_message_safe(update, f"❌ Ошибка: {symbol_info['error']}")
+                # При ошибке отправляем сообщение об ошибке с кнопками для консистентности
+                error_text = f"❌ Ошибка: {symbol_info['error']}"
+                
+                # Создаем кнопки даже при ошибке для консистентности с Okama
+                keyboard = [
+                    [
+                        InlineKeyboardButton("📈 1Y", callback_data=f"tushare_daily_chart_{symbol}"),
+                        InlineKeyboardButton("📅 5Y", callback_data=f"tushare_monthly_chart_{symbol}"),
+                        InlineKeyboardButton("📊 All", callback_data=f"tushare_all_chart_{symbol}")
+                    ],
+                    [
+                        InlineKeyboardButton("💵 Дивиденды", callback_data=f"tushare_dividends_{symbol}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_message_safe(update, error_text, reply_markup=reply_markup)
                 return
             
             # Format information
@@ -1919,54 +1937,6 @@ class ShansAi:
             self.logger.error(f"Error in namespace command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
-    async def gemini_status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /gemini_status command - check Gemini API status"""
-        try:
-            if not self.gemini_service:
-                await self._send_message_safe(update, "❌ Gemini сервис не инициализирован")
-                return
-            
-            status = self.gemini_service.get_service_status()
-            
-            status_text = "🤖 **Статус Gemini API**\n\n"
-            
-            # Service availability
-            if status['available']:
-                status_text += "✅ **Сервис доступен**\n"
-            else:
-                status_text += "❌ **Сервис недоступен**\n"
-            
-            # Library installation
-            if status['library_installed']:
-                status_text += "✅ **Библиотека установлена**\n"
-            else:
-                status_text += "❌ **Библиотека не установлена**\n"
-            
-            # API Key
-            status_text += "\n🔑 **Настройки API ключа:**\n"
-            
-            if status['api_key_set']:
-                status_text += f"✅ **API ключ установлен**\n"
-                status_text += f"📏 Длина ключа: {status['api_key_length']} символов\n"
-            else:
-                status_text += "❌ **API ключ не установлен**\n"
-            
-            # Recommendations
-            status_text += "\n💡 **Рекомендации:**\n"
-            if not status['available']:
-                if not status['library_installed']:
-                    status_text += "• Установите библиотеку: `pip install requests`\n"
-                if not status['api_key_set']:
-                    status_text += "• Установите переменную окружения `GEMINI_API_KEY`\n"
-                    status_text += "• Получите API ключ: https://aistudio.google.com/app/apikey\n"
-            else:
-                status_text += "• Сервис готов к работе! Используйте команду `/compare` для анализа графиков\n"
-            
-            await self._send_message_safe(update, status_text)
-            
-        except Exception as e:
-            self.logger.error(f"Error in gemini_status command: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при проверке статуса: {str(e)}")
 
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
@@ -2155,7 +2125,8 @@ class ShansAi:
                             'portfolio_symbols': portfolio_symbols,
                             'portfolio_weights': portfolio_weights,
                             'portfolio_currency': portfolio_currency,
-                            'portfolio_object': portfolio
+                            'portfolio_object': portfolio,
+                            'original_portfolio_symbol': portfolio_symbol  # Store original portfolio symbol
                         })
                         
                         self.logger.info(f"Expanded portfolio {symbol} with {len(portfolio_symbols)} assets")
@@ -2175,7 +2146,8 @@ class ShansAi:
                         'portfolio_symbols': [symbol],
                         'portfolio_weights': [1.0],
                         'portfolio_currency': None,  # Will be determined later
-                        'portfolio_object': None
+                        'portfolio_object': None,
+                        'original_portfolio_symbol': None  # Not a portfolio
                     })
             
             # Update symbols list with expanded portfolio descriptions
@@ -2251,12 +2223,19 @@ class ShansAi:
                             
                             if portfolio_context:
                                 try:
-                                    # Create portfolio object using okama
-                                    portfolio = ok.Portfolio(
-                                        portfolio_context['portfolio_symbols'], 
-                                        weights=portfolio_context['portfolio_weights'], 
-                                        ccy=portfolio_context['portfolio_currency']
-                                    )
+                                    # Use existing portfolio object if available, otherwise create new one
+                                    if 'portfolio_object' in portfolio_context and portfolio_context['portfolio_object'] is not None:
+                                        portfolio = portfolio_context['portfolio_object']
+                                        self.logger.info(f"Using existing portfolio object for {portfolio_context['symbol']}")
+                                    else:
+                                        # Create portfolio object using okama
+                                        portfolio = ok.Portfolio(
+                                            portfolio_context['portfolio_symbols'], 
+                                            weights=portfolio_context['portfolio_weights'], 
+                                            ccy=portfolio_context['portfolio_currency']
+                                        )
+                                        self.logger.info(f"Created new portfolio object for {portfolio_context['symbol']}")
+                                    
                                     assets_for_comparison.append(portfolio)
                                     self.logger.info(f"Added portfolio {portfolio_context['symbol']} to comparison")
                                 except Exception as portfolio_error:
@@ -10051,7 +10030,6 @@ class ShansAi:
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
-        application.add_handler(CommandHandler("gemini_status", self.gemini_status_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))
