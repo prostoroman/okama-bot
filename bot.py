@@ -8873,11 +8873,16 @@ class ShansAi:
                 # Get longest recovery periods (convert to years)
                 longest_recoveries = portfolio.recovery_period.nlargest(5) / 12
                 
-                # Build enhanced caption
-                caption = f"📉 Просадки портфеля: {', '.join(symbols)}\n\n"
+                # Build enhanced caption with weights in title
+                symbols_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                
+                caption = f"📉 Просадки портфеля: {', '.join(symbols_with_weights)}\n\n"
                 caption += f"📊 Параметры:\n"
-                caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
+                caption += f"• Валюта: {currency}\n\n"
                 
                 # Add largest drawdowns
                 caption += f"📉 5 самых больших просадок:\n"
@@ -8971,11 +8976,16 @@ class ShansAi:
             chart_styles.cleanup_figure(fig)
             img_buffer.seek(0)
             
-            # Build caption
-            caption = f"💵 Дивидендная доходность портфеля: {', '.join(symbols)}\n\n"
+            # Build caption with weights in title
+            symbols_with_weights = []
+            for i, symbol in enumerate(symbols):
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            
+            caption = f"💵 Дивидендная доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
             caption += f"📊 Параметры:\n"
-            caption += f"• Валюта: {currency}\n"
-            caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
+            caption += f"• Валюта: {currency}\n\n"
             caption += f"💡 График показывает:\n"
             caption += f"• Дивидендную доходность портфеля\n"
             caption += f"• Динамику выплат дивидендов\n"
@@ -9753,7 +9763,7 @@ class ShansAi:
             
             # Create standardized rolling CAGR chart using chart_styles
             fig, ax = chart_styles.create_portfolio_rolling_cagr_chart(
-                data=rolling_cagr_data, symbols=symbols, currency=currency
+                data=rolling_cagr_data, symbols=symbols, currency=currency, weights=weights
             )
             
             # Save the figure using standardized method
@@ -9774,11 +9784,16 @@ class ShansAi:
                 max_rolling_cagr = rolling_cagr_series.max()
                 current_rolling_cagr = rolling_cagr_series.iloc[-1] if not rolling_cagr_series.empty else None
                 
-                # Build enhanced caption
-                caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols)}\n\n"
+                # Build enhanced caption with weights in title
+                symbols_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                
+                caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols_with_weights)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
                 caption += f"• Окно: MAX период (весь доступный период)\n\n"
                 
                 # Add rolling CAGR statistics
@@ -10014,7 +10029,7 @@ class ShansAi:
             
             # Create standardized comparison chart using chart_styles
             fig, ax = chart_styles.create_portfolio_compare_assets_chart(
-                data=compare_data, symbols=symbols, currency=currency
+                data=compare_data, symbols=symbols, currency=currency, weights=weights
             )
             
             # Save the figure using standardized method
@@ -10025,11 +10040,16 @@ class ShansAi:
             
             # Get portfolio comparison statistics
             try:
-                # Build enhanced caption
-                caption = f"📊 Портфель vs Активы: {', '.join(symbols)}\n\n"
+                # Build enhanced caption with weights in title
+                symbols_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                
+                caption = f"📊 Портфель vs Активы: {', '.join(symbols_with_weights)}\n\n"
                 caption += f"📊 Параметры:\n"
-                caption += f"• Валюта: {currency}\n"
-                caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
+                caption += f"• Валюта: {currency}\n\n"
                 
                 # Add portfolio performance vs individual assets
                 portfolio_final = portfolio.wealth_index.iloc[-1]

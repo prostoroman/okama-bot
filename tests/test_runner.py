@@ -150,6 +150,7 @@ def main():
     parser.add_argument('--all', action='store_true', help='Запустить все тесты')
     parser.add_argument('--regression', action='store_true', help='Запустить регрессионные тесты')
     parser.add_argument('--quick', action='store_true', help='Запустить быстрые тесты')
+    parser.add_argument('--simple', action='store_true', help='Запустить простые тесты')
     parser.add_argument('--list', action='store_true', help='Показать доступные тесты')
     parser.add_argument('--verbose', '-v', action='store_true', help='Подробный вывод')
     
@@ -177,10 +178,14 @@ def main():
         success = runner.run_quick_tests(args.verbose)
         sys.exit(0 if success else 1)
     
+    elif args.simple:
+        success = runner.run_single_test('simple', args.verbose)
+        sys.exit(0 if success else 1)
+    
     else:
-        # По умолчанию запускаем быстрые тесты
-        print("🚀 Запуск быстрых тестов по умолчанию...")
-        success = runner.run_quick_tests(args.verbose)
+        # По умолчанию запускаем простые тесты
+        print("🚀 Запуск простых тестов по умолчанию...")
+        success = runner.run_single_test('simple', args.verbose)
         sys.exit(0 if success else 1)
 
 
