@@ -27,7 +27,8 @@ class TestSuiteRunner:
             'comprehensive': 'test_comprehensive_regression',
             'portfolio_risk': 'test_portfolio_risk_metrics_fix',
             'additional_metrics': 'test_additional_metrics_calculation',
-            'hk_comparison': 'test_hk_comparison_debug'
+            'hk_comparison': 'test_hk_comparison_debug',
+            'test_command': 'test_test_command'
         }
     
     def run_single_test(self, test_module: str, verbose: bool = False) -> bool:
