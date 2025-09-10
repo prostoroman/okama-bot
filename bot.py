@@ -1341,6 +1341,38 @@ class ShansAi:
             self.logger.error(f"Error creating correlation matrix: {e}")
             await self._send_message_safe(update, f"⚠️ Не удалось создать корреляционную матрицу: {str(e)}")
     
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /start command with welcome message and interactive buttons"""
+        user = update.effective_user
+        user_name = user.first_name or "User"
+        # Remove any special characters that could break Markdown
+        user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
+        
+        welcome_message = f"""👋 Здравствуйте! Я Шанс.ai — ваш интеллектуальный финансовый аналитик.
+
+Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары со всего мира.
+
+👇 Попробуйте одну из ключевых функций прямо сейчас:
+
+Что я еще умею:
+
+🧠 Анализ активов: полная сводка по любой бумаге, валюте или товару.
+⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик.
+💼 Портфели: создание, анализ и прогнозирование доходности ваших портфелей.
+
+⚠️ Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
+
+        # Create inline keyboard with interactive buttons
+        keyboard = [
+            [InlineKeyboardButton("📊 Проанализировать Apple", callback_data="start_info_AAPL.US")],
+            [InlineKeyboardButton("⚖️ Сравнить SPY и QQQ", callback_data="start_compare_SPY.US_QQQ.US")],
+            [InlineKeyboardButton("💼 Создать портфель 60/40", callback_data="start_portfolio_SPY.US:0.6_BND.US:0.4")],
+            [InlineKeyboardButton("📚 Полная справка", callback_data="start_help")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await self._send_message_safe(update, welcome_message, reply_markup=reply_markup)
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command with full help"""
         user = update.effective_user
@@ -4070,6 +4102,30 @@ class ShansAi:
             # Parse callback data
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
+            
+            # Handle start command callbacks
+            if callback_data.startswith("start_"):
+                if callback_data == "start_help":
+                    # Execute help command
+                    await self.help_command(update, context)
+                elif callback_data.startswith("start_info_"):
+                    # Extract symbol and execute info command
+                    symbol = callback_data.replace("start_info_", "")
+                    context.args = [symbol]
+                    await self.info_command(update, context)
+                elif callback_data.startswith("start_compare_"):
+                    # Extract symbols and execute compare command
+                    symbols_str = callback_data.replace("start_compare_", "")
+                    symbols = symbols_str.split("_")
+                    context.args = symbols
+                    await self.compare_command(update, context)
+                elif callback_data.startswith("start_portfolio_"):
+                    # Extract portfolio data and execute portfolio command
+                    portfolio_str = callback_data.replace("start_portfolio_", "")
+                    portfolio_parts = portfolio_str.split("_")
+                    context.args = portfolio_parts
+                    await self.portfolio_command(update, context)
+                return
             
             if callback_data == "drawdowns" or callback_data == "drawdowns_compare" or callback_data == "compare_drawdowns":
                 self.logger.info("Drawdowns button clicked")
@@ -10764,6 +10820,7 @@ class ShansAi:
         application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
         
         # Add handlers
+        application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
