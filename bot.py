@@ -2436,7 +2436,7 @@ class ShansAi:
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True, 
                                                     firstdate=start_date.strftime('%Y-%m-%d'), 
                                                     lastdate=end_date.strftime('%Y-%m-%d'))
-                            self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker})")
+                            self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker}) using firstdate/lastdate parameters")
                         else:
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
                             self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
@@ -2492,7 +2492,7 @@ class ShansAi:
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True,
                                                 firstdate=start_date.strftime('%Y-%m-%d'), 
                                                 lastdate=end_date.strftime('%Y-%m-%d'))
-                        self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker})")
+                        self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker}) using firstdate/lastdate parameters")
                     else:
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
                         self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
