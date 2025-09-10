@@ -4890,86 +4890,70 @@ class ShansAi:
             self.logger.info(f"Portfolio type: {type(portfolio)}")
             self.logger.info(f"Portfolio attributes: {dir(portfolio)}")
             
-            # Get basic metrics with safe handling
-            self.logger.info("Getting CAGR...")
+            # Get portfolio returns data for manual calculations
+            self.logger.info("Getting portfolio returns data...")
+            returns = None
+            if hasattr(portfolio, 'returns'):
+                returns = portfolio.returns
+                self.logger.info(f"Got returns from portfolio.returns: {len(returns)} data points")
+            elif hasattr(portfolio, 'get_returns'):
+                returns = portfolio.get_returns()
+                self.logger.info(f"Got returns from portfolio.get_returns(): {len(returns)} data points")
+            else:
+                # Fallback: calculate returns from price data
+                if hasattr(portfolio, 'prices'):
+                    prices = portfolio.prices
+                    returns = prices.pct_change().dropna()
+                    self.logger.info(f"Calculated returns from prices: {len(returns)} data points")
+                else:
+                    self.logger.warning("No returns data available from portfolio")
+            
+            # Calculate metrics manually using returns data
             cagr_value = None
-            if hasattr(portfolio, 'get_cagr'):
-                try:
-                    cagr = portfolio.get_cagr()
-                    self.logger.info(f"CAGR type: {type(cagr)}, value: {cagr}")
-                    
-                    # Handle CAGR which might be a Series
-                    if hasattr(cagr, '__iter__') and not isinstance(cagr, str):
-                        if hasattr(cagr, 'iloc'):
-                            cagr_value = cagr.iloc[0]
-                        elif hasattr(cagr, '__getitem__'):
-                            cagr_value = cagr[0]
-                        else:
-                            cagr_value = list(cagr)[0]
-                    else:
-                        cagr_value = cagr
-                except Exception as e:
-                    self.logger.warning(f"Could not get CAGR: {e}")
-            
-            self.logger.info("Getting volatility...")
             volatility_value = None
-            if hasattr(portfolio, 'volatility_annual'):
-                try:
-                    volatility = portfolio.volatility_annual
-                    self.logger.info(f"Volatility type: {type(volatility)}, value: {volatility}")
-                    
-                    # Handle volatility which might be a Series
-                    if hasattr(volatility, '__iter__') and not isinstance(volatility, str):
-                        if hasattr(volatility, 'iloc'):
-                            volatility_value = volatility.iloc[0]
-                        elif hasattr(volatility, '__getitem__'):
-                            volatility_value = volatility[0]
-                        else:
-                            volatility_value = list(volatility)[0]
-                    else:
-                        volatility_value = volatility
-                except Exception as e:
-                    self.logger.warning(f"Could not get volatility: {e}")
-            
-            # Get Sharpe ratio
-            self.logger.info("Getting Sharpe ratio...")
             sharpe_value = None
-            if hasattr(portfolio, 'sharpe_ratio'):
-                try:
-                    sharpe_ratio = portfolio.sharpe_ratio
-                    self.logger.info(f"Sharpe ratio type: {type(sharpe_ratio)}, value: {sharpe_ratio}")
-                    
-                    if hasattr(sharpe_ratio, '__iter__') and not isinstance(sharpe_ratio, str):
-                        if hasattr(sharpe_ratio, 'iloc'):
-                            sharpe_value = sharpe_ratio.iloc[0]
-                        elif hasattr(sharpe_ratio, '__getitem__'):
-                            sharpe_value = sharpe_ratio[0]
-                        else:
-                            sharpe_value = list(sharpe_ratio)[0]
-                    else:
-                        sharpe_value = sharpe_ratio
-                except Exception as e:
-                    self.logger.warning(f"Could not get Sharpe ratio: {e}")
-            
-            # Get maximum drawdown
-            self.logger.info("Getting maximum drawdown...")
             max_drawdown_value = None
-            if hasattr(portfolio, 'max_drawdown'):
+            
+            if returns is not None and len(returns) > 0:
+                self.logger.info("Calculating metrics manually from returns data...")
+                
+                # Calculate CAGR manually
                 try:
-                    max_drawdown = portfolio.max_drawdown
-                    self.logger.info(f"Max drawdown type: {type(max_drawdown)}, value: {max_drawdown}")
-                    
-                    if hasattr(max_drawdown, '__iter__') and not isinstance(max_drawdown, str):
-                        if hasattr(max_drawdown, 'iloc'):
-                            max_drawdown_value = max_drawdown.iloc[0]
-                        elif hasattr(max_drawdown, '__getitem__'):
-                            max_drawdown_value = max_drawdown[0]
-                        else:
-                            max_drawdown_value = list(max_drawdown)[0]
-                    else:
-                        max_drawdown_value = max_drawdown
+                    total_return = (1 + returns).prod() - 1
+                    years = self._calculate_portfolio_years(portfolio, returns)
+                    cagr_value = (1 + total_return) ** (1 / years) - 1
+                    self.logger.info(f"Calculated CAGR: {cagr_value:.4f}")
                 except Exception as e:
-                    self.logger.warning(f"Could not get max drawdown: {e}")
+                    self.logger.warning(f"Could not calculate CAGR: {e}")
+                
+                # Calculate volatility manually
+                try:
+                    volatility_value = returns.std() * (12 ** 0.5)  # Annualized for monthly data
+                    self.logger.info(f"Calculated volatility: {volatility_value:.4f}")
+                except Exception as e:
+                    self.logger.warning(f"Could not calculate volatility: {e}")
+                
+                # Calculate Sharpe ratio manually
+                try:
+                    if volatility_value is not None and volatility_value > 0:
+                        sharpe_value = (cagr_value - 0.02) / volatility_value
+                        self.logger.info(f"Calculated Sharpe ratio: {sharpe_value:.4f}")
+                    else:
+                        self.logger.warning("Cannot calculate Sharpe ratio: volatility is zero or None")
+                except Exception as e:
+                    self.logger.warning(f"Could not calculate Sharpe ratio: {e}")
+                
+                # Calculate max drawdown manually
+                try:
+                    cumulative = (1 + returns).cumprod()
+                    running_max = cumulative.expanding().max()
+                    drawdown = (cumulative - running_max) / running_max
+                    max_drawdown_value = drawdown.min()
+                    self.logger.info(f"Calculated max drawdown: {max_drawdown_value:.4f}")
+                except Exception as e:
+                    self.logger.warning(f"Could not calculate max drawdown: {e}")
+            else:
+                self.logger.warning("No returns data available for manual calculations")
             
             # Build symbols with weights
             symbols_with_weights = []
