@@ -2481,6 +2481,7 @@ class ShansAi:
                 user_context['current_symbols'] = clean_symbols
                 user_context['display_symbols'] = display_symbols  # Store descriptive names for display
                 user_context['current_currency'] = currency
+                user_context['current_period'] = specified_period  # Store period for buttons
                 user_context['last_analysis_type'] = 'comparison'
                 user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
                 user_context['expanded_symbols'] = expanded_symbols  # Store expanded symbols
@@ -4200,6 +4201,7 @@ class ShansAi:
             symbols = user_context.get('current_symbols', [])
             display_symbols = user_context.get('display_symbols', symbols)  # Use descriptive names for display
             currency = user_context.get('current_currency', 'USD')
+            period = user_context.get('current_period', None)
             expanded_symbols = user_context.get('expanded_symbols', [])
             portfolio_contexts = user_context.get('portfolio_contexts', [])
 
@@ -4446,6 +4448,7 @@ class ShansAi:
             symbols = user_context.get('current_symbols', [])
             display_symbols = user_context.get('display_symbols', symbols)  # Use descriptive names for display
             currency = user_context.get('current_currency', 'USD')
+            period = user_context.get('current_period', None)
             expanded_symbols = user_context.get('expanded_symbols', [])
             portfolio_contexts = user_context.get('portfolio_contexts', [])
 
@@ -5678,8 +5681,9 @@ class ShansAi:
             
             symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
+            period = user_context.get('current_period', None)
             
-            self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}")
+            self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}, period: {period}")
             await self._send_ephemeral_message(update, context, "📉 Создаю график drawdowns...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
@@ -5692,8 +5696,17 @@ class ShansAi:
                 await self._send_ephemeral_message(update, context, "📉 Создаю график drawdowns для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
             else:
-                # Regular comparison, create AssetList
-                asset_list = ok.AssetList(symbols, ccy=currency)
+                # Regular comparison, create AssetList with period support
+                if period:
+                    years = int(period[:-1])  # Extract number from '5Y'
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    asset_list = ok.AssetList(symbols, ccy=currency, 
+                                            first_date=start_date.strftime('%Y-%m-%d'), 
+                                            last_date=end_date.strftime('%Y-%m-%d'))
+                else:
+                    asset_list = ok.AssetList(symbols, ccy=currency)
                 await self._create_drawdowns_chart(update, context, asset_list, symbols, currency)
         
         except Exception as e:
@@ -5909,8 +5922,9 @@ class ShansAi:
             
             symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
+            period = user_context.get('current_period', None)
             
-            self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}")
+            self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}, period: {period}")
             await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
@@ -5923,8 +5937,17 @@ class ShansAi:
                 await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
             else:
-                # Regular comparison, create AssetList
-                asset_list = ok.AssetList(symbols, ccy=currency)
+                # Regular comparison, create AssetList with period support
+                if period:
+                    years = int(period[:-1])  # Extract number from '5Y'
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    asset_list = ok.AssetList(symbols, ccy=currency, 
+                                            first_date=start_date.strftime('%Y-%m-%d'), 
+                                            last_date=end_date.strftime('%Y-%m-%d'))
+                else:
+                    asset_list = ok.AssetList(symbols, ccy=currency)
                 await self._create_dividend_yield_chart(update, context, asset_list, symbols, currency)
             
         except Exception as e:
@@ -6090,8 +6113,9 @@ class ShansAi:
             
             symbols = user_context['current_symbols']
             currency = user_context.get('current_currency', 'USD')
+            period = user_context.get('current_period', None)
             
-            self.logger.info(f"Creating correlation matrix for symbols: {symbols}, currency: {currency}")
+            self.logger.info(f"Creating correlation matrix for symbols: {symbols}, currency: {currency}, period: {period}")
             await self._send_ephemeral_message(update, context, "🔗 Создаю корреляционную матрицу...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
@@ -6104,8 +6128,17 @@ class ShansAi:
                 await self._send_ephemeral_message(update, context, "🔗 Создаю корреляционную матрицу для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_correlation_matrix(update, context, symbols, currency)
             else:
-                # Regular comparison, create AssetList
-                asset_list = ok.AssetList(symbols, ccy=currency)
+                # Regular comparison, create AssetList with period support
+                if period:
+                    years = int(period[:-1])  # Extract number from '5Y'
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    asset_list = ok.AssetList(symbols, ccy=currency, 
+                                            first_date=start_date.strftime('%Y-%m-%d'), 
+                                            last_date=end_date.strftime('%Y-%m-%d'))
+                else:
+                    asset_list = ok.AssetList(symbols, ccy=currency)
                 await self._create_correlation_matrix(update, context, asset_list, symbols)
             
         except Exception as e:
