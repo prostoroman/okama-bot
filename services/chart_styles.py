@@ -254,9 +254,13 @@ class ChartStyles:
             if xlabel:
                 safe_xlabel = self._safe_text_render(xlabel)
                 ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+            else:
+                ax.set_xlabel('')  # Явно скрываем подпись оси X
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
                 ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+            else:
+                ax.set_ylabel('')  # Явно скрываем подпись оси Y
             
             # Сетка
             if grid:
