@@ -2434,9 +2434,9 @@ class ShansAi:
                             end_date = datetime.now()
                             start_date = end_date - timedelta(days=years * 365)
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True, 
-                                                    firstdate=start_date.strftime('%Y-%m-%d'), 
-                                                    lastdate=end_date.strftime('%Y-%m-%d'))
-                            self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker}) using firstdate/lastdate parameters")
+                                                    first_date=start_date.strftime('%Y-%m-%d'), 
+                                                    last_date=end_date.strftime('%Y-%m-%d'))
+                            self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                         else:
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
                             self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
@@ -2490,9 +2490,9 @@ class ShansAi:
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True,
-                                                firstdate=start_date.strftime('%Y-%m-%d'), 
-                                                lastdate=end_date.strftime('%Y-%m-%d'))
-                        self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker}) using firstdate/lastdate parameters")
+                                                first_date=start_date.strftime('%Y-%m-%d'), 
+                                                last_date=end_date.strftime('%Y-%m-%d'))
+                        self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                     else:
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
                         self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
@@ -2738,12 +2738,9 @@ class ShansAi:
         """Handle /portfolio command for creating portfolio with weights"""
         try:
             if not context.args:
-                # Get random examples for user (excluding Chinese assets)
-                examples = self.get_random_examples(3)
-                examples_text = ", ".join(examples)
+
                 
-                help_text = "📊 *Команда /portfolio - Создание портфеля*\n\n"
-                help_text += f"Примеры случайных активов: `{examples_text}`\n\n"
+                help_text = "📊 *Создание портфеля*\n\n"
                 help_text += "*Введите список активов с указанием долей:*\n\n"
                 help_text += "*Примеры готовых портфелей:*\n"
                 help_text += "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - американский сбалансированный\n"
@@ -2751,11 +2748,12 @@ class ShansAi:
                 help_text += "• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - с золотом и облигациями\n"
                 help_text += "• `AAPL.US:0.3 MSFT.US:0.3 TSLA.US:0.2 AGG.US:0.2` - технологический\n"
                 help_text += "• `SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y` - с валютой USD и периодом 10 лет\n\n"
-                help_text += "💡 *Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле*\n"
-                help_text += "💡 *Базовая валюта определяется по первому символу*\n"
-                help_text += "💡 *Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`*\n"
-                help_text += "💡 *Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY*\n"
-                help_text += "💡 *Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.*\n\n"
+                help_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
+                help_text += "💡 Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`\n"
+                help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
+                help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n\n"
+                help_text += "💡 Если не задана базовая валюта, то она определяется по первому символу\n"
+
                 help_text += "💬 *Введите символы для создания портфеля:*"
                 
                 await self._send_message_safe(update, help_text, parse_mode='Markdown')
@@ -2913,8 +2911,8 @@ class ShansAi:
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
-                                               firstdate=start_date.strftime('%Y-%m-%d'), 
-                                               lastdate=end_date.strftime('%Y-%m-%d'))
+                                               first_date=start_date.strftime('%Y-%m-%d'), 
+                                               last_date=end_date.strftime('%Y-%m-%d'))
                         self.logger.info(f"DEBUG: Successfully created portfolio with period {specified_period}")
                     else:
                         portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
@@ -3489,8 +3487,8 @@ class ShansAi:
                     end_date = datetime.now()
                     start_date = end_date - timedelta(days=years * 365)
                     portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
-                                           firstdate=start_date.strftime('%Y-%m-%d'), 
-                                           lastdate=end_date.strftime('%Y-%m-%d'))
+                                           first_date=start_date.strftime('%Y-%m-%d'), 
+                                           last_date=end_date.strftime('%Y-%m-%d'))
                     self.logger.info(f"Created portfolio with period {specified_period}")
                 else:
                     portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
