@@ -3485,7 +3485,7 @@ class ShansAi:
                 # Apply period filter if specified
                 if specified_period:
                     years = int(specified_period[:-1])  # Extract number from '5Y'
-                    from datetime import datetime, timedelta
+                    from datetime import timedelta
                     end_date = datetime.now()
                     start_date = end_date - timedelta(days=years * 365)
                     portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
