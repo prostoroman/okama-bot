@@ -2430,7 +2430,7 @@ class ShansAi:
                         # Apply period filter if specified
                         if specified_period:
                             years = int(specified_period[:-1])  # Extract number from '5Y'
-                            from datetime import datetime, timedelta
+                            from datetime import timedelta
                             end_date = datetime.now()
                             start_date = end_date - timedelta(days=years * 365)
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True, 
@@ -2486,7 +2486,7 @@ class ShansAi:
                     # Apply period filter if specified
                     if specified_period:
                         years = int(specified_period[:-1])  # Extract number from '5Y'
-                        from datetime import datetime, timedelta
+                        from datetime import timedelta
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True,
@@ -2909,7 +2909,7 @@ class ShansAi:
                     # Apply period filter if specified
                     if specified_period:
                         years = int(specified_period[:-1])  # Extract number from '5Y'
-                        from datetime import datetime, timedelta
+                        from datetime import timedelta
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
@@ -4779,7 +4779,6 @@ class ShansAi:
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
-        from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, user_id: int) -> Dict[str, Any]:
