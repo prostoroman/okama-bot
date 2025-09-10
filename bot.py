@@ -2392,16 +2392,19 @@ class ShansAi:
                         inflation_ticker = self._get_inflation_ticker_by_currency(currency)
                         
                         # Apply period filter if specified
+                        self.logger.info(f"DEBUG: Portfolio comparison - specified_period = {specified_period}, currency = {currency}")
                         if specified_period:
                             years = int(specified_period[:-1])  # Extract number from '5Y'
                             from datetime import timedelta
                             end_date = datetime.now()
                             start_date = end_date - timedelta(days=years * 365)
+                            self.logger.info(f"DEBUG: Creating AssetList with portfolios and period {specified_period}, start_date={start_date.strftime('%Y-%m-%d')}, end_date={end_date.strftime('%Y-%m-%d')}")
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True, 
                                                     first_date=start_date.strftime('%Y-%m-%d'), 
                                                     last_date=end_date.strftime('%Y-%m-%d'))
                             self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                         else:
+                            self.logger.info(f"DEBUG: No period specified for portfolio comparison, creating AssetList without period filter")
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
                             self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
                     except Exception as asset_list_error:
@@ -2448,16 +2451,19 @@ class ShansAi:
                     inflation_ticker = self._get_inflation_ticker_by_currency(currency)
                     
                     # Apply period filter if specified
+                    self.logger.info(f"DEBUG: specified_period = {specified_period}, currency = {currency}")
                     if specified_period:
                         years = int(specified_period[:-1])  # Extract number from '5Y'
                         from datetime import timedelta
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
+                        self.logger.info(f"DEBUG: Creating AssetList with period {specified_period}, start_date={start_date.strftime('%Y-%m-%d')}, end_date={end_date.strftime('%Y-%m-%d')}")
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True,
                                                 first_date=start_date.strftime('%Y-%m-%d'), 
                                                 last_date=end_date.strftime('%Y-%m-%d'))
                         self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                     else:
+                        self.logger.info(f"DEBUG: No period specified, creating AssetList without period filter")
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
                         self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
                 
