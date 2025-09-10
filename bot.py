@@ -5001,74 +5001,96 @@ class ShansAi:
     def _get_portfolio_basic_metrics(self, portfolio, symbols: list, weights: list, currency: str) -> str:
         """Get basic portfolio metrics for creation message"""
         try:
+            self.logger.info(f"=== STARTING PORTFOLIO BASIC METRICS CALCULATION ===")
             self.logger.info(f"Getting portfolio basic metrics for symbols: {symbols}")
             self.logger.info(f"Portfolio type: {type(portfolio)}")
             self.logger.info(f"Portfolio attributes: {dir(portfolio)}")
             
-            # Get portfolio returns data for manual calculations
-            self.logger.info("Getting portfolio returns data...")
-            returns = None
-            if hasattr(portfolio, 'returns'):
-                returns = portfolio.returns
-                self.logger.info(f"Got returns from portfolio.returns: {len(returns)} data points")
-            elif hasattr(portfolio, 'get_returns'):
-                returns = portfolio.get_returns()
-                self.logger.info(f"Got returns from portfolio.get_returns(): {len(returns)} data points")
-            else:
-                # Fallback: calculate returns from price data
-                if hasattr(portfolio, 'prices'):
-                    prices = portfolio.prices
-                    returns = prices.pct_change().dropna()
-                    self.logger.info(f"Calculated returns from prices: {len(returns)} data points")
-                else:
-                    self.logger.warning("No returns data available from portfolio")
+            # Check if pandas is available
+            try:
+                import pandas as pd
+                self.logger.info("Pandas import successful")
+            except ImportError as e:
+                self.logger.error(f"Pandas import failed: {e}")
+                raise e
             
-            # Calculate metrics manually using returns data
+            # Get metrics directly from portfolio object
+            self.logger.info("Getting metrics directly from portfolio object...")
+            
+            # Get CAGR
             cagr_value = None
-            volatility_value = None
-            sharpe_value = None
-            max_drawdown_value = None
-            
-            if returns is not None and len(returns) > 0:
-                self.logger.info("Calculating metrics manually from returns data...")
-                
-                # Calculate CAGR manually
+            if hasattr(portfolio, 'get_cagr'):
                 try:
-                    total_return = (1 + returns).prod() - 1
-                    years = self._calculate_portfolio_years(portfolio, returns)
-                    cagr_value = (1 + total_return) ** (1 / years) - 1
-                    self.logger.info(f"Calculated CAGR: {cagr_value:.4f}")
-                except Exception as e:
-                    self.logger.warning(f"Could not calculate CAGR: {e}")
-                
-                # Calculate volatility manually
-                try:
-                    volatility_value = returns.std() * (12 ** 0.5)  # Annualized for monthly data
-                    self.logger.info(f"Calculated volatility: {volatility_value:.4f}")
-                except Exception as e:
-                    self.logger.warning(f"Could not calculate volatility: {e}")
-                
-                # Calculate Sharpe ratio manually
-                try:
-                    if volatility_value is not None and volatility_value > 0:
-                        sharpe_value = (cagr_value - 0.02) / volatility_value
-                        self.logger.info(f"Calculated Sharpe ratio: {sharpe_value:.4f}")
+                    cagr = portfolio.get_cagr()
+                    self.logger.info(f"Got CAGR: {cagr}")
+                    # Handle Series - get first value
+                    if hasattr(cagr, 'iloc'):
+                        cagr_value = cagr.iloc[0]
+                    elif hasattr(cagr, '__getitem__'):
+                        cagr_value = cagr[0]
                     else:
-                        self.logger.warning("Cannot calculate Sharpe ratio: volatility is zero or None")
+                        cagr_value = cagr
+                    self.logger.info(f"Extracted CAGR value: {cagr_value}")
                 except Exception as e:
-                    self.logger.warning(f"Could not calculate Sharpe ratio: {e}")
-                
-                # Calculate max drawdown manually
+                    self.logger.warning(f"Could not get CAGR: {e}")
+            
+            # Get volatility (risk_annual)
+            volatility_value = None
+            if hasattr(portfolio, 'risk_annual'):
                 try:
-                    cumulative = (1 + returns).cumprod()
-                    running_max = cumulative.expanding().max()
-                    drawdown = (cumulative - running_max) / running_max
+                    risk_annual = portfolio.risk_annual
+                    self.logger.info(f"Got risk_annual: {risk_annual}")
+                    # Handle Series - get last value (most recent)
+                    if hasattr(risk_annual, 'iloc'):
+                        volatility_value = risk_annual.iloc[-1]
+                    elif hasattr(risk_annual, '__getitem__'):
+                        volatility_value = risk_annual[-1]
+                    else:
+                        volatility_value = risk_annual
+                    self.logger.info(f"Extracted volatility value: {volatility_value}")
+                except Exception as e:
+                    self.logger.warning(f"Could not get volatility: {e}")
+            
+            # Get Sharpe ratio
+            sharpe_value = None
+            if hasattr(portfolio, 'get_sharpe_ratio'):
+                try:
+                    sharpe = portfolio.get_sharpe_ratio()
+                    self.logger.info(f"Got Sharpe ratio: {sharpe}")
+                    # Handle Series if needed
+                    if hasattr(sharpe, 'iloc'):
+                        sharpe_value = sharpe.iloc[0]
+                    elif hasattr(sharpe, '__getitem__'):
+                        sharpe_value = sharpe[0]
+                    else:
+                        sharpe_value = sharpe
+                    self.logger.info(f"Extracted Sharpe ratio value: {sharpe_value}")
+                except Exception as e:
+                    self.logger.warning(f"Could not get Sharpe ratio: {e}")
+            
+            # Get max drawdown from wealth_index
+            max_drawdown_value = None
+            if hasattr(portfolio, 'wealth_index'):
+                try:
+                    wealth_index = portfolio.wealth_index
+                    self.logger.info(f"Got wealth_index: {len(wealth_index)} data points")
+                    
+                    # Calculate max drawdown from wealth_index
+                    if hasattr(wealth_index, 'iloc'):
+                        # If it's a DataFrame, get the first column (portfolio value)
+                        if hasattr(wealth_index, 'columns'):
+                            portfolio_values = wealth_index.iloc[:, 0]
+                        else:
+                            portfolio_values = wealth_index
+                    else:
+                        portfolio_values = wealth_index
+                    
+                    running_max = portfolio_values.expanding().max()
+                    drawdown = (portfolio_values - running_max) / running_max
                     max_drawdown_value = drawdown.min()
                     self.logger.info(f"Calculated max drawdown: {max_drawdown_value:.4f}")
                 except Exception as e:
                     self.logger.warning(f"Could not calculate max drawdown: {e}")
-            else:
-                self.logger.warning("No returns data available for manual calculations")
             
             # Build symbols with weights
             symbols_with_weights = []
@@ -5115,6 +5137,8 @@ class ShansAi:
             else:
                 metrics_text += f"• **Макс. просадка:** Недоступно\n"
             
+            self.logger.info(f"=== PORTFOLIO BASIC METRICS CALCULATION COMPLETED ===")
+            self.logger.info(f"Final metrics: CAGR={cagr_value}, Volatility={volatility_value}, Sharpe={sharpe_value}, MaxDD={max_drawdown_value}")
             return metrics_text
             
         except Exception as e:
