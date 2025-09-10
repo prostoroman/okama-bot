@@ -477,6 +477,100 @@ class TushareService:
             self.logger.error(f"Error searching symbols: {e}")
             return []
     
+    def search_symbols_english(self, query: str, exchange: str = None) -> List[Dict[str, Any]]:
+        """Search for symbols by English name or code"""
+        try:
+            results = []
+            
+            if exchange == 'HKEX':
+                # Search Hong Kong stocks with English names
+                try:
+                    df = self.pro.hk_basic(
+                        fields='ts_code,symbol,name,enname,area,industry,list_date'
+                    )
+                    
+                    if not query.isdigit():
+                        # Search by English name first, then by Chinese name if no English results
+                        english_results = df[df['enname'].str.contains(query, case=False, na=False)]
+                        if len(english_results) > 0:
+                            df = english_results
+                        else:
+                            # Fallback to Chinese name search
+                            df = df[df['name'].str.contains(query, case=False, na=False)]
+                    else:
+                        # Search by symbol
+                        df = df[df['symbol'].str.contains(query, na=False)]
+                    
+                    for _, row in df.head(15).iterrows():  # Increased limit
+                        # Use English name if available, otherwise Chinese name
+                        name = row.get('enname') if row.get('enname') and row.get('enname').strip() else row.get('name')
+                        if name:
+                            results.append({
+                                'symbol': f"{row['symbol']}.HK",
+                                'name': name,
+                                'exchange': 'HKEX',
+                                'industry': row.get('industry', ''),
+                                'list_date': row.get('list_date', '')
+                            })
+                except Exception as e:
+                    self.logger.warning(f"HKEX English search failed, falling back to basic search: {e}")
+                    # Fallback to basic search
+                    return self.search_symbols(query, exchange)
+                    
+            else:
+                # Search mainland China stocks with English names
+                try:
+                    df = self.pro.stock_basic(
+                        exchange='',
+                        list_status='L',
+                        fields='ts_code,symbol,name,enname,area,industry,list_date'
+                    )
+                    
+                    if not query.isdigit():
+                        # Search by English name first, then by Chinese name if no English results
+                        english_results = df[df['enname'].str.contains(query, case=False, na=False)]
+                        if len(english_results) > 0:
+                            df = english_results
+                        else:
+                            # Fallback to Chinese name search
+                            df = df[df['name'].str.contains(query, case=False, na=False)]
+                    else:
+                        # Search by symbol
+                        df = df[df['symbol'].str.contains(query, na=False)]
+                    
+                    for _, row in df.head(15).iterrows():  # Increased limit
+                        # Determine exchange from ts_code
+                        ts_code = row['ts_code']
+                        if ts_code.endswith('.SH'):
+                            exchange_suffix = 'SH'
+                        elif ts_code.endswith('.SZ'):
+                            exchange_suffix = 'SZ'
+                        elif ts_code.endswith('.BJ'):
+                            exchange_suffix = 'BJ'
+                        else:
+                            continue
+                        
+                        # Use English name if available, otherwise Chinese name
+                        name = row.get('enname') if row.get('enname') and row.get('enname').strip() else row.get('name')
+                        if name:
+                            results.append({
+                                'symbol': f"{row['symbol']}.{exchange_suffix}",
+                                'name': name,
+                                'exchange': exchange_suffix,
+                                'industry': row.get('industry', ''),
+                                'list_date': row.get('list_date', '')
+                            })
+                except Exception as e:
+                    self.logger.warning(f"Mainland China English search failed, falling back to basic search: {e}")
+                    # Fallback to basic search
+                    return self.search_symbols(query, exchange)
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Error searching symbols with English names: {e}")
+            return []
+    
     def get_exchange_symbols(self, exchange: str) -> List[Dict[str, Any]]:
         """Get all symbols for a specific exchange with detailed information"""
         try:

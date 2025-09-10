@@ -2093,12 +2093,18 @@ class ShansAi:
                 )
                 return
             
+            # Clean query from special characters and validate length
             query = ' '.join(context.args)
-            if len(query.strip()) < 2:
-                await self._send_message_safe(update, "❌ Запрос должен содержать минимум 2 символа")
+            # Remove special characters except letters, numbers, spaces, and basic punctuation
+            import re
+            cleaned_query = re.sub(r'[^\w\s\-\.]', '', query)
+            cleaned_query = cleaned_query.strip()
+            
+            if len(cleaned_query) < 3:
+                await self._send_message_safe(update, "❌ Запрос должен содержать минимум 3 символа")
                 return
             
-            await self._send_message_safe(update, f"🔍 Ищу активы по запросу: `{query}`...")
+            await self._send_message_safe(update, f"🔍 Ищу активы по запросу: `{cleaned_query}`...")
             
             # Search in okama
             okama_results = []
@@ -2106,32 +2112,30 @@ class ShansAi:
             
             try:
                 import okama as ok
-                search_result = ok.search(query)
+                search_result = ok.search(cleaned_query)
                 if not search_result.empty:
-                    for _, row in search_result.head(20).iterrows():  # Limit to 20 results
+                    for _, row in search_result.head(30).iterrows():  # Increased limit to 30 results
                         symbol = row.get('symbol', '')
                         name = row.get('name', '')
                         if symbol and name:
                             okama_results.append({
                                 'symbol': symbol,
-                                'name': name,
-                                'source': 'okama'
+                                'name': name
                             })
             except Exception as e:
                 self.logger.warning(f"Okama search error: {e}")
             
-            # Search in tushare for Chinese exchanges
+            # Search in tushare for Chinese exchanges with English names
             try:
                 if self.tushare_service:
                     # Search in all Chinese exchanges
                     for exchange in ['SSE', 'SZSE', 'BSE', 'HKEX']:
                         try:
-                            exchange_results = self.tushare_service.search_symbols(query, exchange)
-                            for result in exchange_results[:5]:  # Limit to 5 per exchange
+                            exchange_results = self.tushare_service.search_symbols_english(cleaned_query, exchange)
+                            for result in exchange_results[:10]:  # Increased limit to 10 per exchange
                                 tushare_results.append({
                                     'symbol': result['symbol'],
-                                    'name': result['name'],
-                                    'source': f'tushare_{exchange}'
+                                    'name': result['name']
                                 })
                         except Exception as e:
                             self.logger.warning(f"Tushare search error for {exchange}: {e}")
@@ -2143,7 +2147,7 @@ class ShansAi:
             
             if not all_results:
                 await self._send_message_safe(update, 
-                    f"❌ По запросу `{query}` ничего не найдено.\n\n"
+                    f"❌ По запросу `{cleaned_query}` ничего не найдено.\n\n"
                     "**Попробуйте:**\n"
                     "• Использовать английское название\n"
                     "• Использовать тикер (например, AAPL вместо Apple)\n"
@@ -2153,19 +2157,18 @@ class ShansAi:
                 return
             
             # Format results in markdown table format similar to /list namespace
-            response = f"🔍 **Результаты поиска по запросу:** `{query}`\n\n"
+            response = f"🔍 **Результаты поиска по запросу:** `{cleaned_query}`\n\n"
             response += f"Найдено активов: **{len(all_results)}**\n\n"
             
             # Create table using tabulate or fallback to simple format
             if TABULATE_AVAILABLE and len(all_results) > 0:
-                headers = ["Тикер", "Название", "Источник"]
+                headers = ["Тикер", "Название"]
                 table_data = []
                 
-                for result in all_results[:30]:  # Limit to 30 results for display
+                for result in all_results[:50]:  # Increased limit to 50 results for display
                     table_data.append([
                         f"`{result['symbol']}`",
-                        result['name'][:50] + "..." if len(result['name']) > 50 else result['name'],
-                        result['source']
+                        result['name'][:60] + "..." if len(result['name']) > 60 else result['name']
                     ])
                 
                 # Use plain format for best Telegram display
@@ -2173,15 +2176,15 @@ class ShansAi:
                 response += f"```\n{table}\n```\n\n"
             else:
                 # Fallback to simple text format
-                response += "Тикер | Название | Источник\n"
-                response += "--- | --- | ---\n"
-                for result in all_results[:30]:  # Limit to 30 results for display
-                    name = result['name'][:50] + "..." if len(result['name']) > 50 else result['name']
-                    response += f"`{result['symbol']}` | {name} | {result['source']}\n"
+                response += "Тикер | Название\n"
+                response += "--- | ---\n"
+                for result in all_results[:50]:  # Increased limit to 50 results for display
+                    name = result['name'][:60] + "..." if len(result['name']) > 60 else result['name']
+                    response += f"`{result['symbol']}` | {name}\n"
                 response += "\n"
             
-            if len(all_results) > 30:
-                response += f"*Показаны первые 30 из {len(all_results)} результатов*\n\n"
+            if len(all_results) > 50:
+                response += f"*Показаны первые 50 из {len(all_results)} результатов*\n\n"
             
             response += "💡 Используйте найденный тикер в командах `/info`, `/compare` или `/portfolio`"
             
