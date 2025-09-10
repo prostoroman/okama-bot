@@ -4886,55 +4886,90 @@ class ShansAi:
     def _get_portfolio_basic_metrics(self, portfolio, symbols: list, weights: list, currency: str) -> str:
         """Get basic portfolio metrics for creation message"""
         try:
-            # Get basic metrics
-            cagr = portfolio.get_cagr()
-            volatility = portfolio.volatility
+            self.logger.info(f"Getting portfolio basic metrics for symbols: {symbols}")
+            self.logger.info(f"Portfolio type: {type(portfolio)}")
+            self.logger.info(f"Portfolio attributes: {dir(portfolio)}")
             
-            # Handle CAGR which might be a Series
-            if hasattr(cagr, '__iter__') and not isinstance(cagr, str):
-                if hasattr(cagr, 'iloc'):
-                    cagr_value = cagr.iloc[0]
-                elif hasattr(cagr, '__getitem__'):
-                    cagr_value = cagr[0]
-                else:
-                    cagr_value = list(cagr)[0]
-            else:
-                cagr_value = cagr
+            # Get basic metrics with safe handling
+            self.logger.info("Getting CAGR...")
+            cagr_value = None
+            if hasattr(portfolio, 'get_cagr'):
+                try:
+                    cagr = portfolio.get_cagr()
+                    self.logger.info(f"CAGR type: {type(cagr)}, value: {cagr}")
+                    
+                    # Handle CAGR which might be a Series
+                    if hasattr(cagr, '__iter__') and not isinstance(cagr, str):
+                        if hasattr(cagr, 'iloc'):
+                            cagr_value = cagr.iloc[0]
+                        elif hasattr(cagr, '__getitem__'):
+                            cagr_value = cagr[0]
+                        else:
+                            cagr_value = list(cagr)[0]
+                    else:
+                        cagr_value = cagr
+                except Exception as e:
+                    self.logger.warning(f"Could not get CAGR: {e}")
             
-            # Handle volatility which might be a Series
-            if hasattr(volatility, '__iter__') and not isinstance(volatility, str):
-                if hasattr(volatility, 'iloc'):
-                    volatility_value = volatility.iloc[0]
-                elif hasattr(volatility, '__getitem__'):
-                    volatility_value = volatility[0]
-                else:
-                    volatility_value = list(volatility)[0]
-            else:
-                volatility_value = volatility
+            self.logger.info("Getting volatility...")
+            volatility_value = None
+            if hasattr(portfolio, 'volatility_annual'):
+                try:
+                    volatility = portfolio.volatility_annual
+                    self.logger.info(f"Volatility type: {type(volatility)}, value: {volatility}")
+                    
+                    # Handle volatility which might be a Series
+                    if hasattr(volatility, '__iter__') and not isinstance(volatility, str):
+                        if hasattr(volatility, 'iloc'):
+                            volatility_value = volatility.iloc[0]
+                        elif hasattr(volatility, '__getitem__'):
+                            volatility_value = volatility[0]
+                        else:
+                            volatility_value = list(volatility)[0]
+                    else:
+                        volatility_value = volatility
+                except Exception as e:
+                    self.logger.warning(f"Could not get volatility: {e}")
             
             # Get Sharpe ratio
-            sharpe_ratio = portfolio.sharpe_ratio
-            if hasattr(sharpe_ratio, '__iter__') and not isinstance(sharpe_ratio, str):
-                if hasattr(sharpe_ratio, 'iloc'):
-                    sharpe_value = sharpe_ratio.iloc[0]
-                elif hasattr(sharpe_ratio, '__getitem__'):
-                    sharpe_value = sharpe_ratio[0]
-                else:
-                    sharpe_value = list(sharpe_ratio)[0]
-            else:
-                sharpe_value = sharpe_ratio
+            self.logger.info("Getting Sharpe ratio...")
+            sharpe_value = None
+            if hasattr(portfolio, 'sharpe_ratio'):
+                try:
+                    sharpe_ratio = portfolio.sharpe_ratio
+                    self.logger.info(f"Sharpe ratio type: {type(sharpe_ratio)}, value: {sharpe_ratio}")
+                    
+                    if hasattr(sharpe_ratio, '__iter__') and not isinstance(sharpe_ratio, str):
+                        if hasattr(sharpe_ratio, 'iloc'):
+                            sharpe_value = sharpe_ratio.iloc[0]
+                        elif hasattr(sharpe_ratio, '__getitem__'):
+                            sharpe_value = sharpe_ratio[0]
+                        else:
+                            sharpe_value = list(sharpe_ratio)[0]
+                    else:
+                        sharpe_value = sharpe_ratio
+                except Exception as e:
+                    self.logger.warning(f"Could not get Sharpe ratio: {e}")
             
             # Get maximum drawdown
-            max_drawdown = portfolio.max_drawdown
-            if hasattr(max_drawdown, '__iter__') and not isinstance(max_drawdown, str):
-                if hasattr(max_drawdown, 'iloc'):
-                    max_drawdown_value = max_drawdown.iloc[0]
-                elif hasattr(max_drawdown, '__getitem__'):
-                    max_drawdown_value = max_drawdown[0]
-                else:
-                    max_drawdown_value = list(max_drawdown)[0]
-            else:
-                max_drawdown_value = max_drawdown
+            self.logger.info("Getting maximum drawdown...")
+            max_drawdown_value = None
+            if hasattr(portfolio, 'max_drawdown'):
+                try:
+                    max_drawdown = portfolio.max_drawdown
+                    self.logger.info(f"Max drawdown type: {type(max_drawdown)}, value: {max_drawdown}")
+                    
+                    if hasattr(max_drawdown, '__iter__') and not isinstance(max_drawdown, str):
+                        if hasattr(max_drawdown, 'iloc'):
+                            max_drawdown_value = max_drawdown.iloc[0]
+                        elif hasattr(max_drawdown, '__getitem__'):
+                            max_drawdown_value = max_drawdown[0]
+                        else:
+                            max_drawdown_value = list(max_drawdown)[0]
+                    else:
+                        max_drawdown_value = max_drawdown
+                except Exception as e:
+                    self.logger.warning(f"Could not get max drawdown: {e}")
             
             # Build symbols with weights
             symbols_with_weights = []
@@ -4959,15 +4994,35 @@ class ShansAi:
             metrics_text += f"• **Период ребалансировки:** {rebalancing_period}\n"
             if period_info:
                 metrics_text += f"• **Период:** {period_info}\n"
-            metrics_text += f"• **CAGR (Среднегодовая доходность):** {cagr_value:.2%}\n"
-            metrics_text += f"• **Волатильность:** {volatility_value:.2%}\n"
-            metrics_text += f"• **Коэфф. Шарпа:** {sharpe_value:.2f}\n"
-            metrics_text += f"• **Макс. просадка:** {max_drawdown_value:.2%}\n"
+            
+            # Format metrics with proper handling of None values
+            if cagr_value is not None:
+                metrics_text += f"• **CAGR (Среднегодовая доходность):** {cagr_value:.2%}\n"
+            else:
+                metrics_text += f"• **CAGR (Среднегодовая доходность):** Недоступно\n"
+                
+            if volatility_value is not None:
+                metrics_text += f"• **Волатильность:** {volatility_value:.2%}\n"
+            else:
+                metrics_text += f"• **Волатильность:** Недоступно\n"
+                
+            if sharpe_value is not None:
+                metrics_text += f"• **Коэфф. Шарпа:** {sharpe_value:.2f}\n"
+            else:
+                metrics_text += f"• **Коэфф. Шарпа:** Недоступно\n"
+                
+            if max_drawdown_value is not None:
+                metrics_text += f"• **Макс. просадка:** {max_drawdown_value:.2%}\n"
+            else:
+                metrics_text += f"• **Макс. просадка:** Недоступно\n"
             
             return metrics_text
             
         except Exception as e:
-            self.logger.warning(f"Could not get portfolio basic metrics: {e}")
+            self.logger.error(f"Could not get portfolio basic metrics: {e}")
+            self.logger.error(f"Error type: {type(e)}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             # Fallback to basic info
             symbols_with_weights = []
             for i, symbol in enumerate(symbols):
