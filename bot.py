@@ -1384,6 +1384,7 @@ class ShansAi:
 `/portfolio BER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` — создание и анализ портфеля (веса, риски, доходность, прогнозы)
 `/my` — просмотр сохраненных портфелей
 `/list` — доступные для анализа данные или символы в пространстве
+`/search Apple` — поиск активов по названию или ISIN в базе okama и tushare
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -2075,6 +2076,120 @@ class ShansAi:
             self.logger.error(f"Error in namespace command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
+    async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /search command for searching assets by name or ISIN"""
+        try:
+            if not context.args:
+                await self._send_message_safe(update, 
+                    "🔍 **Поиск активов**\n\n"
+                    "Используйте команду `/search <запрос>` для поиска активов по названию или ISIN.\n\n"
+                    "**Примеры:**\n"
+                    "• `/search Apple` - найти акции Apple\n"
+                    "• `/search SBER` - найти Сбербанк\n"
+                    "• `/search US0378331005` - найти по ISIN\n"
+                    "• `/search золото` - найти золото\n"
+                    "• `/search SP500` - найти индекс S&P 500\n\n"
+                    "Поиск работает в базе данных okama и tushare."
+                )
+                return
+            
+            query = ' '.join(context.args)
+            if len(query.strip()) < 2:
+                await self._send_message_safe(update, "❌ Запрос должен содержать минимум 2 символа")
+                return
+            
+            await self._send_message_safe(update, f"🔍 Ищу активы по запросу: `{query}`...")
+            
+            # Search in okama
+            okama_results = []
+            tushare_results = []
+            
+            try:
+                import okama as ok
+                search_result = ok.search(query)
+                if not search_result.empty:
+                    for _, row in search_result.head(20).iterrows():  # Limit to 20 results
+                        symbol = row.get('symbol', '')
+                        name = row.get('name', '')
+                        if symbol and name:
+                            okama_results.append({
+                                'symbol': symbol,
+                                'name': name,
+                                'source': 'okama'
+                            })
+            except Exception as e:
+                self.logger.warning(f"Okama search error: {e}")
+            
+            # Search in tushare for Chinese exchanges
+            try:
+                if self.tushare_service:
+                    # Search in all Chinese exchanges
+                    for exchange in ['SSE', 'SZSE', 'BSE', 'HKEX']:
+                        try:
+                            exchange_results = self.tushare_service.search_symbols(query, exchange)
+                            for result in exchange_results[:5]:  # Limit to 5 per exchange
+                                tushare_results.append({
+                                    'symbol': result['symbol'],
+                                    'name': result['name'],
+                                    'source': f'tushare_{exchange}'
+                                })
+                        except Exception as e:
+                            self.logger.warning(f"Tushare search error for {exchange}: {e}")
+            except Exception as e:
+                self.logger.warning(f"Tushare search error: {e}")
+            
+            # Combine and format results
+            all_results = okama_results + tushare_results
+            
+            if not all_results:
+                await self._send_message_safe(update, 
+                    f"❌ По запросу `{query}` ничего не найдено.\n\n"
+                    "**Попробуйте:**\n"
+                    "• Использовать английское название\n"
+                    "• Использовать тикер (например, AAPL вместо Apple)\n"
+                    "• Проверить правильность написания\n"
+                    "• Использовать `/list` для просмотра доступных активов"
+                )
+                return
+            
+            # Format results in markdown table format similar to /list namespace
+            response = f"🔍 **Результаты поиска по запросу:** `{query}`\n\n"
+            response += f"Найдено активов: **{len(all_results)}**\n\n"
+            
+            # Create table using tabulate or fallback to simple format
+            if TABULATE_AVAILABLE and len(all_results) > 0:
+                headers = ["Тикер", "Название", "Источник"]
+                table_data = []
+                
+                for result in all_results[:30]:  # Limit to 30 results for display
+                    table_data.append([
+                        f"`{result['symbol']}`",
+                        result['name'][:50] + "..." if len(result['name']) > 50 else result['name'],
+                        result['source']
+                    ])
+                
+                # Use plain format for best Telegram display
+                table = tabulate.tabulate(table_data, headers=headers, tablefmt="plain")
+                response += f"```\n{table}\n```\n\n"
+            else:
+                # Fallback to simple text format
+                response += "Тикер | Название | Источник\n"
+                response += "--- | --- | ---\n"
+                for result in all_results[:30]:  # Limit to 30 results for display
+                    name = result['name'][:50] + "..." if len(result['name']) > 50 else result['name']
+                    response += f"`{result['symbol']}` | {name} | {result['source']}\n"
+                response += "\n"
+            
+            if len(all_results) > 30:
+                response += f"*Показаны первые 30 из {len(all_results)} результатов*\n\n"
+            
+            response += "💡 Используйте найденный тикер в командах `/info`, `/compare` или `/portfolio`"
+            
+            await self._send_message_safe(update, response)
+            
+        except Exception as e:
+            self.logger.error(f"Error in search command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка поиска: {str(e)}")
 
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
@@ -10883,6 +10998,7 @@ class ShansAi:
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
+        application.add_handler(CommandHandler("search", self.search_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))
