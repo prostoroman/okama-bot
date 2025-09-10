@@ -1341,8 +1341,8 @@ class ShansAi:
             self.logger.error(f"Error creating correlation matrix: {e}")
             await self._send_message_safe(update, f"⚠️ Не удалось создать корреляционную матрицу: {str(e)}")
     
-    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /start command with full help"""
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /help command with full help"""
         user = update.effective_user
         # Escape user input to prevent Markdown parsing issues
         user_name = user.first_name or "User"
@@ -1355,7 +1355,7 @@ class ShansAi:
 • Анализ портфеля (веса, риски, доходность, прогнозы)
 
 Основные команды:
-/start — эта справка
+/help — эта справка
 /info [тикер] [период] — базовая информация об активе с графиком и анализом
 /compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
 /portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
@@ -10764,7 +10764,7 @@ class ShansAi:
         application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
         
         # Add handlers
-        application.add_handler(CommandHandler("start", self.start_command))
+        application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
         application.add_handler(CommandHandler("compare", self.compare_command))

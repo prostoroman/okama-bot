@@ -580,6 +580,24 @@ class ChartStyles:
             else:
                 column_name = ", ".join(symbols)
             data = pd.DataFrame({column_name: data})
+        elif isinstance(data, pd.DataFrame):
+            # If it's already a DataFrame, rename the first column to our portfolio name
+            if len(data.columns) > 0:
+                if portfolio_name:
+                    column_name = portfolio_name
+                elif weights:
+                    asset_with_weights = []
+                    for i, symbol in enumerate(symbols):
+                        symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                        weight = weights[i] if i < len(weights) else 0.0
+                        asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                    column_name = ", ".join(asset_with_weights)
+                else:
+                    column_name = ", ".join(symbols)
+                
+                # Rename the first column (portfolio column) to our desired name
+                data = data.copy()
+                data.columns = [column_name] + list(data.columns[1:])
         
         ylabel = ''  # No y-axis label
         xlabel = ''  # No x-axis label
