@@ -623,6 +623,58 @@ class ShansAi:
         }
         return inflation_mapping.get(currency, 'US.INFL')
     
+    def _parse_currency_and_period(self, args: List[str]) -> tuple[List[str], Optional[str], Optional[str]]:
+        """
+        Parse currency and period parameters from command arguments.
+        
+        Args:
+            args: List of command arguments
+            
+        Returns:
+            Tuple of (symbols, currency, period) where:
+            - symbols: List of symbols without currency/period parameters
+            - currency: Currency code (e.g., 'USD', 'RUB') or None
+            - period: Period string (e.g., '5Y', '10Y') or None
+        """
+        if not args:
+            return [], None, None
+            
+        # Valid currency codes
+        valid_currencies = {'USD', 'RUB', 'EUR', 'GBP', 'CNY', 'HKD', 'JPY'}
+        
+        # Valid period patterns (e.g., '5Y', '10Y', '1Y', '2Y', etc.)
+        import re
+        period_pattern = re.compile(r'^(\d+)Y$', re.IGNORECASE)
+        
+        symbols = []
+        currency = None
+        period = None
+        
+        for arg in args:
+            arg_upper = arg.upper()
+            
+            # Check if it's a currency code
+            if arg_upper in valid_currencies:
+                if currency is None:
+                    currency = arg_upper
+                else:
+                    self.logger.warning(f"Multiple currencies specified, using first: {currency}")
+                continue
+            
+            # Check if it's a period (e.g., '5Y', '10Y')
+            period_match = period_pattern.match(arg)
+            if period_match:
+                if period is None:
+                    period = arg_upper
+                else:
+                    self.logger.warning(f"Multiple periods specified, using first: {period}")
+                continue
+            
+            # If it's neither currency nor period, it's a symbol
+            symbols.append(arg)
+        
+        return symbols, currency, period
+    
     def _is_chinese_symbol(self, symbol: str) -> bool:
         """
         Проверить, является ли символ китайским
@@ -2005,12 +2057,16 @@ class ShansAi:
                     
                 help_text += "\n\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
+                help_text += "• `SBER.MOEX LKOH.MOEX RUB 5Y` - сравнение с валютой RUB и периодом 5 лет\n"
                 help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (гибридный подход)\n"
                 help_text += "• `600000.SH 000001.SZ` - сравнение китайских акций (гибридный подход)\n"
                 help_text += "• `portfolio_5642.PF portfolio_5642.PF` - сравнение двух портефелей\n"
                 help_text += "• `portfolio_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
                 help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
-                help_text += "💡 Первый актив в списке определяет базовую валюту, если не определено→USD\n\n"
+                help_text += "💡 Первый актив в списке определяет базовую валюту, если не определено→USD\n"
+                help_text += "💡 Можно указать валюту и период в конце: `символы ВАЛЮТА ПЕРИОД`\n"
+                help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
+                help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n\n"
                 help_text += "💬 Введите символы для сравнения:"
                 
                 await self._send_message_safe(update, help_text)
@@ -2019,9 +2075,12 @@ class ShansAi:
                 self._update_user_context(user_id, waiting_for_compare=True)
                 return
 
+            # Parse currency and period parameters from command arguments
+            symbols, specified_currency, specified_period = self._parse_currency_and_period(context.args)
+            
             # Extract symbols from command arguments
             # Support multiple formats: space-separated, comma-separated, and comma+space
-            raw_args = self.clean_symbol(' '.join(context.args))  # Join all arguments into one string
+            raw_args = self.clean_symbol(' '.join(symbols))  # Join all arguments into one string
             
             # Enhanced parsing logic for multiple formats
             if ',' in raw_args:
@@ -2200,41 +2259,46 @@ class ShansAi:
 
             # Create comparison using okama
             
-            # Determine base currency from the first asset
-            first_symbol = symbols[0]
-            currency_info = ""
-            try:
-                # Extract the original symbol from the description (remove the asset list part)
-                original_first_symbol = first_symbol.split(' (')[0] if ' (' in first_symbol else first_symbol
-                
-                # Check if first symbol is a portfolio symbol
-                is_first_portfolio = original_first_symbol in saved_portfolios
-                
-                if not is_first_portfolio:
-                    # Check case-insensitive match for portfolio symbols
-                    for portfolio_key in saved_portfolios.keys():
-                        if (original_first_symbol.lower() == portfolio_key.lower() or
-                            original_first_symbol.upper() == portfolio_key.upper()):
-                            original_first_symbol = portfolio_key
-                            is_first_portfolio = True
-                            break
-                
-                if is_first_portfolio:
-                    # First symbol is a portfolio, use its currency
-                    portfolio_info = saved_portfolios[original_first_symbol]
-                    currency = portfolio_info.get('currency', 'USD')
-                    currency_info = f"автоматически определена по портфелю ({original_first_symbol})"
-                    self.logger.info(f"Using portfolio currency for {original_first_symbol}: {currency}")
-                else:
-                    # Use our new currency detection function
-                    currency, currency_info = self._get_currency_by_symbol(first_symbol)
+            # Determine base currency - use specified currency if provided, otherwise auto-detect
+            if specified_currency:
+                currency = specified_currency
+                currency_info = f"указана пользователем ({specified_currency})"
+                self.logger.info(f"Using user-specified currency: {currency}")
+            else:
+                # Auto-detect currency from the first asset
+                first_symbol = symbols[0]
+                try:
+                    # Extract the original symbol from the description (remove the asset list part)
+                    original_first_symbol = first_symbol.split(' (')[0] if ' (' in first_symbol else first_symbol
                     
-                    self.logger.info(f"Auto-detected currency for {first_symbol}: {currency}")
-                
-            except Exception as e:
-                self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
-                currency = "USD"
-                currency_info = "по умолчанию (USD)"
+                    # Check if first symbol is a portfolio symbol
+                    is_first_portfolio = original_first_symbol in saved_portfolios
+                    
+                    if not is_first_portfolio:
+                        # Check case-insensitive match for portfolio symbols
+                        for portfolio_key in saved_portfolios.keys():
+                            if (original_first_symbol.lower() == portfolio_key.lower() or
+                                original_first_symbol.upper() == portfolio_key.upper()):
+                                original_first_symbol = portfolio_key
+                                is_first_portfolio = True
+                                break
+                    
+                    if is_first_portfolio:
+                        # First symbol is a portfolio, use its currency
+                        portfolio_info = saved_portfolios[original_first_symbol]
+                        currency = portfolio_info.get('currency', 'USD')
+                        currency_info = f"автоматически определена по портфелю ({original_first_symbol})"
+                        self.logger.info(f"Using portfolio currency for {original_first_symbol}: {currency}")
+                    else:
+                        # Use our new currency detection function
+                        currency, currency_info = self._get_currency_by_symbol(first_symbol)
+                        
+                        self.logger.info(f"Auto-detected currency for {first_symbol}: {currency}")
+                    
+                except Exception as e:
+                    self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
+                    currency = "USD"
+                    currency_info = "по умолчанию (USD)"
             
             try:
                 # Check if we have portfolios in the comparison
@@ -2359,8 +2423,20 @@ class ShansAi:
                         self.logger.info(f"Creating AssetList with {len(assets_for_comparison)} assets/portfolios")
                         # Add inflation support for Chinese symbols
                         inflation_ticker = self._get_inflation_ticker_by_currency(currency)
-                        comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
-                        self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
+                        
+                        # Apply period filter if specified
+                        if specified_period:
+                            years = int(specified_period[:-1])  # Extract number from '5Y'
+                            from datetime import datetime, timedelta
+                            end_date = datetime.now()
+                            start_date = end_date - timedelta(days=years * 365)
+                            comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True, 
+                                                    start_date=start_date.strftime('%Y-%m-%d'), 
+                                                    end_date=end_date.strftime('%Y-%m-%d'))
+                            self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker})")
+                        else:
+                            comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
+                            self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
                     except Exception as asset_list_error:
                         self.logger.error(f"Error creating AssetList: {asset_list_error}")
                         await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(asset_list_error)}")
@@ -2403,8 +2479,20 @@ class ShansAi:
                     
                     # Add inflation support for non-Chinese symbols
                     inflation_ticker = self._get_inflation_ticker_by_currency(currency)
-                    comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
-                    self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
+                    
+                    # Apply period filter if specified
+                    if specified_period:
+                        years = int(specified_period[:-1])  # Extract number from '5Y'
+                        from datetime import datetime, timedelta
+                        end_date = datetime.now()
+                        start_date = end_date - timedelta(days=years * 365)
+                        comparison = ok.AssetList(symbols, ccy=currency, inflation=True,
+                                                start_date=start_date.strftime('%Y-%m-%d'), 
+                                                end_date=end_date.strftime('%Y-%m-%d'))
+                        self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker})")
+                    else:
+                        comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
+                        self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
                 
                 # Store context for buttons - use clean portfolio symbols for current_symbols
                 clean_symbols = []
@@ -2457,6 +2545,8 @@ class ShansAi:
                 # Create caption
                 caption = f"Сравнение {', '.join(symbols)}\n\n"
                 caption += f"Валюта: {currency} ({currency_info})\n"
+                if specified_period:
+                    caption += f"Период: {specified_period}\n"
                 
                 # Add inflation information for Chinese symbols
                 if currency in ['CNY', 'HKD']:
@@ -2656,9 +2746,13 @@ class ShansAi:
                     f"Примеры:\n"
                     f"• SPY.US:0.5 QQQ.US:0.3 BND.US:0.2\n"
                     f"• SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3\n"
+                    f"• SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y - с валютой USD и периодом 10 лет\n"
                     f"• VOO.US:0.6 GC.COMM:0.2 BND.US:0.2\n\n"
                     f"💡Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
                     f"💡Базовая валюта определяется по первому символу\n"
+                    f"💡Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`\n"
+                    f"💡Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
+                    f"💡Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n"
                 )
                 
                 # Set flag to wait for portfolio input
@@ -2671,8 +2765,11 @@ class ShansAi:
                 self.logger.info(f"Updated context waiting_for_portfolio: {updated_context.get('waiting_for_portfolio', False)}")
                 return
 
+            # Parse currency and period parameters from command arguments
+            symbols, specified_currency, specified_period = self._parse_currency_and_period(context.args)
+            
             # Extract symbols and weights from command arguments
-            raw_args = ' '.join(context.args)
+            raw_args = ' '.join(symbols)
             portfolio_data = []
             
             for arg in raw_args.split():
@@ -2745,43 +2842,48 @@ class ShansAi:
             self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
             self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
             
-            # Determine base currency from the first asset
-            first_symbol = symbols[0]
-            currency_info = ""
-            try:
-                if '.' in first_symbol:
-                    namespace = first_symbol.split('.')[1]
-                    if namespace == 'MOEX':
-                        currency = "RUB"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'US':
-                        currency = "USD"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'LSE':
-                        currency = "GBP"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'FX':
-                        currency = "USD"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'COMM':
-                        currency = "USD"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                    elif namespace == 'INDX':
-                        currency = "USD"
-                        currency_info = f"автоматически определена по первому активу ({first_symbol})"
+            # Determine base currency - use specified currency if provided, otherwise auto-detect
+            if specified_currency:
+                currency = specified_currency
+                currency_info = f"указана пользователем ({specified_currency})"
+                self.logger.info(f"Using user-specified currency for portfolio: {currency}")
+            else:
+                # Auto-detect currency from the first asset
+                first_symbol = symbols[0]
+                try:
+                    if '.' in first_symbol:
+                        namespace = first_symbol.split('.')[1]
+                        if namespace == 'MOEX':
+                            currency = "RUB"
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'US':
+                            currency = "USD"
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'LSE':
+                            currency = "GBP"
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'FX':
+                            currency = "USD"
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'COMM':
+                            currency = "USD"
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        elif namespace == 'INDX':
+                            currency = "USD"
+                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                        else:
+                            currency = "USD"
+                            currency_info = "по умолчанию (USD)"
                     else:
                         currency = "USD"
                         currency_info = "по умолчанию (USD)"
-                else:
+                    
+                    self.logger.info(f"Auto-detected currency for portfolio {first_symbol}: {currency}")
+                    
+                except Exception as e:
+                    self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
                     currency = "USD"
                     currency_info = "по умолчанию (USD)"
-                
-                self.logger.info(f"Auto-detected currency for portfolio {first_symbol}: {currency}")
-                
-            except Exception as e:
-                self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
-                currency = "USD"
-                currency_info = "по умолчанию (USD)"
             
             try:
                 # Final validation of weights before creating portfolio
@@ -2793,13 +2895,25 @@ class ShansAi:
                     )
                     return
                 
-                # Create Portfolio with detected currency
+                # Create Portfolio with detected currency and period
                 try:
                     self.logger.info(f"DEBUG: About to create ok.Portfolio with symbols={symbols}, ccy={currency}, weights={weights}")
                     self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
                     self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
-                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
-                    self.logger.info(f"DEBUG: Successfully created portfolio")
+                    
+                    # Apply period filter if specified
+                    if specified_period:
+                        years = int(specified_period[:-1])  # Extract number from '5Y'
+                        from datetime import datetime, timedelta
+                        end_date = datetime.now()
+                        start_date = end_date - timedelta(days=years * 365)
+                        portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                               start_date=start_date.strftime('%Y-%m-%d'), 
+                                               end_date=end_date.strftime('%Y-%m-%d'))
+                        self.logger.info(f"DEBUG: Successfully created portfolio with period {specified_period}")
+                    else:
+                        portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                        self.logger.info(f"DEBUG: Successfully created portfolio")
                 except Exception as e:
                     self.logger.error(f"DEBUG: Error creating portfolio: {e}")
                     self.logger.error(f"DEBUG: Error type: {type(e)}")
@@ -3382,6 +3496,8 @@ class ShansAi:
                 
                 # Add portfolio symbol display
                 portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}`\n"
+                if specified_period:
+                    portfolio_text += f"📅 Период: {specified_period}\n"
                 portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
                 
                 # Add buttons in 2 columns
