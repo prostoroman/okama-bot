@@ -2434,8 +2434,8 @@ class ShansAi:
                             end_date = datetime.now()
                             start_date = end_date - timedelta(days=years * 365)
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True, 
-                                                    start_date=start_date.strftime('%Y-%m-%d'), 
-                                                    end_date=end_date.strftime('%Y-%m-%d'))
+                                                    firstdate=start_date.strftime('%Y-%m-%d'), 
+                                                    lastdate=end_date.strftime('%Y-%m-%d'))
                             self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker})")
                         else:
                             comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
@@ -2490,8 +2490,8 @@ class ShansAi:
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True,
-                                                start_date=start_date.strftime('%Y-%m-%d'), 
-                                                end_date=end_date.strftime('%Y-%m-%d'))
+                                                firstdate=start_date.strftime('%Y-%m-%d'), 
+                                                lastdate=end_date.strftime('%Y-%m-%d'))
                         self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker})")
                     else:
                         comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
@@ -2913,8 +2913,8 @@ class ShansAi:
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
-                                               start_date=start_date.strftime('%Y-%m-%d'), 
-                                               end_date=end_date.strftime('%Y-%m-%d'))
+                                               firstdate=start_date.strftime('%Y-%m-%d'), 
+                                               lastdate=end_date.strftime('%Y-%m-%d'))
                         self.logger.info(f"DEBUG: Successfully created portfolio with period {specified_period}")
                     else:
                         portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
@@ -3489,8 +3489,8 @@ class ShansAi:
                     end_date = datetime.now()
                     start_date = end_date - timedelta(days=years * 365)
                     portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
-                                           start_date=start_date.strftime('%Y-%m-%d'), 
-                                           end_date=end_date.strftime('%Y-%m-%d'))
+                                           firstdate=start_date.strftime('%Y-%m-%d'), 
+                                           lastdate=end_date.strftime('%Y-%m-%d'))
                     self.logger.info(f"Created portfolio with period {specified_period}")
                 else:
                     portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
