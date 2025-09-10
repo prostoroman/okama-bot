@@ -391,11 +391,14 @@ class ShansAi:
 
 
     def get_random_examples(self, count: int = 3) -> list:
-        """Get random examples from known assets"""
+        """Get random examples from known assets, excluding Chinese assets"""
         import random
         all_assets = []
-        for assets in self.known_assets.values():
-            all_assets.extend(assets)
+        # Exclude Chinese assets (SSE, SZSE, BSE)
+        excluded_categories = ['SSE', 'SZSE', 'BSE']
+        for category, assets in self.known_assets.items():
+            if category not in excluded_categories:
+                all_assets.extend(assets)
         return random.sample(all_assets, min(count, len(all_assets)))
 
     async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation") -> None:
@@ -2735,25 +2738,27 @@ class ShansAi:
         """Handle /portfolio command for creating portfolio with weights"""
         try:
             if not context.args:
-                # Get random examples for user
+                # Get random examples for user (excluding Chinese assets)
                 examples = self.get_random_examples(3)
                 examples_text = ", ".join(examples)
                 
-                await self._send_message_safe(update, 
-                    f"📊 Команда /portfolio - Создание портфеля\n\n"
-                    f"Примеры случайных активов: {examples_text}\n\n"
-                    f"Введите список активов с указанием долей:\n"
-                    f"Примеры:\n"
-                    f"• SPY.US:0.5 QQQ.US:0.3 BND.US:0.2\n"
-                    f"• SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3\n"
-                    f"• SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y - с валютой USD и периодом 10 лет\n"
-                    f"• VOO.US:0.6 GC.COMM:0.2 BND.US:0.2\n\n"
-                    f"💡Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
-                    f"💡Базовая валюта определяется по первому символу\n"
-                    f"💡Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`\n"
-                    f"💡Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
-                    f"💡Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n"
-                )
+                help_text = "📊 *Команда /portfolio - Создание портфеля*\n\n"
+                help_text += f"Примеры случайных активов: `{examples_text}`\n\n"
+                help_text += "*Введите список активов с указанием долей:*\n\n"
+                help_text += "*Примеры готовых портфелей:*\n"
+                help_text += "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - американский сбалансированный\n"
+                help_text += "• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский энергетический\n"
+                help_text += "• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - с золотом и облигациями\n"
+                help_text += "• `AAPL.US:0.3 MSFT.US:0.3 TSLA.US:0.2 AGG.US:0.2` - технологический\n"
+                help_text += "• `SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y` - с валютой USD и периодом 10 лет\n\n"
+                help_text += "💡 *Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле*\n"
+                help_text += "💡 *Базовая валюта определяется по первому символу*\n"
+                help_text += "💡 *Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`*\n"
+                help_text += "💡 *Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY*\n"
+                help_text += "💡 *Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.*\n\n"
+                help_text += "💬 *Введите символы для создания портфеля:*"
+                
+                await self._send_message_safe(update, help_text, parse_mode='Markdown')
                 
                 # Set flag to wait for portfolio input
                 user_id = update.effective_user.id
@@ -3380,10 +3385,14 @@ class ShansAi:
             # Clear waiting flag
             self._update_user_context(user_id, waiting_for_portfolio=False)
             
-            # Extract symbols and weights from input text
+            # Parse currency and period parameters from input text
+            text_args = text.split()
+            symbols, specified_currency, specified_period = self._parse_currency_and_period(text_args)
+            
+            # Extract symbols and weights from parsed symbols
             portfolio_data = []
             
-            for arg in text.split():
+            for arg in symbols:
                 if ':' in arg:
                     symbol_part, weight_part = arg.split(':', 1)
                     original_symbol = self.clean_symbol(symbol_part.strip())
@@ -3452,23 +3461,40 @@ class ShansAi:
             self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
             self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
             
-            # Determine base currency from the first asset using .currency property
-            first_symbol = symbols[0]
-            currency_info = ""
-            try:
-                # Create asset to get its currency
-                first_asset = ok.Asset(first_symbol)
-                currency = first_asset.currency
-                currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                self.logger.info(f"Currency determined from asset {first_symbol}: {currency}")
-            except Exception as e:
-                self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
-                # Fallback to namespace-based detection using our function
-                currency, currency_info = self._get_currency_by_symbol(first_symbol)
+            # Determine base currency - use specified currency if provided, otherwise auto-detect
+            if specified_currency:
+                currency = specified_currency
+                currency_info = f"указана пользователем ({specified_currency})"
+                self.logger.info(f"Using user-specified currency for portfolio: {currency}")
+            else:
+                # Auto-detect currency from the first asset
+                first_symbol = symbols[0]
+                try:
+                    # Create asset to get its currency
+                    first_asset = ok.Asset(first_symbol)
+                    currency = first_asset.currency
+                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    self.logger.info(f"Currency determined from asset {first_symbol}: {currency}")
+                except Exception as e:
+                    self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
+                    # Fallback to namespace-based detection using our function
+                    currency, currency_info = self._get_currency_by_symbol(first_symbol)
             
-            # Create portfolio using okama
+            # Create portfolio using okama with period support
             try:
-                portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                # Apply period filter if specified
+                if specified_period:
+                    years = int(specified_period[:-1])  # Extract number from '5Y'
+                    from datetime import datetime, timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                           start_date=start_date.strftime('%Y-%m-%d'), 
+                                           end_date=end_date.strftime('%Y-%m-%d'))
+                    self.logger.info(f"Created portfolio with period {specified_period}")
+                else:
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                    self.logger.info(f"Created portfolio with maximum available period")
                 
                 # Get portfolio information (raw object like /info)
                 portfolio_text = f"{portfolio}"
