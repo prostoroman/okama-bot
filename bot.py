@@ -391,11 +391,11 @@ class ShansAi:
 
 
     def get_random_examples(self, count: int = 3) -> list:
-        """Get random examples from known assets, excluding Chinese assets"""
+        """Get random examples from known assets, excluding Chinese and Hong Kong assets"""
         import random
         all_assets = []
-        # Exclude Chinese assets (SSE, SZSE, BSE)
-        excluded_categories = ['SSE', 'SZSE', 'BSE']
+        # Exclude Chinese assets (SSE, SZSE, BSE) and Hong Kong assets (HKEX)
+        excluded_categories = ['SSE', 'SZSE', 'BSE', 'HKEX']
         for category, assets in self.known_assets.items():
             if category not in excluded_categories:
                 all_assets.extend(assets)
