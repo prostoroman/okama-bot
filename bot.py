@@ -4800,16 +4800,7 @@ class ShansAi:
                             chat_id=update.effective_chat.id,
                             document=io.BytesIO(excel_buffer.getvalue()),
                             filename=f"metrics_{'_'.join(symbols[:3])}_{currency}.xlsx",
-                            caption=f"📊 **Детальная статистика активов**\n\n"
-                                   f"🔍 **Анализируемые активы:** {', '.join(assets_with_names)}\n"
-                                   f"💰 **Валюта:** {currency}\n"
-                                   f"📅 **Дата создания:** {self._get_current_timestamp()}\n\n"
-                                   f"📋 **Содержит:**\n"
-                                   f"• Основные метрики производительности\n"
-                                   f"• Коэффициенты Шарпа и Сортино\n"
-                                   f"• Анализ рисков и доходности\n"
-                                   f"• Корреляционная матрица\n"
-                                   f"• Детальная статистика по каждому активу"
+                            caption=f""
                         )
                     else:
                         await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла")
@@ -7340,8 +7331,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_risk_metrics_report(update, context, portfolio, final_symbols, currency)
             
@@ -7425,8 +7416,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_risk_metrics_report(update, context, portfolio, final_symbols, currency)
             
@@ -7521,8 +7512,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_monte_carlo_forecast(update, context, portfolio, final_symbols, currency)
             
@@ -7606,8 +7597,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_monte_carlo_forecast(update, context, portfolio, final_symbols, currency)
             
@@ -7702,8 +7693,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_forecast_chart(update, context, portfolio, final_symbols, currency)
             
@@ -7787,8 +7778,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_forecast_chart(update, context, portfolio, final_symbols, currency)
             
@@ -9001,13 +8992,7 @@ class ShansAi:
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(
-                    f"🎲 Прогноз Monte Carlo для портфеля: {', '.join(symbols)}\n\n"
-                    f"📊 Параметры:\n"
-                    f"• Распределение: Нормальное (norm)\n"
-                    f"• Период: 10 лет\n"
-                    f"• Количество симуляций: 20\n"
-                    f"• Валюта: {currency}\n\n"
-                    f"💡 График показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
+                    f"💡 Показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
                 )
             )
             
@@ -9098,8 +9083,9 @@ class ShansAi:
             symbols = portfolio_info.get('symbols', [])
             weights = portfolio_info.get('weights', [])
             currency = portfolio_info.get('currency', 'USD')
+            period = portfolio_info.get('period')
             
-            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}, period={period}")
             
             if not symbols:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
@@ -9159,8 +9145,19 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            if period:
+                years = int(period[:-1])  # Extract number from '5Y'
+                from datetime import timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=years * 365)
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency,
+                                       first_date=start_date.strftime('%Y-%m-%d'), 
+                                       last_date=end_date.strftime('%Y-%m-%d'))
+                self.logger.info(f"Created portfolio with period {period}")
+            else:
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+                self.logger.info(f"Created portfolio with maximum available period")
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights, portfolio_symbol)
             
         except Exception as e:
@@ -9539,8 +9536,9 @@ class ShansAi:
             symbols = portfolio_info.get('symbols', [])
             weights = portfolio_info.get('weights', [])
             currency = portfolio_info.get('currency', 'USD')
+            period = portfolio_info.get('period')
             
-            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}, period={period}")
             
             if not symbols:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
@@ -9600,8 +9598,19 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            if period:
+                years = int(period[:-1])  # Extract number from '5Y'
+                from datetime import timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=years * 365)
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency,
+                                       first_date=start_date.strftime('%Y-%m-%d'), 
+                                       last_date=end_date.strftime('%Y-%m-%d'))
+                self.logger.info(f"Created portfolio with period {period}")
+            else:
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+                self.logger.info(f"Created portfolio with maximum available period")
             await self._create_portfolio_dividends_chart(update, context, portfolio, final_symbols, currency, weights, portfolio_symbol)
             
         except Exception as e:
@@ -9625,8 +9634,9 @@ class ShansAi:
             symbols = portfolio_info.get('symbols', [])
             weights = portfolio_info.get('weights', [])
             currency = portfolio_info.get('currency', 'USD')
+            period = portfolio_info.get('period')
             
-            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}, period={period}")
             
             if not symbols:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
@@ -9683,8 +9693,19 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            if period:
+                years = int(period[:-1])  # Extract number from '5Y'
+                from datetime import timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=years * 365)
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency,
+                                       first_date=start_date.strftime('%Y-%m-%d'), 
+                                       last_date=end_date.strftime('%Y-%m-%d'))
+                self.logger.info(f"Created portfolio with period {period}")
+            else:
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+                self.logger.info(f"Created portfolio with maximum available period")
             
             await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -9741,11 +9762,8 @@ class ShansAi:
                     weight = weights[i] if i < len(weights) else 0.0
                     symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
                 
-                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"                
-                caption += f"• Средняя месячная доходность: {mean_return_monthly:.2%}\n"
                 caption += f"• Средняя годовая доходность: {mean_return_annual:.2%}\n"
                 caption += f"• CAGR (Compound Annual Growth Rate): {cagr_value:.2%}\n\n"
-                caption += f"• Валюта: {currency}\n\n"
                 
             except Exception as e:
                 self.logger.warning(f"Could not get returns statistics: {e}")
@@ -9757,12 +9775,6 @@ class ShansAi:
                     symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
                 
                 caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
-                caption += f"📊 Параметры:\n"
-                caption += f"• Валюта: {currency}\n\n"
-                caption += f"💡 График показывает:\n"
-                caption += f"• Годовую доходность по годам\n"
-                caption += f"• Волатильность доходности\n"
-                caption += f"• Тренды доходности портфеля"
             
             # Send the chart
             await context.bot.send_photo(
@@ -9951,7 +9963,7 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not get final portfolio value: {e}")
             
-            caption = f"Накопленная доходность: {', '.join(symbols_with_weights)}: {final_value:.2f} {currency}, {period_length} лет"
+            caption = f"При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}"
 
             # Send the chart
             await context.bot.send_photo(
@@ -10096,8 +10108,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_portfolio_rolling_cagr_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -10180,8 +10192,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_portfolio_rolling_cagr_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -10255,10 +10267,8 @@ class ShansAi:
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
                 caption += f"• Окно: MAX период (весь доступный период)\n\n"
-                caption += f"💡 График показывает:\n"
-                caption += f"• Rolling CAGR за весь доступный период\n"
-                caption += f"• Динамику изменения CAGR во времени\n"
-                caption += f"• Стабильность доходности портфеля"
+                caption = f"💡 График показывает динамику изменения доходноси во времени\n"
+
             
             # Send the chart
             await context.bot.send_photo(
@@ -10361,8 +10371,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -10446,8 +10456,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
             
