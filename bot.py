@@ -1366,7 +1366,7 @@ class ShansAi:
         keyboard = [
             [InlineKeyboardButton("📊 Проанализировать Apple", callback_data="start_info_AAPL.US")],
             [InlineKeyboardButton("⚖️ Сравнить SPY и QQQ", callback_data="start_compare_SPY.US_QQQ.US")],
-            [InlineKeyboardButton("💼 Создать портфель 60/40", callback_data="start_portfolio_SPY.US:0.6_BND.US:0.4")],
+            [InlineKeyboardButton("💼 Создать портфель 60/40", callback_data="start_portfolio_SPY.US-0.6_BND.US-0.4")],
             [InlineKeyboardButton("📚 Полная справка", callback_data="start_help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -4123,7 +4123,14 @@ class ShansAi:
                     # Extract portfolio data and execute portfolio command
                     portfolio_str = callback_data.replace("start_portfolio_", "")
                     portfolio_parts = portfolio_str.split("_")
-                    context.args = portfolio_parts
+                    # Convert dashes back to colons for portfolio weights
+                    portfolio_args = []
+                    for part in portfolio_parts:
+                        if "-" in part:
+                            portfolio_args.append(part.replace("-", ":"))
+                        else:
+                            portfolio_args.append(part)
+                    context.args = portfolio_args
                     await self.portfolio_command(update, context)
                 return
             
