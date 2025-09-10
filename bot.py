@@ -1745,12 +1745,12 @@ class ShansAi:
                 # Создаем кнопки для дополнительных функций только если данные получены успешно
                 keyboard = [
                     [
-                        InlineKeyboardButton("1Y", callback_data=f"daily_chart_{symbol}"),
-                        InlineKeyboardButton("5Y", callback_data=f"monthly_chart_{symbol}"),
-                        InlineKeyboardButton("All", callback_data=f"all_chart_{symbol}")
+                        InlineKeyboardButton("📈 1Y", callback_data=f"daily_chart_{symbol}"),
+                        InlineKeyboardButton("📈 5Y", callback_data=f"monthly_chart_{symbol}"),
+                        InlineKeyboardButton("📈 All", callback_data=f"all_chart_{symbol}")
                     ],
                     [
-                        InlineKeyboardButton("💵 Dividends", callback_data=f"dividends_{symbol}")
+                        InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
                     ]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1785,8 +1785,8 @@ class ShansAi:
                 keyboard = [
                     [
                         InlineKeyboardButton("📈 1Y", callback_data=f"tushare_daily_chart_{symbol}"),
-                        InlineKeyboardButton("📅 5Y", callback_data=f"tushare_monthly_chart_{symbol}"),
-                        InlineKeyboardButton("📊 All", callback_data=f"tushare_all_chart_{symbol}")
+                        InlineKeyboardButton("📈 5Y", callback_data=f"tushare_monthly_chart_{symbol}"),
+                        InlineKeyboardButton("📈 All", callback_data=f"tushare_all_chart_{symbol}")
                     ],
                     [
                         InlineKeyboardButton("💵 Дивиденды", callback_data=f"tushare_dividends_{symbol}")
@@ -3380,12 +3380,40 @@ class ShansAi:
             
             # Parse currency and period parameters from input text
             text_args = text.split()
-            symbols, specified_currency, specified_period = self._parse_currency_and_period(text_args)
             
-            # Extract symbols and weights from parsed symbols
+            # For portfolio command, we need to preserve the full symbol:weight format
+            # So we'll parse currency and period manually, keeping the original arguments
+            valid_currencies = {'USD', 'RUB', 'EUR', 'GBP', 'CNY', 'HKD', 'JPY'}
+            import re
+            period_pattern = re.compile(r'^(\d+)Y$', re.IGNORECASE)
+            
+            portfolio_args = []
+            specified_currency = None
+            specified_period = None
+            
+            for arg in text_args:
+                arg_upper = arg.upper()
+                
+                # Check if it's a currency code
+                if arg_upper in valid_currencies:
+                    if specified_currency is None:
+                        specified_currency = arg_upper
+                    continue
+                
+                # Check if it's a period (e.g., '5Y', '10Y')
+                period_match = period_pattern.match(arg)
+                if period_match:
+                    if specified_period is None:
+                        specified_period = arg_upper
+                    continue
+                
+                # If it's neither currency nor period, it's a portfolio argument
+                portfolio_args.append(arg)
+            
+            # Extract symbols and weights from portfolio arguments
             portfolio_data = []
             
-            for arg in symbols:
+            for arg in portfolio_args:
                 if ':' in arg:
                     symbol_part, weight_part = arg.split(':', 1)
                     original_symbol = self.clean_symbol(symbol_part.strip())
