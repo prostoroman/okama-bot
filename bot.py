@@ -2991,12 +2991,13 @@ class ShansAi:
                     user_id, 
                     last_assets=symbols,
                     last_analysis_type='portfolio',
-                    last_period='MAX',
+                    last_period=specified_period or 'MAX',
                     current_symbols=symbols,
                     current_currency=currency,
                     current_currency_info=currency_info,
                     portfolio_weights=weights,
-                    portfolio_count=portfolio_count
+                    portfolio_count=portfolio_count,
+                    current_period=specified_period
                 )
                 
                 # Verify what was saved
@@ -3039,7 +3040,8 @@ class ShansAi:
                         'description': f"Портфель: {', '.join(symbols)}",
                         'portfolio_symbol': portfolio_symbol,  # Ensure symbol is preserved
                         'total_weight': sum(weights),
-                        'asset_count': len(symbols)
+                        'asset_count': len(symbols),
+                        'period': specified_period
                     })
                     
                     # Portfolio performance metrics
@@ -3212,6 +3214,7 @@ class ShansAi:
                         'portfolio_symbol': portfolio_symbol,
                         'total_weight': sum(weights),
                         'asset_count': len(symbols),
+                        'period': specified_period,
                         'json_data': json.dumps({
                             'symbols': symbols,
                             'weights': weights,
@@ -3562,12 +3565,13 @@ class ShansAi:
                     user_id, 
                     last_assets=symbols,
                     last_analysis_type='portfolio',
-                    last_period='MAX',
+                    last_period=specified_period or 'MAX',
                     current_symbols=symbols,
                     current_currency=currency,
                     current_currency_info=currency_info,
                     portfolio_weights=weights,
-                    portfolio_count=portfolio_count
+                    portfolio_count=portfolio_count,
+                    current_period=specified_period
                 )
                 
                 # Verify what was saved
@@ -3589,7 +3593,8 @@ class ShansAi:
                     'description': f"Портфель: {', '.join(symbols)}",
                     'portfolio_symbol': portfolio_symbol,
                     'total_weight': sum(weights),
-                    'asset_count': len(symbols)
+                    'asset_count': len(symbols),
+                    'period': specified_period
                 }
                 
                 # Add portfolio to saved portfolios
@@ -9576,8 +9581,22 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Get period from user context
+            current_period = user_context.get('current_period')
+            
+            # Create Portfolio with validated symbols and period
+            if current_period:
+                years = int(current_period[:-1])  # Extract number from '5Y'
+                from datetime import timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=years * 365)
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency,
+                                       first_date=start_date.strftime('%Y-%m-%d'), 
+                                       last_date=end_date.strftime('%Y-%m-%d'))
+                self.logger.info(f"Created portfolio with period {current_period}")
+            else:
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+                self.logger.info(f"Created portfolio with maximum available period")
             
             await self._create_portfolio_wealth_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -9682,8 +9701,9 @@ class ShansAi:
             symbols = portfolio_info.get('symbols', [])
             weights = portfolio_info.get('weights', [])
             currency = portfolio_info.get('currency', 'USD')
+            period = portfolio_info.get('period')
             
-            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}, period={period}")
             
             if not symbols:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
@@ -9691,8 +9711,20 @@ class ShansAi:
             
             await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
             
-            # Create portfolio and generate wealth chart
-            portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+            # Create portfolio with period if specified
+            if period:
+                years = int(period[:-1])  # Extract number from '5Y'
+                from datetime import timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=years * 365)
+                portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                       first_date=start_date.strftime('%Y-%m-%d'), 
+                                       last_date=end_date.strftime('%Y-%m-%d'))
+                self.logger.info(f"Created portfolio with period {period}")
+            else:
+                portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                self.logger.info(f"Created portfolio with maximum available period")
+            
             await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights)
             
         except Exception as e:
