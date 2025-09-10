@@ -565,6 +565,22 @@ class ChartStyles:
                 asset_percentages.append(symbol_name)
             title = f'Накопленная доходность\n{", ".join(asset_percentages)} | {currency}'
         
+        # Convert Series to DataFrame with proper column name for legend
+        if isinstance(data, pd.Series):
+            # Create column name for legend
+            if portfolio_name:
+                column_name = portfolio_name
+            elif weights:
+                asset_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                column_name = ", ".join(asset_with_weights)
+            else:
+                column_name = ", ".join(symbols)
+            data = pd.DataFrame({column_name: data})
+        
         ylabel = ''  # No y-axis label
         xlabel = ''  # No x-axis label
         return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)

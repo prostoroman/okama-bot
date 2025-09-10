@@ -9890,13 +9890,13 @@ class ShansAi:
                 portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
                 self.logger.info(f"Created portfolio with maximum available period")
             
-            await self._create_portfolio_wealth_chart(update, context, portfolio, final_symbols, currency, weights)
+            await self._create_portfolio_wealth_chart(update, context, portfolio, final_symbols, currency, weights, "Портфель")
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio wealth chart button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
 
-    async def _create_portfolio_wealth_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
+    async def _create_portfolio_wealth_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list, portfolio_name: str = None):
         """Create and send portfolio wealth chart"""
         try:
             self.logger.info(f"Creating portfolio wealth chart for portfolio: {symbols}")
@@ -9906,7 +9906,7 @@ class ShansAi:
             
             # Create portfolio chart with chart_styles using optimized method
             fig, ax = chart_styles.create_portfolio_wealth_chart(
-                data=wealth_index, symbols=symbols, currency=currency, weights=weights
+                data=wealth_index, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_name
             )
             
             # Save chart to bytes with memory optimization
@@ -10017,7 +10017,7 @@ class ShansAi:
                 portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
                 self.logger.info(f"Created portfolio with maximum available period")
             
-            await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights)
+            await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights, portfolio_symbol)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio wealth chart by symbol: {e}")
