@@ -2753,8 +2753,8 @@ class ShansAi:
 
                 
                 help_text = "📊 *Создание портфеля*\n\n"
-                help_text += "*Введите список активов с указанием долей:*\n\n"
-                help_text += "*Примеры готовых портфелей:*\n"
+
+                help_text += "*Примеры:*\n"
                 help_text += "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - американский сбалансированный\n"
                 help_text += "• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский энергетический\n"
                 help_text += "• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - с золотом и облигациями\n"
@@ -2763,8 +2763,8 @@ class ShansAi:
                 help_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
                 help_text += "💡 Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`\n"
                 help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
-                help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n\n"
-                help_text += "💡 Если не задана базовая валюта, то она определяется по первому символу\n"
+                help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n"
+                help_text += "💡 Если не задана базовая валюта, то она определяется по первому символу\n\n"
 
                 help_text += "💬 *Введите символы для создания портфеля:*"
                 
@@ -2944,6 +2944,13 @@ class ShansAi:
                 
                 # Clean up any extra escaping that might have been added
                 portfolio_text = portfolio_text.replace("\\", "")
+                
+                # Add basic metrics to portfolio text
+                try:
+                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
+                    portfolio_text += metrics_text
+                except Exception as e:
+                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
                 
                 # Portfolio information is already set above as raw object
                 
@@ -3542,6 +3549,13 @@ class ShansAi:
                 
                 # Escape Markdown characters to prevent parsing errors
                 portfolio_text = self._escape_markdown(portfolio_text)
+                
+                # Add basic metrics to portfolio text
+                try:
+                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
+                    portfolio_text += metrics_text
+                except Exception as e:
+                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
                 
                 # Generate portfolio symbol using PF namespace and okama's assigned symbol
                 user_id = update.effective_user.id
@@ -4814,6 +4828,87 @@ class ShansAi:
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def _get_portfolio_basic_metrics(self, portfolio, symbols: list, weights: list, currency: str) -> str:
+        """Get basic portfolio metrics for creation message"""
+        try:
+            # Get basic metrics
+            cagr = portfolio.get_cagr()
+            volatility = portfolio.volatility
+            
+            # Handle CAGR which might be a Series
+            if hasattr(cagr, '__iter__') and not isinstance(cagr, str):
+                if hasattr(cagr, 'iloc'):
+                    cagr_value = cagr.iloc[0]
+                elif hasattr(cagr, '__getitem__'):
+                    cagr_value = cagr[0]
+                else:
+                    cagr_value = list(cagr)[0]
+            else:
+                cagr_value = cagr
+            
+            # Handle volatility which might be a Series
+            if hasattr(volatility, '__iter__') and not isinstance(volatility, str):
+                if hasattr(volatility, 'iloc'):
+                    volatility_value = volatility.iloc[0]
+                elif hasattr(volatility, '__getitem__'):
+                    volatility_value = volatility[0]
+                else:
+                    volatility_value = list(volatility)[0]
+            else:
+                volatility_value = volatility
+            
+            # Get Sharpe ratio
+            sharpe_ratio = portfolio.sharpe_ratio
+            if hasattr(sharpe_ratio, '__iter__') and not isinstance(sharpe_ratio, str):
+                if hasattr(sharpe_ratio, 'iloc'):
+                    sharpe_value = sharpe_ratio.iloc[0]
+                elif hasattr(sharpe_ratio, '__getitem__'):
+                    sharpe_value = sharpe_ratio[0]
+                else:
+                    sharpe_value = list(sharpe_ratio)[0]
+            else:
+                sharpe_value = sharpe_ratio
+            
+            # Build symbols with weights
+            symbols_with_weights = []
+            for i, symbol in enumerate(symbols):
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            
+            # Get rebalancing period (default to annual)
+            rebalancing_period = "Ежегодно"
+            
+            # Get period info
+            period_info = ""
+            if hasattr(portfolio, 'first_date') and hasattr(portfolio, 'last_date'):
+                if portfolio.first_date and portfolio.last_date:
+                    period_info = f"{portfolio.first_date} - {portfolio.last_date}"
+            
+            # Build metrics text
+            metrics_text = f"\n\n📊 **Основные метрики:**\n"
+            metrics_text += f"• **Состав:** {', '.join(symbols_with_weights)}\n"
+            metrics_text += f"• **Валюта:** {currency}\n"
+            metrics_text += f"• **Период ребалансировки:** {rebalancing_period}\n"
+            if period_info:
+                metrics_text += f"• **Период:** {period_info}\n"
+            metrics_text += f"• **CAGR:** {cagr_value:.2%}\n"
+            metrics_text += f"• **Волатильность:** {volatility_value:.2%}\n"
+            metrics_text += f"• **Коэфф. Шарпа:** {sharpe_value:.2f}\n"
+            
+            return metrics_text
+            
+        except Exception as e:
+            self.logger.warning(f"Could not get portfolio basic metrics: {e}")
+            # Fallback to basic info
+            symbols_with_weights = []
+            for i, symbol in enumerate(symbols):
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            
+            return f"\n\n📊 **Основные метрики:**\n• **Состав:** {', '.join(symbols_with_weights)}\n• **Валюта:** {currency}\n• **Период ребалансировки:** Ежегодно\n"
 
     async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, user_id: int) -> Dict[str, Any]:
         """Prepare comprehensive financial data for Gemini analysis"""
