@@ -1348,13 +1348,9 @@ class ShansAi:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""👋 Здравствуйте! Я Шанс.ai — ваш интеллектуальный финансовый аналитик.
+        welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары со всего мира.
 
-Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары со всего мира.
-
-👇 Попробуйте одну из ключевых функций прямо сейчас:
-
-Что я еще умею:
+Попробуйте одну из ключевых функций прямо сейчас:
 
 🧠 Анализ активов: полная сводка по любой бумаге, валюте или товару.
 ⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик.
@@ -1382,18 +1378,12 @@ class ShansAi:
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
         welcome_message = f"""
-• Анализ активов (акции, облигации, товары, индексы, валюты) с графиками цен
-• Сравнение нескольких активов с графиками накопленной доходности и учетом инфляции
-• Анализ портфеля (веса, риски, доходность, прогнозы)
-
-Основные команды:
-/help — эта справка
-/info [тикер] [период] — базовая информация об активе с графиком и анализом
-/compare [символ1] [символ2] ... — сравнение активов с графиком накопленной доходности
-/portfolio [символ1:доля1] [символ2:доля2] ... — создание портфеля с указанными весами
-/my — просмотр сохраненных портфелей
-/list [название] — список пространств имен или символы в пространстве
-/test [тип] — запуск тестов (simple/quick/regression/all/comprehensive)
+`/help` — справка
+`/info GAZP.MOEX` — базовая информация об активе с графиками цен и анализом (акции, облигации, товары, индексы, валюты)
+`/compare SPY.US SBER.MOEX` — сравнение нескольких активов с графиками накопленной доходности и учетом инфляции
+`/portfolio BER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` — создание и анализ портфеля (веса, риски, доходность, прогнозы)
+`/my` — просмотр сохраненных портфелей
+`/list` — доступные для анализа данные или символы в пространстве
 
 Поддерживаемые форматы тикеров:
 • US акции: AAPL.US, VOO.US, SPY.US, QQQ.US
@@ -1402,9 +1392,12 @@ class ShansAi:
 • Товары: GC.COMM (золото), CL.COMM (нефть), SI.COMM (серебро)
 • Валюты: EURUSD.FX, GBPUSD.FX, USDJPY.FX
 • LSE: VOD.LSE, HSBA.LSE, BP.LSE
+• SSE: 600000.SSE, 601318.SSE, 601398.SSE
+• SZSE: 000001.SZSE, 000002.SZSE, 000003.SZSE
+• BSE: 500000.BSE, 500001.BSE, 500002.BSE
+• HKEX: 00001.HKEX, 00002.HKEX, 00003.HKEX
 
 Примеры команд:
-• `/compare SPY.US QQQ.US` - сравнить S&P 500 и NASDAQ
 • `/compare SBER.MOEX,GAZP.MOEX` - сравнить Сбербанк и Газпром
 • `/compare SPY.US, QQQ.US, VOO.US` - сравнить с пробелами после запятых
 • `/compare GC.COMM CL.COMM` - сравнить золото и нефть
@@ -1412,7 +1405,6 @@ class ShansAi:
 
 • `/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - портфель 50% S&P 500, 30% NASDAQ, 20% облигации
 • `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель
-Базовая валюта опрелеляется по первому символу в списке.
 
 ⚠️ Вся информация предоставляется исключительно в информационных целях и не является инвестиционными рекомендациями.
 
@@ -3029,6 +3021,10 @@ class ShansAi:
                 # Send portfolio information with buttons (no chart)
                 await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
                 
+                # Automatically generate and send wealth chart
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+                await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights, portfolio_symbol)
+                
                 # Store portfolio data in context
                 user_id = update.effective_user.id
                 self.logger.info(f"Storing portfolio data in context for user {user_id}")
@@ -3637,6 +3633,10 @@ class ShansAi:
                 self.logger.info(f"Sending portfolio message with buttons for portfolio {portfolio_symbol}")
                 await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
                 self.logger.info(f"Portfolio message sent successfully for portfolio {portfolio_symbol}")
+                
+                # Automatically generate and send wealth chart
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+                await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights, portfolio_symbol)
                 
                 # Store portfolio data in context
                 user_id = update.effective_user.id
@@ -4924,6 +4924,18 @@ class ShansAi:
             else:
                 sharpe_value = sharpe_ratio
             
+            # Get maximum drawdown
+            max_drawdown = portfolio.max_drawdown
+            if hasattr(max_drawdown, '__iter__') and not isinstance(max_drawdown, str):
+                if hasattr(max_drawdown, 'iloc'):
+                    max_drawdown_value = max_drawdown.iloc[0]
+                elif hasattr(max_drawdown, '__getitem__'):
+                    max_drawdown_value = max_drawdown[0]
+                else:
+                    max_drawdown_value = list(max_drawdown)[0]
+            else:
+                max_drawdown_value = max_drawdown
+            
             # Build symbols with weights
             symbols_with_weights = []
             for i, symbol in enumerate(symbols):
@@ -4947,9 +4959,10 @@ class ShansAi:
             metrics_text += f"• **Период ребалансировки:** {rebalancing_period}\n"
             if period_info:
                 metrics_text += f"• **Период:** {period_info}\n"
-            metrics_text += f"• **CAGR:** {cagr_value:.2%}\n"
+            metrics_text += f"• **CAGR (Среднегодовая доходность):** {cagr_value:.2%}\n"
             metrics_text += f"• **Волатильность:** {volatility_value:.2%}\n"
             metrics_text += f"• **Коэфф. Шарпа:** {sharpe_value:.2f}\n"
+            metrics_text += f"• **Макс. просадка:** {max_drawdown_value:.2%}\n"
             
             return metrics_text
             
@@ -4962,7 +4975,7 @@ class ShansAi:
                 weight = weights[i] if i < len(weights) else 0.0
                 symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
             
-            return f"\n\n📊 **Основные метрики:**\n• **Состав:** {', '.join(symbols_with_weights)}\n• **Валюта:** {currency}\n• **Период ребалансировки:** Ежегодно\n"
+            return f"\n\n📊 **Основные метрики:**\n• **Состав:** {', '.join(symbols_with_weights)}\n• **Валюта:** {currency}\n• **Период ребалансировки:** Ежегодно\n• **CAGR (Среднегодовая доходность):** Недоступно\n• **Волатильность:** Недоступно\n• **Коэфф. Шарпа:** Недоступно\n• **Макс. просадка:** Недоступно\n"
 
     async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, user_id: int) -> Dict[str, Any]:
         """Prepare comprehensive financial data for Gemini analysis"""
