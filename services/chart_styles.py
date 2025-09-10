@@ -490,8 +490,10 @@ class ChartStyles:
             ax.plot(x_values, data[column].values,
                     color=color, alpha=self.lines['alpha'], label=column)
         
-        # Создаем заголовок с весами
-        if weights:
+        # Create title with portfolio name if provided, otherwise use asset percentages
+        if portfolio_name:
+            title = f'Дивидендная доходность портфеля\n{portfolio_name}'
+        elif weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
                 symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
@@ -538,10 +540,12 @@ class ChartStyles:
         
         return fig, ax
     
-    def create_portfolio_wealth_chart(self, data, symbols, currency, weights=None, **kwargs):
+    def create_portfolio_wealth_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
         """Создать график накопленной доходности портфеля"""
-        # Create title with asset percentages and currency
-        if weights:
+        # Create title with portfolio name if provided, otherwise use asset percentages and currency
+        if portfolio_name:
+            title = f'Накопленная доходность\n{portfolio_name} | {currency}'
+        elif weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
                 # Extract symbol name without namespace
@@ -561,7 +565,7 @@ class ChartStyles:
         xlabel = ''  # No x-axis label
         return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
-    def create_portfolio_returns_chart(self, data, symbols, currency, weights=None, **kwargs):
+    def create_portfolio_returns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
         """Создать график годовой доходности портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -577,7 +581,10 @@ class ChartStyles:
         ax.set_xticks(x_positions)
         ax.set_xticklabels(x_labels, rotation=45)
         
-        if weights:
+        # Create title with portfolio name if provided, otherwise use asset percentages
+        if portfolio_name:
+            title = f'Годовая доходность портфеля\n{portfolio_name}'
+        elif weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
                 # Extract symbol name without namespace
@@ -630,7 +637,10 @@ class ChartStyles:
                 ax.plot(cleaned_data.index, cleaned_data[column].values * 100,
                        color=color, alpha=self.lines['alpha'], label=column)
         
-        if weights:
+        # Create title with portfolio name if provided, otherwise use asset percentages
+        if portfolio_name:
+            title = f'Просадки портфеля\n{portfolio_name}'
+        elif weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
                 # Extract symbol name without namespace
@@ -647,9 +657,12 @@ class ChartStyles:
         
         return fig, ax
     
-    def create_portfolio_rolling_cagr_chart(self, data, symbols, currency, weights=None, **kwargs):
+    def create_portfolio_rolling_cagr_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
         """Создать график скользящего CAGR портфеля"""
-        if weights:
+        # Create title with portfolio name if provided, otherwise use asset percentages
+        if portfolio_name:
+            title = f'Скользящая CAGR портфеля\n{portfolio_name}'
+        elif weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
                 # Extract symbol name without namespace
@@ -662,7 +675,7 @@ class ChartStyles:
         ylabel = f'CAGR ({currency}) (%)'
         return self.create_line_chart(data, title, ylabel, **kwargs)
     
-    def create_portfolio_compare_assets_chart(self, data, symbols, currency, weights=None, **kwargs):
+    def create_portfolio_compare_assets_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
         """Создать график сравнения портфеля с активами"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -682,7 +695,10 @@ class ChartStyles:
                 lines[i].set_alpha(0.8)
                 lines[i].set_color(self.get_color(i-1))
         
-        if weights:
+        # Create title with portfolio name if provided, otherwise use asset percentages
+        if portfolio_name:
+            title = f'Портфель vs Активы\n{portfolio_name}'
+        elif weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
                 # Extract symbol name without namespace
@@ -1006,7 +1022,7 @@ class ChartStyles:
             ax.axis('off')
             return fig, ax
 
-    def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, **kwargs):
+    def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, **kwargs):
         """Применить стили к графику монте-карло"""
         try:
             # Set figure size to standard chart size
@@ -1021,8 +1037,10 @@ class ChartStyles:
                 line.set_linewidth(0.8)
                 line.set_alpha(0.7)
             
-            # Get portfolio weights for title
-            if weights:
+            # Create title with portfolio name if provided, otherwise use asset percentages
+            if portfolio_name:
+                title = f'Прогноз Monte Carlo\n{portfolio_name}'
+            elif weights:
                 asset_with_weights = []
                 for i, symbol in enumerate(symbols):
                     symbol_name = symbol.split('.')[0] if '.' in symbol else symbol

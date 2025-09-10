@@ -535,6 +535,26 @@ class ShansAi:
             # Safe fallback
             return [1.0 / len(symbols)] * len(symbols) if symbols else []
 
+    def _create_portfolio_with_period(self, symbols: list, weights: list, currency: str, user_context: dict) -> object:
+        """Create portfolio with period from user context"""
+        import okama as ok
+        from datetime import datetime, timedelta
+        
+        current_period = user_context.get('current_period')
+        if current_period:
+            years = int(current_period[:-1])
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=years * 365)
+            portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                   first_date=start_date.strftime('%Y-%m-%d'), 
+                                   last_date=end_date.strftime('%Y-%m-%d'))
+            self.logger.info(f"Created portfolio with period {current_period}")
+        else:
+            portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+            self.logger.info("Created portfolio without period (MAX)")
+        
+        return portfolio
+
     def _get_user_context(self, user_id: int) -> Dict[str, Any]:
         """Получить контекст пользователя (с поддержкой персистентности)."""
         # Load from persistent store, and mirror into memory for hot path
@@ -9142,8 +9162,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_portfolio_drawdowns_chart(update, context, portfolio, final_symbols, currency, weights, "Портфель")
             
@@ -9234,39 +9254,51 @@ class ShansAi:
         try:
             self.logger.info(f"Creating portfolio dividends chart for portfolio: {symbols}")
             
-            # Check if portfolio has dividend yield data
+            # Try to get dividend yield data from portfolio first (respects period)
             try:
-                # Try to get dividend yield data for each asset
-                import okama as ok
-                asset_list = ok.AssetList(symbols, ccy=currency)
-                
-                self.logger.info(f"AssetList created for symbols: {symbols}")
-                self.logger.info(f"AssetList has dividend_yields: {hasattr(asset_list, 'dividend_yields')}")
-                
-                if hasattr(asset_list, 'dividend_yields'):
-                    self.logger.info(f"Dividend yields shape: {asset_list.dividend_yields.shape}")
-                    self.logger.info(f"Dividend yields empty: {asset_list.dividend_yields.empty}")
-                    if not asset_list.dividend_yields.empty:
-                        self.logger.info(f"Dividend yields columns: {asset_list.dividend_yields.columns.tolist()}")
-                        dividend_yield_data = asset_list.dividend_yields
-                    else:
-                        self.logger.warning("AssetList dividend_yields is empty")
-                        raise ValueError("No dividend yield data in AssetList")
+                # First try portfolio dividend yield with assets (shows individual assets)
+                if hasattr(portfolio, 'dividend_yield_with_assets'):
+                    dividend_yield_data = portfolio.dividend_yield_with_assets
+                    self.logger.info("Using portfolio.dividend_yield_with_assets (respects period)")
                 else:
-                    self.logger.warning("AssetList does not have dividend_yields attribute")
-                    raise ValueError("No dividend_yields attribute in AssetList")
-                    
-            except Exception as e:
-                self.logger.warning(f"Could not get dividend yield data from AssetList: {e}")
-                # Fallback to portfolio dividend yield
-                try:
+                    # Fallback to portfolio dividend yield (aggregated)
                     dividend_yield_data = portfolio.dividend_yield
-                    if dividend_yield_data is None or dividend_yield_data.empty:
-                        await self._send_callback_message(update, context, "❌ Данные о дивидендах не содержат информацию для отображения.")
-                        return
-                    self.logger.info("Using portfolio dividend yield as fallback")
-                except Exception as portfolio_error:
-                    self.logger.error(f"Could not access portfolio dividend yield: {portfolio_error}")
+                    self.logger.info("Using portfolio.dividend_yield (respects period)")
+                
+                if dividend_yield_data is None or dividend_yield_data.empty:
+                    await self._send_callback_message(update, context, "❌ Данные о дивидендах не содержат информацию для отображения.")
+                    return
+                    
+            except Exception as portfolio_error:
+                self.logger.warning(f"Could not get dividend yield data from portfolio: {portfolio_error}")
+                # Fallback to creating AssetList with period from user context
+                try:
+                    user_id = update.effective_user.id
+                    user_context = self._get_user_context(user_id)
+                    current_period = user_context.get('current_period')
+                    
+                    import okama as ok
+                    if current_period:
+                        years = int(current_period[:-1])
+                        from datetime import datetime, timedelta
+                        end_date = datetime.now()
+                        start_date = end_date - timedelta(days=years * 365)
+                        asset_list = ok.AssetList(symbols, ccy=currency,
+                                                first_date=start_date.strftime('%Y-%m-%d'), 
+                                                last_date=end_date.strftime('%Y-%m-%d'))
+                        self.logger.info(f"Created AssetList with period {current_period}")
+                    else:
+                        asset_list = ok.AssetList(symbols, ccy=currency)
+                        self.logger.info("Created AssetList without period (MAX)")
+                    
+                    if hasattr(asset_list, 'dividend_yields') and not asset_list.dividend_yields.empty:
+                        dividend_yield_data = asset_list.dividend_yields
+                        self.logger.info("Using AssetList dividend_yields as fallback")
+                    else:
+                        raise ValueError("No dividend yield data available")
+                        
+                except Exception as e:
+                    self.logger.error(f"Could not get dividend yield data: {e}")
                     await self._send_callback_message(update, context, "❌ Данные о дивидендах не содержат информацию для отображения.")
                     return
             
@@ -9288,13 +9320,7 @@ class ShansAi:
                 weight = weights[i] if i < len(weights) else 0.0
                 symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
             
-            caption = f"💵 Дивидендная доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
-            caption += f"📊 Параметры:\n"
-            caption += f"• Валюта: {currency}\n\n"
-            caption += f"💡 График показывает:\n"
-            caption += f"• Дивидендную доходность портфеля\n"
-            caption += f"• Динамику выплат дивидендов\n"
-            caption += f"• Стабильность доходности"
+            caption = f"Дивидендная доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
             
             # Send the chart
             await context.bot.send_photo(
@@ -9392,8 +9418,8 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Create Portfolio with validated symbols
-            portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            # Create Portfolio with validated symbols and period
+            portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
             await self._create_portfolio_returns_chart(update, context, portfolio, final_symbols, currency, weights)
             
@@ -9830,7 +9856,7 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not get final portfolio value: {e}")
             
-            caption = f"Накопленная доходность: {', '.join(symbols_with_weights)}: {final_value:.2f} {currency}, {period_length}"
+            caption = f"Накопленная доходность: {', '.join(symbols_with_weights)}: {final_value:.2f} {currency}, {period_length} лет"
 
             # Send the chart
             await context.bot.send_photo(
