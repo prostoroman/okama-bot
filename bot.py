@@ -673,6 +673,14 @@ class ShansAi:
                     self.logger.warning(f"Multiple periods specified, using first: {period}")
                 continue
             
+            # Check if this is a symbol:weight format (for compare command, we ignore weights)
+            if ':' in arg:
+                # Split on colon and take only the symbol part
+                symbol_part = arg.split(':', 1)[0].strip()
+                if symbol_part:  # Only add non-empty symbols
+                    symbols.append(symbol_part)
+                continue
+            
             # If it's neither currency nor period, it's a symbol
             symbols.append(arg)
         
@@ -2079,7 +2087,14 @@ class ShansAi:
                 return
 
             # Parse currency and period parameters from command arguments
-            symbols, specified_currency, specified_period = self._parse_currency_and_period(context.args)
+            # Check if they were already parsed by _handle_compare_input
+            if hasattr(context, 'specified_currency') and hasattr(context, 'specified_period'):
+                symbols = context.args
+                specified_currency = context.specified_currency
+                specified_period = context.specified_period
+                self.logger.info(f"Using pre-parsed parameters from _handle_compare_input: currency={specified_currency}, period={specified_period}")
+            else:
+                symbols, specified_currency, specified_period = self._parse_currency_and_period(context.args)
             
             # Clean up symbols (remove empty strings and whitespace)
             symbols = [symbol for symbol in symbols if symbol.strip()]
@@ -3632,6 +3647,11 @@ class ShansAi:
             # Process the comparison using the same logic as compare_command
             # We'll reuse the existing comparison logic by calling compare_command with args
             context.args = symbols
+            
+            # Store parsed currency and period in context for compare_command to use
+            context.specified_currency = specified_currency
+            context.specified_period = specified_period
+            
             await self.compare_command(update, context)
             
         except Exception as e:
@@ -7666,6 +7686,124 @@ class ShansAi:
             self.logger.error(f"Error creating risk metrics report: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании отчета о рисках: {str(e)}")
 
+    def _calculate_portfolio_years(self, portfolio, returns) -> float:
+        """Calculate the actual number of years for portfolio CAGR calculation"""
+        try:
+            # Handle empty returns
+            if len(returns) == 0:
+                return 0
+            # Try to get actual dates from portfolio object
+            if hasattr(portfolio, 'first_date') and hasattr(portfolio, 'last_date'):
+                from datetime import datetime
+                try:
+                    # Parse dates from portfolio object
+                    if isinstance(portfolio.first_date, str):
+                        start_date = datetime.strptime(portfolio.first_date, '%Y-%m-%d')
+                    else:
+                        start_date = portfolio.first_date
+                    
+                    if isinstance(portfolio.last_date, str):
+                        end_date = datetime.strptime(portfolio.last_date, '%Y-%m-%d')
+                    else:
+                        end_date = portfolio.last_date
+                    
+                    # Calculate years difference
+                    days_diff = (end_date - start_date).days
+                    years = days_diff / 365.25  # Use 365.25 for leap years
+                    
+                    if years > 0:
+                        return years
+                except Exception as e:
+                    self.logger.warning(f"Could not parse portfolio dates: {e}")
+            
+            # Fallback: estimate from returns data frequency
+            if len(returns) > 0:
+                # Try to detect data frequency from index
+                if hasattr(returns, 'index'):
+                    index = returns.index
+                    if len(index) > 1:
+                        # Calculate average time difference between data points
+                        time_diffs = []
+                        for i in range(1, min(len(index), 10)):  # Check first 10 differences
+                            try:
+                                diff = (index[i] - index[i-1]).days
+                                time_diffs.append(diff)
+                            except:
+                                continue
+                        
+                        if time_diffs:
+                            avg_days = sum(time_diffs) / len(time_diffs)
+                            total_days = (index[-1] - index[0]).days
+                            years = total_days / 365.25
+                            return years
+            
+            # Final fallback: assume monthly data
+            return len(returns) / 12 if len(returns) > 0 else 0
+            
+        except Exception as e:
+            self.logger.warning(f"Error calculating portfolio years: {e}")
+            # Ultimate fallback: assume monthly data
+            return len(returns) / 12 if len(returns) > 0 else 0
+
+    def _calculate_asset_years(self, asset, returns) -> float:
+        """Calculate the actual number of years for asset CAGR calculation"""
+        try:
+            # Handle empty returns
+            if len(returns) == 0:
+                return 0
+            # Try to get actual dates from asset object
+            if hasattr(asset, 'first_date') and hasattr(asset, 'last_date'):
+                from datetime import datetime
+                try:
+                    # Parse dates from asset object
+                    if isinstance(asset.first_date, str):
+                        start_date = datetime.strptime(asset.first_date, '%Y-%m-%d')
+                    else:
+                        start_date = asset.first_date
+                    
+                    if isinstance(asset.last_date, str):
+                        end_date = datetime.strptime(asset.last_date, '%Y-%m-%d')
+                    else:
+                        end_date = asset.last_date
+                    
+                    # Calculate years difference
+                    days_diff = (end_date - start_date).days
+                    years = days_diff / 365.25  # Use 365.25 for leap years
+                    
+                    if years > 0:
+                        return years
+                except Exception as e:
+                    self.logger.warning(f"Could not parse asset dates: {e}")
+            
+            # Fallback: estimate from returns data frequency
+            if len(returns) > 0:
+                # Try to detect data frequency from index
+                if hasattr(returns, 'index'):
+                    index = returns.index
+                    if len(index) > 1:
+                        # Calculate average time difference between data points
+                        time_diffs = []
+                        for i in range(1, min(len(index), 10)):  # Check first 10 differences
+                            try:
+                                diff = (index[i] - index[i-1]).days
+                                time_diffs.append(diff)
+                            except:
+                                continue
+                        
+                        if time_diffs:
+                            avg_days = sum(time_diffs) / len(time_diffs)
+                            total_days = (index[-1] - index[0]).days
+                            years = total_days / 365.25
+                            return years
+            
+            # Final fallback: assume monthly data
+            return len(returns) / 12 if len(returns) > 0 else 0
+            
+        except Exception as e:
+            self.logger.warning(f"Error calculating asset years: {e}")
+            # Ultimate fallback: assume monthly data
+            return len(returns) / 12 if len(returns) > 0 else 0
+
     def _prepare_portfolio_metrics_data(self, portfolio, symbols: list, currency: str) -> Dict[str, Any]:
         """Prepare comprehensive metrics data for portfolio Excel export"""
         try:
@@ -7701,15 +7839,15 @@ class ShansAi:
                         try:
                             portfolio_metrics['annual_return'] = float(portfolio.mean_return_annual) * 100
                         except:
-                            # Calculate manually
+                            # Calculate manually with real portfolio period
                             total_return = (1 + returns).prod() - 1
-                            years = len(returns) / 12  # Assuming monthly data
+                            years = self._calculate_portfolio_years(portfolio, returns)
                             cagr = (1 + total_return) ** (1 / years) - 1
                             portfolio_metrics['annual_return'] = cagr * 100
                     else:
-                        # Calculate manually
+                        # Calculate manually with real portfolio period
                         total_return = (1 + returns).prod() - 1
-                        years = len(returns) / 12  # Assuming monthly data
+                        years = self._calculate_portfolio_years(portfolio, returns)
                         cagr = (1 + total_return) ** (1 / years) - 1
                         portfolio_metrics['annual_return'] = cagr * 100
                     
@@ -7884,15 +8022,15 @@ class ShansAi:
                             try:
                                 asset_metrics['annual_return'] = float(asset.mean_return_annual) * 100
                             except:
-                                # Calculate manually
+                                # Calculate manually with real asset period
                                 total_return = (1 + returns).prod() - 1
-                                years = len(returns) / 12  # Assuming monthly data
+                                years = self._calculate_asset_years(asset, returns)
                                 cagr = (1 + total_return) ** (1 / years) - 1
                                 asset_metrics['annual_return'] = cagr * 100
                         else:
-                            # Calculate manually
+                            # Calculate manually with real asset period
                             total_return = (1 + returns).prod() - 1
-                            years = len(returns) / 12  # Assuming monthly data
+                            years = self._calculate_asset_years(asset, returns)
                             cagr = (1 + total_return) ** (1 / years) - 1
                             asset_metrics['annual_return'] = cagr * 100
                         
