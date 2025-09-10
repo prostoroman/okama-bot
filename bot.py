@@ -2059,22 +2059,28 @@ class ShansAi:
                         if symbols and weights and len(symbols) == len(weights):
                             portfolio_parts = []
                             for i, (symbol, weight) in enumerate(zip(symbols, weights)):
-                                portfolio_parts.append(f"{symbol}:{weight:.1%}")
+                                # Escape underscores in symbol names for markdown
+                                escaped_symbol = symbol.replace('_', '\\_')
+                                portfolio_parts.append(f"{escaped_symbol}:{weight:.1%}")
                             portfolio_str = ' '.join(portfolio_parts)
                         else:
-                            portfolio_str = ', '.join(symbols)
+                            # Escape underscores in symbol names for markdown
+                            escaped_symbols = [symbol.replace('_', '\\_') for symbol in symbols]
+                            portfolio_str = ', '.join(escaped_symbols)
                         
-                        help_text += f"• {portfolio_symbol} ({portfolio_str})\n"
+                        # Escape underscores in portfolio symbol for markdown
+                        escaped_symbol = portfolio_symbol.replace('_', '\\_')
+                        help_text += f"• {escaped_symbol} ({portfolio_str})\n"
                     
                 help_text += "\n\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
                 help_text += "• `SBER.MOEX LKOH.MOEX RUB 5Y` - сравнение с валютой RUB и периодом 5 лет\n"
                 help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (гибридный подход)\n"
                 help_text += "• `600000.SH 000001.SZ` - сравнение китайских акций (гибридный подход)\n"
-                help_text += "• `portfolio_5642.PF portfolio_5642.PF` - сравнение двух портефелей\n"
-                help_text += "• `portfolio_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
+                help_text += "• `portfolio\\_5642.PF portfolio\\_5642.PF` - сравнение двух портефелей\n"
+                help_text += "• `portfolio\\_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
                 help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
-                help_text += "💡 Первый актив в списке определяет базовую валюту, если не определено→USD\n"
+                help_text += "💡 Первый актив в списке определяет базовую валюту, если не определено -> USD\n"
                 help_text += "💡 Можно указать валюту и период в конце: `символы ВАЛЮТА ПЕРИОД`\n"
                 help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
                 help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n\n"
