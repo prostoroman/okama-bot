@@ -2072,7 +2072,7 @@ class ShansAi:
                 help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n\n"
                 help_text += "💬 Введите символы для сравнения:"
                 
-                await self._send_message_safe(update, help_text)
+                await self._send_message_safe(update, help_text, parse_mode='Markdown')
                 
                 # Set waiting flag for compare input
                 self._update_user_context(user_id, waiting_for_compare=True)
@@ -2081,49 +2081,13 @@ class ShansAi:
             # Parse currency and period parameters from command arguments
             symbols, specified_currency, specified_period = self._parse_currency_and_period(context.args)
             
-            # Extract symbols from command arguments
-            # Support multiple formats: space-separated, comma-separated, and comma+space
-            raw_args = self.clean_symbol(' '.join(symbols))  # Join all arguments into one string
-            
-            # Enhanced parsing logic for multiple formats
-            if ',' in raw_args:
-                # Handle comma-separated symbols (with or without spaces)
-                # Split by comma and clean each symbol
-                symbols = []
-                for symbol_part in raw_args.split(','):
-                    # Handle cases like "SPY.US, QQQ.US" (comma + space)
-                    symbol_part = self.clean_symbol(symbol_part.strip())
-                    if symbol_part:  # Only add non-empty symbols
-                        # Preserve original case for portfolio symbols, uppercase for regular assets
-                        if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
-                            symbols.append(symbol_part)  # Keep original case for portfolios
-                        else:
-                            symbols.append(symbol_part.upper())  # Uppercase for regular assets
-                self.logger.info(f"Parsed comma-separated symbols: {symbols}")
-            else:
-                # Handle space-separated symbols (original behavior)
-                symbols = []
-                for arg in context.args:
-                    # Check if argument contains multiple symbols separated by spaces
-                    if ' ' in arg and not any(portfolio_indicator in arg.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
-                        # Split by spaces for regular assets
-                        for symbol in arg.split():
-                            symbol = self.clean_symbol(symbol.strip())
-                            if symbol:
-                                symbols.append(symbol.upper())
-                    else:
-                        # Single symbol or portfolio
-                        symbol = self.clean_symbol(arg.strip())
-                        if symbol:
-                            # Preserve original case for portfolio symbols, uppercase for regular assets
-                            if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
-                                symbols.append(symbol)  # Keep original case for portfolios
-                            else:
-                                symbols.append(symbol.upper())  # Uppercase for regular assets
-                self.logger.info(f"Parsed space-separated symbols: {symbols}")
-            
             # Clean up symbols (remove empty strings and whitespace)
             symbols = [symbol for symbol in symbols if symbol.strip()]
+            
+            # Log the parsed parameters for debugging
+            self.logger.info(f"Parsed symbols: {symbols}")
+            self.logger.info(f"Parsed currency: {specified_currency}")
+            self.logger.info(f"Parsed period: {specified_period}")
             
             if len(symbols) < 2:
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
@@ -3637,34 +3601,18 @@ class ShansAi:
             # Clear waiting flag
             self._update_user_context(user_id, waiting_for_compare=False)
             
-            # Parse input text similar to compare_command logic
-            raw_args = self.clean_symbol(text.strip())
+            # Parse input text using the same logic as compare_command
+            # Split the text into arguments and use the same parsing function
+            text_args = text.split()
+            symbols, specified_currency, specified_period = self._parse_currency_and_period(text_args)
             
-            # Enhanced parsing logic for multiple formats
-            if ',' in raw_args:
-                # Handle comma-separated symbols (with or without spaces)
-                symbols = []
-                for symbol_part in raw_args.split(','):
-                    symbol_part = self.clean_symbol(symbol_part.strip())
-                    if symbol_part:
-                        if any(portfolio_indicator in symbol_part.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
-                            symbols.append(symbol_part)
-                        else:
-                            symbols.append(symbol_part.upper())
-                self.logger.info(f"Parsed comma-separated symbols: {symbols}")
-            else:
-                # Handle space-separated symbols
-                symbols = []
-                for symbol in raw_args.split():
-                    symbol = self.clean_symbol(symbol)
-                    if any(portfolio_indicator in symbol.upper() for portfolio_indicator in ['PORTFOLIO_', 'PF_', 'PORTFOLIO_', '.PF', '.pf']):
-                        symbols.append(symbol)
-                    else:
-                        symbols.append(symbol.upper())
-                self.logger.info(f"Parsed space-separated symbols: {symbols}")
-            
-            # Clean up symbols
+            # Clean up symbols (remove empty strings and whitespace)
             symbols = [symbol for symbol in symbols if symbol.strip()]
+            
+            # Log the parsed parameters for debugging
+            self.logger.info(f"Parsed symbols: {symbols}")
+            self.logger.info(f"Parsed currency: {specified_currency}")
+            self.logger.info(f"Parsed period: {specified_period}")
             
             if len(symbols) < 2:
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
@@ -4162,7 +4110,7 @@ class ShansAi:
                 symbols = [self.clean_symbol(s) for s in callback_data.replace('wealth_chart_', '').split(',')]
                 self.logger.info(f"Wealth chart button clicked for symbols: {symbols}")
                 self.logger.info(f"Callback data: '{callback_data}'")
-                self.logger.info(f"Parsed symbols: {[f"'{s}'" for s in symbols]}")
+                self.logger.info(f"Parsed symbols: {[f'{s}' for s in symbols]}")
                 self.logger.info(f"Symbol types: {[type(s) for s in symbols]}")
                 self.logger.info(f"Symbol lengths: {[len(str(s)) if s else 'None' for s in symbols]}")
                 await self._handle_portfolio_wealth_chart_button(update, context, symbols)
