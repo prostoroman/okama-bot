@@ -4505,8 +4505,8 @@ class ShansAi:
                 await self._send_message_safe(update, "❌ Максимум 10 символов для сравнения")
                 return
             
-            # We have 2 or more symbols - clear any stored symbol and process normally
-            self._update_user_context(user_id, compare_first_symbol=None)
+            # We have 2 or more symbols - clear any stored symbols and process normally
+            self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None)
             
             # Process the comparison using the same logic as compare_command
             # We'll reuse the existing comparison logic by calling compare_command with args
