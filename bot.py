@@ -1958,7 +1958,87 @@ class ShansAi:
             self.logger.error(f"Error formatting chart caption for {symbol}: {e}")
             return f"📈 {symbol}"
 
-    def _format_tushare_info_response(self, symbol_info: Dict[str, Any], symbol: str) -> str:
+    def _get_max_period_years_tushare(self, symbol_info: Dict[str, Any]) -> str:
+        """Get maximum available period in years for Tushare asset"""
+        try:
+            list_date = symbol_info.get('list_date', '')
+            if list_date and len(str(list_date)) == 8:
+                # Calculate years since listing
+                from datetime import datetime
+                try:
+                    listing_date = datetime.strptime(str(list_date), '%Y%m%d')
+                    years_since_listing = (datetime.now() - listing_date).days / 365.25
+                    
+                    if years_since_listing < 1:
+                        return "максимальный период данных (лет)"
+                    elif years_since_listing < 2:
+                        return f"максимальный период данных ({years_since_listing:.1f} лет)"
+                    else:
+                        return f"максимальный период данных ({years_since_listing:.0f} лет)"
+                except:
+                    return "максимальный период данных (лет)"
+            else:
+                return "максимальный период данных (лет)"
+                
+        except Exception as e:
+            self.logger.error(f"Error calculating max period years for Tushare: {e}")
+            return "максимальный период данных (лет)"
+
+    def _calculate_tushare_period_metrics(self, symbol_info: Dict[str, Any], symbol: str, period: str) -> Dict[str, Any]:
+        """Calculate metrics for specific period for Tushare assets"""
+        try:
+            if not self.tushare_service:
+                return {}
+            
+            # Get ts_code
+            ts_code = symbol_info.get('ts_code')
+            if not ts_code:
+                return {}
+            
+            # Determine days based on period
+            if period == '1Y':
+                days = 252
+            elif period == '5Y':
+                days = 1260
+            elif period == 'MAX':
+                days = 2520  # 10 years max
+            else:
+                days = 252
+            
+            # Get daily data for the period
+            daily_data = self.tushare_service.get_daily_data_by_days(ts_code, days)
+            if daily_data is None or daily_data.empty:
+                return {}
+            
+            # Calculate returns
+            daily_data = daily_data.sort_values('trade_date')
+            daily_data['returns'] = daily_data['close'].pct_change()
+            returns = daily_data['returns'].dropna()
+            
+            if returns.empty:
+                return {}
+            
+            # Calculate annual return (CAGR)
+            if len(returns) > 1:
+                total_return = (daily_data['close'].iloc[-1] / daily_data['close'].iloc[0]) - 1
+                years = len(returns) / 252.0  # Approximate trading days per year
+                annual_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
+            else:
+                annual_return = 0
+            
+            # Calculate volatility (annualized)
+            volatility = returns.std() * (252 ** 0.5) if len(returns) > 1 else 0
+            
+            return {
+                'annual_return': annual_return,
+                'volatility': volatility
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating Tushare period metrics for {symbol} period {period}: {e}")
+            return {}
+
+    def _format_tushare_info_response(self, symbol_info: Dict[str, Any], symbol: str, period: str = '1Y') -> str:
         """Format Tushare info response according to new structure"""
         try:
             # Block 1: Header - who is this?
@@ -1977,7 +2057,12 @@ class ShansAi:
             header += f"📍 {area} | {industry} | {exchange}"
             
             # Block 2: Key metrics showcase
-            metrics_text = "\n\nКлючевые показатели (за 1 год):\n"
+            period_text = {
+                '1Y': '1 год',
+                '5Y': '5 лет',
+                'MAX': self._get_max_period_years_tushare(symbol_info)
+            }.get(period, period)
+            metrics_text = f"\n\nКлючевые показатели (за {period_text}):\n"
             
             # Current price
             if 'current_price' in symbol_info:
@@ -2001,15 +2086,27 @@ class ShansAi:
                 volume = symbol_info['volume']
                 metrics_text += f"Объем торгов: {volume:,.0f}\n"
             
-            # Add calculated metrics if available
-            if 'annual_return' in symbol_info:
-                annual_return = symbol_info['annual_return']
-                return_sign = "+" if annual_return >= 0 else ""
-                metrics_text += f"Доходность (годовая): {return_sign}{annual_return:.1%}\n"
-            
-            if 'volatility' in symbol_info:
-                volatility = symbol_info['volatility']
-                metrics_text += f"Волатильность: {volatility:.1%}\n"
+            # Add calculated metrics for the specific period
+            period_metrics = self._calculate_tushare_period_metrics(symbol_info, symbol, period)
+            if period_metrics:
+                if 'annual_return' in period_metrics:
+                    annual_return = period_metrics['annual_return']
+                    return_sign = "+" if annual_return >= 0 else ""
+                    metrics_text += f"Доходность (годовая): {return_sign}{annual_return:.1%}\n"
+                
+                if 'volatility' in period_metrics:
+                    volatility = period_metrics['volatility']
+                    metrics_text += f"Волатильность: {volatility:.1%}\n"
+            else:
+                # Fallback to original metrics if period calculation fails
+                if 'annual_return' in symbol_info:
+                    annual_return = symbol_info['annual_return']
+                    return_sign = "+" if annual_return >= 0 else ""
+                    metrics_text += f"Доходность (годовая): {return_sign}{annual_return:.1%}\n"
+                
+                if 'volatility' in symbol_info:
+                    volatility = symbol_info['volatility']
+                    metrics_text += f"Волатильность: {volatility:.1%}\n"
             
             # List date
             if 'list_date' in symbol_info:
@@ -7530,7 +7627,7 @@ class ShansAi:
                 return
             
             # Format information according to new structure
-            info_text = self._format_tushare_info_response(symbol_info, symbol)
+            info_text = self._format_tushare_info_response(symbol_info, symbol, period)
             
             # Create updated keyboard with new period selected
             keyboard = self._create_info_interactive_keyboard_with_period(symbol, period)
