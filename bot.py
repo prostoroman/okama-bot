@@ -3514,6 +3514,9 @@ class ShansAi:
                 
                 self.logger.info(f"Created Portfolio with weights: {weights}, total: {sum(weights):.6f}")
                 
+                # Create portfolio information text
+                portfolio_text = f"💼 **Портфель создан успешно!**\n\n"
+                
                 # Add basic metrics to portfolio text
                 try:
                     metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
@@ -3562,12 +3565,11 @@ class ShansAi:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # Send portfolio information with buttons (no chart)
-                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
-                
-                # Automatically generate and send wealth chart
+                # Send ephemeral message about creating chart
                 await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
-                await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights, portfolio_symbol)
+                
+                # Create and send wealth chart with portfolio info in caption and buttons
+                await self._create_portfolio_wealth_chart_with_info(update, context, portfolio, symbols, currency, weights, portfolio_symbol, portfolio_text, reply_markup)
                 
                 # Store portfolio data in context
                 user_id = update.effective_user.id
@@ -4173,14 +4175,11 @@ class ShansAi:
                     for j, button in enumerate(button_row):
                         self.logger.info(f"Button [{i}][{j}]: '{button.text}' -> '{button.callback_data}'")
                 
-                # Send portfolio information with buttons (no chart)
-                self.logger.info(f"Sending portfolio message with buttons for portfolio {portfolio_symbol}")
-                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
-                self.logger.info(f"Portfolio message sent successfully for portfolio {portfolio_symbol}")
-                
-                # Automatically generate and send wealth chart
+                # Send ephemeral message about creating chart
                 await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
-                await self._create_portfolio_wealth_chart(update, context, portfolio, symbols, currency, weights, portfolio_symbol)
+                
+                # Create and send wealth chart with portfolio info in caption and buttons
+                await self._create_portfolio_wealth_chart_with_info(update, context, portfolio, symbols, currency, weights, portfolio_symbol, portfolio_text, reply_markup)
                 
                 # Store portfolio data in context
                 user_id = update.effective_user.id
