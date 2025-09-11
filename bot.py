@@ -391,14 +391,12 @@ class ShansAi:
 
 
     def get_random_examples(self, count: int = 3) -> list:
-        """Get random examples from known assets, excluding Chinese and Hong Kong assets"""
+        """Get random examples from known assets, including Chinese and Hong Kong assets"""
         import random
         all_assets = []
-        # Exclude Chinese assets (SSE, SZSE, BSE) and Hong Kong assets (HKEX)
-        excluded_categories = ['SSE', 'SZSE', 'BSE', 'HKEX']
+        # Include all assets including Chinese and Hong Kong assets
         for category, assets in self.known_assets.items():
-            if category not in excluded_categories:
-                all_assets.extend(assets)
+            all_assets.extend(assets)
         # Get random sample and format with backticks
         selected_assets = random.sample(all_assets, min(count, len(all_assets)))
         return [f"`{asset}`" for asset in selected_assets]
@@ -1904,7 +1902,7 @@ class ShansAi:
         """Format chart caption with English information for Chinese/Hong Kong assets"""
         try:
             # Get English name
-            english_name = symbol_info.get('name', symbol.split('.')[0])
+            english_name = symbol_info.get('english_name', symbol_info.get('name', symbol.split('.')[0]))
             
             # Get exchange and location information
             exchange = symbol_info.get('exchange', 'N/A')
@@ -2071,11 +2069,7 @@ class ShansAi:
                 price = symbol_info['current_price']
                 price_text = f"Цена: {price:.2f} CNY"
                 
-                if 'change' in symbol_info:
-                    change = symbol_info['change']
-                    change_sign = "+" if change >= 0 else ""
-                    price_text += f" ({change_sign}{change:.2f})"
-                
+                # Show only percentage change to avoid duplicate brackets
                 if 'pct_chg' in symbol_info:
                     pct_chg = symbol_info['pct_chg']
                     change_sign = "+" if pct_chg >= 0 else ""
@@ -2208,9 +2202,6 @@ class ShansAi:
             # Determine currency based on exchange
             currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
             
-            # Use English name if available, otherwise fall back to asset name
-            display_name = english_name if english_name and english_name != asset_name else asset_name
-            
             # Create chart using ChartStyles
             chart_styles = ChartStyles()
             fig, ax = chart_styles.create_price_chart(
@@ -2222,6 +2213,8 @@ class ShansAi:
             )
             
             # Set title with proper format: Тикер | Английское название | Валюта | Срок
+            # Use English name if available, otherwise fall back to asset name
+            display_name = english_name if english_name and english_name != asset_name else asset_name
             title = f"{symbol} | {display_name} | {currency} | {period}"
             ax.set_title(title, **chart_styles.title)
             
@@ -2675,7 +2668,7 @@ class ShansAi:
                 namespace = self.clean_symbol(context.args[0]).upper()
                 
                 # Use the unified method that handles both okama and tushare
-                await self._show_namespace_symbols(update, context, namespace, is_callback=False, page=0)
+                await self._show_namespace_symbols(update, context, namespace, is_callback=False)
                     
         except ImportError:
             await self._send_message_safe(update, "*❌ Библиотека okama не установлена*")
@@ -12260,7 +12253,7 @@ class ShansAi:
             self.logger.info(f"Handling namespace button for: {namespace}")
             
             # Use the unified method that handles both okama and tushare
-            await self._show_namespace_symbols(update, context, namespace, is_callback=True, page=0)
+            await self._show_namespace_symbols(update, context, namespace, is_callback=True)
                 
         except ImportError:
             await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
