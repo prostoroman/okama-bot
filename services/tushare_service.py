@@ -110,6 +110,9 @@ class TushareService:
             # Find matching stock
             stock_info = df[df['symbol'] == symbol_code]
             if stock_info.empty:
+                # Log available symbols for debugging
+                available_symbols = df[df['symbol'].str.contains(symbol_code[:3], na=False)]['symbol'].head(10).tolist()
+                self.logger.warning(f"Stock {symbol_code} not found in {exchange}. Available similar symbols: {available_symbols}")
                 # Try to find as index if not found as stock
                 return self._get_index_info(symbol_code, exchange)
             
@@ -322,11 +325,14 @@ class TushareService:
                     )
                 else:
                     # Mainland China stock data - use the original symbol format
+                    self.logger.info(f"Getting daily data for {symbol} from {start_date} to {end_date}")
                     df = self.pro.daily(
                         ts_code=symbol,  # Use full symbol like 600026.SH
                         start_date=start_date,
                         end_date=end_date
                     )
+                    if df.empty:
+                        self.logger.warning(f"No daily data returned for {symbol}")
             
             if df.empty:
                 return pd.DataFrame()
