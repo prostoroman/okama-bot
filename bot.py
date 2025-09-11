@@ -2094,7 +2094,14 @@ class ShansAi:
                 header += f" | ISIN: {isin}"
             
             # Block 2: Key metrics showcase
-            metrics_text = "\n\nКлючевые показатели (за 1 год):\n"
+            period = key_metrics.get('period', '1Y')
+            period_text = {
+                '1Y': '1 год',
+                '5Y': '5 лет', 
+                'MAX': 'MAX'
+            }.get(period, '1 год')
+            
+            metrics_text = f"\n\nКлючевые показатели (за {period_text}):\n"
             
             # Current price
             if key_metrics.get('current_price') is not None:
