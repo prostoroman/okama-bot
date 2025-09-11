@@ -1684,9 +1684,9 @@ class ShansAi:
             examples_text = ", ".join(examples)
             
             await self._send_message_safe(update, 
-                f"📊 Информация об активе\n\n"
-                f"Примеры: {examples_text}\n\n"
-                f"Просто отправьте название инструмента")
+                f"📊 *Информация об активе*\n\n"
+                f"*Примеры:* {examples_text}\n\n"
+                f"*Просто отправьте название инструмента*")
             return
         
         symbol = self.clean_symbol(context.args[0]).upper()
@@ -1712,7 +1712,7 @@ class ShansAi:
             
             if data_source == 'tushare':
                 # Use Tushare service for Chinese exchanges
-                await self._handle_tushare_info(update, resolved_symbol)
+                await self._handle_tushare_info(update, resolved_symbol, context)
             else:
                 # Use Okama for other exchanges
                 await self._handle_okama_info(update, resolved_symbol, context)
@@ -1804,7 +1804,7 @@ class ShansAi:
             
             if data_source == 'tushare':
                 # Use Tushare service for Chinese exchanges
-                await self._handle_tushare_info(update, resolved_symbol)
+                await self._handle_tushare_info(update, resolved_symbol, context)
             else:
                 # Use Okama for other exchanges
                 await self._handle_okama_info(update, resolved_symbol, context)
@@ -1854,11 +1854,11 @@ class ShansAi:
             self.logger.error(f"Error in _handle_okama_info for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
-    async def _handle_tushare_info(self, update: Update, symbol: str):
+    async def _handle_tushare_info(self, update: Update, symbol: str, context: ContextTypes.DEFAULT_TYPE = None):
         """Handle info display for Tushare assets with new interactive structure"""
         try:
             if not self.tushare_service:
-                await self._send_message_safe(update, "❌ Сервис Tushare недоступен")
+                await self._send_message_safe(update, "*❌ Сервис Tushare недоступен*")
                 return
             
             # Get symbol information from Tushare
@@ -1952,27 +1952,6 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error getting Tushare chart for {symbol}: {e}")
             return None
-
-    def _get_max_period_years(self, asset) -> str:
-        """Get maximum available period in years for the asset"""
-        try:
-            if not hasattr(asset, 'close_daily'):
-                return "максимальный период данных (лет)"
-            
-            data = asset.close_daily
-            total_days = len(data)
-            years = total_days / 252.0  # Approximate trading days per year
-            
-            if years < 1:
-                return "максимальный период данных (лет)"
-            elif years < 2:
-                return f"максимальный период данных ({years:.1f} лет)"
-            else:
-                return f"максимальный период данных ({years:.0f} лет)"
-                
-        except Exception as e:
-            self.logger.error(f"Error calculating max period years: {e}")
-            return "максимальный период данных (лет)"
 
     def _get_data_for_period(self, asset, period: str):
         """Get filtered data for the specified period"""
@@ -2123,18 +2102,11 @@ class ShansAi:
             
             # Block 2: Key metrics showcase
             period = key_metrics.get('period', '1Y')
-            
-            if period == 'MAX':
-                # Get dynamic max period text for this asset
-                try:
-                    period_text = self._get_max_period_years(asset)
-                except:
-                    period_text = 'максимальный период данных (лет)'
-            else:
-                period_text = {
-                    '1Y': '1 год',
-                    '5Y': '5 лет'
-                }.get(period, '1 год')
+            period_text = {
+                '1Y': '1 год',
+                '5Y': '5 лет', 
+                'MAX': 'MAX'
+            }.get(period, '1 год')
             
             metrics_text = f"\n\nКлючевые показатели (за {period_text}):\n"
             
@@ -2181,18 +2153,10 @@ class ShansAi:
         """Create interactive keyboard for info command with active period highlighted"""
         # Create period buttons with active period highlighted
         period_buttons = []
-        
-        # Get dynamic max period text for this asset
-        try:
-            asset = ok.Asset(symbol)
-            max_period_text = self._get_max_period_years(asset)
-        except:
-            max_period_text = "максимальный период данных (лет)"
-        
         periods = [
             ("1Y", "1 год"),
             ("5Y", "5 лет"),
-            ("MAX", max_period_text)
+            ("MAX", "MAX")
         ]
         
         for period_code, period_text in periods:
@@ -2424,7 +2388,7 @@ class ShansAi:
                 await self._show_namespace_symbols(update, context, namespace, is_callback=False)
                     
         except ImportError:
-            await self._send_message_safe(update, "❌ Библиотека okama не установлена")
+            await self._send_message_safe(update, "*❌ Библиотека okama не установлена*")
         except Exception as e:
             self.logger.error(f"Error in namespace command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
@@ -2599,7 +2563,7 @@ class ShansAi:
                 help_text += "💡 Можно указать валюту и период в конце: `символы ВАЛЮТА ПЕРИОД`\n"
                 help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
                 help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n\n"
-                help_text += "💬 Введите символы для сравнения:"
+                help_text += "*💬 Введите символы для сравнения:*"
                 
                 await self._send_message_safe(update, help_text, parse_mode='Markdown')
                 
@@ -7260,12 +7224,6 @@ class ShansAi:
         try:
             await self._send_ephemeral_message(update, context, f"📊 Обновляю данные за {period}...", delete_after=2)
             
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             # Get asset and metrics for the new period
             asset = ok.Asset(symbol)
             key_metrics = await self._get_asset_key_metrics(asset, symbol, period)
@@ -7480,12 +7438,12 @@ class ShansAi:
             )
             
             portfolio_text = f"💼 **Добавить {symbol} в портфель**\n\n"
-            portfolio_text += f"📝 **Отправьте состав портфеля, включая {symbol}.**\n\n"
-            portfolio_text += "**📋 Примеры:**\n"
+            portfolio_text += f"Отправьте состав портфеля, включая {symbol}.\n\n"
+            portfolio_text += "**Примеры:**\n"
             portfolio_text += f"• `{symbol}:0.6 QQQ.US:0.4`\n"
             portfolio_text += f"• `{symbol}:0.5 BND.US:0.3 GC.COMM:0.2`\n"
             portfolio_text += f"• `{symbol}:0.7 VTI.US:0.3`\n\n"
-            portfolio_text += f"💡 **Или отправьте любой другой состав портфеля с {symbol}**"
+            portfolio_text += f"Или отправьте любой другой состав портфеля с {symbol}"
             
             await self._send_callback_message(update, context, portfolio_text)
             
@@ -7568,7 +7526,7 @@ class ShansAi:
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle dividends button click for single asset"""
         try:
-            await self._send_ephemeral_message(update, context, "💵 Получаю информацию о дивидендах...", delete_after=3)
+            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
             
             # Получаем информацию о дивидендах
             try:
@@ -7760,7 +7718,7 @@ class ShansAi:
     async def _handle_tushare_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare dividends button click"""
         try:
-            await self._send_ephemeral_message(update, context, "💵 Получаю информацию о дивидендах...", delete_after=3)
+            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
