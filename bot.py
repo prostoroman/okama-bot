@@ -7480,6 +7480,12 @@ class ShansAi:
     async def _handle_info_ai_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle AI analysis button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             await self._send_ephemeral_message(update, context, "🧠 Анализирую график с помощью AI...", delete_after=3)
             
             # Get asset data for analysis
@@ -7514,6 +7520,12 @@ class ShansAi:
     async def _handle_info_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle compare button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             # Set user context to wait for comparison input
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
@@ -7541,6 +7553,12 @@ class ShansAi:
     async def _handle_info_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle portfolio button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             # Set user context to wait for portfolio input
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
