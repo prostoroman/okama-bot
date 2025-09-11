@@ -1098,6 +1098,30 @@ class ShansAi:
             self.logger.error(f"Error in vertical describe table formatting: {e}")
             return "📊 Ошибка при формировании таблицы статистики"
 
+    async def _send_photo_safe(self, update: Update, photo_bytes: bytes, caption: str = None, reply_markup=None):
+        """Безопасная отправка фотографии с обработкой ошибок"""
+        try:
+            import io
+            
+            # Проверяем, что update не None
+            if not update or not update.effective_chat:
+                self.logger.error("Update or effective_chat is None in _send_photo_safe")
+                return
+            
+            # Отправляем фотографию
+            await self.application.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=io.BytesIO(photo_bytes),
+                caption=caption,
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error sending photo: {e}")
+            # Fallback: отправляем только текст
+            if caption:
+                await self._send_message_safe(update, caption, reply_markup=reply_markup)
+
     async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown', reply_markup=None):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
         try:
