@@ -1829,6 +1829,7 @@ class ShansAi:
                     await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
                 else:
                     # Если график не удалось получить, отправляем только текст
+                    self.logger.warning(f"Could not get chart for {symbol}, sending text only")
                     await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                 
             except Exception as e:
@@ -2187,6 +2188,9 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error getting daily chart for {symbol}: {e}")
+            self.logger.error(f"Error type: {type(e)}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
 
@@ -7176,9 +7180,11 @@ class ShansAi:
             
             if chart_data:
                 caption = f"📈 График доходности за {period}\n\n{info_text}"
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+                # Update the existing message with new chart and info
+                await self._update_message_with_chart(update, context, chart_data, caption, reply_markup)
             else:
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                # If no chart, update with text only
+                await self._update_message_with_text(update, context, info_text, reply_markup)
                 
         except Exception as e:
             self.logger.error(f"Error handling info period button: {e}")
@@ -7396,6 +7402,48 @@ class ShansAi:
         
         return alternatives.get(symbol, ['SPY.US', 'QQQ.US', 'VTI.US', 'BND.US'])
 
+    async def _update_message_with_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, chart_data: bytes, caption: str, reply_markup):
+        """Update existing message with new chart and caption"""
+        try:
+            import io
+            from telegram import InputMediaPhoto
+            
+            # Create media object
+            media = InputMediaPhoto(
+                media=io.BytesIO(chart_data),
+                caption=caption,
+                parse_mode='Markdown'
+            )
+            
+            # Update the message
+            await context.bot.edit_message_media(
+                chat_id=update.callback_query.message.chat_id,
+                message_id=update.callback_query.message.message_id,
+                media=media,
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error updating message with chart: {e}")
+            # Fallback: send new message
+            await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+
+    async def _update_message_with_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup):
+        """Update existing message with new text"""
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.callback_query.message.chat_id,
+                message_id=update.callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error updating message with text: {e}")
+            # Fallback: send new message
+            await self._send_message_safe(update, text, reply_markup=reply_markup)
+
     async def _get_chart_for_period(self, symbol: str, period: str) -> Optional[bytes]:
         """Get chart for specific period"""
         try:
@@ -7411,6 +7459,9 @@ class ShansAi:
                 return await self._get_daily_chart(symbol)
         except Exception as e:
             self.logger.error(f"Error getting chart for period {period}: {e}")
+            self.logger.error(f"Error type: {type(e)}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
@@ -7735,6 +7786,9 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error getting monthly chart for {symbol}: {e}")
+            self.logger.error(f"Error type: {type(e)}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     async def _get_all_chart(self, symbol: str) -> Optional[bytes]:
@@ -7792,6 +7846,9 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error getting all chart for {symbol}: {e}")
+            self.logger.error(f"Error type: {type(e)}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
     async def _get_dividend_chart(self, symbol: str) -> Optional[bytes]:
