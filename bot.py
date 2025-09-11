@@ -2711,6 +2711,9 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 saved_portfolios = user_context.get('saved_portfolios', {})
                 
+                # Clear any existing compare context when starting fresh
+                self._update_user_context(user_id, compare_first_symbol=None, waiting_for_compare=False)
+                
                 # Get random examples for user
                 examples = self.get_random_examples(3)
                 examples_text = ", ".join(examples)
@@ -2780,6 +2783,20 @@ class ShansAi:
             self.logger.info(f"Parsed currency: {specified_currency}")
             self.logger.info(f"Parsed period: {specified_period}")
             
+            # Get user_id for context operations
+            user_id = update.effective_user.id
+            
+            # Check if we have a stored first symbol and only 1 symbol in current input
+            user_context = self._get_user_context(user_id)
+            stored_first_symbol = user_context.get('compare_first_symbol')
+            
+            if len(symbols) == 1 and stored_first_symbol is not None:
+                # Combine stored symbol with current input
+                symbols = [stored_first_symbol] + symbols
+                # Clear the stored symbol
+                self._update_user_context(user_id, compare_first_symbol=None)
+                self.logger.info(f"Combined with stored symbol: {symbols}")
+            
             if len(symbols) < 2:
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
                 return
@@ -2789,7 +2806,6 @@ class ShansAi:
                 return
 
             # Process portfolio symbols and expand them
-            user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
@@ -4341,6 +4357,7 @@ class ShansAi:
         """Handle compare input from user message"""
         try:
             user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
             
             # Clear waiting flag
             self._update_user_context(user_id, waiting_for_compare=False)
@@ -4358,13 +4375,41 @@ class ShansAi:
             self.logger.info(f"Parsed currency: {specified_currency}")
             self.logger.info(f"Parsed period: {specified_period}")
             
-            if len(symbols) < 2:
+            # Check if we have a stored first symbol from previous input
+            stored_first_symbol = user_context.get('compare_first_symbol')
+            
+            if len(symbols) == 1:
+                if stored_first_symbol is None:
+                    # First symbol - store it and ask for more
+                    self._update_user_context(user_id, compare_first_symbol=symbols[0])
+                    await self._send_message_safe(update, f"Вы указали только 1 символ, а для сравнения нужно 2 и больше, напишите дополнительный символ для сравнения, например `случайный символ`")
+                    return
+                else:
+                    # We have a stored symbol, combine with new input
+                    combined_symbols = [stored_first_symbol] + symbols
+                    # Clear the stored symbol
+                    self._update_user_context(user_id, compare_first_symbol=None)
+                    
+                    # Process the comparison with combined symbols
+                    context.args = combined_symbols
+                    context.specified_currency = specified_currency
+                    context.specified_period = specified_period
+                    
+                    await self.compare_command(update, context)
+                    return
+            
+            elif len(symbols) == 0:
+                # Empty input - clear stored symbol and show help
+                self._update_user_context(user_id, compare_first_symbol=None)
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
                 return
             
-            if len(symbols) > 10:
+            elif len(symbols) > 10:
                 await self._send_message_safe(update, "❌ Максимум 10 символов для сравнения")
                 return
+            
+            # We have 2 or more symbols - clear any stored symbol and process normally
+            self._update_user_context(user_id, compare_first_symbol=None)
             
             # Process the comparison using the same logic as compare_command
             # We'll reuse the existing comparison logic by calling compare_command with args

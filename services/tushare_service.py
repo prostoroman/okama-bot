@@ -120,12 +120,9 @@ class TushareService:
                 info['english_name'] = info['enname']  # Preserve English name
                 info['name'] = info['enname']  # Use English name as primary name
             else:
-                # For mainland Chinese stocks, use cnspell if available, otherwise use Chinese name
-                if 'cnspell' in info and info['cnspell'] and info['cnspell'].strip():
-                    info['english_name'] = info['cnspell'].upper()  # Use cnspell as English name
-                    info['name'] = info['cnspell'].upper()  # Use cnspell as primary name
-                else:
-                    info['english_name'] = info.get('name', symbol_code)  # Fallback to Chinese name
+                # For mainland Chinese stocks, keep Chinese name as primary, no English fallback
+                info['english_name'] = info.get('name', symbol_code)  # Use Chinese name as fallback
+                info['name'] = info.get('name', symbol_code)  # Keep Chinese name as primary
             
             # Get additional metrics
             try:
@@ -201,12 +198,9 @@ class TushareService:
                 info['english_name'] = info['enname']  # Preserve English name
                 info['name'] = info['enname']  # Use English name as primary name
             else:
-                # For mainland Chinese stocks, use cnspell if available, otherwise use Chinese name
-                if 'cnspell' in info and info['cnspell'] and info['cnspell'].strip():
-                    info['english_name'] = info['cnspell'].upper()  # Use cnspell as English name
-                    info['name'] = info['cnspell'].upper()  # Use cnspell as primary name
-                else:
-                    info['english_name'] = info.get('name', symbol_code)  # Fallback to Chinese name
+                # For Hong Kong stocks, keep Chinese name as primary, no English fallback
+                info['english_name'] = info.get('name', symbol_code)  # Use Chinese name as fallback
+                info['name'] = info.get('name', symbol_code)  # Keep Chinese name as primary
 
             # Add missing fields for consistency
             info.update({

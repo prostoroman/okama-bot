@@ -49,6 +49,9 @@ class InMemoryUserContextStore:
                     "current_symbols": [],
                     "current_currency": None,
                     "current_currency_info": None,
+                    # Compare command context
+                    "compare_first_symbol": None,
+                    "waiting_for_compare": False,
                 }
                 self._data[key] = ctx
             return ctx
