@@ -2098,7 +2098,6 @@ class ShansAi:
         period_buttons = []
         periods = [
             ("1Y", "1 год"),
-            ("3Y", "3 года"), 
             ("5Y", "5 лет"),
             ("MAX", "MAX")
         ]
@@ -2115,15 +2114,9 @@ class ShansAi:
         keyboard = [
             # Row 1: Period switching
             period_buttons,
-            # Row 2: Deep analysis
+            # Row 2: Actions
             [
-                InlineKeyboardButton("📉 Риски и просадки", callback_data=f"info_risks_{symbol}"),
                 InlineKeyboardButton("💵 История дивидендов", callback_data=f"info_dividends_{symbol}"),
-                InlineKeyboardButton("📊 Все метрики", callback_data=f"info_metrics_{symbol}")
-            ],
-            # Row 3: Next steps
-            [
-                InlineKeyboardButton("🧠 AI-анализ графика", callback_data=f"info_ai_analysis_{symbol}"),
                 InlineKeyboardButton("➡️ Сравнить с...", callback_data=f"info_compare_{symbol}"),
                 InlineKeyboardButton("💼 Добавить в портфель", callback_data=f"info_portfolio_{symbol}")
             ]
@@ -7449,8 +7442,6 @@ class ShansAi:
         try:
             if period == '1Y':
                 return await self._get_daily_chart(symbol)
-            elif period == '3Y':
-                return await self._get_monthly_chart(symbol)
             elif period == '5Y':
                 return await self._get_monthly_chart(symbol)
             elif period == 'MAX':

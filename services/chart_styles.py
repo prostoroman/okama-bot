@@ -432,12 +432,8 @@ class ChartStyles:
         bars = ax.bar(yearly_dividends.index, yearly_dividends.values, 
                      color='#94D2BD', alpha=0.7, width=0.8)
         
-        # Получаем информацию об активе для заголовка
-        asset_name = symbol.split('.')[0] if '.' in symbol else symbol
-        
-        # Обновляем заголовок с нужным форматом
-        title = f"{symbol} | {asset_name} | {currency} | dividends"
-        ax.set_title(title, **self.title)
+        # Убираем заголовок графика
+        ax.set_title('')
         
         # Убираем подписи осей
         ax.set_xlabel('')
@@ -445,7 +441,7 @@ class ChartStyles:
         
         # Настройка осей для отображения только годов
         ax.set_xticks(yearly_dividends.index)
-        ax.set_xticklabels(yearly_dividends.index, rotation=45)
+        ax.set_xticklabels(yearly_dividends.index, rotation=0)
         
         # Применяем базовые стили
         self._apply_base_style(fig, ax)
