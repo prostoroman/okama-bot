@@ -1953,6 +1953,27 @@ class ShansAi:
             self.logger.error(f"Error getting Tushare chart for {symbol}: {e}")
             return None
 
+    def _get_max_period_years(self, asset) -> str:
+        """Get maximum available period in years for the asset"""
+        try:
+            if not hasattr(asset, 'close_daily'):
+                return "максимальный период данных (лет)"
+            
+            data = asset.close_daily
+            total_days = len(data)
+            years = total_days / 252.0  # Approximate trading days per year
+            
+            if years < 1:
+                return "максимальный период данных (лет)"
+            elif years < 2:
+                return f"максимальный период данных ({years:.1f} лет)"
+            else:
+                return f"максимальный период данных ({years:.0f} лет)"
+                
+        except Exception as e:
+            self.logger.error(f"Error calculating max period years: {e}")
+            return "максимальный период данных (лет)"
+
     def _get_data_for_period(self, asset, period: str):
         """Get filtered data for the specified period"""
         try:
@@ -2102,11 +2123,18 @@ class ShansAi:
             
             # Block 2: Key metrics showcase
             period = key_metrics.get('period', '1Y')
-            period_text = {
-                '1Y': '1 год',
-                '5Y': '5 лет', 
-                'MAX': 'MAX'
-            }.get(period, '1 год')
+            
+            if period == 'MAX':
+                # Get dynamic max period text for this asset
+                try:
+                    period_text = self._get_max_period_years(asset)
+                except:
+                    period_text = 'максимальный период данных (лет)'
+            else:
+                period_text = {
+                    '1Y': '1 год',
+                    '5Y': '5 лет'
+                }.get(period, '1 год')
             
             metrics_text = f"\n\nКлючевые показатели (за {period_text}):\n"
             
@@ -2153,10 +2181,18 @@ class ShansAi:
         """Create interactive keyboard for info command with active period highlighted"""
         # Create period buttons with active period highlighted
         period_buttons = []
+        
+        # Get dynamic max period text for this asset
+        try:
+            asset = ok.Asset(symbol)
+            max_period_text = self._get_max_period_years(asset)
+        except:
+            max_period_text = "максимальный период данных (лет)"
+        
         periods = [
             ("1Y", "1 год"),
             ("5Y", "5 лет"),
-            ("MAX", "MAX")
+            ("MAX", max_period_text)
         ]
         
         for period_code, period_text in periods:
@@ -7532,7 +7568,7 @@ class ShansAi:
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle dividends button click for single asset"""
         try:
-            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
+            await self._send_ephemeral_message(update, context, "💵 Получаю информацию о дивидендах...", delete_after=3)
             
             # Получаем информацию о дивидендах
             try:
@@ -7724,7 +7760,7 @@ class ShansAi:
     async def _handle_tushare_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare dividends button click"""
         try:
-            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
+            await self._send_ephemeral_message(update, context, "💵 Получаю информацию о дивидендах...", delete_after=3)
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
