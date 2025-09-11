@@ -242,7 +242,7 @@ class ChartStyles:
             logger.error(f"Error applying base style: {e}")
     
     def apply_styling(self, ax, title=None, xlabel=None, ylabel=None, 
-                     grid=True, legend=True, copyright=True, **kwargs):
+                     grid=True, legend=True, copyright=True, data_source='okama', **kwargs):
         """Универсальный метод применения стилей"""
         try:
             # Заголовок
@@ -274,13 +274,13 @@ class ChartStyles:
             
             # Копирайт
             if copyright:
-                self.add_copyright(ax)
+                self.add_copyright(ax, data_source=data_source)
                 
         except Exception as e:
             logger.error(f"Error applying styling: {e}")
     
     def apply_drawdown_styling(self, ax, title=None, xlabel=None, ylabel=None, 
-                              grid=True, legend=True, copyright=True, **kwargs):
+                              grid=True, legend=True, copyright=True, data_source='okama', **kwargs):
         """Apply styling for drawdown charts with standard grid colors and date labels above"""
         try:
             # Заголовок
@@ -308,7 +308,7 @@ class ChartStyles:
             
             # Копирайт
             if copyright:
-                self.add_copyright(ax)
+                self.add_copyright(ax, data_source=data_source)
             
             # Move date labels to appear above the chart
             ax.tick_params(axis='x', labeltop=True, labelbottom=False)
@@ -316,11 +316,17 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error applying drawdown styling: {e}")
     
-    def add_copyright(self, ax):
-        """Добавить копирайт"""
+    def add_copyright(self, ax, data_source='okama'):
+        """Добавить копирайт с указанием источника данных"""
         try:
+            # Формируем текст копирайта в зависимости от источника данных
+            if data_source == 'tushare':
+                copyright_text = 'shans.ai | source: tushare'
+            else:  # по умолчанию okama
+                copyright_text = 'shans.ai | source: okama'
+            
             ax.text(*self.copyright['position'], 
-                   self.copyright['text'],
+                   copyright_text,
                    transform=ax.transAxes, 
                    fontsize=self.copyright['fontsize'], 
                    color=self.copyright['color'], 
@@ -349,12 +355,13 @@ class ChartStyles:
         else:
             ax.plot(data.index, data.values, alpha=self.lines['alpha'])
         
-        # Extract copyright parameter from kwargs and pass to apply_styling
+        # Extract copyright and data_source parameters from kwargs and pass to apply_styling
         copyright_param = kwargs.pop('copyright', True)
-        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, legend=False, copyright=copyright_param)
+        data_source = kwargs.pop('data_source', 'okama')
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, legend=False, copyright=copyright_param, data_source=data_source)
         return fig, ax
     
-    def create_bar_chart(self, data, title, ylabel, xlabel='', bar_color=None, **kwargs):
+    def create_bar_chart(self, data, title, ylabel, xlabel='', bar_color=None, data_source='okama', **kwargs):
         """Создать столбчатый график"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -366,13 +373,13 @@ class ChartStyles:
         else:
             ax.bar(data.index, data.values, color=bar_color, alpha=0.8)
         
-        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel)
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, data_source=data_source)
         # Поворачиваем подписи на оси X
         for label in ax.get_xticklabels():
             label.set_rotation(45)
         return fig, ax
     
-    def create_multi_line_chart(self, data, title, ylabel, xlabel='', **kwargs):
+    def create_multi_line_chart(self, data, title, ylabel, xlabel='', data_source='okama', **kwargs):
         """Создать график с множественными линиями"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -393,7 +400,7 @@ class ChartStyles:
             ax.plot(x_values, data[column].values,
                     color=color, alpha=self.lines['alpha'], label=column)
         
-        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel)
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, data_source=data_source)
         # Поворачиваем подписи на оси X
         for label in ax.get_xticklabels():
             label.set_rotation(45)
@@ -403,14 +410,14 @@ class ChartStyles:
     # СПЕЦИАЛИЗИРОВАННЫЕ МЕТОДЫ
     # ============================================================================
     
-    def create_price_chart(self, data, symbol, currency, period='', **kwargs):
+    def create_price_chart(self, data, symbol, currency, period='', data_source='okama', **kwargs):
         """Создать график цен актива"""
         title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
         ylabel = f'Цена ({currency})' if currency else 'Цена'
         xlabel = ''  # Пустая подпись по оси X
-        return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
+        return self.create_line_chart(data, title, ylabel, xlabel=xlabel, data_source=data_source, **kwargs)
     
-    def create_dividends_chart(self, data, symbol, currency, asset_name=None, **kwargs):
+    def create_dividends_chart(self, data, symbol, currency, asset_name=None, data_source='okama', **kwargs):
         """Создать график дивидендов"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -455,11 +462,11 @@ class ChartStyles:
         self._apply_base_style(fig, ax)
         
         # Добавляем копирайт
-        self.add_copyright(ax)
+        self.add_copyright(ax, data_source=data_source)
         
         return fig, ax
     
-    def create_dividend_yield_chart(self, data, symbols, weights=None, portfolio_name=None, **kwargs):
+    def create_dividend_yield_chart(self, data, symbols, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Создать график дивидендной доходности портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -516,14 +523,14 @@ class ChartStyles:
         xlabel = ''  # No x-axis label
         
         # Применяем общие стили
-        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=True, copyright=True)
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=True, copyright=True, data_source=data_source)
         # Поворачиваем подписи на оси X
         for label in ax.get_xticklabels():
             label.set_rotation(45)
         
         return fig, ax
     
-    def create_drawdowns_chart(self, data, symbols, currency, **kwargs):
+    def create_drawdowns_chart(self, data, symbols, currency, data_source='okama', **kwargs):
         """Создать график просадок"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -546,11 +553,11 @@ class ChartStyles:
         ylabel = f'Просадка (%)'
         
         # Apply drawdown-specific styling with standard grid colors and date labels above
-        self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True)
+        self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True, data_source=data_source)
         
         return fig, ax
     
-    def create_portfolio_wealth_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
+    def create_portfolio_wealth_chart(self, data, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Создать график накопленной доходности портфеля"""
         # Create title with portfolio name if provided, otherwise use asset percentages and currency
         if portfolio_name:
@@ -644,11 +651,11 @@ class ChartStyles:
         xlabel = ''  # No x-axis label
         
         # Применяем стили
-        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=False, copyright=True)
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=False, copyright=True, data_source=data_source)
         
         return fig, ax
     
-    def create_portfolio_drawdowns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
+    def create_portfolio_drawdowns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Создать график просадок портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -697,7 +704,7 @@ class ChartStyles:
         ylabel = f'Просадка ({currency}) (%)'
         
         # Apply drawdown-specific styling with standard grid colors and date labels above
-        self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True)
+        self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True, data_source=data_source)
         
         return fig, ax
     
@@ -719,7 +726,7 @@ class ChartStyles:
         ylabel = f'CAGR ({currency}) (%)'
         return self.create_line_chart(data, title, ylabel, **kwargs)
     
-    def create_portfolio_compare_assets_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
+    def create_portfolio_compare_assets_chart(self, data, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Создать график сравнения портфеля с активами"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -753,10 +760,10 @@ class ChartStyles:
         else:
             title = f'Портфель vs Активы\n{", ".join(symbols)}'
         ylabel = f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность'
-        self.apply_styling(ax, title=title, ylabel=ylabel)
+        self.apply_styling(ax, title=title, ylabel=ylabel, data_source=data_source)
         return fig, ax
     
-    def create_comparison_chart(self, data, symbols, currency, **kwargs):
+    def create_comparison_chart(self, data, symbols, currency, data_source='okama', **kwargs):
         """Создать график сравнения активов"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -785,7 +792,7 @@ class ChartStyles:
         ylabel = kwargs.get('ylabel', f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность')
         
         # Применяем стили
-        self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel)
+        self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel, data_source=data_source)
         ax.tick_params(axis='x', rotation=45)
         
         # Автоматически настраиваем интервал между датами на оси X
@@ -793,7 +800,7 @@ class ChartStyles:
         
         return fig, ax
     
-    def create_correlation_matrix_chart(self, correlation_matrix, **kwargs):
+    def create_correlation_matrix_chart(self, correlation_matrix, data_source='okama', **kwargs):
         """Создать график корреляционной матрицы"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -818,10 +825,10 @@ class ChartStyles:
                        color=text_color, fontweight='bold', fontsize=10)
         
         title = f'Корреляционная матрица ({len(correlation_matrix.columns)} активов)'
-        self.apply_styling(ax, title=title, grid=False, legend=False)
+        self.apply_styling(ax, title=title, grid=False, legend=False, data_source=data_source)
         return fig, ax
     
-    def create_dividend_table_chart(self, table_data, headers, title='История дивидендов', **kwargs):
+    def create_dividend_table_chart(self, table_data, headers, title='История дивидендов', data_source='okama', **kwargs):
         """Создать график с таблицей дивидендов"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -837,10 +844,10 @@ class ChartStyles:
         table.set_fontsize(10)
         table.scale(1.2, 1.5)
         
-        self.apply_styling(ax, title=title, grid=False, legend=False)
+        self.apply_styling(ax, title=title, grid=False, legend=False, data_source=data_source)
         return fig, ax, table
     
-    def create_dividends_chart_enhanced(self, data, symbol, currency, **kwargs):
+    def create_dividends_chart_enhanced(self, data, symbol, currency, data_source='okama', **kwargs):
         """Создать улучшенный график дивидендов"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -851,7 +858,7 @@ class ChartStyles:
         
         title = f'Дивиденды {symbol}'
         ylabel = f'Сумма ({currency})'
-        self.apply_styling(ax, title=title, ylabel=ylabel)
+        self.apply_styling(ax, title=title, ylabel=ylabel, data_source=data_source)
         
         fig.autofmt_xdate()
         
@@ -1066,7 +1073,7 @@ class ChartStyles:
             ax.axis('off')
             return fig, ax
 
-    def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, **kwargs):
+    def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Применить стили к графику монте-карло"""
         try:
             # Set figure size to standard chart size
@@ -1105,7 +1112,8 @@ class ChartStyles:
                 xlabel='',  # No x-axis label
                 grid=True,
                 legend=False,
-                copyright=True
+                copyright=True,
+                data_source=data_source
             )
             
             # Hide x-axis label completely

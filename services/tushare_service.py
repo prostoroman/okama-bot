@@ -119,6 +119,13 @@ class TushareService:
             if 'enname' in info and info['enname'] and info['enname'].strip() and info['enname'] != 'N/A':
                 info['english_name'] = info['enname']  # Preserve English name
                 info['name'] = info['enname']  # Use English name as primary name
+            else:
+                # For mainland Chinese stocks, use cnspell if available, otherwise use Chinese name
+                if 'cnspell' in info and info['cnspell'] and info['cnspell'].strip():
+                    info['english_name'] = info['cnspell'].upper()  # Use cnspell as English name
+                    info['name'] = info['cnspell'].upper()  # Use cnspell as primary name
+                else:
+                    info['english_name'] = info.get('name', symbol_code)  # Fallback to Chinese name
             
             # Get additional metrics
             try:
@@ -193,6 +200,13 @@ class TushareService:
             if 'enname' in info and info['enname'] and info['enname'].strip() and info['enname'] != 'N/A':
                 info['english_name'] = info['enname']  # Preserve English name
                 info['name'] = info['enname']  # Use English name as primary name
+            else:
+                # For mainland Chinese stocks, use cnspell if available, otherwise use Chinese name
+                if 'cnspell' in info and info['cnspell'] and info['cnspell'].strip():
+                    info['english_name'] = info['cnspell'].upper()  # Use cnspell as English name
+                    info['name'] = info['cnspell'].upper()  # Use cnspell as primary name
+                else:
+                    info['english_name'] = info.get('name', symbol_code)  # Fallback to Chinese name
 
             # Add missing fields for consistency
             info.update({

@@ -8038,7 +8038,11 @@ class ShansAi:
             info_text += f"🏢 {english_name}\n\n"
             
             if dividend_data.empty:
-                info_text += "❌ Дивиденды не найдены\n\n"
+                info_text += "❌ Дивиденды не найдены\n"
+                info_text += "💡 Возможные причины:\n"
+                info_text += "   • Компания не выплачивает дивиденды\n"
+                info_text += "   • Данные о дивидендах недоступны в Tushare\n"
+                info_text += "   • Компания выплачивает дивиденды нерегулярно\n\n"
             else:
                 # Calculate dividend statistics
                 total_dividends = len(dividend_data)
