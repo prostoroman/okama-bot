@@ -121,9 +121,10 @@ class TushareService:
             
             # Get additional metrics
             try:
+                # Get 1 year of data for calculations
                 daily_data = self.pro.daily(
                     ts_code=info['ts_code'],
-                    start_date=(datetime.now() - timedelta(days=30)).strftime('%Y%m%d'),
+                    start_date=(datetime.now() - timedelta(days=365)).strftime('%Y%m%d'),
                     end_date=datetime.now().strftime('%Y%m%d')
                 )
                 
@@ -136,6 +137,24 @@ class TushareService:
                         'volume': latest['vol'],
                         'amount': latest['amount']
                     })
+                    
+                    # Calculate annual return and volatility
+                    if len(daily_data) > 1:
+                        # Calculate returns
+                        daily_data = daily_data.sort_values('trade_date')
+                        daily_data['returns'] = daily_data['close'].pct_change().dropna()
+                        
+                        # Annual return (CAGR)
+                        if len(daily_data) > 30:  # Need at least 30 days
+                            total_return = (daily_data['close'].iloc[-1] / daily_data['close'].iloc[0]) - 1
+                            days = len(daily_data)
+                            annual_return = (1 + total_return) ** (365 / days) - 1
+                            info['annual_return'] = annual_return
+                            
+                            # Volatility (annualized)
+                            volatility = daily_data['returns'].std() * (365 ** 0.5)
+                            info['volatility'] = volatility
+                            
             except Exception as e:
                 self.logger.warning(f"Could not get price data: {e}")
             

@@ -1900,11 +1900,17 @@ class ShansAi:
         try:
             # Block 1: Header - who is this?
             asset_name = symbol_info.get('name', symbol)
+            english_name = symbol_info.get('english_name', '')
             exchange = symbol_info.get('exchange', 'N/A')
             industry = symbol_info.get('industry', 'N/A')
             area = symbol_info.get('area', 'N/A')
             
-            header = f"📊 {asset_name} ({symbol})\n"
+            # Format header with Chinese and English names
+            if english_name and english_name != asset_name:
+                header = f"📊 {asset_name} ({symbol})\n"
+                header += f"🌐 {english_name}\n"
+            else:
+                header = f"📊 {asset_name} ({symbol})\n"
             header += f"📍 {area} | {industry} | {exchange}"
             
             # Block 2: Key metrics showcase
@@ -1932,6 +1938,16 @@ class ShansAi:
                 volume = symbol_info['volume']
                 metrics_text += f"Объем торгов: {volume:,.0f}\n"
             
+            # Add calculated metrics if available
+            if 'annual_return' in symbol_info:
+                annual_return = symbol_info['annual_return']
+                return_sign = "+" if annual_return >= 0 else ""
+                metrics_text += f"Доходность (годовая): {return_sign}{annual_return:.1%}\n"
+            
+            if 'volatility' in symbol_info:
+                volatility = symbol_info['volatility']
+                metrics_text += f"Волатильность: {volatility:.1%}\n"
+            
             # List date
             if 'list_date' in symbol_info:
                 list_date = symbol_info['list_date']
@@ -1951,6 +1967,16 @@ class ShansAi:
             return None
         except Exception as e:
             self.logger.error(f"Error getting Tushare chart for {symbol}: {e}")
+            return None
+
+    async def _get_tushare_chart_for_period(self, symbol: str, period: str) -> Optional[bytes]:
+        """Get Tushare chart for specific period"""
+        try:
+            # For now, use the same chart for all periods
+            # In the future, we can implement period-specific charts
+            return await self._get_tushare_chart(symbol)
+        except Exception as e:
+            self.logger.error(f"Error getting Tushare chart for {symbol} period {period}: {e}")
             return None
 
     def _get_data_for_period(self, asset, period: str):
@@ -7224,6 +7250,23 @@ class ShansAi:
         try:
             await self._send_ephemeral_message(update, context, f"📊 Обновляю данные за {period}...", delete_after=2)
             
+            # Determine data source
+            data_source = self.determine_data_source(symbol)
+            
+            if data_source == 'tushare':
+                # Handle Tushare assets
+                await self._handle_tushare_info_period_button(update, context, symbol, period)
+            else:
+                # Handle Okama assets
+                await self._handle_okama_info_period_button(update, context, symbol, period)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling info period button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при обновлении данных: {str(e)}")
+
+    async def _handle_okama_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
+        """Handle period switching for Okama assets"""
+        try:
             # Get asset and metrics for the new period
             asset = ok.Asset(symbol)
             key_metrics = await self._get_asset_key_metrics(asset, symbol, period)
@@ -7248,7 +7291,46 @@ class ShansAi:
                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                 
         except Exception as e:
-            self.logger.error(f"Error handling info period button: {e}")
+            self.logger.error(f"Error handling Okama info period button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при обновлении данных: {str(e)}")
+
+    async def _handle_tushare_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
+        """Handle period switching for Tushare assets"""
+        try:
+            if not self.tushare_service:
+                await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
+                return
+            
+            # Get symbol information from Tushare
+            symbol_info = self.tushare_service.get_symbol_info(symbol)
+            
+            if 'error' in symbol_info:
+                await self._send_callback_message(update, context, f"❌ Ошибка: {symbol_info['error']}")
+                return
+            
+            # Format information according to new structure
+            info_text = self._format_tushare_info_response(symbol_info, symbol)
+            
+            # Create updated keyboard with new period selected
+            keyboard = self._create_info_interactive_keyboard_with_period(symbol, period)
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Try to get chart data for the period
+            chart_data = await self._get_tushare_chart_for_period(symbol, period)
+            
+            if chart_data:
+                period_text = {
+                    '1Y': '1 год',
+                    '5Y': '5 лет', 
+                    'MAX': 'MAX'
+                }.get(period, period)
+                caption = f"📈 График доходности за {period_text}\n\n{info_text}"
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
+            else:
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling Tushare info period button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при обновлении данных: {str(e)}")
 
     async def _handle_info_risks_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
