@@ -399,7 +399,9 @@ class ShansAi:
         for category, assets in self.known_assets.items():
             if category not in excluded_categories:
                 all_assets.extend(assets)
-        return random.sample(all_assets, min(count, len(all_assets)))
+        # Get random sample and format with backticks
+        selected_assets = random.sample(all_assets, min(count, len(all_assets)))
+        return [f"`{asset}`" for asset in selected_assets]
 
     async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation") -> None:
         """Общая функция для обработки ошибок"""
@@ -2673,7 +2675,7 @@ class ShansAi:
                 namespace = self.clean_symbol(context.args[0]).upper()
                 
                 # Use the unified method that handles both okama and tushare
-                await self._show_namespace_symbols(update, context, namespace, is_callback=False)
+                await self._show_namespace_symbols(update, context, namespace, is_callback=False, page=0)
                     
         except ImportError:
             await self._send_message_safe(update, "*❌ Библиотека okama не установлена*")
@@ -12258,7 +12260,7 @@ class ShansAi:
             self.logger.info(f"Handling namespace button for: {namespace}")
             
             # Use the unified method that handles both okama and tushare
-            await self._show_namespace_symbols(update, context, namespace, is_callback=True)
+            await self._show_namespace_symbols(update, context, namespace, is_callback=True, page=0)
                 
         except ImportError:
             await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
