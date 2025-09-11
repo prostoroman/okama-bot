@@ -1951,7 +1951,12 @@ class ShansAi:
             # List date
             if 'list_date' in symbol_info:
                 list_date = symbol_info['list_date']
-                metrics_text += f"Дата листинга: {list_date}\n"
+                # Format date from YYYYMMDD to YYYY-MM-DD
+                if isinstance(list_date, str) and len(list_date) == 8 and list_date.isdigit():
+                    formatted_date = f"{list_date[:4]}-{list_date[4:6]}-{list_date[6:8]}"
+                    metrics_text += f"Дата листинга: {formatted_date}\n"
+                else:
+                    metrics_text += f"Дата листинга: {list_date}\n"
             
             return header + metrics_text
             
@@ -7267,6 +7272,12 @@ class ShansAi:
     async def _handle_okama_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Okama assets"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             # Get asset and metrics for the new period
             asset = ok.Asset(symbol)
             key_metrics = await self._get_asset_key_metrics(asset, symbol, period)
@@ -7297,6 +7308,12 @@ class ShansAi:
     async def _handle_tushare_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Tushare assets"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
                 return
@@ -7336,6 +7353,12 @@ class ShansAi:
     async def _handle_info_risks_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle risks and drawdowns button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             await self._send_ephemeral_message(update, context, "📉 Анализирую риски и просадки...", delete_after=2)
             
             asset = ok.Asset(symbol)
@@ -7388,6 +7411,12 @@ class ShansAi:
     async def _handle_info_metrics_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle all metrics button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             await self._send_ephemeral_message(update, context, "📊 Получаю все метрики...", delete_after=2)
             
             asset = ok.Asset(symbol)
