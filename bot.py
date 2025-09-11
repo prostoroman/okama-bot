@@ -1780,28 +1780,32 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _handle_okama_info(self, update: Update, symbol: str):
-        """Handle info display for Okama assets"""
+        """Handle info display for Okama assets with new interactive structure"""
         try:
-            # Получаем сырой вывод объекта ok.Asset
+            # Получаем объект актива
             try:
                 asset = ok.Asset(symbol)
-                info_text = f"{asset}"
                 
-                # Создаем кнопки для дополнительных функций только если данные получены успешно
-                keyboard = [
-                    [
-                        InlineKeyboardButton("📈 1Y", callback_data=f"daily_chart_{symbol}"),
-                        InlineKeyboardButton("📈 5Y", callback_data=f"monthly_chart_{symbol}"),
-                        InlineKeyboardButton("📈 All", callback_data=f"all_chart_{symbol}")
-                    ],
-                    [
-                        InlineKeyboardButton("💵 Дивиденды", callback_data=f"dividends_{symbol}")
-                    ]
-                ]
+                # Получаем ключевые метрики за 1 год
+                key_metrics = await self._get_asset_key_metrics(asset, symbol, period='1Y')
+                
+                # Формируем структурированный ответ
+                info_text = self._format_asset_info_response(asset, symbol, key_metrics)
+                
+                # Создаем интерактивную панель управления
+                keyboard = self._create_info_interactive_keyboard(symbol)
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # Отправляем информацию с кнопками
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                # Получаем график доходности за 1 год
+                chart_data = await self._get_daily_chart(symbol)
+                
+                if chart_data:
+                    # Отправляем график с информацией в caption
+                    caption = f"📈 График доходности за 1 год\n\n{info_text}"
+                    await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+                else:
+                    # Если график не удалось получить, отправляем только текст
+                    await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                 
             except Exception as e:
                 # При ошибке получения данных актива отправляем только сообщение об ошибке без кнопок
@@ -1813,7 +1817,7 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
     async def _handle_tushare_info(self, update: Update, symbol: str):
-        """Handle info display for Tushare assets"""
+        """Handle info display for Tushare assets with new interactive structure"""
         try:
             if not self.tushare_service:
                 await self._send_message_safe(update, "❌ Сервис Tushare недоступен")
@@ -1827,55 +1831,262 @@ class ShansAi:
                 error_text = f"❌ Ошибка: {symbol_info['error']}"
                 
                 # Создаем кнопки даже при ошибке для консистентности с Okama
-                keyboard = [
-                    [
-                        InlineKeyboardButton("📈 1Y", callback_data=f"tushare_daily_chart_{symbol}"),
-                        InlineKeyboardButton("📈 5Y", callback_data=f"tushare_monthly_chart_{symbol}"),
-                        InlineKeyboardButton("📈 All", callback_data=f"tushare_all_chart_{symbol}")
-                    ],
-                    [
-                        InlineKeyboardButton("💵 Дивиденды", callback_data=f"tushare_dividends_{symbol}")
-                    ]
-                ]
+                keyboard = self._create_info_interactive_keyboard(symbol)
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await self._send_message_safe(update, error_text, reply_markup=reply_markup)
                 return
             
-            # Format information
-            info_text = f"📊 {symbol_info.get('name', 'N/A')} ({symbol})\n\n"
-            info_text += f"🏢 Биржа: {symbol_info.get('exchange', 'N/A')}\n"
-            info_text += f"🏭 Отрасль: {symbol_info.get('industry', 'N/A')}\n"
-            info_text += f"📍 Регион: {symbol_info.get('area', 'N/A')}\n"
-            info_text += f"📅 Дата листинга: {symbol_info.get('list_date', 'N/A')}\n"
+            # Format information according to new structure
+            info_text = self._format_tushare_info_response(symbol_info, symbol)
             
-            if 'current_price' in symbol_info:
-                info_text += f"\n💰 Текущая цена: {symbol_info['current_price']:.2f}\n"
-                if 'change' in symbol_info:
-                    change_sign = "+" if symbol_info['change'] >= 0 else ""
-                    info_text += f"📈 Изменение: {change_sign}{symbol_info['change']:.2f} ({symbol_info.get('pct_chg', 0):.2f}%)\n"
-                if 'volume' in symbol_info:
-                    info_text += f"📊 Объем: {symbol_info['volume']:,.0f}\n"
-            
-            # Создаем кнопки для дополнительных функций
-            keyboard = [
-                [
-                    InlineKeyboardButton("📈 1Y", callback_data=f"tushare_daily_chart_{symbol}"),
-                    InlineKeyboardButton("📅 5Y", callback_data=f"tushare_monthly_chart_{symbol}"),
-                    InlineKeyboardButton("📊 All", callback_data=f"tushare_all_chart_{symbol}")
-                ],
-                [
-                    InlineKeyboardButton("💵 Дивиденды", callback_data=f"tushare_dividends_{symbol}")
-                ]
-            ]
+            # Create interactive keyboard
+            keyboard = self._create_info_interactive_keyboard(symbol)
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            # Отправляем информацию с кнопками
-            await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+            # Try to get chart data
+            chart_data = await self._get_tushare_chart(symbol)
+            
+            if chart_data:
+                caption = f"📈 График доходности за 1 год\n\n{info_text}"
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+            else:
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
             
         except Exception as e:
             self.logger.error(f"Error in _handle_tushare_info for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
+    def _format_tushare_info_response(self, symbol_info: Dict[str, Any], symbol: str) -> str:
+        """Format Tushare info response according to new structure"""
+        try:
+            # Block 1: Header - who is this?
+            asset_name = symbol_info.get('name', symbol)
+            exchange = symbol_info.get('exchange', 'N/A')
+            industry = symbol_info.get('industry', 'N/A')
+            area = symbol_info.get('area', 'N/A')
+            
+            header = f"📊 {asset_name} ({symbol})\n"
+            header += f"📍 {area} | {industry} | {exchange}"
+            
+            # Block 2: Key metrics showcase
+            metrics_text = "\n\nКлючевые показатели (за 1 год):\n"
+            
+            # Current price
+            if 'current_price' in symbol_info:
+                price = symbol_info['current_price']
+                price_text = f"Цена: {price:.2f} CNY"
+                
+                if 'change' in symbol_info:
+                    change = symbol_info['change']
+                    change_sign = "+" if change >= 0 else ""
+                    price_text += f" ({change_sign}{change:.2f})"
+                
+                if 'pct_chg' in symbol_info:
+                    pct_chg = symbol_info['pct_chg']
+                    change_sign = "+" if pct_chg >= 0 else ""
+                    price_text += f" ({change_sign}{pct_chg:.2f}%)"
+                
+                metrics_text += f"{price_text}\n"
+            
+            # Volume
+            if 'volume' in symbol_info:
+                volume = symbol_info['volume']
+                metrics_text += f"Объем торгов: {volume:,.0f}\n"
+            
+            # List date
+            if 'list_date' in symbol_info:
+                list_date = symbol_info['list_date']
+                metrics_text += f"Дата листинга: {list_date}\n"
+            
+            return header + metrics_text
+            
+        except Exception as e:
+            self.logger.error(f"Error formatting Tushare info response for {symbol}: {e}")
+            return f"📊 {symbol}\n\n❌ Ошибка при форматировании информации"
+
+    async def _get_tushare_chart(self, symbol: str) -> Optional[bytes]:
+        """Get chart for Tushare asset"""
+        try:
+            # For now, return None as Tushare chart generation needs to be implemented
+            # This can be extended later to generate charts from Tushare data
+            return None
+        except Exception as e:
+            self.logger.error(f"Error getting Tushare chart for {symbol}: {e}")
+            return None
+
+    async def _get_asset_key_metrics(self, asset, symbol: str, period: str = '1Y') -> Dict[str, Any]:
+        """Get key metrics for an asset for the specified period"""
+        try:
+            metrics = {}
+            
+            # Get current price
+            try:
+                if hasattr(asset, 'close_daily'):
+                    current_price = asset.close_daily.iloc[-1]
+                    metrics['current_price'] = current_price
+                    
+                    # Calculate price change if we have enough data
+                    if len(asset.close_daily) > 1:
+                        prev_price = asset.close_daily.iloc[-2]
+                        price_change = ((current_price - prev_price) / prev_price) * 100
+                        metrics['price_change_pct'] = price_change
+                else:
+                    metrics['current_price'] = None
+                    metrics['price_change_pct'] = None
+            except Exception as e:
+                self.logger.warning(f"Could not get current price for {symbol}: {e}")
+                metrics['current_price'] = None
+                metrics['price_change_pct'] = None
+            
+            # Get CAGR for the period
+            try:
+                if hasattr(asset, 'get_cagr'):
+                    cagr = asset.get_cagr()
+                    if hasattr(cagr, 'iloc'):
+                        metrics['cagr'] = cagr.iloc[0]
+                    else:
+                        metrics['cagr'] = cagr
+                else:
+                    # Calculate manually
+                    if hasattr(asset, 'close_daily'):
+                        returns = asset.close_daily.pct_change().dropna()
+                        if len(returns) > 0:
+                            total_return = (1 + returns).prod() - 1
+                            years = self._calculate_asset_years(asset, returns)
+                            if years > 0:
+                                cagr = (1 + total_return) ** (1 / years) - 1
+                                metrics['cagr'] = cagr
+                            else:
+                                metrics['cagr'] = None
+                        else:
+                            metrics['cagr'] = None
+                    else:
+                        metrics['cagr'] = None
+            except Exception as e:
+                self.logger.warning(f"Could not get CAGR for {symbol}: {e}")
+                metrics['cagr'] = None
+            
+            # Get volatility
+            try:
+                if hasattr(asset, 'volatility_annual'):
+                    volatility = asset.volatility_annual
+                    if hasattr(volatility, 'iloc'):
+                        metrics['volatility'] = volatility.iloc[-1]
+                    else:
+                        metrics['volatility'] = volatility
+                else:
+                    # Calculate manually
+                    if hasattr(asset, 'close_daily'):
+                        returns = asset.close_daily.pct_change().dropna()
+                        if len(returns) > 0:
+                            volatility = returns.std() * (252 ** 0.5)  # Annualized for daily data
+                            metrics['volatility'] = volatility
+                        else:
+                            metrics['volatility'] = None
+                    else:
+                        metrics['volatility'] = None
+            except Exception as e:
+                self.logger.warning(f"Could not get volatility for {symbol}: {e}")
+                metrics['volatility'] = None
+            
+            # Get dividend yield
+            try:
+                if hasattr(asset, 'dividend_yield'):
+                    dividend_yield = asset.dividend_yield
+                    if hasattr(dividend_yield, 'iloc'):
+                        metrics['dividend_yield'] = dividend_yield.iloc[-1]
+                    else:
+                        metrics['dividend_yield'] = dividend_yield
+                else:
+                    metrics['dividend_yield'] = None
+            except Exception as e:
+                self.logger.warning(f"Could not get dividend yield for {symbol}: {e}")
+                metrics['dividend_yield'] = None
+            
+            return metrics
+            
+        except Exception as e:
+            self.logger.error(f"Error getting key metrics for {symbol}: {e}")
+            return {}
+
+    def _format_asset_info_response(self, asset, symbol: str, key_metrics: Dict[str, Any]) -> str:
+        """Format the asset info response according to the new structure"""
+        try:
+            # Block 1: Header - who is this?
+            asset_name = getattr(asset, 'name', symbol)
+            country = getattr(asset, 'country', 'N/A')
+            asset_type = getattr(asset, 'asset_type', 'N/A')
+            exchange = getattr(asset, 'exchange', 'N/A')
+            isin = getattr(asset, 'isin', 'N/A')
+            
+            header = f"📊 {asset_name} ({symbol})\n"
+            header += f"📍 {country} | {asset_type} | {exchange}"
+            if isin and isin != 'N/A':
+                header += f" | ISIN: {isin}"
+            
+            # Block 2: Key metrics showcase
+            metrics_text = "\n\nКлючевые показатели (за 1 год):\n"
+            
+            # Current price
+            if key_metrics.get('current_price') is not None:
+                price = key_metrics['current_price']
+                currency = getattr(asset, 'currency', 'USD')
+                price_text = f"Цена: {price:.2f} {currency}"
+                
+                if key_metrics.get('price_change_pct') is not None:
+                    change_pct = key_metrics['price_change_pct']
+                    change_sign = "+" if change_pct >= 0 else ""
+                    price_text += f" ({change_sign}{change_pct:.2f}%)"
+                
+                metrics_text += f"{price_text}\n"
+            
+            # CAGR
+            if key_metrics.get('cagr') is not None:
+                cagr = key_metrics['cagr']
+                cagr_sign = "+" if cagr >= 0 else ""
+                metrics_text += f"Доходность (CAGR): {cagr_sign}{cagr:.1%}\n"
+            
+            # Volatility
+            if key_metrics.get('volatility') is not None:
+                volatility = key_metrics['volatility']
+                metrics_text += f"Волатильность: {volatility:.1%}\n"
+            
+            # Dividend yield
+            if key_metrics.get('dividend_yield') is not None:
+                dividend_yield = key_metrics['dividend_yield']
+                metrics_text += f"Див. доходность (LTM): {dividend_yield:.2%}\n"
+            
+            return header + metrics_text
+            
+        except Exception as e:
+            self.logger.error(f"Error formatting asset info response for {symbol}: {e}")
+            return f"📊 {symbol}\n\n❌ Ошибка при форматировании информации"
+
+    def _create_info_interactive_keyboard(self, symbol: str) -> List[List[InlineKeyboardButton]]:
+        """Create interactive keyboard for info command"""
+        keyboard = [
+            # Row 1: Period switching
+            [
+                InlineKeyboardButton("✅ 1 год", callback_data=f"info_period_{symbol}_1Y"),
+                InlineKeyboardButton("3 года", callback_data=f"info_period_{symbol}_3Y"),
+                InlineKeyboardButton("5 лет", callback_data=f"info_period_{symbol}_5Y"),
+                InlineKeyboardButton("MAX", callback_data=f"info_period_{symbol}_MAX")
+            ],
+            # Row 2: Deep analysis
+            [
+                InlineKeyboardButton("📉 Риски и просадки", callback_data=f"info_risks_{symbol}"),
+                InlineKeyboardButton("💵 История дивидендов", callback_data=f"info_dividends_{symbol}"),
+                InlineKeyboardButton("📊 Все метрики", callback_data=f"info_metrics_{symbol}")
+            ],
+            # Row 3: Next steps
+            [
+                InlineKeyboardButton("🧠 AI-анализ графика", callback_data=f"info_ai_analysis_{symbol}"),
+                InlineKeyboardButton("➡️ Сравнить с...", callback_data=f"info_compare_{symbol}"),
+                InlineKeyboardButton("💼 Добавить в портфель", callback_data=f"info_portfolio_{symbol}")
+            ]
+        ]
+        return keyboard
 
     async def _get_daily_chart(self, symbol: str) -> Optional[bytes]:
         """Получить ежедневный график за последний год используя ChartStyles"""
@@ -4325,6 +4536,34 @@ class ShansAi:
                 symbol = self.clean_symbol(callback_data.replace('all_chart_', ''))
                 self.logger.info(f"All chart button clicked for symbol: {symbol}")
                 await self._handle_all_chart_button(update, context, symbol)
+            elif callback_data.startswith('info_period_'):
+                # Handle period switching for info command
+                parts = callback_data.replace('info_period_', '').split('_')
+                if len(parts) >= 2:
+                    symbol = self.clean_symbol(parts[0])
+                    period = '_'.join(parts[1:])
+                    self.logger.info(f"Info period button clicked for symbol: {symbol}, period: {period}")
+                    await self._handle_info_period_button(update, context, symbol, period)
+            elif callback_data.startswith('info_risks_'):
+                symbol = self.clean_symbol(callback_data.replace('info_risks_', ''))
+                self.logger.info(f"Info risks button clicked for symbol: {symbol}")
+                await self._handle_info_risks_button(update, context, symbol)
+            elif callback_data.startswith('info_metrics_'):
+                symbol = self.clean_symbol(callback_data.replace('info_metrics_', ''))
+                self.logger.info(f"Info metrics button clicked for symbol: {symbol}")
+                await self._handle_info_metrics_button(update, context, symbol)
+            elif callback_data.startswith('info_ai_analysis_'):
+                symbol = self.clean_symbol(callback_data.replace('info_ai_analysis_', ''))
+                self.logger.info(f"Info AI analysis button clicked for symbol: {symbol}")
+                await self._handle_info_ai_analysis_button(update, context, symbol)
+            elif callback_data.startswith('info_compare_'):
+                symbol = self.clean_symbol(callback_data.replace('info_compare_', ''))
+                self.logger.info(f"Info compare button clicked for symbol: {symbol}")
+                await self._handle_info_compare_button(update, context, symbol)
+            elif callback_data.startswith('info_portfolio_'):
+                symbol = self.clean_symbol(callback_data.replace('info_portfolio_', ''))
+                self.logger.info(f"Info portfolio button clicked for symbol: {symbol}")
+                await self._handle_info_portfolio_button(update, context, symbol)
             elif callback_data.startswith('info_dividends_'):
                 symbol = self.clean_symbol(callback_data.replace('info_dividends_', ''))
                 self.logger.info(f"Info dividends button clicked for symbol: {symbol}")
@@ -6873,6 +7112,273 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling all chart button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика за весь период: {str(e)}")
+
+    async def _handle_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
+        """Handle period switching for info command"""
+        try:
+            await self._send_ephemeral_message(update, context, f"📊 Обновляю данные за {period}...", delete_after=2)
+            
+            # Get asset and metrics for the new period
+            asset = ok.Asset(symbol)
+            key_metrics = await self._get_asset_key_metrics(asset, symbol, period)
+            
+            # Format response with new period
+            info_text = self._format_asset_info_response(asset, symbol, key_metrics)
+            info_text = info_text.replace("(за 1 год)", f"(за {period})")
+            
+            # Create updated keyboard with new period selected
+            keyboard = self._create_info_interactive_keyboard(symbol)
+            # Update the period button to show selected period
+            for row in keyboard:
+                for button in row:
+                    if button.callback_data.startswith(f"info_period_{symbol}_"):
+                        if period in button.callback_data:
+                            button.text = f"✅ {period}"
+                        else:
+                            button.text = button.text.replace("✅ ", "")
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Get chart for the new period
+            chart_data = await self._get_chart_for_period(symbol, period)
+            
+            if chart_data:
+                caption = f"📈 График доходности за {period}\n\n{info_text}"
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+            else:
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling info period button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при обновлении данных: {str(e)}")
+
+    async def _handle_info_risks_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle risks and drawdowns button for info command"""
+        try:
+            await self._send_ephemeral_message(update, context, "📉 Анализирую риски и просадки...", delete_after=2)
+            
+            asset = ok.Asset(symbol)
+            
+            # Get risk metrics
+            risk_text = f"📉 **Анализ рисков для {symbol}**\n\n"
+            
+            # Volatility
+            if hasattr(asset, 'volatility_annual'):
+                volatility = asset.volatility_annual
+                if hasattr(volatility, 'iloc'):
+                    vol_value = volatility.iloc[-1]
+                else:
+                    vol_value = volatility
+                risk_text += f"**Волатильность:** {vol_value:.2%}\n"
+            
+            # Max drawdown
+            if hasattr(asset, 'max_drawdown'):
+                max_dd = asset.max_drawdown
+                if hasattr(max_dd, 'iloc'):
+                    dd_value = max_dd.iloc[-1]
+                else:
+                    dd_value = max_dd
+                risk_text += f"**Максимальная просадка:** {dd_value:.2%}\n"
+            
+            # VaR 95%
+            if hasattr(asset, 'var_95'):
+                var_95 = asset.var_95
+                if hasattr(var_95, 'iloc'):
+                    var_value = var_95.iloc[-1]
+                else:
+                    var_value = var_95
+                risk_text += f"**VaR 95%:** {var_value:.2%}\n"
+            
+            # Sharpe ratio
+            if hasattr(asset, 'get_sharpe_ratio'):
+                sharpe = asset.get_sharpe_ratio()
+                if hasattr(sharpe, 'iloc'):
+                    sharpe_value = sharpe.iloc[0]
+                else:
+                    sharpe_value = sharpe
+                risk_text += f"**Коэффициент Шарпа:** {sharpe_value:.2f}\n"
+            
+            await self._send_callback_message(update, context, risk_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling info risks button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе рисков: {str(e)}")
+
+    async def _handle_info_metrics_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle all metrics button for info command"""
+        try:
+            await self._send_ephemeral_message(update, context, "📊 Получаю все метрики...", delete_after=2)
+            
+            asset = ok.Asset(symbol)
+            
+            # Get comprehensive metrics
+            metrics_text = f"📊 **Все метрики для {symbol}**\n\n"
+            
+            # Basic info
+            metrics_text += f"**Основная информация:**\n"
+            metrics_text += f"• Название: {getattr(asset, 'name', 'N/A')}\n"
+            metrics_text += f"• Страна: {getattr(asset, 'country', 'N/A')}\n"
+            metrics_text += f"• Тип: {getattr(asset, 'asset_type', 'N/A')}\n"
+            metrics_text += f"• Биржа: {getattr(asset, 'exchange', 'N/A')}\n"
+            metrics_text += f"• Валюта: {getattr(asset, 'currency', 'N/A')}\n\n"
+            
+            # Performance metrics
+            metrics_text += f"**Метрики производительности:**\n"
+            
+            # CAGR
+            if hasattr(asset, 'get_cagr'):
+                cagr = asset.get_cagr()
+                if hasattr(cagr, 'iloc'):
+                    cagr_value = cagr.iloc[0]
+                else:
+                    cagr_value = cagr
+                metrics_text += f"• CAGR: {cagr_value:.2%}\n"
+            
+            # Volatility
+            if hasattr(asset, 'volatility_annual'):
+                volatility = asset.volatility_annual
+                if hasattr(volatility, 'iloc'):
+                    vol_value = volatility.iloc[-1]
+                else:
+                    vol_value = volatility
+                metrics_text += f"• Волатильность: {vol_value:.2%}\n"
+            
+            # Sharpe ratio
+            if hasattr(asset, 'get_sharpe_ratio'):
+                sharpe = asset.get_sharpe_ratio()
+                if hasattr(sharpe, 'iloc'):
+                    sharpe_value = sharpe.iloc[0]
+                else:
+                    sharpe_value = sharpe
+                metrics_text += f"• Коэффициент Шарпа: {sharpe_value:.2f}\n"
+            
+            # Max drawdown
+            if hasattr(asset, 'max_drawdown'):
+                max_dd = asset.max_drawdown
+                if hasattr(max_dd, 'iloc'):
+                    dd_value = max_dd.iloc[-1]
+                else:
+                    dd_value = max_dd
+                metrics_text += f"• Максимальная просадка: {dd_value:.2%}\n"
+            
+            await self._send_callback_message(update, context, metrics_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling info metrics button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при получении метрик: {str(e)}")
+
+    async def _handle_info_ai_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle AI analysis button for info command"""
+        try:
+            await self._send_ephemeral_message(update, context, "🧠 Анализирую график с помощью AI...", delete_after=3)
+            
+            # Get asset data for analysis
+            asset = ok.Asset(symbol)
+            
+            # Prepare data for AI analysis
+            data_info = {
+                'symbols': [symbol],
+                'currency': getattr(asset, 'currency', 'USD'),
+                'period': 'полный доступный период данных',
+                'performance': {},
+                'analysis_type': 'single_asset_analysis',
+                'asset_name': getattr(asset, 'name', symbol)
+            }
+            
+            # Get AI analysis
+            if self.gemini_service:
+                analysis_result = self.gemini_service.analyze_data(data_info)
+                if analysis_result and 'analysis' in analysis_result:
+                    analysis_text = f"🧠 **AI-анализ графика {symbol}**\n\n{analysis_result['analysis']}"
+                else:
+                    analysis_text = f"🧠 **AI-анализ графика {symbol}**\n\n❌ Не удалось получить AI-анализ"
+            else:
+                analysis_text = f"🧠 **AI-анализ графика {symbol}**\n\n❌ AI-сервис недоступен"
+            
+            await self._send_callback_message(update, context, analysis_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling info AI analysis button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при AI-анализе: {str(e)}")
+
+    async def _handle_info_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle compare button for info command"""
+        try:
+            # Set user context to wait for comparison input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, {
+                'waiting_for_compare': True,
+                'compare_base_symbol': symbol
+            })
+            
+            # Suggest popular alternatives
+            suggestions = self._get_popular_alternatives(symbol)
+            
+            compare_text = f"➡️ **Сравнить {symbol} с:**\n\n"
+            compare_text += "Отправьте название актива для сравнения или выберите из популярных альтернатив:\n\n"
+            
+            for suggestion in suggestions:
+                compare_text += f"• {suggestion}\n"
+            
+            compare_text += f"\nИли отправьте любой другой тикер для сравнения с {symbol}"
+            
+            await self._send_callback_message(update, context, compare_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling info compare button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при подготовке сравнения: {str(e)}")
+
+    async def _handle_info_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle portfolio button for info command"""
+        try:
+            # Set user context to wait for portfolio input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, {
+                'waiting_for_portfolio': True,
+                'portfolio_base_symbol': symbol
+            })
+            
+            portfolio_text = f"💼 **Добавить {symbol} в портфель**\n\n"
+            portfolio_text += f"Отправьте состав портфеля, включая {symbol}.\n\n"
+            portfolio_text += "**Примеры:**\n"
+            portfolio_text += f"• `{symbol}:0.6 QQQ.US:0.4`\n"
+            portfolio_text += f"• `{symbol}:0.5 BND.US:0.3 GC.COMM:0.2`\n"
+            portfolio_text += f"• `{symbol}:0.7 VTI.US:0.3`\n\n"
+            portfolio_text += f"Или отправьте любой другой состав портфеля с {symbol}"
+            
+            await self._send_callback_message(update, context, portfolio_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling info portfolio button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при подготовке портфеля: {str(e)}")
+
+    def _get_popular_alternatives(self, symbol: str) -> List[str]:
+        """Get popular alternatives for comparison"""
+        alternatives = {
+            'SPY.US': ['QQQ.US', 'VOO.US', 'IVV.US', 'VTI.US'],
+            'QQQ.US': ['SPY.US', 'VTI.US', 'VUG.US', 'ARKK.US'],
+            'AAPL.US': ['MSFT.US', 'GOOGL.US', 'AMZN.US', 'TSLA.US'],
+            'SBER.MOEX': ['GAZP.MOEX', 'LKOH.MOEX', 'NVTK.MOEX', 'ROSN.MOEX'],
+            'VOO.US': ['SPY.US', 'IVV.US', 'VTI.US', 'VTSAX.US']
+        }
+        
+        return alternatives.get(symbol, ['SPY.US', 'QQQ.US', 'VTI.US', 'BND.US'])
+
+    async def _get_chart_for_period(self, symbol: str, period: str) -> Optional[bytes]:
+        """Get chart for specific period"""
+        try:
+            if period == '1Y':
+                return await self._get_daily_chart(symbol)
+            elif period == '3Y':
+                return await self._get_monthly_chart(symbol)
+            elif period == '5Y':
+                return await self._get_monthly_chart(symbol)
+            elif period == 'MAX':
+                return await self._get_all_chart(symbol)
+            else:
+                return await self._get_daily_chart(symbol)
+        except Exception as e:
+            self.logger.error(f"Error getting chart for period {period}: {e}")
+            return None
 
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle dividends button click for single asset"""
