@@ -1821,11 +1821,14 @@ class ShansAi:
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 # Получаем график доходности за 1 год
+                self.logger.info(f"Getting daily chart for {symbol}")
                 chart_data = await self._get_daily_chart(symbol)
+                self.logger.info(f"Chart data result: {chart_data is not None}")
                 
                 if chart_data:
                     # Отправляем график с информацией в caption
                     caption = f"📈 График доходности за 1 год\n\n{info_text}"
+                    self.logger.info(f"Sending chart with caption length: {len(caption)}")
                     await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
                 else:
                     # Если график не удалось получить, отправляем только текст
@@ -2129,29 +2132,36 @@ class ShansAi:
             import io
             
             def create_daily_chart():
+                self.logger.info(f"Creating daily chart for {symbol}")
                 # Устанавливаем backend для headless режима
                 import matplotlib
                 matplotlib.use('Agg')
                 
                 asset = ok.Asset(symbol)
+                self.logger.info(f"Asset created for {symbol}")
                 
                 # Получаем данные за последний год
                 daily_data = asset.close_daily
+                self.logger.info(f"Daily data shape: {daily_data.shape if hasattr(daily_data, 'shape') else 'No shape'}")
                 
                 # Берем последние 252 торговых дня (примерно год)
                 filtered_data = daily_data.tail(252)
+                self.logger.info(f"Filtered data shape: {filtered_data.shape if hasattr(filtered_data, 'shape') else 'No shape'}")
                 
                 # Получаем информацию об активе для заголовка
                 asset_name = getattr(asset, 'name', symbol)
                 currency = getattr(asset, 'currency', '')
+                self.logger.info(f"Asset name: {asset_name}, currency: {currency}")
                 
                 # Используем ChartStyles для создания графика
+                self.logger.info("Creating chart with ChartStyles")
                 fig, ax = chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
                     period='1Y'
                 )
+                self.logger.info("Chart created successfully")
                 
                 # Обновляем заголовок с нужным форматом
                 title = f"{symbol} | {asset_name} | {currency} | 1Y"
@@ -2169,14 +2179,18 @@ class ShansAi:
                 # Очистка
                 chart_styles.cleanup_figure(fig)
                 
-                return output.getvalue()
+                result = output.getvalue()
+                self.logger.info(f"Chart bytes length: {len(result)}")
+                return result
             
             # Выполняем с таймаутом
+            self.logger.info(f"Starting chart creation for {symbol}")
             chart_data = await asyncio.wait_for(
                 asyncio.to_thread(create_daily_chart),
                 timeout=30.0
             )
             
+            self.logger.info(f"Chart creation completed for {symbol}")
             return chart_data
             
         except Exception as e:
@@ -7173,11 +7187,11 @@ class ShansAi:
             
             if chart_data:
                 caption = f"📈 График доходности за {period}\n\n{info_text}"
-                # Update the existing message with new chart and info
-                await self._update_message_with_chart(update, context, chart_data, caption, reply_markup)
+                # Send new message with chart and info
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
             else:
-                # If no chart, update with text only
-                await self._update_message_with_text(update, context, info_text, reply_markup)
+                # If no chart, send text only
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
                 
         except Exception as e:
             self.logger.error(f"Error handling info period button: {e}")
@@ -7482,52 +7496,16 @@ class ShansAi:
                     has_dividends = bool(dividends) and len(dividends) > 0
                 
                 if has_dividends:
-                    # Формируем краткую информацию о дивидендах + текст последних выплат
-                    try:
-                        dividend_series = pd.Series(dividends)
-                        recent = dividend_series.sort_index(ascending=False).head(10)
-                        payouts_lines = []
-                        for date, amount in recent.items():
-                            if hasattr(date, 'strftime'):
-                                formatted_date = date.strftime('%Y-%m-%d')
-                            else:
-                                formatted_date = str(date)[:10]
-                            try:
-                                amount_value = float(amount)
-                            except Exception:
-                                amount_value = amount
-                            payouts_lines.append(f"{formatted_date} — {amount_value:.2f} {currency}")
-                        payouts_text = "\n".join(payouts_lines)
-                    except Exception:
-                        # Fallback без pandas
-                        items = list(dividends.items())[-10:][::-1]
-                        payouts_lines = []
-                        for date, amount in items:
-                            formatted_date = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)[:10]
-                            try:
-                                amount_value = float(amount)
-                            except Exception:
-                                amount_value = amount
-                            payouts_lines.append(f"{formatted_date} — {amount_value:.2f} {currency}")
-                        payouts_text = "\n".join(payouts_lines)
-
-                    dividend_response = (
-                        f"💵 Дивиденды {symbol}\n\n"
-                        f"📊 Количество выплат: {len(dividends)}\n"
-                        f"💰 Валюта: {currency}\n\n"
-                        f"🗓️ Последние выплаты:\n{payouts_text}"
-                    )
-                    
-                    # Получаем график дивидендов (без встроенной таблицы)
+                    # Получаем график дивидендов
                     dividend_chart = await self._get_dividend_chart(symbol)
                     
                     if dividend_chart:
                         await update.callback_query.message.reply_photo(
                             photo=dividend_chart,
-                            caption=self._truncate_caption(dividend_response)
+                            caption=f"💵 Дивиденды {symbol}"
                         )
                     else:
-                        await self._send_callback_message(update, context, dividend_response)
+                        await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен")
                 else:
                     await self._send_callback_message(update, context, "💵 Дивиденды не выплачивались в указанный период")
             else:
