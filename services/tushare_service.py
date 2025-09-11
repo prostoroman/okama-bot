@@ -61,7 +61,13 @@ class TushareService:
             '399001.SZ',  # Shenzhen Component Index
             '399005.SZ',  # Shenzhen Small & Medium Enterprise Board Index
             '399006.SZ',  # ChiNext Index
+            '899050.BJ',  # Beijing Stock Exchange 50 Index
         }
+        
+        # Also check if symbol ends with .BJ (Beijing Stock Exchange indices)
+        if symbol.endswith('.BJ'):
+            return True
+            
         return symbol in index_symbols
     
     def get_symbol_info(self, symbol: str) -> Dict[str, Any]:
@@ -325,14 +331,11 @@ class TushareService:
                     )
                 else:
                     # Mainland China stock data - use the original symbol format
-                    self.logger.info(f"Getting daily data for {symbol} from {start_date} to {end_date}")
                     df = self.pro.daily(
                         ts_code=symbol,  # Use full symbol like 600026.SH
                         start_date=start_date,
                         end_date=end_date
                     )
-                    if df.empty:
-                        self.logger.warning(f"No daily data returned for {symbol}")
             
             if df.empty:
                 return pd.DataFrame()
