@@ -1974,7 +1974,7 @@ class ShansAi:
             ts_code = symbol_info['ts_code']
             
             # Get 1 year of daily data
-            daily_data = self.tushare_service.get_daily_data(ts_code, 252)
+            daily_data = self.tushare_service.get_daily_data_by_days(ts_code, 252)
             if daily_data is None or daily_data.empty:
                 self.logger.warning(f"No daily data available for {symbol}")
                 return None
@@ -2012,7 +2012,7 @@ class ShansAi:
                 days = 252
             
             # Get daily data for the period
-            daily_data = self.tushare_service.get_daily_data(ts_code, days)
+            daily_data = self.tushare_service.get_daily_data_by_days(ts_code, days)
             if daily_data is None or daily_data.empty:
                 self.logger.warning(f"No daily data available for {symbol} period {period}")
                 return None
@@ -2051,9 +2051,8 @@ class ShansAi:
             chart_styles = ChartStyles()
             fig, ax = chart_styles.create_price_chart(
                 data=price_series,
-                symbol=symbol,
-                currency='CNY',  # Default to CNY for Chinese stocks
-                asset_name=chart_title
+                symbol=chart_title,  # Use chart_title as symbol for display
+                currency='CNY'  # Default to CNY for Chinese stocks
             )
             
             # Convert to bytes

@@ -331,6 +331,20 @@ class TushareService:
             self.logger.error(f"Error getting daily data for {symbol}: {e}")
             return pd.DataFrame()
     
+    def get_daily_data_by_days(self, ts_code: str, days: int) -> pd.DataFrame:
+        """Get daily price data for a symbol for specified number of days"""
+        try:
+            # Calculate start date based on days
+            end_date = datetime.now().strftime('%Y%m%d')
+            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
+            
+            # Get data using the existing method
+            return self.get_daily_data(ts_code, start_date, end_date)
+            
+        except Exception as e:
+            self.logger.error(f"Error getting daily data for {ts_code} for {days} days: {e}")
+            return pd.DataFrame()
+    
     def get_monthly_data(self, symbol: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
         """Get monthly price data for a symbol"""
         try:
