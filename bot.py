@@ -1953,12 +1953,49 @@ class ShansAi:
             self.logger.error(f"Error getting Tushare chart for {symbol}: {e}")
             return None
 
+    def _get_data_for_period(self, asset, period: str):
+        """Get filtered data for the specified period"""
+        try:
+            if not hasattr(asset, 'close_daily'):
+                return None, None
+            
+            data = asset.close_daily
+            
+            if period == '1Y':
+                # Last 252 trading days (approximately 1 year)
+                filtered_data = data.tail(252)
+            elif period == '5Y':
+                # Last 1260 trading days (approximately 5 years)
+                filtered_data = data.tail(1260)
+            elif period == 'MAX':
+                # All available data
+                filtered_data = data
+            else:
+                # Default to 1Y
+                filtered_data = data.tail(252)
+            
+            # Calculate returns for the filtered period
+            returns = filtered_data.pct_change().dropna()
+            
+            return filtered_data, returns
+            
+        except Exception as e:
+            self.logger.error(f"Error filtering data for period {period}: {e}")
+            return None, None
+
     async def _get_asset_key_metrics(self, asset, symbol: str, period: str = '1Y') -> Dict[str, Any]:
         """Get key metrics for an asset for the specified period"""
         try:
             metrics = {}
             
-            # Get current price
+            # Get filtered data for the period
+            filtered_data, returns = self._get_data_for_period(asset, period)
+            
+            if filtered_data is None or len(filtered_data) == 0:
+                self.logger.warning(f"No data available for {symbol} for period {period}")
+                return {}
+            
+            # Get current price (always the latest price)
             try:
                 if hasattr(asset, 'close_daily'):
                     current_price = asset.close_daily.iloc[-1]
@@ -1977,58 +2014,47 @@ class ShansAi:
                 metrics['current_price'] = None
                 metrics['price_change_pct'] = None
             
-            # Get CAGR for the period
+            # Calculate CAGR for the specific period
             try:
-                if hasattr(asset, 'get_cagr'):
-                    cagr = asset.get_cagr()
-                    if hasattr(cagr, 'iloc'):
-                        metrics['cagr'] = cagr.iloc[0]
+                if returns is not None and len(returns) > 0:
+                    # Calculate total return for the period
+                    total_return = (1 + returns).prod() - 1
+                    
+                    # Calculate years based on the period
+                    if period == '1Y':
+                        years = 1.0
+                    elif period == '5Y':
+                        years = 5.0
+                    elif period == 'MAX':
+                        # Calculate actual years from data
+                        years = len(filtered_data) / 252.0  # Approximate trading days per year
                     else:
+                        years = 1.0
+                    
+                    if years > 0:
+                        cagr = (1 + total_return) ** (1 / years) - 1
                         metrics['cagr'] = cagr
-                else:
-                    # Calculate manually
-                    if hasattr(asset, 'close_daily'):
-                        returns = asset.close_daily.pct_change().dropna()
-                        if len(returns) > 0:
-                            total_return = (1 + returns).prod() - 1
-                            years = self._calculate_asset_years(asset, returns)
-                            if years > 0:
-                                cagr = (1 + total_return) ** (1 / years) - 1
-                                metrics['cagr'] = cagr
-                            else:
-                                metrics['cagr'] = None
-                        else:
-                            metrics['cagr'] = None
                     else:
                         metrics['cagr'] = None
+                else:
+                    metrics['cagr'] = None
             except Exception as e:
-                self.logger.warning(f"Could not get CAGR for {symbol}: {e}")
+                self.logger.warning(f"Could not calculate CAGR for {symbol} period {period}: {e}")
                 metrics['cagr'] = None
             
-            # Get volatility
+            # Calculate volatility for the specific period
             try:
-                if hasattr(asset, 'volatility_annual'):
-                    volatility = asset.volatility_annual
-                    if hasattr(volatility, 'iloc'):
-                        metrics['volatility'] = volatility.iloc[-1]
-                    else:
-                        metrics['volatility'] = volatility
+                if returns is not None and len(returns) > 0:
+                    # Calculate annualized volatility for the period
+                    volatility = returns.std() * (252 ** 0.5)  # Annualized for daily data
+                    metrics['volatility'] = volatility
                 else:
-                    # Calculate manually
-                    if hasattr(asset, 'close_daily'):
-                        returns = asset.close_daily.pct_change().dropna()
-                        if len(returns) > 0:
-                            volatility = returns.std() * (252 ** 0.5)  # Annualized for daily data
-                            metrics['volatility'] = volatility
-                        else:
-                            metrics['volatility'] = None
-                    else:
-                        metrics['volatility'] = None
+                    metrics['volatility'] = None
             except Exception as e:
-                self.logger.warning(f"Could not get volatility for {symbol}: {e}")
+                self.logger.warning(f"Could not calculate volatility for {symbol} period {period}: {e}")
                 metrics['volatility'] = None
             
-            # Get dividend yield
+            # Get dividend yield (this is typically a current metric, not period-specific)
             try:
                 if hasattr(asset, 'dividend_yield'):
                     dividend_yield = asset.dividend_yield
@@ -2042,10 +2068,14 @@ class ShansAi:
                 self.logger.warning(f"Could not get dividend yield for {symbol}: {e}")
                 metrics['dividend_yield'] = None
             
+            # Add period information to metrics
+            metrics['period'] = period
+            metrics['data_points'] = len(filtered_data)
+            
             return metrics
             
         except Exception as e:
-            self.logger.error(f"Error getting key metrics for {symbol}: {e}")
+            self.logger.error(f"Error getting key metrics for {symbol} period {period}: {e}")
             return {}
 
     def _format_asset_info_response(self, asset, symbol: str, key_metrics: Dict[str, Any]) -> str:
@@ -2129,7 +2159,7 @@ class ShansAi:
             period_buttons,
             # Row 2: Actions
             [
-                InlineKeyboardButton("💵 История дивидендов", callback_data=f"info_dividends_{symbol}"),
+                InlineKeyboardButton("💵 Дивиденды", callback_data=f"info_dividends_{symbol}"),
                 InlineKeyboardButton("➡️ Сравнить с...", callback_data=f"info_compare_{symbol}"),
                 InlineKeyboardButton("💼 Добавить в портфель", callback_data=f"info_portfolio_{symbol}")
             ]
@@ -7361,10 +7391,10 @@ class ShansAi:
         try:
             # Set user context to wait for comparison input
             user_id = update.effective_user.id
-            self._update_user_context(user_id, {
-                'waiting_for_compare': True,
-                'compare_base_symbol': symbol
-            })
+            self._update_user_context(user_id, 
+                waiting_for_compare=True,
+                compare_base_symbol=symbol
+            )
             
             # Suggest popular alternatives
             suggestions = self._get_popular_alternatives(symbol)
@@ -7388,10 +7418,10 @@ class ShansAi:
         try:
             # Set user context to wait for portfolio input
             user_id = update.effective_user.id
-            self._update_user_context(user_id, {
-                'waiting_for_portfolio': True,
-                'portfolio_base_symbol': symbol
-            })
+            self._update_user_context(user_id, 
+                waiting_for_portfolio=True,
+                portfolio_base_symbol=symbol
+            )
             
             portfolio_text = f"💼 **Добавить {symbol} в портфель**\n\n"
             portfolio_text += f"Отправьте состав портфеля, включая {symbol}.\n\n"
