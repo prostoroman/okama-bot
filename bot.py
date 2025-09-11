@@ -1589,8 +1589,8 @@ class ShansAi:
             else:
                 await self._send_message_safe(update, error_msg)
     
-    async def _show_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
-        """Единый метод для показа символов в пространстве имен"""
+    async def _show_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False, page: int = 0):
+        """Единый метод для показа символов в пространстве имен с навигацией"""
         try:
             # Check if it's a Chinese exchange
             chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
