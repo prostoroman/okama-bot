@@ -1595,7 +1595,7 @@ class ShansAi:
             # Check if it's a Chinese exchange
             chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
             if namespace in chinese_exchanges:
-                await self._show_tushare_namespace_symbols(update, context, namespace, is_callback)
+                await self._show_tushare_namespace_symbols(update, context, namespace, is_callback, page)
                 return
             
             symbols_df = ok.symbols_in_namespace(namespace)
@@ -1614,19 +1614,29 @@ class ShansAi:
             
             # Show statistics first
             total_symbols = len(symbols_df)
-            response = f"📊 {namespace}: {total_symbols}\n\n"
-
-
+            symbols_per_page = 20  # Показываем по 20 символов на страницу
             
-            # Prepare data for display - show top 30 or all if less than 30
-            display_count = min(30, total_symbols)
-            response += f"📋 Первые {display_count}:\n\n"
+            # Calculate pagination
+            total_pages = (total_symbols + symbols_per_page - 1) // symbols_per_page
+            current_page = min(page, total_pages - 1) if total_pages > 0 else 0
+            
+            # Calculate start and end indices
+            start_idx = current_page * symbols_per_page
+            end_idx = min(start_idx + symbols_per_page, total_symbols)
+            
+            # Navigation info instead of first symbols
+            response = f"📊 **{namespace}** - Всего символов: {total_symbols:,}\n\n"
+            response += f"📋 **Навигация:** Показаны символы {start_idx + 1}-{end_idx} из {total_symbols}\n"
+            response += f"📄 Страница {current_page + 1} из {total_pages}\n\n"
+            
+            # Get symbols for current page
+            page_symbols = symbols_df.iloc[start_idx:end_idx]
             
             # Prepare data for tabulate
             table_data = []
             headers = ["Символ", "Название"]
             
-            for _, row in symbols_df.head(display_count).iterrows():
+            for _, row in page_symbols.iterrows():
                 symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                 name = row['name'] if pd.notna(row['name']) else 'N/A'
                 
@@ -1641,16 +1651,46 @@ class ShansAi:
                 table = tabulate.tabulate(table_data, headers=headers, tablefmt="simple")
                 response += f"```\n{table}\n```\n"
             
-            # Добавляем кнопку для выгрузки Excel
-            keyboard = [[
+            # Create navigation keyboard
+            keyboard = []
+            
+            # Navigation buttons (only if more than one page)
+            if total_pages > 1:
+                nav_buttons = []
+                
+                # Previous button
+                if current_page > 0:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "⬅️ Назад", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
+                    ))
+                
+                # Page indicator
+                nav_buttons.append(InlineKeyboardButton(
+                    f"{current_page + 1}/{total_pages}", 
+                    callback_data="noop"
+                ))
+                
+                # Next button
+                if current_page < total_pages - 1:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "➡️ Вперед", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
+                    ))
+                
+                keyboard.append(nav_buttons)
+            
+            # Excel export button
+            keyboard.append([
                 InlineKeyboardButton(
-                    f"📊 Полный список в Excel ({total_symbols})", 
+                    f"📊 Полный список в Excel ({total_symbols:,})", 
                     callback_data=f"excel_namespace_{namespace}"
                 )
-            ]]
+            ])
+            
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            # Отправляем сообщение с таблицей и кнопкой
+            # Отправляем сообщение с таблицей и кнопками
             if is_callback:
                 # Для callback сообщений отправляем через context.bot с кнопками
                 await context.bot.send_message(
