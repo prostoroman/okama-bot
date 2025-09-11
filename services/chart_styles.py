@@ -434,7 +434,7 @@ class ChartStyles:
         
         # Создаем столбчатый график
         bars = ax.bar(yearly_dividends.index, yearly_dividends.values, 
-                     color='#94D2BD', alpha=0.7, width=0.8)
+                     color='#94D2BD', alpha=1.0, width=0.8)
         
         # Убираем заголовок графика
         ax.set_title('')
@@ -843,7 +843,7 @@ class ChartStyles:
         dates = [pd.to_datetime(date) for date in data.index]
         amounts = data.values
         
-        bars = ax.bar(dates, amounts, color='#94D2BD', alpha=0.7, width=20)
+        bars = ax.bar(dates, amounts, color='#94D2BD', alpha=1.0, width=20)
         
         title = f'Дивиденды {symbol}'
         ylabel = f'Сумма ({currency})'
