@@ -7902,8 +7902,18 @@ class ShansAi:
                 if not dividends or len(dividends) == 0:
                     return None
             
+            # Получаем название компании
+            asset_name = symbol  # Default to symbol
+            try:
+                if hasattr(asset, 'name') and asset.name:
+                    asset_name = asset.name
+                elif hasattr(asset, 'symbol') and asset.symbol:
+                    asset_name = asset.symbol
+            except Exception as e:
+                self.logger.warning(f"Failed to get asset name for {symbol}: {e}")
+            
             # Создаем график дивидендов
-            dividend_chart = self._create_dividend_chart(symbol, dividend_info['dividends'], dividend_info.get('currency', ''))
+            dividend_chart = self._create_dividend_chart(symbol, dividend_info['dividends'], dividend_info.get('currency', ''), asset_name)
             
             if dividend_chart:
                 # Копирайт уже добавлен в _create_dividend_chart
@@ -8108,7 +8118,7 @@ class ShansAi:
             self.logger.error(f"Error getting dividend table image for {symbol}: {e}")
             return None
 
-    def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str) -> Optional[bytes]:
+    def _create_dividend_chart(self, symbol: str, dividends: dict, currency: str, asset_name: str = None) -> Optional[bytes]:
         """Создать график дивидендов используя ChartStyles"""
         try:
             import io
@@ -8123,7 +8133,8 @@ class ShansAi:
             fig, ax = chart_styles.create_dividends_chart(
                 data=dividend_series,
                 symbol=symbol,
-                currency=currency
+                currency=currency,
+                asset_name=asset_name
             )
             
             # Сохраняем в bytes

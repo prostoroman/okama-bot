@@ -410,7 +410,7 @@ class ChartStyles:
         xlabel = ''  # Пустая подпись по оси X
         return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
-    def create_dividends_chart(self, data, symbol, currency, **kwargs):
+    def create_dividends_chart(self, data, symbol, currency, asset_name=None, **kwargs):
         """Создать график дивидендов"""
         fig, ax = self.create_chart(**kwargs)
         
@@ -436,8 +436,12 @@ class ChartStyles:
         bars = ax.bar(yearly_dividends.index, yearly_dividends.values, 
                      color='#94D2BD', alpha=1.0, width=0.8)
         
-        # Убираем заголовок графика
-        ax.set_title('')
+        # Создаем заголовок
+        if asset_name:
+            title = f'Дивиденды | {asset_name} | {symbol} | {currency}'
+        else:
+            title = f'Дивиденды | {symbol} | {currency}'
+        ax.set_title(title)
         
         # Убираем подписи осей
         ax.set_xlabel('')

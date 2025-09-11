@@ -54,7 +54,18 @@ class Asset:
             return None
         if divs is None:
             return None
-        fig, ax = chart_styles.create_dividends_chart(dividends=divs, symbol=self.symbol)
+        
+        # Получаем название компании
+        asset_name = self.symbol  # Default to symbol
+        try:
+            if hasattr(self._asset, 'name') and self._asset.name:
+                asset_name = self._asset.name
+            elif hasattr(self._asset, 'symbol') and self._asset.symbol:
+                asset_name = self._asset.symbol
+        except Exception:
+            pass  # Use default symbol name
+        
+        fig, ax = chart_styles.create_dividends_chart(data=divs, symbol=self.symbol, currency=self.currency, asset_name=asset_name)
         buf = io.BytesIO()
         chart_styles.save_figure(fig, buf)
         chart_styles.cleanup_figure(fig)
