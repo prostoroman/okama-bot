@@ -2001,8 +2001,15 @@ class ShansAi:
                     current_price = asset.close_daily.iloc[-1]
                     metrics['current_price'] = current_price
                     
-                    # Calculate price change if we have enough data
-                    if len(asset.close_daily) > 1:
+                    # Calculate price change for the selected period
+                    if filtered_data is not None and len(filtered_data) > 1:
+                        # For period-specific price change, use start and end of filtered data
+                        start_price = filtered_data.iloc[0]
+                        end_price = filtered_data.iloc[-1]
+                        price_change = ((end_price - start_price) / start_price) * 100
+                        metrics['price_change_pct'] = price_change
+                    elif len(asset.close_daily) > 1:
+                        # Fallback: use last two prices for daily change
                         prev_price = asset.close_daily.iloc[-2]
                         price_change = ((current_price - prev_price) / prev_price) * 100
                         metrics['price_change_pct'] = price_change
