@@ -1816,8 +1816,8 @@ class ShansAi:
                 # Формируем структурированный ответ
                 info_text = self._format_asset_info_response(asset, symbol, key_metrics)
                 
-                # Создаем интерактивную панель управления
-                keyboard = self._create_info_interactive_keyboard(symbol)
+                # Создаем интерактивную панель управления с выделенным периодом 1Y
+                keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 # Получаем график доходности за 1 год
@@ -1864,8 +1864,8 @@ class ShansAi:
             # Format information according to new structure
             info_text = self._format_tushare_info_response(symbol_info, symbol)
             
-            # Create interactive keyboard
-            keyboard = self._create_info_interactive_keyboard(symbol)
+            # Create interactive keyboard with highlighted 1Y period
+            keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             # Try to get chart data
@@ -2089,14 +2089,31 @@ class ShansAi:
 
     def _create_info_interactive_keyboard(self, symbol: str) -> List[List[InlineKeyboardButton]]:
         """Create interactive keyboard for info command"""
+        return self._create_info_interactive_keyboard_with_period(symbol, "1Y")
+
+    def _create_info_interactive_keyboard_with_period(self, symbol: str, active_period: str) -> List[List[InlineKeyboardButton]]:
+        """Create interactive keyboard for info command with active period highlighted"""
+        # Create period buttons with active period highlighted
+        period_buttons = []
+        periods = [
+            ("1Y", "1 год"),
+            ("3Y", "3 года"), 
+            ("5Y", "5 лет"),
+            ("MAX", "MAX")
+        ]
+        
+        for period_code, period_text in periods:
+            if period_code == active_period:
+                button_text = f"✅ {period_text}"
+            else:
+                button_text = period_text
+            period_buttons.append(
+                InlineKeyboardButton(button_text, callback_data=f"info_period_{symbol}_{period_code}")
+            )
+        
         keyboard = [
             # Row 1: Period switching
-            [
-                InlineKeyboardButton("✅ 1 год", callback_data=f"info_period_{symbol}_1Y"),
-                InlineKeyboardButton("3 года", callback_data=f"info_period_{symbol}_3Y"),
-                InlineKeyboardButton("5 лет", callback_data=f"info_period_{symbol}_5Y"),
-                InlineKeyboardButton("MAX", callback_data=f"info_period_{symbol}_MAX")
-            ],
+            period_buttons,
             # Row 2: Deep analysis
             [
                 InlineKeyboardButton("📉 Риски и просадки", callback_data=f"info_risks_{symbol}"),
@@ -7151,15 +7168,7 @@ class ShansAi:
             info_text = info_text.replace("(за 1 год)", f"(за {period})")
             
             # Create updated keyboard with new period selected
-            keyboard = self._create_info_interactive_keyboard(symbol)
-            # Update the period button to show selected period
-            for row in keyboard:
-                for button in row:
-                    if button.callback_data.startswith(f"info_period_{symbol}_"):
-                        if period in button.callback_data:
-                            button.text = f"✅ {period}"
-                        else:
-                            button.text = button.text.replace("✅ ", "")
+            keyboard = self._create_info_interactive_keyboard_with_period(symbol, period)
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             # Get chart for the new period
