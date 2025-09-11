@@ -1886,7 +1886,9 @@ class ShansAi:
             chart_data = await self._get_tushare_chart(symbol)
             
             if chart_data:
-                caption = f"📈 График доходности за 1 год\n\n{info_text}"
+                # Create enhanced caption with English information
+                chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, "1 год")
+                caption = f"{chart_caption}\n\n{info_text}"
                 await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
             else:
                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
@@ -1894,6 +1896,66 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in _handle_tushare_info for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+
+    def _format_tushare_chart_caption(self, symbol_info: Dict[str, Any], symbol: str, period_text: str) -> str:
+        """Format chart caption with English information for Chinese/Hong Kong assets"""
+        try:
+            # Get English name
+            english_name = symbol_info.get('name', symbol.split('.')[0])
+            
+            # Get exchange and location information
+            exchange = symbol_info.get('exchange', 'N/A')
+            area = symbol_info.get('area', 'N/A')
+            
+            # Map exchanges to English names
+            exchange_map = {
+                'SSE': 'Shanghai Stock Exchange',
+                'SZSE': 'Shenzhen Stock Exchange', 
+                'HKEX': 'Hong Kong Exchange',
+                'SH': 'Shanghai Stock Exchange',
+                'SZ': 'Shenzhen Stock Exchange',
+                'HK': 'Hong Kong Exchange'
+            }
+            
+            # Map areas to English names
+            area_map = {
+                'China': 'China',
+                'Hong Kong': 'Hong Kong',
+                'Shanghai': 'Shanghai',
+                'Shenzhen': 'Shenzhen'
+            }
+            
+            english_exchange = exchange_map.get(exchange, exchange)
+            english_location = area_map.get(area, area)
+            
+            # Determine currency
+            currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+            
+            # Format listing date if available
+            listing_date = symbol_info.get('list_date', '')
+            formatted_date = ''
+            if listing_date and listing_date != 'N/A' and len(str(listing_date)) == 8:
+                try:
+                    # Convert YYYYMMDD to YYYY-MM-DD
+                    date_str = str(listing_date)
+                    formatted_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+                except:
+                    formatted_date = str(listing_date)
+            
+            # Create caption
+            caption = f"📈 {english_name}\n"
+            caption += f"🏢 {english_exchange}\n"
+            caption += f"📍 {english_location}\n"
+            caption += f"💰 {currency}"
+            
+            if formatted_date:
+                caption += f"\n📅 Listing Date: {formatted_date}"
+            
+            return caption
+            
+        except Exception as e:
+            self.logger.error(f"Error formatting chart caption for {symbol}: {e}")
+            return f"📈 {symbol}"
 
     def _format_tushare_info_response(self, symbol_info: Dict[str, Any], symbol: str) -> str:
         """Format Tushare info response according to new structure"""
@@ -2039,21 +2101,32 @@ class ShansAi:
             # Create price series
             price_series = daily_data.set_index('date')['close']
             
-            # Get asset name
+            # Get asset information
             asset_name = symbol_info.get('name', symbol)
             english_name = symbol_info.get('english_name', '')
-            if english_name and english_name != asset_name:
-                chart_title = f"{asset_name} ({english_name})"
-            else:
-                chart_title = asset_name
+            
+            # Determine currency based on exchange
+            currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+            
+            # Use English name if available, otherwise fall back to asset name
+            display_name = english_name if english_name and english_name != asset_name else asset_name
             
             # Create chart using ChartStyles
             chart_styles = ChartStyles()
             fig, ax = chart_styles.create_price_chart(
                 data=price_series,
-                symbol=chart_title,  # Use chart_title as symbol for display
-                currency='CNY'  # Default to CNY for Chinese stocks
+                symbol=symbol,
+                currency=currency,
+                period='1Y'  # Default period
             )
+            
+            # Set title with proper format: Тикер | Английское название | Валюта | Срок
+            title = f"{symbol} | {display_name} | {currency} | 1Y"
+            ax.set_title(title, **chart_styles.title)
+            
+            # Убираем подписи осей
+            ax.set_xlabel('')
+            ax.set_ylabel('')
             
             # Convert to bytes
             buffer = io.BytesIO()
@@ -7424,7 +7497,9 @@ class ShansAi:
                     '5Y': '5 лет', 
                     'MAX': 'MAX'
                 }.get(period, period)
-                caption = f"📈 График доходности за {period_text}\n\n{info_text}"
+                # Create enhanced caption with English information
+                chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, period_text)
+                caption = f"{chart_caption}\n\n{info_text}"
                 await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
             else:
                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
@@ -7800,10 +7875,13 @@ class ShansAi:
             chart_bytes = await self._get_tushare_daily_chart(symbol)
             
             if chart_bytes:
+                # Get symbol info for enhanced caption
+                symbol_info = self.tushare_service.get_symbol_info(symbol)
+                chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, "1 год")
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id,
                     photo=io.BytesIO(chart_bytes),
-                    caption=self._truncate_caption(f"📈 График за 1 год {symbol}")
+                    caption=self._truncate_caption(chart_caption)
                 )
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
@@ -7825,10 +7903,13 @@ class ShansAi:
             chart_bytes = await self._get_tushare_monthly_chart(symbol)
             
             if chart_bytes:
+                # Get symbol info for enhanced caption
+                symbol_info = self.tushare_service.get_symbol_info(symbol)
+                chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, "5 лет")
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id,
                     photo=io.BytesIO(chart_bytes),
-                    caption=self._truncate_caption(f"📅 График за 5 лет {symbol}")
+                    caption=self._truncate_caption(chart_caption)
                 )
             else:
                 await self._send_callback_message(update, context, "❌ Не удалось создать график")
@@ -7934,40 +8015,180 @@ class ShansAi:
             return None
 
     async def _handle_tushare_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
-        """Handle Tushare dividends button click"""
+        """Handle Tushare dividends button click with enhanced information"""
         try:
-            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
+            await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах и рейтингах...")
             
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
                 return
             
+            # Get symbol info for English name
+            symbol_info = self.tushare_service.get_symbol_info(symbol)
+            english_name = symbol_info.get('name', symbol.split('.')[0])
+            
             # Get dividend data from Tushare
             dividend_data = self.tushare_service.get_dividend_data(symbol)
             
-            if dividend_data.empty:
-                await self._send_callback_message(update, context, f"💵 Дивиденды для {symbol} не найдены")
-                return
+            # Get rating data if available
+            rating_data = self.tushare_service.get_rating_data(symbol)
             
             # Format dividend information
-            info_text = f"💵 Дивиденды {symbol}\n\n"
+            info_text = f"💵 Дивиденды {symbol}\n"
+            info_text += f"🏢 {english_name}\n\n"
             
-            # Show last 10 dividends
-            recent_dividends = dividend_data.tail(10)
-            for _, row in recent_dividends.iterrows():
-                ann_date = row['ann_date'].strftime('%Y-%m-%d') if pd.notna(row['ann_date']) else 'N/A'
-                div_proc_date = row['div_proc_date'].strftime('%Y-%m-%d') if pd.notna(row['div_proc_date']) else 'N/A'
-                stk_div_date = row['stk_div_date'].strftime('%Y-%m-%d') if pd.notna(row['stk_div_date']) else 'N/A'
+            if dividend_data.empty:
+                info_text += "❌ Дивиденды не найдены\n\n"
+            else:
+                # Calculate dividend statistics
+                total_dividends = len(dividend_data)
+                recent_dividends = dividend_data.head(5)  # Most recent 5
                 
-                info_text += f"📅 {ann_date}: {row.get('cash_div_tax', 0):.4f}\n"
-                info_text += f"   💰 Дата выплаты: {div_proc_date}\n"
-                info_text += f"   📊 Дата регистрации: {stk_div_date}\n\n"
+                info_text += f"📊 Всего выплат: {total_dividends}\n"
+                
+                # Calculate average dividend
+                if 'cash_div_tax' in dividend_data.columns:
+                    avg_dividend = dividend_data['cash_div_tax'].mean()
+                    info_text += f"💰 Средний дивиденд: {avg_dividend:.4f}\n\n"
+                
+                info_text += "📅 Последние дивиденды:\n"
+                
+                for _, row in recent_dividends.iterrows():
+                    ann_date = row['ann_date'].strftime('%Y-%m-%d') if pd.notna(row['ann_date']) else 'N/A'
+                    div_proc_date = row['div_proc_date'].strftime('%Y-%m-%d') if pd.notna(row['div_proc_date']) else 'N/A'
+                    stk_div_date = row['stk_div_date'].strftime('%Y-%m-%d') if pd.notna(row['stk_div_date']) else 'N/A'
+                    
+                    # Get dividend amount (prefer after-tax, fallback to before-tax, then tax)
+                    dividend_amount = 0
+                    if 'cash_div_after_tax' in row and row['cash_div_after_tax'] > 0:
+                        dividend_amount = row['cash_div_after_tax']
+                    elif 'cash_div_before_tax' in row and row['cash_div_before_tax'] > 0:
+                        dividend_amount = row['cash_div_before_tax']
+                    elif 'cash_div_tax' in row and row['cash_div_tax'] > 0:
+                        dividend_amount = row['cash_div_tax']
+                    
+                    info_text += f"📅 {ann_date}: {dividend_amount:.4f}\n"
+                    if div_proc_date != 'N/A':
+                        info_text += f"   💰 Выплата: {div_proc_date}\n"
+                    if stk_div_date != 'N/A':
+                        info_text += f"   📊 Регистрация: {stk_div_date}\n"
+                    info_text += "\n"
+            
+            # Add rating information if available
+            if not rating_data.empty:
+                info_text += "⭐ Рейтинги:\n"
+                recent_ratings = rating_data.head(3)  # Most recent 3 ratings
+                
+                for _, row in recent_ratings.iterrows():
+                    rating_date = row['rating_date'].strftime('%Y-%m-%d') if pd.notna(row['rating_date']) else 'N/A'
+                    
+                    # Get rating information (field names may vary)
+                    rating_info = []
+                    if 'rating_agency' in row and pd.notna(row['rating_agency']):
+                        rating_info.append(f"Агентство: {row['rating_agency']}")
+                    if 'rating_type' in row and pd.notna(row['rating_type']):
+                        rating_info.append(f"Тип: {row['rating_type']}")
+                    if 'rating_value' in row and pd.notna(row['rating_value']):
+                        rating_info.append(f"Рейтинг: {row['rating_value']}")
+                    
+                    info_text += f"📅 {rating_date}\n"
+                    if rating_info:
+                        info_text += f"   {' | '.join(rating_info)}\n"
+                    info_text += "\n"
+            else:
+                info_text += "⭐ Рейтинги: Недоступны\n"
+            
+            # Try to create dividend chart if we have data
+            if not dividend_data.empty:
+                try:
+                    chart_bytes = await self._create_tushare_dividend_chart(symbol, dividend_data, symbol_info)
+                    if chart_bytes:
+                        caption = f"💵 График дивидендов {symbol}\n🏢 {english_name}"
+                        await context.bot.send_photo(
+                            chat_id=update.effective_chat.id,
+                            photo=io.BytesIO(chart_bytes),
+                            caption=self._truncate_caption(caption)
+                        )
+                except Exception as e:
+                    self.logger.warning(f"Could not create dividend chart: {e}")
             
             await self._send_callback_message(update, context, info_text)
                 
         except Exception as e:
             self.logger.error(f"Error handling Tushare dividends button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
+
+    async def _create_tushare_dividend_chart(self, symbol: str, dividend_data, symbol_info: Dict[str, Any]) -> Optional[bytes]:
+        """Create dividend chart for Tushare asset"""
+        try:
+            import io
+            import pandas as pd
+            from services.chart_styles import ChartStyles
+            
+            # Prepare dividend data for chart
+            dividend_data = dividend_data.copy()
+            
+            # Get dividend amounts (prefer after-tax, fallback to before-tax, then tax)
+            dividend_amounts = []
+            for _, row in dividend_data.iterrows():
+                amount = 0
+                if 'cash_div_after_tax' in row and row['cash_div_after_tax'] > 0:
+                    amount = row['cash_div_after_tax']
+                elif 'cash_div_before_tax' in row and row['cash_div_before_tax'] > 0:
+                    amount = row['cash_div_before_tax']
+                elif 'cash_div_tax' in row and row['cash_div_tax'] > 0:
+                    amount = row['cash_div_tax']
+                dividend_amounts.append(amount)
+            
+            dividend_data['dividend_amount'] = dividend_amounts
+            
+            # Filter out zero dividends
+            dividend_data = dividend_data[dividend_data['dividend_amount'] > 0]
+            
+            if dividend_data.empty:
+                return None
+            
+            # Group by year and sum dividends
+            dividend_data['year'] = dividend_data['ann_date'].dt.year
+            yearly_dividends = dividend_data.groupby('year')['dividend_amount'].sum()
+            
+            # Take last 10 years
+            yearly_dividends = yearly_dividends.tail(10)
+            
+            if yearly_dividends.empty:
+                return None
+            
+            # Create chart using ChartStyles
+            chart_styles = ChartStyles()
+            fig, ax = chart_styles.create_dividends_chart(
+                data=yearly_dividends,
+                symbol=symbol,
+                currency='HKD' if symbol.endswith('.HK') else 'CNY',
+                asset_name=symbol_info.get('name', symbol.split('.')[0])
+            )
+            
+            # Set title with proper format
+            english_name = symbol_info.get('name', symbol.split('.')[0])
+            currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
+            title = f"{symbol} | {english_name} | {currency} | Дивиденды"
+            ax.set_title(title, **chart_styles.title)
+            
+            # Убираем подписи осей
+            ax.set_xlabel('')
+            ax.set_ylabel('')
+            
+            # Convert to bytes
+            buffer = io.BytesIO()
+            fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+            buffer.seek(0)
+            chart_bytes = buffer.getvalue()
+            buffer.close()
+            
+            return chart_bytes
+            
+        except Exception as e:
+            self.logger.error(f"Error creating Tushare dividend chart for {symbol}: {e}")
+            return None
 
     async def _get_monthly_chart(self, symbol: str) -> Optional[bytes]:
         """Получить месячный график за последние 5 лет используя ChartStyles"""
@@ -8170,8 +8391,9 @@ class ShansAi:
                     # Determine currency based on exchange
                     currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
                     
-                    # Get asset name from symbol
-                    asset_name = symbol.split('.')[0]
+                    # Get asset information including English name
+                    symbol_info = self.tushare_service.get_symbol_info(symbol)
+                    english_name = symbol_info.get('name', symbol.split('.')[0])
                     
                     # Create chart using ChartStyles
                     fig, ax = chart_styles.create_price_chart(
@@ -8181,8 +8403,8 @@ class ShansAi:
                         period='1Y'
                     )
                     
-                    # Обновляем заголовок с нужным форматом
-                    title = f"{symbol} | {asset_name} | {currency} | 1Y"
+                    # Обновляем заголовок с нужным форматом: Тикер | Английское название | Валюта | Срок
+                    title = f"{symbol} | {english_name} | {currency} | 1Y"
                     ax.set_title(title, **chart_styles.title)
                     
                     # Убираем подписи осей
@@ -8246,8 +8468,9 @@ class ShansAi:
                     # Determine currency based on exchange
                     currency = 'HKD' if symbol.endswith('.HK') else 'CNY'
                     
-                    # Get asset name from symbol
-                    asset_name = symbol.split('.')[0]
+                    # Get asset information including English name
+                    symbol_info = self.tushare_service.get_symbol_info(symbol)
+                    english_name = symbol_info.get('name', symbol.split('.')[0])
                     
                     # Create chart using ChartStyles
                     fig, ax = chart_styles.create_price_chart(
@@ -8257,8 +8480,8 @@ class ShansAi:
                         period='5Y'
                     )
                     
-                    # Обновляем заголовок с нужным форматом
-                    title = f"{symbol} | {asset_name} | {currency} | 5Y"
+                    # Обновляем заголовок с нужным форматом: Тикер | Английское название | Валюта | Срок
+                    title = f"{symbol} | {english_name} | {currency} | 5Y"
                     ax.set_title(title, **chart_styles.title)
                     
                     # Убираем подписи осей

@@ -117,7 +117,8 @@ class TushareService:
             
             # Use English name if available, otherwise fall back to Chinese name
             if 'enname' in info and info['enname'] and info['enname'].strip() and info['enname'] != 'N/A':
-                info['name'] = info['enname']
+                info['english_name'] = info['enname']  # Preserve English name
+                info['name'] = info['enname']  # Use English name as primary name
             
             # Get additional metrics
             try:
@@ -190,7 +191,8 @@ class TushareService:
             
             # Use English name if available, otherwise fall back to Chinese name
             if 'enname' in info and info['enname'] and info['enname'].strip() and info['enname'] != 'N/A':
-                info['name'] = info['enname']
+                info['english_name'] = info['enname']  # Preserve English name
+                info['name'] = info['enname']  # Use English name as primary name
 
             # Add missing fields for consistency
             info.update({
@@ -411,7 +413,7 @@ class TushareService:
             return pd.DataFrame()
     
     def get_dividend_data(self, symbol: str) -> pd.DataFrame:
-        """Get dividend data for a symbol"""
+        """Get comprehensive dividend data for a symbol"""
         try:
             exchange = self.get_exchange_from_symbol(symbol)
             if not exchange:
@@ -420,28 +422,76 @@ class TushareService:
             symbol_code = symbol.split('.')[0]
             
             if exchange == 'HKEX':
-                # Hong Kong dividend data
+                # Hong Kong dividend data - get more comprehensive data
                 df = self.pro.hk_dividend(
-                    ts_code=f"{symbol_code}.HK"
+                    ts_code=f"{symbol_code}.HK",
+                    fields='ts_code,ann_date,div_proc_date,stk_div_date,cash_div_tax,cash_div_before_tax,stk_div,stk_bo_rate,stk_co_rate,cash_div_after_tax'
                 )
             else:
-                # Mainland China dividend data
+                # Mainland China dividend data - get more comprehensive data
                 df = self.pro.dividend(
-                    ts_code=f"{symbol_code}.{exchange}"
+                    ts_code=f"{symbol_code}.{exchange}",
+                    fields='ts_code,ann_date,div_proc_date,stk_div_date,cash_div_tax,cash_div_before_tax,stk_div,stk_bo_rate,stk_co_rate,cash_div_after_tax'
                 )
             
             if df.empty:
                 return pd.DataFrame()
             
-            # Convert date column
-            df['ann_date'] = pd.to_datetime(df['ann_date'], format='%Y%m%d')
-            df['div_proc_date'] = pd.to_datetime(df['div_proc_date'], format='%Y%m%d')
-            df['stk_div_date'] = pd.to_datetime(df['stk_div_date'], format='%Y%m%d')
+            # Convert date columns
+            df['ann_date'] = pd.to_datetime(df['ann_date'], format='%Y%m%d', errors='coerce')
+            df['div_proc_date'] = pd.to_datetime(df['div_proc_date'], format='%Y%m%d', errors='coerce')
+            df['stk_div_date'] = pd.to_datetime(df['stk_div_date'], format='%Y%m%d', errors='coerce')
             
-            return df.sort_values('ann_date')
+            # Fill NaN values with 0 for numeric columns
+            numeric_columns = ['cash_div_tax', 'cash_div_before_tax', 'stk_div', 'stk_bo_rate', 'stk_co_rate', 'cash_div_after_tax']
+            for col in numeric_columns:
+                if col in df.columns:
+                    df[col] = df[col].fillna(0)
+            
+            return df.sort_values('ann_date', ascending=False)
             
         except Exception as e:
             self.logger.error(f"Error getting dividend data for {symbol}: {e}")
+            return pd.DataFrame()
+    
+    def get_rating_data(self, symbol: str) -> pd.DataFrame:
+        """Get rating data for a symbol (if available)"""
+        try:
+            exchange = self.get_exchange_from_symbol(symbol)
+            if not exchange:
+                raise ValueError("Unsupported exchange")
+            
+            symbol_code = symbol.split('.')[0]
+            
+            # Try to get rating data - this method may not be available for all symbols
+            try:
+                if exchange == 'HKEX':
+                    # Hong Kong rating data
+                    df = self.pro.hk_rating(
+                        ts_code=f"{symbol_code}.HK"
+                    )
+                else:
+                    # Mainland China rating data
+                    df = self.pro.rating(
+                        ts_code=f"{symbol_code}.{exchange}"
+                    )
+                
+                if df.empty:
+                    return pd.DataFrame()
+                
+                # Convert date columns
+                if 'rating_date' in df.columns:
+                    df['rating_date'] = pd.to_datetime(df['rating_date'], format='%Y%m%d', errors='coerce')
+                
+                return df.sort_values('rating_date', ascending=False)
+                
+            except Exception as e:
+                # Rating data might not be available for this symbol
+                self.logger.warning(f"Rating data not available for {symbol}: {e}")
+                return pd.DataFrame()
+            
+        except Exception as e:
+            self.logger.error(f"Error getting rating data for {symbol}: {e}")
             return pd.DataFrame()
     
     def search_symbols(self, query: str, exchange: str = None) -> List[Dict[str, Any]]:
