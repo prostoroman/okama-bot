@@ -1098,7 +1098,7 @@ class ShansAi:
             self.logger.error(f"Error in vertical describe table formatting: {e}")
             return "📊 Ошибка при формировании таблицы статистики"
 
-    async def _send_photo_safe(self, update: Update, photo_bytes: bytes, caption: str = None, reply_markup=None):
+    async def _send_photo_safe(self, update: Update, photo_bytes: bytes, caption: str = None, reply_markup=None, context: ContextTypes.DEFAULT_TYPE = None):
         """Безопасная отправка фотографии с обработкой ошибок"""
         try:
             import io
@@ -1108,8 +1108,18 @@ class ShansAi:
                 self.logger.error("Update or effective_chat is None in _send_photo_safe")
                 return
             
+            # Получаем bot из context или из update
+            bot = None
+            if context and hasattr(context, 'bot'):
+                bot = context.bot
+            elif hasattr(update, 'bot'):
+                bot = update.bot
+            else:
+                self.logger.error("Cannot find bot instance for sending photo")
+                return
+            
             # Отправляем фотографию
-            await self.application.bot.send_photo(
+            await bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(photo_bytes),
                 caption=caption,
@@ -1705,7 +1715,7 @@ class ShansAi:
                 await self._handle_tushare_info(update, resolved_symbol)
             else:
                 # Use Okama for other exchanges
-                await self._handle_okama_info(update, resolved_symbol)
+                await self._handle_okama_info(update, resolved_symbol, context)
                 
         except Exception as e:
             self.logger.error(f"Error in info command for {symbol}: {e}")
@@ -1797,13 +1807,13 @@ class ShansAi:
                 await self._handle_tushare_info(update, resolved_symbol)
             else:
                 # Use Okama for other exchanges
-                await self._handle_okama_info(update, resolved_symbol)
+                await self._handle_okama_info(update, resolved_symbol, context)
                 
         except Exception as e:
             self.logger.error(f"Error in handle_message for {symbol}: {e}")
             await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
 
-    async def _handle_okama_info(self, update: Update, symbol: str):
+    async def _handle_okama_info(self, update: Update, symbol: str, context: ContextTypes.DEFAULT_TYPE = None):
         """Handle info display for Okama assets with new interactive structure"""
         try:
             # Получаем объект актива
@@ -1829,7 +1839,7 @@ class ShansAi:
                     # Отправляем график с информацией в caption
                     caption = f"📈 График доходности за 1 год\n\n{info_text}"
                     self.logger.info(f"Sending chart with caption length: {len(caption)}")
-                    await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+                    await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
                 else:
                     # Если график не удалось получить, отправляем только текст
                     self.logger.warning(f"Could not get chart for {symbol}, sending text only")
@@ -1877,7 +1887,7 @@ class ShansAi:
             
             if chart_data:
                 caption = f"📈 График доходности за 1 год\n\n{info_text}"
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
             else:
                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
             
@@ -7188,7 +7198,7 @@ class ShansAi:
             if chart_data:
                 caption = f"📈 График доходности за {period}\n\n{info_text}"
                 # Send new message with chart and info
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
             else:
                 # If no chart, send text only
                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
@@ -7433,7 +7443,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error updating message with chart: {e}")
             # Fallback: send new message
-            await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+            await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
 
     async def _update_message_with_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup):
         """Update existing message with new text"""
