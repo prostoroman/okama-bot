@@ -3078,15 +3078,6 @@ class ShansAi:
                 
                 self.logger.info(f"Created Portfolio with weights: {weights}, total: {sum(weights):.6f}")
                 
-                # Get portfolio information (raw object like /info)
-                portfolio_text = f"{portfolio}"
-                
-                # Remove dtype: object from the output
-                portfolio_text = portfolio_text.replace("dtype: object", "")
-                
-                # Clean up any extra escaping that might have been added
-                portfolio_text = portfolio_text.replace("\\", "")
-                
                 # Add basic metrics to portfolio text
                 try:
                     metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
@@ -3119,8 +3110,7 @@ class ShansAi:
                 portfolio_data_str = ','.join(symbols)
                 
                 # Add portfolio symbol display
-                portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
-                portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
+                portfolio_text += f"\n\n🏷️ Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
                 
                 # Add buttons in 2 columns
                 keyboard = [
@@ -5071,6 +5061,16 @@ class ShansAi:
                 except Exception as e:
                     self.logger.warning(f"Could not get Sharpe ratio: {e}")
             
+            # If Sharpe ratio is still None, try manual calculation
+            if sharpe_value is None and cagr_value is not None and volatility_value is not None and volatility_value > 0:
+                try:
+                    # Manual Sharpe ratio calculation: (CAGR - risk_free_rate) / volatility
+                    risk_free_rate = 0.02  # 2% annual risk-free rate
+                    sharpe_value = (cagr_value - risk_free_rate) / volatility_value
+                    self.logger.info(f"Calculated Sharpe ratio manually: {sharpe_value}")
+                except Exception as e:
+                    self.logger.warning(f"Could not calculate Sharpe ratio manually: {e}")
+            
             # Get max drawdown from wealth_index
             max_drawdown_value = None
             if hasattr(portfolio, 'wealth_index'):
@@ -5102,19 +5102,80 @@ class ShansAi:
                 weight = weights[i] if i < len(weights) else 0.0
                 symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
             
-            # Get rebalancing period (default to annual)
-            rebalancing_period = "Ежегодно"
+            # Get rebalancing period - determine based on portfolio data
+            rebalancing_period = "Ежегодно"  # Default fallback
+            try:
+                # Try to get actual rebalancing period from portfolio
+                if hasattr(portfolio, 'rebalancing_period'):
+                    rebalancing_period = portfolio.rebalancing_period
+                elif hasattr(portfolio, 'rebalance_freq'):
+                    rebalancing_period = portfolio.rebalance_freq
+                # If no specific rebalancing period is set, determine from data frequency
+                elif hasattr(portfolio, 'wealth_index') and portfolio.wealth_index is not None:
+                    # Check data frequency to determine rebalancing
+                    if hasattr(portfolio.wealth_index, 'index'):
+                        freq = portfolio.wealth_index.index.freq
+                        if freq:
+                            if 'D' in str(freq) or 'day' in str(freq).lower():
+                                rebalancing_period = "Ежедневно"
+                            elif 'W' in str(freq) or 'week' in str(freq).lower():
+                                rebalancing_period = "Еженедельно"
+                            elif 'M' in str(freq) or 'month' in str(freq).lower():
+                                rebalancing_period = "Ежемесячно"
+                            elif 'Q' in str(freq) or 'quarter' in str(freq).lower():
+                                rebalancing_period = "Ежеквартально"
+                            elif 'Y' in str(freq) or 'year' in str(freq).lower():
+                                rebalancing_period = "Ежегодно"
+            except Exception as e:
+                self.logger.warning(f"Could not determine rebalancing period: {e}")
+                rebalancing_period = "Ежегодно"
             
-            # Get period info
+            # Get period info with duration calculation
             period_info = ""
             if hasattr(portfolio, 'first_date') and hasattr(portfolio, 'last_date'):
                 if portfolio.first_date and portfolio.last_date:
-                    period_info = f"{portfolio.first_date} - {portfolio.last_date}"
+                    try:
+                        # Convert to datetime if needed and format as date only
+                        from datetime import datetime
+                        
+                        # Handle different date formats
+                        if isinstance(portfolio.first_date, str):
+                            start_date = datetime.strptime(portfolio.first_date.split()[0], '%Y-%m-%d').date()
+                        else:
+                            start_date = portfolio.first_date.date() if hasattr(portfolio.first_date, 'date') else portfolio.first_date
+                            
+                        if isinstance(portfolio.last_date, str):
+                            end_date = datetime.strptime(portfolio.last_date.split()[0], '%Y-%m-%d').date()
+                        else:
+                            end_date = portfolio.last_date.date() if hasattr(portfolio.last_date, 'date') else portfolio.last_date
+                        
+                        # Calculate duration
+                        duration_days = (end_date - start_date).days
+                        duration_years = duration_days / 365.25
+                        
+                        # Format duration
+                        if duration_years >= 1:
+                            years = int(duration_years)
+                            months = int((duration_years - years) * 12)
+                            if months > 0:
+                                duration_str = f"{years} г. {months} мес."
+                            else:
+                                duration_str = f"{years} г."
+                        else:
+                            months = int(duration_days / 30.44)
+                            duration_str = f"{months} мес."
+                        
+                        # Format period info with duration
+                        period_info = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')} ({duration_str})"
+                        
+                    except Exception as e:
+                        self.logger.warning(f"Could not format period info: {e}")
+                        # Fallback to simple format
+                        period_info = f"{portfolio.first_date} - {portfolio.last_date}"
             
             # Build metrics text
-            metrics_text = f"\n\n📊 **Основные метрики:**\n"
-            metrics_text += f"• **Состав:** {', '.join(symbols_with_weights)}\n"
-            metrics_text += f"• **Валюта:** {currency}\n"
+            metrics_text = f"• 📊 {', '.join(symbols_with_weights)}\n"
+            metrics_text += f"• **Базовая валюта:** {currency}\n"
             metrics_text += f"• **Период ребалансировки:** {rebalancing_period}\n"
             if period_info:
                 metrics_text += f"• **Период:** {period_info}\n"
