@@ -2174,8 +2174,8 @@ class ShansAi:
             # Row 2: Actions
             [
                 InlineKeyboardButton("💵 Дивиденды", callback_data=f"info_dividends_{symbol}"),
-                InlineKeyboardButton("➡️ Сравнить с...", callback_data=f"info_compare_{symbol}"),
-                InlineKeyboardButton("💼 Добавить в портфель", callback_data=f"info_portfolio_{symbol}")
+                InlineKeyboardButton("➡️ Сравнить", callback_data=f"info_compare_{symbol}"),
+                InlineKeyboardButton("💼 В портфель", callback_data=f"info_portfolio_{symbol}")
             ]
         ]
         return keyboard
@@ -7224,6 +7224,12 @@ class ShansAi:
         try:
             await self._send_ephemeral_message(update, context, f"📊 Обновляю данные за {period}...", delete_after=2)
             
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             # Get asset and metrics for the new period
             asset = ok.Asset(symbol)
             key_metrics = await self._get_asset_key_metrics(asset, symbol, period)
@@ -7438,12 +7444,12 @@ class ShansAi:
             )
             
             portfolio_text = f"💼 **Добавить {symbol} в портфель**\n\n"
-            portfolio_text += f"Отправьте состав портфеля, включая {symbol}.\n\n"
-            portfolio_text += "**Примеры:**\n"
+            portfolio_text += f"📝 **Отправьте состав портфеля, включая {symbol}.**\n\n"
+            portfolio_text += "**📋 Примеры:**\n"
             portfolio_text += f"• `{symbol}:0.6 QQQ.US:0.4`\n"
             portfolio_text += f"• `{symbol}:0.5 BND.US:0.3 GC.COMM:0.2`\n"
             portfolio_text += f"• `{symbol}:0.7 VTI.US:0.3`\n\n"
-            portfolio_text += f"Или отправьте любой другой состав портфеля с {symbol}"
+            portfolio_text += f"💡 **Или отправьте любой другой состав портфеля с {symbol}**"
             
             await self._send_callback_message(update, context, portfolio_text)
             
