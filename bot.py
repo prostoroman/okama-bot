@@ -2668,7 +2668,7 @@ class ShansAi:
                 namespace = self.clean_symbol(context.args[0]).upper()
                 
                 # Use the unified method that handles both okama and tushare
-                await self._show_namespace_symbols(update, context, namespace, is_callback=False)
+                await self._show_namespace_symbols(update, context, namespace, is_callback=False, page=0)
                     
         except ImportError:
             await self._send_message_safe(update, "*❌ Библиотека okama не установлена*")
@@ -5123,6 +5123,22 @@ class ShansAi:
                 namespace = self.clean_symbol(callback_data.replace('excel_namespace_', ''))
                 self.logger.info(f"Excel namespace button clicked for: {namespace}")
                 await self._handle_excel_namespace_button(update, context, namespace)
+            elif callback_data.startswith('nav_namespace_'):
+                # Handle navigation for okama namespaces
+                parts = callback_data.replace('nav_namespace_', '').split('_')
+                if len(parts) >= 2:
+                    namespace = self.clean_symbol(parts[0])
+                    page = int(parts[1])
+                    self.logger.info(f"Navigation button clicked for namespace: {namespace}, page: {page}")
+                    await self._show_namespace_symbols(update, context, namespace, is_callback=True, page=page)
+            elif callback_data.startswith('nav_tushare_'):
+                # Handle navigation for tushare namespaces
+                parts = callback_data.replace('nav_tushare_', '').split('_')
+                if len(parts) >= 2:
+                    namespace = self.clean_symbol(parts[0])
+                    page = int(parts[1])
+                    self.logger.info(f"Navigation button clicked for tushare namespace: {namespace}, page: {page}")
+                    await self._show_tushare_namespace_symbols(update, context, namespace, is_callback=True, page=page)
             elif callback_data == 'utility_clear_portfolios':
                 self.logger.info("Utility clear portfolios button clicked")
                 await self._handle_clear_all_portfolios_button(update, context)
@@ -12253,7 +12269,7 @@ class ShansAi:
             self.logger.info(f"Handling namespace button for: {namespace}")
             
             # Use the unified method that handles both okama and tushare
-            await self._show_namespace_symbols(update, context, namespace, is_callback=True)
+            await self._show_namespace_symbols(update, context, namespace, is_callback=True, page=0)
                 
         except ImportError:
             await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
