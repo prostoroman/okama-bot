@@ -1951,12 +1951,7 @@ class ShansAi:
             # List date
             if 'list_date' in symbol_info:
                 list_date = symbol_info['list_date']
-                # Format date from YYYYMMDD to YYYY-MM-DD
-                if isinstance(list_date, str) and len(list_date) == 8 and list_date.isdigit():
-                    formatted_date = f"{list_date[:4]}-{list_date[4:6]}-{list_date[6:8]}"
-                    metrics_text += f"Дата листинга: {formatted_date}\n"
-                else:
-                    metrics_text += f"Дата листинга: {list_date}\n"
+                metrics_text += f"Дата листинга: {list_date}\n"
             
             return header + metrics_text
             
@@ -1967,9 +1962,27 @@ class ShansAi:
     async def _get_tushare_chart(self, symbol: str) -> Optional[bytes]:
         """Get chart for Tushare asset"""
         try:
-            # For now, return None as Tushare chart generation needs to be implemented
-            # This can be extended later to generate charts from Tushare data
-            return None
+            if not self.tushare_service:
+                return None
+            
+            # Get symbol info to get ts_code
+            symbol_info = self.tushare_service.get_symbol_info(symbol)
+            if 'error' in symbol_info or 'ts_code' not in symbol_info:
+                self.logger.warning(f"No ts_code found for {symbol}")
+                return None
+            
+            ts_code = symbol_info['ts_code']
+            
+            # Get 1 year of daily data
+            daily_data = self.tushare_service.get_daily_data(ts_code, 252)
+            if daily_data is None or daily_data.empty:
+                self.logger.warning(f"No daily data available for {symbol}")
+                return None
+            
+            # Create chart using ChartStyles
+            chart_data = self._create_tushare_price_chart(symbol, daily_data, symbol_info)
+            return chart_data
+            
         except Exception as e:
             self.logger.error(f"Error getting Tushare chart for {symbol}: {e}")
             return None
@@ -1977,11 +1990,83 @@ class ShansAi:
     async def _get_tushare_chart_for_period(self, symbol: str, period: str) -> Optional[bytes]:
         """Get Tushare chart for specific period"""
         try:
-            # For now, use the same chart for all periods
-            # In the future, we can implement period-specific charts
-            return await self._get_tushare_chart(symbol)
+            if not self.tushare_service:
+                return None
+            
+            # Get symbol info to get ts_code
+            symbol_info = self.tushare_service.get_symbol_info(symbol)
+            if 'error' in symbol_info or 'ts_code' not in symbol_info:
+                self.logger.warning(f"No ts_code found for {symbol}")
+                return None
+            
+            ts_code = symbol_info['ts_code']
+            
+            # Determine days based on period
+            if period == '1Y':
+                days = 252
+            elif period == '5Y':
+                days = 1260
+            elif period == 'MAX':
+                days = 2520  # 10 years max
+            else:
+                days = 252
+            
+            # Get daily data for the period
+            daily_data = self.tushare_service.get_daily_data(ts_code, days)
+            if daily_data is None or daily_data.empty:
+                self.logger.warning(f"No daily data available for {symbol} period {period}")
+                return None
+            
+            # Create chart using ChartStyles
+            chart_data = self._create_tushare_price_chart(symbol, daily_data, symbol_info)
+            return chart_data
+            
         except Exception as e:
             self.logger.error(f"Error getting Tushare chart for {symbol} period {period}: {e}")
+            return None
+
+    def _create_tushare_price_chart(self, symbol: str, daily_data, symbol_info: Dict[str, Any]) -> Optional[bytes]:
+        """Create price chart for Tushare asset using ChartStyles"""
+        try:
+            import io
+            import pandas as pd
+            from services.chart_styles import ChartStyles
+            
+            # Prepare data for chart
+            daily_data = daily_data.sort_values('trade_date')
+            daily_data['date'] = pd.to_datetime(daily_data['trade_date'], format='%Y%m%d')
+            
+            # Create price series
+            price_series = daily_data.set_index('date')['close']
+            
+            # Get asset name
+            asset_name = symbol_info.get('name', symbol)
+            english_name = symbol_info.get('english_name', '')
+            if english_name and english_name != asset_name:
+                chart_title = f"{asset_name} ({english_name})"
+            else:
+                chart_title = asset_name
+            
+            # Create chart using ChartStyles
+            chart_styles = ChartStyles()
+            fig, ax = chart_styles.create_price_chart(
+                data=price_series,
+                symbol=symbol,
+                currency='CNY',  # Default to CNY for Chinese stocks
+                asset_name=chart_title
+            )
+            
+            # Convert to bytes
+            buffer = io.BytesIO()
+            fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+            buffer.seek(0)
+            chart_bytes = buffer.getvalue()
+            buffer.close()
+            
+            return chart_bytes
+            
+        except Exception as e:
+            self.logger.error(f"Error creating Tushare price chart for {symbol}: {e}")
             return None
 
     def _get_data_for_period(self, asset, period: str):
@@ -7272,12 +7357,6 @@ class ShansAi:
     async def _handle_okama_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Okama assets"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             # Get asset and metrics for the new period
             asset = ok.Asset(symbol)
             key_metrics = await self._get_asset_key_metrics(asset, symbol, period)
@@ -7308,12 +7387,6 @@ class ShansAi:
     async def _handle_tushare_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Tushare assets"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
                 return
@@ -7353,12 +7426,6 @@ class ShansAi:
     async def _handle_info_risks_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle risks and drawdowns button for info command"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             await self._send_ephemeral_message(update, context, "📉 Анализирую риски и просадки...", delete_after=2)
             
             asset = ok.Asset(symbol)
@@ -7411,12 +7478,6 @@ class ShansAi:
     async def _handle_info_metrics_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle all metrics button for info command"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             await self._send_ephemeral_message(update, context, "📊 Получаю все метрики...", delete_after=2)
             
             asset = ok.Asset(symbol)
@@ -7480,12 +7541,6 @@ class ShansAi:
     async def _handle_info_ai_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle AI analysis button for info command"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             await self._send_ephemeral_message(update, context, "🧠 Анализирую график с помощью AI...", delete_after=3)
             
             # Get asset data for analysis
@@ -7520,12 +7575,6 @@ class ShansAi:
     async def _handle_info_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle compare button for info command"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             # Set user context to wait for comparison input
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
@@ -7553,12 +7602,6 @@ class ShansAi:
     async def _handle_info_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle portfolio button for info command"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
             # Set user context to wait for portfolio input
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
@@ -11010,6 +11053,95 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio wealth chart button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
+
+    async def _create_portfolio_wealth_chart_with_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list, portfolio_symbol: str, portfolio_text: str, reply_markup):
+        """Create and send portfolio wealth chart with portfolio info in caption and buttons"""
+        try:
+            self.logger.info(f"Creating portfolio wealth chart with info for portfolio: {symbols}")
+            
+            # Generate wealth chart using chart_styles
+            wealth_index = portfolio.wealth_index
+            
+            # Create portfolio chart with chart_styles using optimized method
+            fig, ax = chart_styles.create_portfolio_wealth_chart(
+                data=wealth_index, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_symbol
+            )
+            
+            # Save chart to bytes with memory optimization
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache to free memory
+            chart_styles.cleanup_figure(fig)
+            
+            # Get final portfolio value safely
+            try:
+                final_value = portfolio.wealth_index.iloc[-1]
+                
+                # Handle different types of final_value
+                if hasattr(final_value, '__iter__') and not isinstance(final_value, str):
+                    if hasattr(final_value, 'iloc'):
+                        final_value = final_value.iloc[0]
+                    elif hasattr(final_value, '__getitem__'):
+                        final_value = final_value[0]
+                    else:
+                        final_value = list(final_value)[0]
+                
+                # Convert to float safely
+                if isinstance(final_value, (int, float)):
+                    final_value = float(final_value)
+                else:
+                    final_value_str = str(final_value)
+                    try:
+                        final_value = float(final_value_str)
+                    except (ValueError, TypeError):
+                        import re
+                        numeric_match = re.search(r'[\d.]+', final_value_str)
+                        if numeric_match:
+                            final_value = float(numeric_match.group())
+                        else:
+                            raise ValueError(f"Cannot convert {final_value} to float")
+                
+                # Add period information
+                try:
+                    period_length = portfolio.period_length
+                except Exception as e:
+                    self.logger.warning(f"Could not get period length: {e}")
+                    period_length = "неизвестный период"
+            except Exception as e:
+                self.logger.warning(f"Could not get final portfolio value: {e}")
+                final_value = 0.0
+                period_length = "неизвестный период"
+            
+            # Create comprehensive caption with portfolio info
+            chart_caption = f"📈 Накопленная доходность портфеля\n\n"
+            chart_caption += f"💰 При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}\n\n"
+            
+            # Add portfolio composition
+            symbols_with_weights = []
+            for i, symbol in enumerate(symbols):
+                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                weight = weights[i] if i < len(weights) else 0.0
+                symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+            
+            chart_caption += f"📊 Состав портфеля: {', '.join(symbols_with_weights)}\n"
+            chart_caption += f"🏷️ Символ портфеля: `{portfolio_symbol}`\n"
+            chart_caption += f"💱 Валюта: {currency}\n\n"
+            chart_caption += f"ℹ️ Используйте кнопки ниже для дополнительного анализа"
+
+            # Send the chart with caption and buttons
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=io.BytesIO(img_bytes),
+                caption=self._truncate_caption(chart_caption),
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio wealth chart with info: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
 
     async def _create_portfolio_wealth_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list, portfolio_name: str = None):
