@@ -7355,6 +7355,12 @@ class ShansAi:
     async def _handle_okama_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Okama assets"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             # Get asset and metrics for the new period
             asset = ok.Asset(symbol)
             key_metrics = await self._get_asset_key_metrics(asset, symbol, period)
@@ -7385,6 +7391,12 @@ class ShansAi:
     async def _handle_tushare_info_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Tushare assets"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             if not self.tushare_service:
                 await self._send_callback_message(update, context, "❌ Сервис Tushare недоступен")
                 return
@@ -7424,6 +7436,12 @@ class ShansAi:
     async def _handle_info_risks_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle risks and drawdowns button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             await self._send_ephemeral_message(update, context, "📉 Анализирую риски и просадки...", delete_after=2)
             
             asset = ok.Asset(symbol)
@@ -7476,6 +7494,12 @@ class ShansAi:
     async def _handle_info_metrics_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle all metrics button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             await self._send_ephemeral_message(update, context, "📊 Получаю все метрики...", delete_after=2)
             
             asset = ok.Asset(symbol)
@@ -7539,6 +7563,12 @@ class ShansAi:
     async def _handle_info_ai_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle AI analysis button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             await self._send_ephemeral_message(update, context, "🧠 Анализирую график с помощью AI...", delete_after=3)
             
             # Get asset data for analysis
@@ -7573,6 +7603,12 @@ class ShansAi:
     async def _handle_info_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle compare button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             # Set user context to wait for comparison input
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
@@ -7600,6 +7636,12 @@ class ShansAi:
     async def _handle_info_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle portfolio button for info command"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             # Set user context to wait for portfolio input
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
@@ -7696,6 +7738,12 @@ class ShansAi:
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle dividends button click for single asset"""
         try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
             await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
             
             # Получаем информацию о дивидендах
