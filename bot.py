@@ -2824,7 +2824,10 @@ class ShansAi:
             for portfolio_symbol, portfolio_info in saved_portfolios.items():
                 self.logger.info(f"Processing portfolio: {portfolio_symbol}")
                 self.logger.info(f"Portfolio info keys: {list(portfolio_info.keys())}")
-                portfolio_list += f"🏷️ **{portfolio_symbol}**\n"
+                
+                # Get portfolio name or fallback to symbol
+                portfolio_name = portfolio_info.get('portfolio_name', portfolio_symbol)
+                portfolio_list += f"🏷️ **{portfolio_name}** (`{portfolio_symbol}`)\n"
                 
                 # Basic info
                 symbols = portfolio_info.get('symbols', [])
@@ -3186,6 +3189,9 @@ class ShansAi:
                 # Get additional portfolio attributes for comprehensive storage
                 portfolio_attributes = {}
                 try:
+                    # Generate portfolio name
+                    portfolio_name = self._generate_portfolio_name(symbols, weights)
+                    
                     # Basic portfolio info
                     portfolio_attributes.update({
                         'symbols': symbols,
@@ -3194,6 +3200,7 @@ class ShansAi:
                         'created_at': datetime.now().isoformat(),
                         'description': f"Портфель: {', '.join(symbols)}",
                         'portfolio_symbol': portfolio_symbol,  # Ensure symbol is preserved
+                        'portfolio_name': portfolio_name,
                         'total_weight': sum(weights),
                         'asset_count': len(symbols),
                         'period': specified_period
@@ -3360,6 +3367,7 @@ class ShansAi:
                 except Exception as e:
                     self.logger.warning(f"Could not get all portfolio attributes: {e}")
                     # Fallback to basic storage
+                    portfolio_name = self._generate_portfolio_name(symbols, weights)
                     portfolio_attributes = {
                         'symbols': symbols,
                         'weights': weights,
@@ -3367,6 +3375,7 @@ class ShansAi:
                         'created_at': datetime.now().isoformat(),
                         'description': f"Портфель: {', '.join(symbols)}",
                         'portfolio_symbol': portfolio_symbol,
+                        'portfolio_name': portfolio_name,
                         'total_weight': sum(weights),
                         'asset_count': len(symbols),
                         'period': specified_period,
@@ -3680,11 +3689,8 @@ class ShansAi:
                     portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
                     self.logger.info(f"Created portfolio with maximum available period")
                 
-                # Get portfolio information (raw object like /info)
-                portfolio_text = f"{portfolio}"
-                
-                # Escape Markdown characters to prevent parsing errors
-                portfolio_text = self._escape_markdown(portfolio_text)
+                # Create portfolio information text (without raw object)
+                portfolio_text = f"💼 **Портфель создан успешно!**\n\n"
                 
                 # Add basic metrics to portfolio text
                 try:
@@ -3712,10 +3718,7 @@ class ShansAi:
                 portfolio_data_str = ','.join(symbols)
                 
                 # Add portfolio symbol display
-                portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}`\n"
-                if specified_period:
-                    portfolio_text += f"📅 Период: {specified_period}\n"
-                portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
+                portfolio_text += f"\n\n🏷️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
                 
                 # Add buttons in 2 columns
                 keyboard = [
@@ -3778,6 +3781,9 @@ class ShansAi:
                 # Get current saved portfolios and add the new portfolio
                 saved_portfolios = user_context.get('saved_portfolios', {})
                 
+                # Generate portfolio name
+                portfolio_name = self._generate_portfolio_name(symbols, weights)
+                
                 # Create portfolio attributes for storage
                 portfolio_attributes = {
                     'symbols': symbols,
@@ -3786,6 +3792,7 @@ class ShansAi:
                     'created_at': datetime.now().isoformat(),
                     'description': f"Портфель: {', '.join(symbols)}",
                     'portfolio_symbol': portfolio_symbol,
+                    'portfolio_name': portfolio_name,
                     'total_weight': sum(weights),
                     'asset_count': len(symbols),
                     'period': specified_period
@@ -4990,6 +4997,38 @@ class ShansAi:
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def _generate_portfolio_name(self, symbols: list, weights: list) -> str:
+        """Generate a meaningful portfolio name based on symbols and weights"""
+        try:
+            # Clean symbol names (remove .US, .RU, etc.)
+            clean_symbols = []
+            for symbol in symbols:
+                clean_symbol = symbol.split('.')[0] if '.' in symbol else symbol
+                clean_symbols.append(clean_symbol)
+            
+            # If portfolio has 1-2 assets, use their names
+            if len(clean_symbols) <= 2:
+                if len(clean_symbols) == 1:
+                    return f"Портфель {clean_symbols[0]}"
+                else:
+                    return f"Портфель {clean_symbols[0]} + {clean_symbols[1]}"
+            
+            # If portfolio has 3+ assets, use top 2 by weight
+            elif len(clean_symbols) >= 3:
+                # Sort by weights (descending)
+                symbol_weight_pairs = list(zip(clean_symbols, weights))
+                symbol_weight_pairs.sort(key=lambda x: x[1], reverse=True)
+                
+                top_symbols = [pair[0] for pair in symbol_weight_pairs[:2]]
+                return f"Портфель {top_symbols[0]} + {top_symbols[1]} + {len(clean_symbols)-2} др."
+            
+            # Fallback
+            return f"Портфель из {len(clean_symbols)} активов"
+            
+        except Exception as e:
+            self.logger.warning(f"Could not generate portfolio name: {e}")
+            return f"Портфель из {len(symbols)} активов"
 
     def _get_portfolio_basic_metrics(self, portfolio, symbols: list, weights: list, currency: str) -> str:
         """Get basic portfolio metrics for creation message"""
