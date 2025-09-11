@@ -64,11 +64,21 @@ class TushareService:
             '899050.BJ',  # Beijing Stock Exchange 50 Index
         }
         
-        # Also check if symbol ends with .BJ (Beijing Stock Exchange indices)
-        if symbol.endswith('.BJ'):
+        # Check if symbol is in known indices
+        if symbol in index_symbols:
             return True
-            
-        return symbol in index_symbols
+        
+        # For BJ symbols, check if they exist in index_basic
+        # This allows for dynamic detection of new BJ indices
+        if symbol.endswith('.BJ'):
+            try:
+                index_df = self.pro.index_basic()
+                return symbol in index_df['ts_code'].values
+            except Exception as e:
+                self.logger.warning(f"Could not check index_basic for {symbol}: {e}")
+                return False
+        
+        return False
     
     def get_symbol_info(self, symbol: str) -> Dict[str, Any]:
         """Get basic information about a symbol"""
@@ -120,6 +130,7 @@ class TushareService:
                 available_symbols = df[df['symbol'].str.contains(symbol_code[:3], na=False)]['symbol'].head(10).tolist()
                 self.logger.warning(f"Stock {symbol_code} not found in {exchange}. Available similar symbols: {available_symbols}")
                 # Try to find as index if not found as stock
+                # This will correctly determine if it's an index or return an error
                 return self._get_index_info(symbol_code, exchange)
             
             info = stock_info.iloc[0].to_dict()

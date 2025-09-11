@@ -3591,7 +3591,7 @@ class ShansAi:
             for arg in raw_args.split():
                 if ':' in arg:
                     symbol_part, weight_part = arg.split(':', 1)
-                    original_symbol = symbol_part.strip()
+                    original_symbol = self.clean_symbol(symbol_part.strip())
                     # Преобразуем символ в верхний регистр
                     symbol = original_symbol.upper()
                     
@@ -4491,9 +4491,6 @@ class ShansAi:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             
-            # Clear waiting flag
-            self._update_user_context(user_id, waiting_for_compare=False)
-            
             # Parse input text using the same logic as compare_command
             # Split the text into arguments and use the same parsing function
             text_args = text.split()
@@ -4507,20 +4504,25 @@ class ShansAi:
             self.logger.info(f"Parsed currency: {specified_currency}")
             self.logger.info(f"Parsed period: {specified_period}")
             
-            # Check if we have a stored first symbol from previous input
+            # Check if we have a stored first symbol from previous input or from compare button
             stored_first_symbol = user_context.get('compare_first_symbol')
+            compare_base_symbol = user_context.get('compare_base_symbol')
             
             if len(symbols) == 1:
-                if stored_first_symbol is None:
+                if stored_first_symbol is None and compare_base_symbol is None:
                     # First symbol - store it and ask for more
-                    self._update_user_context(user_id, compare_first_symbol=symbols[0])
-                    await self._send_message_safe(update, f"Вы указали только 1 символ, а для сравнения нужно 2 и больше, напишите дополнительный символ для сравнения, например `случайный символ`")
+                    self._update_user_context(user_id, compare_first_symbol=symbols[0], waiting_for_compare=True)
+                    # Generate random examples for the message
+                    random_examples = self.get_random_examples(3)
+                    examples_text = ", ".join([f"`{example}`" for example in random_examples])
+                    await self._send_message_safe(update, f"Вы указали только 1 символ, а для сравнения нужно 2 и больше, напишите дополнительный символ для сравнения, например {examples_text}")
                     return
                 else:
-                    # We have a stored symbol, combine with new input
-                    combined_symbols = [stored_first_symbol] + symbols
-                    # Clear the stored symbol
-                    self._update_user_context(user_id, compare_first_symbol=None)
+                    # We have a stored symbol or base symbol, combine with new input
+                    base_symbol = stored_first_symbol or compare_base_symbol
+                    combined_symbols = [base_symbol] + symbols
+                    # Clear both stored symbols and waiting flag
+                    self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
                     
                     # Process the comparison with combined symbols
                     context.args = combined_symbols
@@ -4531,8 +4533,8 @@ class ShansAi:
                     return
             
             elif len(symbols) == 0:
-                # Empty input - clear stored symbol and show help
-                self._update_user_context(user_id, compare_first_symbol=None)
+                # Empty input - clear stored symbols and show help
+                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
                 return
             
@@ -4541,7 +4543,7 @@ class ShansAi:
                 return
             
             # We have 2 or more symbols - clear any stored symbols and process normally
-            self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None)
+            self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
             
             # Process the comparison using the same logic as compare_command
             # We'll reuse the existing comparison logic by calling compare_command with args
