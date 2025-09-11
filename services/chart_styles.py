@@ -192,7 +192,7 @@ class ChartStyles:
             plt.style.use(self.style['style'])
             
             # Убираем параметры, которые не поддерживаются plt.subplots
-            plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright', 'title', 'xlabel', 'ylabel']}
+            plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright', 'title', 'xlabel', 'ylabel', 'data_source']}
             
             if figsize is None:
                 if rows == 1 and cols == 1:
@@ -616,7 +616,7 @@ class ChartStyles:
         xlabel = ''  # No x-axis label
         return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
     
-    def create_portfolio_returns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, **kwargs):
+    def create_portfolio_returns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Создать график годовой доходности портфеля"""
         fig, ax = self.create_chart(**kwargs)
         
