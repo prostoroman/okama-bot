@@ -367,7 +367,7 @@ class ChartStyles:
             ax.bar(data.index, data.values, color=bar_color, alpha=0.8)
         
         self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel)
-        ax.tick_params(axis='x', rotation=45)
+        ax.tick_params(axis='x', rotation=0)
         return fig, ax
     
     def create_multi_line_chart(self, data, title, ylabel, xlabel='', **kwargs):
@@ -392,7 +392,7 @@ class ChartStyles:
                     color=color, alpha=self.lines['alpha'], label=column)
         
         self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel)
-        ax.tick_params(axis='x', rotation=45)
+        ax.tick_params(axis='x', rotation=0)
         return fig, ax
     
     # ============================================================================
@@ -509,7 +509,7 @@ class ChartStyles:
         
         # Применяем общие стили
         self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, grid=True, legend=True, copyright=True)
-        ax.tick_params(axis='x', rotation=45)
+        ax.tick_params(axis='x', rotation=0)
         
         return fig, ax
     
@@ -1134,7 +1134,7 @@ class ChartStyles:
                     except Exception as e:
                         logger.warning(f"Could not convert date_index to datetime: {e}")
                         # Fallback к стандартному поведению
-                        ax.tick_params(axis='x', rotation=45)
+                        ax.tick_params(axis='x', rotation=0)
                         return
             
             # Определяем количество точек данных
@@ -1178,12 +1178,12 @@ class ChartStyles:
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
             
             # Поворачиваем подписи дат для лучшей читаемости
-            ax.tick_params(axis='x', rotation=45)
+            ax.tick_params(axis='x', rotation=0)
             
         except Exception as e:
             logger.warning(f"Error optimizing x-axis ticks: {e}")
             # Fallback к стандартному поведению
-            ax.tick_params(axis='x', rotation=45)
+            ax.tick_params(axis='x', rotation=0)
 
 # Глобальный экземпляр
 chart_styles = ChartStyles()
