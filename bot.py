@@ -856,6 +856,7 @@ class ShansAi:
                 data=comparison_df,
                 symbols=list(comparison_data.keys()),
                 currency=currency,
+                data_source='tushare',
                 title=title,
                 xlabel='',  # Скрываем подпись оси X
                 ylabel=''   # Скрываем подпись оси Y
@@ -1259,7 +1260,7 @@ class ShansAi:
             
             # Create drawdowns chart using chart_styles
             fig, ax = chart_styles.create_drawdowns_chart(
-                asset_list.drawdowns, symbols, currency
+                asset_list.drawdowns, symbols, currency, data_source='okama'
             )
             
             # Save chart to bytes with memory optimization
@@ -1292,7 +1293,7 @@ class ShansAi:
             
             # Create dividend yield chart using chart_styles
             fig, ax = chart_styles.create_dividend_yield_chart(
-                asset_list.dividend_yield, symbols
+                asset_list.dividend_yield, symbols, data_source='okama'
             )
             
             # Save chart to bytes with memory optimization
@@ -1348,7 +1349,7 @@ class ShansAi:
             
             # Create correlation matrix visualization using chart_styles
             fig, ax = chart_styles.create_correlation_matrix_chart(
-                correlation_matrix
+                correlation_matrix, data_source='okama'
             )
             
             # Save chart to bytes with memory optimization
@@ -2042,7 +2043,7 @@ class ShansAi:
                 return None
             
             # Create chart using ChartStyles
-            chart_data = self._create_tushare_price_chart(symbol, daily_data, symbol_info)
+            chart_data = self._create_tushare_price_chart(symbol, daily_data, symbol_info, '1Y')
             return chart_data
             
         except Exception as e:
@@ -2080,14 +2081,14 @@ class ShansAi:
                 return None
             
             # Create chart using ChartStyles
-            chart_data = self._create_tushare_price_chart(symbol, daily_data, symbol_info)
+            chart_data = self._create_tushare_price_chart(symbol, daily_data, symbol_info, period)
             return chart_data
             
         except Exception as e:
             self.logger.error(f"Error getting Tushare chart for {symbol} period {period}: {e}")
             return None
 
-    def _create_tushare_price_chart(self, symbol: str, daily_data, symbol_info: Dict[str, Any]) -> Optional[bytes]:
+    def _create_tushare_price_chart(self, symbol: str, daily_data, symbol_info: Dict[str, Any], period: str = '1Y') -> Optional[bytes]:
         """Create price chart for Tushare asset using ChartStyles"""
         try:
             import io
@@ -2117,11 +2118,12 @@ class ShansAi:
                 data=price_series,
                 symbol=symbol,
                 currency=currency,
-                period='1Y'  # Default period
+                period=period,  # Use the actual period
+                data_source='tushare'
             )
             
             # Set title with proper format: Тикер | Английское название | Валюта | Срок
-            title = f"{symbol} | {display_name} | {currency} | 1Y"
+            title = f"{symbol} | {display_name} | {currency} | {period}"
             ax.set_title(title, **chart_styles.title)
             
             # Убираем подписи осей
@@ -2401,7 +2403,8 @@ class ShansAi:
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
-                    period='1Y'
+                    period='1Y',
+                    data_source='okama'
                 )
                 self.logger.info("Chart created successfully")
                 
@@ -7975,7 +7978,8 @@ class ShansAi:
                         data=chart_data,
                         symbol=symbol,
                         currency=currency,
-                        period='All'
+                        period='All',
+                        data_source='okama'
                     )
                     
                     # Обновляем заголовок с нужным форматом
@@ -8221,7 +8225,8 @@ class ShansAi:
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
-                    period='5Y'
+                    period='5Y',
+                    data_source='okama'
                 )
                 
                 # Обновляем заголовок с нужным форматом
@@ -8281,7 +8286,8 @@ class ShansAi:
                     data=monthly_data,
                     symbol=symbol,
                     currency=currency,
-                    period='All'
+                    period='All',
+                    data_source='okama'
                 )
                 
                 # Обновляем заголовок с нужным форматом
@@ -8404,7 +8410,8 @@ class ShansAi:
                         data=filtered_data,
                         symbol=symbol,
                         currency=currency,
-                        period='1Y'
+                        period='1Y',
+                        data_source='tushare'
                     )
                     
                     # Обновляем заголовок с нужным форматом: Тикер | Английское название | Валюта | Срок
@@ -8481,7 +8488,8 @@ class ShansAi:
                         data=filtered_data,
                         symbol=symbol,
                         currency=currency,
-                        period='5Y'
+                        period='5Y',
+                        data_source='tushare'
                     )
                     
                     # Обновляем заголовок с нужным форматом: Тикер | Английское название | Валюта | Срок
