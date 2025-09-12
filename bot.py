@@ -1615,8 +1615,9 @@ class ShansAi:
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             if is_callback:
-                await context.bot.send_message(
+                await context.bot.edit_message_text(
                     chat_id=update.callback_query.message.chat_id,
+                    message_id=update.callback_query.message.message_id,
                     text=response,
                     parse_mode='Markdown',
                     reply_markup=reply_markup
@@ -1692,7 +1693,7 @@ class ShansAi:
                     escaped_name = escaped_name[:37] + "..."
                 
                 # Create bullet list item with bold ticker
-                symbol_list.append(f"• **`{symbol}** - {escaped_name}")
+                symbol_list.append(f"• **`{symbol}`** - {escaped_name}")
             
             # Add symbol list to response
             if symbol_list:
@@ -1739,9 +1740,10 @@ class ShansAi:
             
             # Отправляем сообщение с таблицей и кнопками
             if is_callback:
-                # Для callback сообщений отправляем через context.bot с кнопками
-                await context.bot.send_message(
+                # Для callback сообщений редактируем существующее сообщение
+                await context.bot.edit_message_text(
                     chat_id=update.callback_query.message.chat_id,
+                    message_id=update.callback_query.message.message_id,
                     text=response,
                     parse_mode='Markdown',
                     reply_markup=reply_markup
