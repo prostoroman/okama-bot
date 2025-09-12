@@ -7984,11 +7984,11 @@ class ShansAi:
             portfolio_text += f"• `{symbol}:0.7 VTI.US:0.3`\n\n"
             portfolio_text += f"Или отправьте любой другой состав портфеля с {symbol}"
             
-            await self._send_callback_message(update, context, portfolio_text)
+            await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error handling info portfolio button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при подготовке портфеля: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при подготовке портфеля: {str(e)}", parse_mode='Markdown')
 
     def _get_popular_alternatives(self, symbol: str) -> List[str]:
         """Get popular alternatives for comparison"""
