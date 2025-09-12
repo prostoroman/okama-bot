@@ -3437,16 +3437,13 @@ class ShansAi:
                 
                 # Chart analysis is now only available via buttons
                 
-                # Create caption
-                caption = f"Сравнение {', '.join(symbols)}\n\n"
-                caption += f"Валюта: {currency} ({currency_info})\n"
-                if specified_period:
-                    caption += f"Период: {specified_period}\n"
+                # Create summary metrics table for caption
+                summary_table = self._create_summary_metrics_table(
+                    symbols, currency, expanded_symbols, portfolio_contexts, specified_period
+                )
                 
-                # Add inflation information for Chinese symbols
-                if currency in ['CNY', 'HKD']:
-                    inflation_ticker = self._get_inflation_ticker_by_currency(currency)
-                    caption += f"Инфляция: {inflation_ticker}\n"
+                # Create caption with summary table
+                caption = f"📊 **Сводная таблица ключевых метрик**\n\n{summary_table}"
                 
                 # Describe table will be sent in separate message
                 
@@ -6783,6 +6780,185 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error preparing comprehensive metrics: {e}")
             return None
+
+    def _create_summary_metrics_table(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, specified_period: str = None) -> str:
+        """Create summary metrics table with key performance indicators"""
+        try:
+            # Prepare table data
+            table_data = []
+            headers = ["Метрика"] + symbols
+            
+            # Get metrics for each symbol
+            metrics_data = {}
+            for i, symbol in enumerate(symbols):
+                try:
+                    # Get the actual asset/portfolio object from portfolio_contexts
+                    asset_data = None
+                    if i < len(portfolio_contexts):
+                        portfolio_context = portfolio_contexts[i]
+                        portfolio_object = portfolio_context.get('portfolio_object')
+                        
+                        if portfolio_object is not None:
+                            # This is a portfolio - use portfolio object
+                            asset_data = portfolio_object
+                        else:
+                            # This is a regular asset - create Asset object
+                            asset_symbol = portfolio_context.get('portfolio_symbols', [symbol])[0]
+                            try:
+                                asset_data = ok.Asset(asset_symbol)
+                            except Exception as e:
+                                self.logger.warning(f"Failed to create Asset object for {asset_symbol}: {e}")
+                                asset_data = None
+                    
+                    if asset_data is None:
+                        # Fallback: try to create Asset from symbol
+                        try:
+                            asset_data = ok.Asset(symbol)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to create Asset object for {symbol}: {e}")
+                            asset_data = None
+                    
+                    # Calculate key metrics
+                    symbol_metrics = {}
+                    
+                    if asset_data is not None:
+                        # CAGR (Annual Return)
+                        try:
+                            if hasattr(asset_data, 'annual_return') and asset_data.annual_return is not None:
+                                symbol_metrics['cagr'] = asset_data.annual_return
+                            else:
+                                # Calculate CAGR manually
+                                if hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
+                                    wealth_index = asset_data.wealth_index
+                                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
+                                        if hasattr(wealth_index, 'columns'):
+                                            values = wealth_index.iloc[:, 0]
+                                        else:
+                                            values = wealth_index
+                                        # Calculate years based on actual date range
+                                        if len(values) > 1:
+                                            start_date = values.index[0]
+                                            end_date = values.index[-1]
+                                            if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
+                                                years = (end_date - start_date).days / 365.25
+                                            else:
+                                                years = len(values) / 12  # Fallback: assuming monthly data
+                                            
+                                            if years > 0:
+                                                total_return = (values.iloc[-1] / values.iloc[0]) - 1
+                                                symbol_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
+                        except Exception as e:
+                            self.logger.warning(f"Could not calculate CAGR for {symbol}: {e}")
+                            symbol_metrics['cagr'] = None
+                        
+                        # Volatility
+                        try:
+                            if hasattr(asset_data, 'volatility') and asset_data.volatility is not None:
+                                symbol_metrics['volatility'] = asset_data.volatility
+                            else:
+                                # Calculate volatility manually
+                                if hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
+                                    wealth_index = asset_data.wealth_index
+                                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
+                                        if hasattr(wealth_index, 'columns'):
+                                            values = wealth_index.iloc[:, 0]
+                                        else:
+                                            values = wealth_index
+                                        returns = values.pct_change().dropna()
+                                        if len(returns) > 1:
+                                            symbol_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Annualized
+                        except Exception as e:
+                            self.logger.warning(f"Could not calculate volatility for {symbol}: {e}")
+                            symbol_metrics['volatility'] = None
+                        
+                        # Sharpe Ratio
+                        try:
+                            if hasattr(asset_data, 'sharpe') and asset_data.sharpe is not None:
+                                symbol_metrics['sharpe'] = asset_data.sharpe
+                            else:
+                                # Calculate Sharpe ratio manually
+                                if symbol_metrics.get('cagr') is not None and symbol_metrics.get('volatility') is not None and symbol_metrics['volatility'] > 0:
+                                    risk_free_rate = 0.02  # 2% annual risk-free rate
+                                    symbol_metrics['sharpe'] = (symbol_metrics['cagr'] - risk_free_rate) / symbol_metrics['volatility']
+                        except Exception as e:
+                            self.logger.warning(f"Could not calculate Sharpe ratio for {symbol}: {e}")
+                            symbol_metrics['sharpe'] = None
+                        
+                        # Max Drawdown
+                        try:
+                            if hasattr(asset_data, 'max_drawdown') and asset_data.max_drawdown is not None:
+                                symbol_metrics['max_drawdown'] = asset_data.max_drawdown
+                            else:
+                                # Calculate max drawdown manually
+                                if hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
+                                    wealth_index = asset_data.wealth_index
+                                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
+                                        if hasattr(wealth_index, 'columns'):
+                                            values = wealth_index.iloc[:, 0]
+                                        else:
+                                            values = wealth_index
+                                        running_max = values.expanding().max()
+                                        drawdown = (values - running_max) / running_max
+                                        symbol_metrics['max_drawdown'] = drawdown.min()
+                        except Exception as e:
+                            self.logger.warning(f"Could not calculate max drawdown for {symbol}: {e}")
+                            symbol_metrics['max_drawdown'] = None
+                    
+                    metrics_data[symbol] = symbol_metrics
+                    
+                except Exception as e:
+                    self.logger.warning(f"Error processing symbol {symbol}: {e}")
+                    metrics_data[symbol] = {}
+            
+            # Create table rows
+            # CAGR row
+            cagr_row = ["Среднегодовая доходность (CAGR)"]
+            for symbol in symbols:
+                cagr = metrics_data.get(symbol, {}).get('cagr')
+                if cagr is not None:
+                    cagr_row.append(f"{cagr*100:.2f}%")
+                else:
+                    cagr_row.append("N/A")
+            table_data.append(cagr_row)
+            
+            # Volatility row
+            volatility_row = ["Волатильность"]
+            for symbol in symbols:
+                volatility = metrics_data.get(symbol, {}).get('volatility')
+                if volatility is not None:
+                    volatility_row.append(f"{volatility*100:.2f}%")
+                else:
+                    volatility_row.append("N/A")
+            table_data.append(volatility_row)
+            
+            # Sharpe Ratio row
+            sharpe_row = ["Коэфф. Шарпа"]
+            for symbol in symbols:
+                sharpe = metrics_data.get(symbol, {}).get('sharpe')
+                if sharpe is not None:
+                    sharpe_row.append(f"{sharpe:.2f}")
+                else:
+                    sharpe_row.append("N/A")
+            table_data.append(sharpe_row)
+            
+            # Max Drawdown row
+            drawdown_row = ["Макс. просадка"]
+            for symbol in symbols:
+                max_drawdown = metrics_data.get(symbol, {}).get('max_drawdown')
+                if max_drawdown is not None:
+                    drawdown_row.append(f"{max_drawdown*100:.2f}%")
+                else:
+                    drawdown_row.append("N/A")
+            table_data.append(drawdown_row)
+            
+            # Create markdown table
+            table_markdown = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
+            
+            return table_markdown
+            
+        except Exception as e:
+            self.logger.error(f"Error creating summary metrics table: {e}")
+            return "❌ Ошибка при создании таблицы метрик"
 
     def _create_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
         """Create Excel file with comprehensive metrics"""
