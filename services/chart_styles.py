@@ -226,17 +226,18 @@ class ChartStyles:
         try:
             ax.set_facecolor('#E9ECEF')  # светло-серый фон
             
-            # Рамки - только снизу и слева
-            for spine in ['top', 'right']:
+            # Рамки - только снизу и справа
+            for spine in ['top', 'left']:
                 ax.spines[spine].set_visible(False)
-            for spine in ['left', 'bottom']:
+            for spine in ['right', 'bottom']:
                 ax.spines[spine].set_color(self.spines['color'])
                 ax.spines[spine].set_linewidth(self.spines['linewidth'])
             
-            # Тики
+            # Тики - ось Y справа
             ax.tick_params(axis='both', which='major', 
                            labelsize=self.axes['tick_fontsize'], 
                            color=self.axes['tick_color'])
+            ax.yaxis.tick_right()  # Перемещаем тики оси Y вправо
                 
         except Exception as e:
             logger.error(f"Error applying base style: {e}")
@@ -259,6 +260,7 @@ class ChartStyles:
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
                 ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.yaxis.set_label_position('right')  # Перемещаем подпись оси Y вправо
             else:
                 ax.set_ylabel('')  # Явно скрываем подпись оси Y
             
@@ -295,6 +297,7 @@ class ChartStyles:
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
                 ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.yaxis.set_label_position('right')  # Перемещаем подпись оси Y вправо
             
             # Сетка с стандартными цветами matplotlib (без кастомных цветов)
             if grid:
@@ -1119,6 +1122,9 @@ class ChartStyles:
             # Hide x-axis label completely
             ax.set_xlabel('')
             ax.tick_params(axis='x', labelbottom=False)
+            
+            # Ensure Y-axis is on the right
+            ax.yaxis.tick_right()
             
             # Add custom legend with forecast period and currency
             from matplotlib.patches import Patch
