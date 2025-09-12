@@ -3646,8 +3646,10 @@ class ShansAi:
                     symbols, currency, expanded_symbols, portfolio_contexts, specified_period
                 )
                 
-                # Create caption with summary table
-                caption = f"📊 **Сводная таблица ключевых метрик**\n\n{summary_table}"
+                # Create enhanced caption with markdown formatting
+                caption = self._create_enhanced_chart_caption(
+                    symbols, currency, specified_period, summary_table
+                )
                 
                 # Describe table will be sent in separate message
                 
@@ -7162,14 +7164,106 @@ class ShansAi:
                     drawdown_row.append("N/A")
             table_data.append(drawdown_row)
             
-            # Create markdown table
-            table_markdown = tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
+            # Create enhanced markdown table with better formatting
+            table_markdown = self._create_enhanced_markdown_table(table_data, headers)
             
             return table_markdown
             
         except Exception as e:
             self.logger.error(f"Error creating summary metrics table: {e}")
             return "❌ Ошибка при создании таблицы метрик"
+
+    def _create_enhanced_markdown_table(self, table_data: list, headers: list) -> str:
+        """Create enhanced markdown table with better formatting and alignment"""
+        try:
+            # Create table with proper alignment
+            # First column (metric names) - left aligned
+            # Other columns (values) - center aligned for better readability
+            
+            # Build the table manually for better control over formatting
+            table_lines = []
+            
+            # Create header row
+            header_row = "| " + " | ".join(headers) + " |"
+            table_lines.append(header_row)
+            
+            # Create separator row with alignment
+            separator_parts = ["|"]
+            for i, header in enumerate(headers):
+                if i == 0:
+                    # First column (metric names) - left aligned
+                    separator_parts.append(":---" + "-" * (len(header) - 4) + "|")
+                else:
+                    # Other columns (values) - center aligned
+                    separator_parts.append(":---:" + "-" * (len(header) - 5) + "|")
+            separator_row = "".join(separator_parts)
+            table_lines.append(separator_row)
+            
+            # Add data rows
+            for row in table_data:
+                # Format the first column (metric name) with bold
+                formatted_row = ["**" + str(row[0]) + "**"]
+                
+                # Format other columns with proper spacing
+                for i in range(1, len(row)):
+                    value = str(row[i])
+                    # Add extra spaces for better alignment
+                    formatted_row.append(f" {value} ")
+                
+                data_row = "| " + " | ".join(formatted_row) + " |"
+                table_lines.append(data_row)
+            
+            return "\n".join(table_lines)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating enhanced markdown table: {e}")
+            # Fallback to simple tabulate
+            return tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
+
+    def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str, summary_table: str) -> str:
+        """Create enhanced chart caption with markdown formatting"""
+        try:
+            # Create chart title section
+            chart_title = f"📈 **График накопленной доходности**"
+            
+            # Create assets info section
+            assets_info = f"**Активы:** {', '.join(symbols)}"
+            
+            # Create currency info section
+            currency_info = f"**Валюта:** {currency}"
+            
+            # Create period info section if specified
+            period_info = ""
+            if specified_period:
+                period_info = f"**Период:** {specified_period}"
+            
+            # Create summary section
+            summary_section = f"📊 **Сводная таблица ключевых метрик**"
+            
+            # Combine all sections with proper markdown formatting
+            caption_parts = [
+                chart_title,
+                "",
+                assets_info,
+                currency_info
+            ]
+            
+            if period_info:
+                caption_parts.append(period_info)
+            
+            caption_parts.extend([
+                "",
+                summary_section,
+                "",
+                summary_table
+            ])
+            
+            return "\n".join(caption_parts)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating enhanced chart caption: {e}")
+            # Fallback to simple caption
+            return f"📊 **Сводная таблица ключевых метрик**\n\n{summary_table}"
 
     def _create_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
         """Create Excel file with comprehensive metrics"""
