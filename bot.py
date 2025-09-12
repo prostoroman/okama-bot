@@ -1541,13 +1541,12 @@ class ShansAi:
             response += f"• Всего символов: {total_count:,}\n"
             response += f"• Показываю: {len(symbols_data)}\n\n"
             
-            # Show first 20 symbols with detailed info using TABULATE
+            # Show first 20 symbols with detailed info using bullet list format
             display_count = min(20, len(symbols_data))
             response += f"📋 Первые {display_count} символов:\n\n"
             
-            # Prepare data for tabulate
-            table_data = []
-            headers = ["Символ", "Название"]
+            # Create bullet list format
+            symbol_list = []
             
             for symbol_info in symbols_data[:display_count]:
                 symbol = symbol_info['symbol']
@@ -1556,12 +1555,12 @@ class ShansAi:
                 # Escape Markdown characters in company names
                 escaped_name = self._escape_markdown(name)
                 
-                # No truncation for Chinese exchanges - show full names
-                table_data.append([f"`{symbol}`", escaped_name])
+                # Create bullet list item
+                symbol_list.append(f"• `{symbol}` - {escaped_name}")
             
-            # Create table using tabulate with simple format to avoid Markdown conflicts
-            table = tabulate.tabulate(table_data, headers=headers, tablefmt="simple")
-            response += f"```\n{table}\n```\n"
+            # Add symbol list to response
+            if symbol_list:
+                response += "\n".join(symbol_list) + "\n"
             
             if len(symbols_data) > display_count:
                 response += f"... и еще {len(symbols_data) - display_count} символов\n\n"
@@ -1637,9 +1636,8 @@ class ShansAi:
             # Get symbols for current page
             page_symbols = symbols_df.iloc[start_idx:end_idx]
             
-            # Prepare data for tabulate
-            table_data = []
-            headers = ["Символ", "Название"]
+            # Create bullet list format
+            symbol_list = []
             
             for _, row in page_symbols.iterrows():
                 symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
@@ -1648,13 +1646,12 @@ class ShansAi:
                 # Escape Markdown characters in company names
                 escaped_name = self._escape_markdown(name)
                 
-                # No truncation - show full names
-                table_data.append([f"`{symbol}`", escaped_name])
+                # Create bullet list item
+                symbol_list.append(f"• `{symbol}` - {escaped_name}")
             
-            # Create table using tabulate with simple format to avoid Markdown conflicts
-            if table_data:
-                table = tabulate.tabulate(table_data, headers=headers, tablefmt="simple")
-                response += f"```\n{table}\n```\n"
+            # Add symbol list to response
+            if symbol_list:
+                response += "\n".join(symbol_list) + "\n"
             
             # Create navigation keyboard
             keyboard = []
