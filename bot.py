@@ -1614,9 +1614,9 @@ class ShansAi:
             
             # Analysis, Compare, Portfolio buttons
             keyboard.append([
-                InlineKeyboardButton("🔍 Анализ", callback_data=f"namespace_analysis_{namespace}"),
-                InlineKeyboardButton("⚖️ Сравнить", callback_data=f"namespace_compare_{namespace}"),
-                InlineKeyboardButton("💼 В портфель", callback_data=f"namespace_portfolio_{namespace}")
+                InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
+                InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
             ])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1745,9 +1745,9 @@ class ShansAi:
             
             # Analysis, Compare, Portfolio buttons
             keyboard.append([
-                InlineKeyboardButton("🔍 Анализ", callback_data=f"namespace_analysis_{namespace}"),
-                InlineKeyboardButton("⚖️ Сравнить", callback_data=f"namespace_compare_{namespace}"),
-                InlineKeyboardButton("💼 В портфель", callback_data=f"namespace_portfolio_{namespace}")
+                InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
+                InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
             ])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -3417,9 +3417,13 @@ class ShansAi:
                     self.logger.error(f"Error storing describe table: {e}")
                     user_context['describe_table'] = "📊 Данные для анализа недоступны"
                 
-                # Create comparison chart
+                # Create comparison chart with updated title format
+                chart_title = f"Сравнение {', '.join(symbols)} | {currency}"
+                if specified_period:
+                    chart_title += f" | {specified_period}"
+                
                 fig, ax = chart_styles.create_comparison_chart(
-                    comparison.wealth_indexes, symbols, currency
+                    comparison.wealth_indexes, symbols, currency, title=chart_title
                 )
                 
                 # Save chart to bytes with memory optimization
@@ -5244,18 +5248,15 @@ class ShansAi:
                 namespace = self.clean_symbol(callback_data.replace('excel_namespace_', ''))
                 self.logger.info(f"Excel namespace button clicked for: {namespace}")
                 await self._handle_excel_namespace_button(update, context, namespace)
-            elif callback_data.startswith('namespace_analysis_'):
-                namespace = self.clean_symbol(callback_data.replace('namespace_analysis_', ''))
-                self.logger.info(f"Namespace analysis button clicked for: {namespace}")
-                await self._handle_namespace_analysis_button(update, context, namespace)
-            elif callback_data.startswith('namespace_compare_'):
-                namespace = self.clean_symbol(callback_data.replace('namespace_compare_', ''))
-                self.logger.info(f"Namespace compare button clicked for: {namespace}")
-                await self._handle_namespace_compare_button(update, context, namespace)
-            elif callback_data.startswith('namespace_portfolio_'):
-                namespace = self.clean_symbol(callback_data.replace('namespace_portfolio_', ''))
-                self.logger.info(f"Namespace portfolio button clicked for: {namespace}")
-                await self._handle_namespace_portfolio_button(update, context, namespace)
+            elif callback_data == 'namespace_analysis':
+                self.logger.info("Namespace analysis button clicked")
+                await self._handle_namespace_analysis_button(update, context)
+            elif callback_data == 'namespace_compare':
+                self.logger.info("Namespace compare button clicked")
+                await self._handle_namespace_compare_button(update, context)
+            elif callback_data == 'namespace_portfolio':
+                self.logger.info("Namespace portfolio button clicked")
+                await self._handle_namespace_portfolio_button(update, context)
             elif callback_data.startswith('nav_namespace_'):
                 # Handle navigation for okama namespaces
                 parts = callback_data.replace('nav_namespace_', '').split('_')
@@ -12537,10 +12538,10 @@ class ShansAi:
             self.logger.error(f"Error in Tushare Excel export for {namespace}: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
 
-    async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+    async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle namespace analysis button click - show info command help"""
         try:
-            self.logger.info(f"Handling namespace analysis button for: {namespace}")
+            self.logger.info("Handling namespace analysis button")
             
             # Show info command help instead of calling it without arguments
             await self._send_callback_message(update, context, 
@@ -12549,17 +12550,17 @@ class ShansAi:
                 f"• `/info AAPL.US` - анализ акции Apple\n"
                 f"• `/info SPY.US` - анализ ETF S&P 500\n"
                 f"• `/info SBER.MOEX` - анализ акции Сбербанка\n\n"
-                f"💡 *Примеры символов из {namespace}:*\n"
-                f"Используйте `/list {namespace}` для просмотра доступных символов")
+                f"💡 *Доступные символы:*\n"
+                f"Используйте `/list` для просмотра всех доступных пространств имен")
                 
         except Exception as e:
             self.logger.error(f"Error in namespace analysis button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
-    async def _handle_namespace_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+    async def _handle_namespace_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle namespace compare button click - show compare command help"""
         try:
-            self.logger.info(f"Handling namespace compare button for: {namespace}")
+            self.logger.info("Handling namespace compare button")
             
             # Show compare command help instead of calling it without arguments
             await self._send_callback_message(update, context, 
@@ -12568,17 +12569,17 @@ class ShansAi:
                 f"• `/compare AAPL.US MSFT.US` - сравнение акций Apple и Microsoft\n"
                 f"• `/compare SPY.US QQQ.US` - сравнение ETF\n"
                 f"• `/compare SBER.MOEX GAZP.MOEX` - сравнение российских акций\n\n"
-                f"💡 *Примеры символов из {namespace}:*\n"
-                f"Используйте `/list {namespace}` для просмотра доступных символов")
+                f"💡 *Доступные символы:*\n"
+                f"Используйте `/list` для просмотра всех доступных пространств имен")
                 
         except Exception as e:
             self.logger.error(f"Error in namespace compare button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
-    async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+    async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle namespace portfolio button click - show portfolio command help"""
         try:
-            self.logger.info(f"Handling namespace portfolio button for: {namespace}")
+            self.logger.info("Handling namespace portfolio button")
             
             # Show portfolio command help instead of calling it without arguments
             await self._send_callback_message(update, context, 
@@ -12587,8 +12588,8 @@ class ShansAi:
                 f"• `/portfolio SPY.US:0.6 QQQ.US:0.4` - портфель из ETF\n"
                 f"• `/portfolio AAPL.US:0.5 MSFT.US:0.3 GOOGL.US:0.2` - портфель акций\n"
                 f"• `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель\n\n"
-                f"💡 *Примеры символов из {namespace}:*\n"
-                f"Используйте `/list {namespace}` для просмотра доступных символов")
+                f"💡 *Доступные символы:*\n"
+                f"Используйте `/list` для просмотра всех доступных пространств имен")
                 
         except Exception as e:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")

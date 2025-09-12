@@ -789,7 +789,7 @@ class ChartStyles:
         # Извлекаем параметры из kwargs
         title = kwargs.get('title', f'Сравнение активов: {", ".join(symbols)}')
         xlabel = kwargs.get('xlabel', '')
-        ylabel = kwargs.get('ylabel', f'Накопленная доходность ({currency})' if currency else 'Накопленная доходность')
+        ylabel = kwargs.get('ylabel', '')  # Скрываем подпись оси Y
         
         # Применяем стили
         self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel, data_source=data_source)
