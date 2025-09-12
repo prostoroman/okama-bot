@@ -309,6 +309,9 @@ class ShansAi:
         # Удаляем множественные пробелы
         cleaned = re.sub(r'\s+', ' ', cleaned)
         
+        # Нормализуем namespace (конвертируем lowercase в uppercase)
+        cleaned = self._normalize_symbol_namespace(cleaned)
+        
         return cleaned
         
 
@@ -869,6 +872,46 @@ class ShansAi:
         if not self.tushare_service:
             return False
         return self.tushare_service.is_tushare_symbol(symbol)
+    
+    def _normalize_symbol_namespace(self, symbol: str) -> str:
+        """
+        Нормализовать регистр namespace в символе
+        
+        Args:
+            symbol: Символ в формате TICKER.NAMESPACE
+            
+        Returns:
+            str: Символ с нормализованным namespace (uppercase)
+        """
+        if '.' not in symbol:
+            return symbol
+        
+        ticker, namespace = symbol.split('.', 1)
+        
+        # Known namespace mappings (lowercase -> uppercase)
+        namespace_mappings = {
+            'moex': 'MOEX',
+            'us': 'US',
+            'lse': 'LSE',
+            'xetr': 'XETR',
+            'xfra': 'XFRA',
+            'xstu': 'XSTU',
+            'xams': 'XAMS',
+            'xtae': 'XTAE',
+            'pif': 'PIF',
+            'fx': 'FX',
+            'cc': 'CC',
+            'indx': 'INDX',
+            'comm': 'COMM',
+            're': 'RE',
+            'cbr': 'CBR',
+            'pf': 'PF'
+        }
+        
+        # Convert namespace to uppercase if it's in our mappings
+        normalized_namespace = namespace_mappings.get(namespace.lower(), namespace.upper())
+        
+        return f"{ticker}.{normalized_namespace}"
     
     def _get_chinese_symbol_data(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -1752,17 +1795,17 @@ class ShansAi:
                 
                 keyboard.append(nav_buttons)
             
-            # Home button first
-            keyboard.append([
-                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
-            ])
-            
             # Excel export button
             keyboard.append([
                 InlineKeyboardButton(
                     f"📊 Полный список в Excel ({total_count:,})", 
                     callback_data=f"excel_namespace_{namespace}"
                 )
+            ])
+            
+            # Home button after Excel
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
             ])
             
             # Analysis, Compare, Portfolio buttons
@@ -1888,17 +1931,17 @@ class ShansAi:
                 
                 keyboard.append(nav_buttons)
             
-            # Home button first
-            keyboard.append([
-                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
-            ])
-            
             # Excel export button
             keyboard.append([
                 InlineKeyboardButton(
                     f"📊 Полный список в Excel ({total_symbols:,})", 
                     callback_data=f"excel_namespace_{namespace}"
                 )
+            ])
+            
+            # Home button after Excel
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
             ])
             
             # Analysis, Compare, Portfolio buttons
@@ -3145,6 +3188,9 @@ class ShansAi:
             
             # Clean up symbols (remove empty strings and whitespace)
             symbols = [symbol for symbol in symbols if symbol.strip()]
+            
+            # Normalize namespace case (convert lowercase namespaces to uppercase)
+            symbols = [self._normalize_symbol_namespace(symbol) for symbol in symbols]
             
             # Log the parsed parameters for debugging
             self.logger.info(f"Parsed symbols: {symbols}")
@@ -12932,41 +12978,40 @@ class ShansAi:
                     response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
                 response += "\n"
             
-            response += "💡 Используйте `/list <код>` для просмотра символов в конкретном пространстве"
             
             # Создаем кнопки для основных пространств имен
             keyboard = []
             
             # Основные биржи
             keyboard.append([
-                InlineKeyboardButton("🇺🇸 US", callback_data="namespace_US"),
                 InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX"),
-                InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE")
+                InlineKeyboardButton("🇷🇺 PIF", callback_data="namespace_PIF"),
+                InlineKeyboardButton("💱 FX", callback_data="namespace_FX")
             ])
-            
-            # Европейские биржи
+
             keyboard.append([
-                InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR"),
-                InlineKeyboardButton("🇫🇷 XFRA", callback_data="namespace_XFRA"),
-                InlineKeyboardButton("🇳🇱 XAMS", callback_data="namespace_XAMS")
+                InlineKeyboardButton("🇺🇸 US", callback_data="namespace_US"),
+                InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE"),                
+                InlineKeyboardButton("🇭🇰 HKEX", callback_data="namespace_HKEX")
             ])
-            
+
             # Китайские биржи
             keyboard.append([
                 InlineKeyboardButton("🇨🇳 SSE", callback_data="namespace_SSE"),
                 InlineKeyboardButton("🇨🇳 SZSE", callback_data="namespace_SZSE"),
                 InlineKeyboardButton("🇨🇳 BSE", callback_data="namespace_BSE")
             ])
-            
+
             keyboard.append([
-                InlineKeyboardButton("🇭🇰 HKEX", callback_data="namespace_HKEX")
+                InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR"),
+                InlineKeyboardButton("🇩🇪 XFRA", callback_data="namespace_XFRA"),
+                InlineKeyboardButton("🇩🇪 XSTU", callback_data="namespace_XSTU")
             ])
-            
-            # Индексы и валюты
+
             keyboard.append([
-                InlineKeyboardButton("📊 INDX", callback_data="namespace_INDX"),
-                InlineKeyboardButton("💱 FX", callback_data="namespace_FX"),
-                InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
+                InlineKeyboardButton("🇮🇱 XTAE", callback_data="namespace_XTAE"),
+                InlineKeyboardButton("🇳🇱 XAMS", callback_data="namespace_XAMS"),
+                InlineKeyboardButton("📊 INDX", callback_data="namespace_INDX")
             ])
             
             # Товары и криптовалюты
@@ -12979,8 +13024,8 @@ class ShansAi:
             # Инфляция и депозиты
             keyboard.append([
                 InlineKeyboardButton("📈 INFL", callback_data="namespace_INFL"),
-                InlineKeyboardButton("💰 PIF", callback_data="namespace_PIF"),
-                InlineKeyboardButton("🏦 RATE", callback_data="namespace_RATE")
+                InlineKeyboardButton("🏦 RATE", callback_data="namespace_RATE"),
+                InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")     
             ])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
