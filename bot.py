@@ -136,10 +136,158 @@ class ShansAi:
             'HKEX': ['00001.HK', '00700.HK']
         }
         
+        # Risk-free rate mapping for different currencies and regions
+        self.risk_free_rate_mapping = {
+            'USD': 'US_EFFR.RATE',  # US Federal Reserve Effective Federal Funds Rate
+            'EUR': 'EU_DFR.RATE',   # European Central Bank key rate
+            'GBP': 'UK_BR.RATE',    # Bank of England Bank Rate
+            'RUB': 'RUS_CBR.RATE',  # Bank of Russia key rate
+            'CNY': 'CHN_LPR1.RATE', # China one-year loan prime rate
+            'JPY': 'US_EFFR.RATE',  # Use US rate as proxy for JPY (no specific JPY rate available)
+            'CHF': 'EU_DFR.RATE',   # Use EU rate as proxy for CHF
+            'CAD': 'US_EFFR.RATE',  # Use US rate as proxy for CAD
+            'AUD': 'US_EFFR.RATE',  # Use US rate as proxy for AUD
+            'ILS': 'ISR_IR.RATE',   # Bank of Israel interest rate
+        }
+        
         # User session storage (in-memory for fast access)
         self.user_sessions = {}
         # Persistent context store
         self.context_store = JSONUserContextStore()
+
+    def get_risk_free_rate(self, currency: str, period_years: float = None) -> float:
+        """
+        Get appropriate risk-free rate for given currency using okama rates
+        
+        Args:
+            currency: Currency code (USD, EUR, RUB, etc.)
+            period_years: Investment period in years (for selecting appropriate rate)
+            
+        Returns:
+            Risk-free rate as decimal (e.g., 0.05 for 5%)
+        """
+        try:
+            # Get the appropriate rate symbol for the currency
+            rate_symbol = self.risk_free_rate_mapping.get(currency.upper(), 'US_EFFR.RATE')
+            
+            # For RUB currency, select appropriate rate based on period
+            if currency.upper() == 'RUB':
+                if period_years is not None:
+                    if period_years <= 0.25:  # 3 months or less
+                        rate_symbol = 'RUONIA.RATE'  # Overnight rate
+                    elif period_years <= 0.5:  # 6 months or less
+                        rate_symbol = 'RUONIA_AVG_1M.RATE'  # 1 month average
+                    elif period_years <= 1.0:  # 1 year or less
+                        rate_symbol = 'RUONIA_AVG_3M.RATE'  # 3 month average
+                    else:  # More than 1 year
+                        rate_symbol = 'RUONIA_AVG_6M.RATE'  # 6 month average
+                else:
+                    rate_symbol = 'RUS_CBR.RATE'  # Default to central bank rate
+            
+            # For CNY currency, select appropriate rate based on period
+            elif currency.upper() == 'CNY':
+                if period_years is not None and period_years > 5:
+                    rate_symbol = 'CHN_LPR5.RATE'  # 5-year rate for longer periods
+                else:
+                    rate_symbol = 'CHN_LPR1.RATE'  # 1-year rate for shorter periods
+            
+            # Get the rate using okama
+            import okama as ok
+            rate_asset = ok.Asset(rate_symbol)
+            
+            # Get the most recent rate value
+            if hasattr(rate_asset, 'wealth_index') and not rate_asset.wealth_index.empty:
+                # Get the latest rate value
+                latest_rate = rate_asset.wealth_index.iloc[-1]
+                if hasattr(latest_rate, 'values'):
+                    rate_value = latest_rate.values[0]
+                else:
+                    rate_value = latest_rate
+                
+                # Convert to decimal (okama rates are typically in percentage)
+                risk_free_rate = float(rate_value) / 100.0
+                
+                self.logger.info(f"Retrieved risk-free rate for {currency}: {rate_symbol} = {risk_free_rate:.4f}")
+                return risk_free_rate
+            else:
+                self.logger.warning(f"No wealth_index data available for {rate_symbol}")
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to get risk-free rate for {currency}: {e}")
+        
+        # Fallback rates if okama data is not available
+        fallback_rates = {
+            'USD': 0.05,  # 5% - current Fed funds rate
+            'EUR': 0.04,  # 4% - current ECB rate
+            'GBP': 0.05,  # 5% - current BoE rate
+            'RUB': 0.16,  # 16% - current CBR rate
+            'CNY': 0.035, # 3.5% - current LPR rate
+            'JPY': 0.05,  # 5% - use US rate as proxy
+            'CHF': 0.04,  # 4% - use EU rate as proxy
+            'CAD': 0.05,  # 5% - use US rate as proxy
+            'AUD': 0.05,  # 5% - use US rate as proxy
+            'ILS': 0.045, # 4.5% - current BoI rate
+        }
+        
+        fallback_rate = fallback_rates.get(currency.upper(), 0.05)  # Default to 5%
+        self.logger.info(f"Using fallback risk-free rate for {currency}: {fallback_rate:.4f}")
+        return fallback_rate
+
+    def calculate_sharpe_ratio(self, returns: Union[float, pd.Series], volatility: float, 
+                              currency: str = 'USD', period_years: float = None, 
+                              asset_data: Any = None) -> float:
+        """
+        Calculate Sharpe ratio using appropriate risk-free rate for currency
+        
+        Args:
+            returns: Annual return (float) or returns series (pd.Series)
+            volatility: Annual volatility
+            currency: Currency code for risk-free rate selection
+            period_years: Investment period in years
+            asset_data: Okama asset/portfolio object (optional, for direct calculation)
+            
+        Returns:
+            Sharpe ratio
+        """
+        try:
+            # If we have asset_data with get_sharpe_ratio method, use it with appropriate risk-free rate
+            if asset_data is not None and hasattr(asset_data, 'get_sharpe_ratio'):
+                risk_free_rate = self.get_risk_free_rate(currency, period_years)
+                sharpe_ratio = asset_data.get_sharpe_ratio(rf_return=risk_free_rate)
+                
+                # Handle different return types
+                if hasattr(sharpe_ratio, 'iloc'):
+                    return float(sharpe_ratio.iloc[0])
+                elif hasattr(sharpe_ratio, '__getitem__'):
+                    return float(sharpe_ratio[0])
+                else:
+                    return float(sharpe_ratio)
+            
+            # Manual calculation
+            if isinstance(returns, pd.Series):
+                # Calculate annual return from series
+                if len(returns) > 0:
+                    annual_return = (1 + returns).prod() ** (252 / len(returns)) - 1  # Annualized
+                else:
+                    annual_return = 0.0
+            else:
+                annual_return = float(returns)
+            
+            # Get appropriate risk-free rate
+            risk_free_rate = self.get_risk_free_rate(currency, period_years)
+            
+            # Calculate Sharpe ratio: (return - risk_free_rate) / volatility
+            if volatility > 0:
+                sharpe_ratio = (annual_return - risk_free_rate) / volatility
+                self.logger.info(f"Calculated Sharpe ratio: ({annual_return:.4f} - {risk_free_rate:.4f}) / {volatility:.4f} = {sharpe_ratio:.4f}")
+                return sharpe_ratio
+            else:
+                self.logger.warning("Volatility is zero or negative, cannot calculate Sharpe ratio")
+                return 0.0
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate Sharpe ratio: {e}")
+            return 0.0
         
         # User history management
         self.user_history: Dict[int, List[dict]] = {}       # chat_id -> list[{"role": "...", "parts": [str]}]
@@ -5953,10 +6101,9 @@ class ShansAi:
             # If Sharpe ratio is still None, try manual calculation
             if sharpe_value is None and cagr_value is not None and volatility_value is not None and volatility_value > 0:
                 try:
-                    # Manual Sharpe ratio calculation: (CAGR - risk_free_rate) / volatility
-                    risk_free_rate = 0.02  # 2% annual risk-free rate
-                    sharpe_value = (cagr_value - risk_free_rate) / volatility_value
-                    self.logger.info(f"Calculated Sharpe ratio manually: {sharpe_value}")
+                    # Use unified Sharpe ratio calculation
+                    sharpe_value = self.calculate_sharpe_ratio(cagr_value, volatility_value, currency)
+                    self.logger.info(f"Calculated Sharpe ratio using unified function: {sharpe_value}")
                 except Exception as e:
                     self.logger.warning(f"Could not calculate Sharpe ratio manually: {e}")
             
@@ -6257,20 +6404,10 @@ class ShansAi:
                         
                         # Sharpe ratio calculation
                         try:
-                            if hasattr(asset_data, 'get_sharpe_ratio'):
-                                sharpe_ratio = asset_data.get_sharpe_ratio(rf_return=0.02)
-                                performance_metrics['sharpe_ratio'] = float(sharpe_ratio)
-                            elif hasattr(asset_data, 'sharpe_ratio'):
-                                performance_metrics['sharpe_ratio'] = asset_data.sharpe_ratio
-                            else:
-                                # Manual Sharpe ratio calculation
-                                annual_return = performance_metrics.get('annual_return', 0)
-                                volatility = performance_metrics.get('volatility', 0)
-                                if volatility > 0:
-                                    sharpe_ratio = (annual_return - 0.02) / volatility
-                                    performance_metrics['sharpe_ratio'] = sharpe_ratio
-                                else:
-                                    performance_metrics['sharpe_ratio'] = 0.0
+                            annual_return = performance_metrics.get('annual_return', 0)
+                            volatility = performance_metrics.get('volatility', 0)
+                            sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=asset_data)
+                            performance_metrics['sharpe_ratio'] = sharpe_ratio
                         except Exception as e:
                             self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
                             performance_metrics['sharpe_ratio'] = 0.0
@@ -12753,23 +12890,13 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
 
     async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace analysis button click - show info command help"""
+        """Handle namespace analysis button click - call info command directly"""
         try:
             self.logger.info("Handling namespace analysis button")
             
-            # Get random examples for user (same as info command)
-            examples = self.get_random_examples(3)
-            examples_text = ", ".join(examples)
-            
-            # Set flag that user is waiting for info input
-            user_id = update.effective_user.id
-            self._update_user_context(user_id, waiting_for_info=True)
-            
-            # Send the same message as info command without arguments
-            await self._send_callback_message(update, context, 
-                f"📊 *Информация об активе*\n\n"
-                f"*Примеры:* {examples_text}\n\n"
-                f"*Просто отправьте название инструмента*")
+            # Call info command without arguments directly
+            context.args = []
+            await self.info_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace analysis button handler: {e}")
@@ -12820,29 +12947,13 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace portfolio button click - show portfolio command help"""
+        """Handle namespace portfolio button click - call portfolio command directly"""
         try:
             self.logger.info("Handling namespace portfolio button")
             
-            # Create the same help message as portfolio command without arguments
-            help_text = "📊 *Создание портфеля*\n\n"
-
-            help_text += "*Примеры:*\n"
-            help_text += "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - американский сбалансированный\n"
-            help_text += "• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский энергетический\n"
-            help_text += "• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - с золотом и облигациями\n"
-            help_text += "• `AAPL.US:0.3 MSFT.US:0.3 TSLA.US:0.2 AGG.US:0.2` - технологический\n"
-            help_text += "• `SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y` - с валютой USD и периодом 10 лет\n\n"
-            help_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
-            help_text += "💡 Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`\n"
-            help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
-            help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n"
-            help_text += "💡 Если не задана базовая валюта, то она определяется по первому символу\n\n"
-
-            help_text += "💬 *Введите символы для создания портфеля:*"
-            
-            # Send the same message as portfolio command without arguments
-            await self._send_callback_message(update, context, help_text)
+            # Call portfolio command without arguments directly
+            context.args = []
+            await self.portfolio_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")
