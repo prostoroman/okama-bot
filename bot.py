@@ -1612,6 +1612,13 @@ class ShansAi:
                 )
             ])
             
+            # Analysis, Compare, Portfolio buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 Анализ", callback_data=f"namespace_analysis_{namespace}"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data=f"namespace_compare_{namespace}"),
+                InlineKeyboardButton("💼 В портфель", callback_data=f"namespace_portfolio_{namespace}")
+            ])
+            
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             if is_callback:
@@ -1736,6 +1743,13 @@ class ShansAi:
                 )
             ])
             
+            # Analysis, Compare, Portfolio buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 Анализ", callback_data=f"namespace_analysis_{namespace}"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data=f"namespace_compare_{namespace}"),
+                InlineKeyboardButton("💼 В портфель", callback_data=f"namespace_portfolio_{namespace}")
+            ])
+            
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             # Отправляем сообщение с таблицей и кнопками
@@ -1773,6 +1787,10 @@ class ShansAi:
             examples = self.get_random_examples(3)
             examples_text = ", ".join(examples)
             
+            # Set flag that user is waiting for info input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, waiting_for_info=True)
+            
             await self._send_message_safe(update, 
                 f"📊 *Информация об активе*\n\n"
                 f"*Примеры:* {examples_text}\n\n"
@@ -1784,7 +1802,8 @@ class ShansAi:
         # Update user context
         user_id = update.effective_user.id
         self._update_user_context(user_id, 
-                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []))
+                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []),
+                                waiting_for_info=False)
         
         await self._send_ephemeral_message(update, context, f"📊 Получаю информацию об активе {symbol}...", delete_after=3)
         
@@ -1833,6 +1852,16 @@ class ShansAi:
             self.logger.info(f"Processing as portfolio input: {text}")
             # Process as portfolio input
             await self._handle_portfolio_input(update, context, text)
+            return
+        
+        # Check if user is waiting for info input
+        if user_context.get('waiting_for_info', False):
+            self.logger.info(f"Processing as info input: {text}")
+            # Clear the waiting flag
+            self._update_user_context(user_id, waiting_for_info=False)
+            # Process as info command with the symbol
+            context.args = [text]
+            await self.info_command(update, context)
             return
         
         # Check if user is waiting for compare input or has stored compare symbol
@@ -2545,7 +2574,7 @@ class ShansAi:
             # Row 2: Actions
             [
                 InlineKeyboardButton("💵 Дивиденды", callback_data=f"info_dividends_{symbol}"),
-                InlineKeyboardButton("➡️ Сравнить", callback_data=f"info_compare_{symbol}"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data=f"info_compare_{symbol}"),
                 InlineKeyboardButton("💼 В портфель", callback_data=f"info_portfolio_{symbol}")
             ]
         ]
@@ -4426,7 +4455,7 @@ class ShansAi:
                 portfolio_data_str = ','.join(symbols)
                 
                 # Add portfolio symbol display
-                portfolio_text += f"\n\n🏷️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
+                portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
                 
                 # Add buttons in 2 columns
                 keyboard = [
@@ -5215,6 +5244,18 @@ class ShansAi:
                 namespace = self.clean_symbol(callback_data.replace('excel_namespace_', ''))
                 self.logger.info(f"Excel namespace button clicked for: {namespace}")
                 await self._handle_excel_namespace_button(update, context, namespace)
+            elif callback_data.startswith('namespace_analysis_'):
+                namespace = self.clean_symbol(callback_data.replace('namespace_analysis_', ''))
+                self.logger.info(f"Namespace analysis button clicked for: {namespace}")
+                await self._handle_namespace_analysis_button(update, context, namespace)
+            elif callback_data.startswith('namespace_compare_'):
+                namespace = self.clean_symbol(callback_data.replace('namespace_compare_', ''))
+                self.logger.info(f"Namespace compare button clicked for: {namespace}")
+                await self._handle_namespace_compare_button(update, context, namespace)
+            elif callback_data.startswith('namespace_portfolio_'):
+                namespace = self.clean_symbol(callback_data.replace('namespace_portfolio_', ''))
+                self.logger.info(f"Namespace portfolio button clicked for: {namespace}")
+                await self._handle_namespace_portfolio_button(update, context, namespace)
             elif callback_data.startswith('nav_namespace_'):
                 # Handle navigation for okama namespaces
                 parts = callback_data.replace('nav_namespace_', '').split('_')
@@ -12495,6 +12536,73 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in Tushare Excel export for {namespace}: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
+
+    async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+        """Handle namespace analysis button click - redirect to /info command"""
+        try:
+            self.logger.info(f"Handling namespace analysis button for: {namespace}")
+            
+            # Set flag that user is waiting for info input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, waiting_for_info=True)
+            
+            # Send message asking for symbol input
+            await self._send_callback_message(
+                update, context, 
+                f"🔍 **Анализ актива из пространства {namespace}**\n\n"
+                f"Введите символ для анализа:\n"
+                f"Пример: `AAPL.US`, `SBER.MOEX`, `600036.SH`\n\n"
+                f"💡 Используйте `/list {namespace}` для просмотра доступных символов"
+            )
+                
+        except Exception as e:
+            self.logger.error(f"Error in namespace analysis button handler: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
+
+    async def _handle_namespace_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+        """Handle namespace compare button click - redirect to /compare command"""
+        try:
+            self.logger.info(f"Handling namespace compare button for: {namespace}")
+            
+            # Set flag that user is waiting for compare input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, waiting_for_compare=True)
+            
+            # Send message asking for symbols input
+            await self._send_callback_message(
+                update, context, 
+                f"⚖️ **Сравнение активов из пространства {namespace}**\n\n"
+                f"Введите символы для сравнения через пробел:\n"
+                f"Пример: `AAPL.US TSLA.US MSFT.US`\n\n"
+                f"💡 Используйте `/list {namespace}` для просмотра доступных символов"
+            )
+                
+        except Exception as e:
+            self.logger.error(f"Error in namespace compare button handler: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
+
+    async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
+        """Handle namespace portfolio button click - redirect to /portfolio command"""
+        try:
+            self.logger.info(f"Handling namespace portfolio button for: {namespace}")
+            
+            # Set flag that user is waiting for portfolio input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, waiting_for_portfolio=True)
+            
+            # Send message asking for portfolio input
+            await self._send_callback_message(
+                update, context, 
+                f"💼 **Создание портфеля из активов пространства {namespace}**\n\n"
+                f"Введите портфель в формате:\n"
+                f"`Символ1:Вес1 Символ2:Вес2 ...`\n\n"
+                f"Пример: `AAPL.US:0.4 TSLA.US:0.3 MSFT.US:0.3`\n\n"
+                f"💡 Используйте `/list {namespace}` для просмотра доступных символов"
+            )
+                
+        except Exception as e:
+            self.logger.error(f"Error in namespace portfolio button handler: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_clear_all_portfolios_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle clear all portfolios button click"""
