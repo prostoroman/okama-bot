@@ -1612,6 +1612,11 @@ class ShansAi:
                 )
             ])
             
+            # Home button first
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+            ])
+            
             # Analysis, Compare, Portfolio buttons
             keyboard.append([
                 InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
@@ -6871,9 +6876,18 @@ class ShansAi:
                                 end_date = prices.index[-1]
                                 
                                 # Calculate years based on actual date range
-                                if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
-                                    years = (end_date - start_date).days / 365.25
-                                else:
+                                try:
+                                    # Handle different date types (Period, Timestamp, etc.)
+                                    if hasattr(start_date, 'to_timestamp'):
+                                        start_date = start_date.to_timestamp()
+                                    if hasattr(end_date, 'to_timestamp'):
+                                        end_date = end_date.to_timestamp()
+                                    
+                                    if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
+                                        years = (end_date - start_date).days / 365.25
+                                    else:
+                                        years = len(prices) / 12  # Fallback: assuming monthly data
+                                except Exception:
                                     years = len(prices) / 12  # Fallback: assuming monthly data
                                 
                                 if years > 0:
