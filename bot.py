@@ -12538,39 +12538,57 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
 
     async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
-        """Handle namespace analysis button click - redirect to /info command"""
+        """Handle namespace analysis button click - show info command help"""
         try:
             self.logger.info(f"Handling namespace analysis button for: {namespace}")
             
-            # Call info command without arguments
-            context.args = []
-            await self.info_command(update, context)
+            # Show info command help instead of calling it without arguments
+            await self._send_callback_message(update, context, 
+                f"📊 *Анализ активов*\n\n"
+                f"Для анализа актива используйте команду `/info` с символом:\n"
+                f"• `/info AAPL.US` - анализ акции Apple\n"
+                f"• `/info SPY.US` - анализ ETF S&P 500\n"
+                f"• `/info SBER.MOEX` - анализ акции Сбербанка\n\n"
+                f"💡 *Примеры символов из {namespace}:*\n"
+                f"Используйте `/list {namespace}` для просмотра доступных символов")
                 
         except Exception as e:
             self.logger.error(f"Error in namespace analysis button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
-        """Handle namespace compare button click - redirect to /compare command"""
+        """Handle namespace compare button click - show compare command help"""
         try:
             self.logger.info(f"Handling namespace compare button for: {namespace}")
             
-            # Call compare command without arguments
-            context.args = []
-            await self.compare_command(update, context)
+            # Show compare command help instead of calling it without arguments
+            await self._send_callback_message(update, context, 
+                f"⚖️ *Сравнение активов*\n\n"
+                f"Для сравнения активов используйте команду `/compare` с символами:\n"
+                f"• `/compare AAPL.US MSFT.US` - сравнение акций Apple и Microsoft\n"
+                f"• `/compare SPY.US QQQ.US` - сравнение ETF\n"
+                f"• `/compare SBER.MOEX GAZP.MOEX` - сравнение российских акций\n\n"
+                f"💡 *Примеры символов из {namespace}:*\n"
+                f"Используйте `/list {namespace}` для просмотра доступных символов")
                 
         except Exception as e:
             self.logger.error(f"Error in namespace compare button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
-        """Handle namespace portfolio button click - redirect to /portfolio command"""
+        """Handle namespace portfolio button click - show portfolio command help"""
         try:
             self.logger.info(f"Handling namespace portfolio button for: {namespace}")
             
-            # Call portfolio command without arguments
-            context.args = []
-            await self.portfolio_command(update, context)
+            # Show portfolio command help instead of calling it without arguments
+            await self._send_callback_message(update, context, 
+                f"💼 *Создание портфеля*\n\n"
+                f"Для создания портфеля используйте команду `/portfolio` с символами и весами:\n"
+                f"• `/portfolio SPY.US:0.6 QQQ.US:0.4` - портфель из ETF\n"
+                f"• `/portfolio AAPL.US:0.5 MSFT.US:0.3 GOOGL.US:0.2` - портфель акций\n"
+                f"• `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель\n\n"
+                f"💡 *Примеры символов из {namespace}:*\n"
+                f"Используйте `/list {namespace}` для просмотра доступных символов")
                 
         except Exception as e:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")
