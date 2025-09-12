@@ -29,8 +29,8 @@ def test_bullet_list_format():
         symbol = symbol_info['symbol']
         name = symbol_info['name']
         
-        # Escape Markdown characters in company names (simplified for test)
-        escaped_name = name.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+        # Simple escaping for list display - only escape characters that interfere with bold formatting
+        escaped_name = name.replace('*', '\\*').replace('_', '\\_')
         
         # Truncate name to maximum 40 characters
         if len(escaped_name) > 40:
@@ -59,12 +59,14 @@ def test_bullet_list_format():
     
     print("✅ Bullet list format with bold tickers and truncated names test passed!")
     
-    # Test with Chinese symbols
+    # Test with Chinese symbols (including problematic names with periods and commas)
     chinese_symbols_data = [
         {'symbol': '000001.SZ', 'name': 'Ping An Bank Co Ltd'},
         {'symbol': '000002.SZ', 'name': 'China Vanke Co Ltd'},
         {'symbol': '600000.SH', 'name': 'Shanghai Pudong Development Bank Co Ltd'},
-        {'symbol': '600036.SH', 'name': 'China Merchants Bank Co Ltd'}
+        {'symbol': '600036.SH', 'name': 'China Merchants Bank Co., Ltd.'},
+        {'symbol': '600037.SH', 'name': 'Beijing Gehua Catv Network Co.,Ltd.'},
+        {'symbol': '600038.SH', 'name': 'Avicopter Plc.'}
     ]
     
     chinese_symbol_list = []
@@ -72,8 +74,8 @@ def test_bullet_list_format():
         symbol = symbol_info['symbol']
         name = symbol_info['name']
         
-        # Escape Markdown characters
-        escaped_name = name.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+        # Simple escaping for list display - only escape characters that interfere with bold formatting
+        escaped_name = name.replace('*', '\\*').replace('_', '\\_')
         
         # Truncate name to maximum 40 characters
         if len(escaped_name) > 40:
@@ -88,14 +90,22 @@ def test_bullet_list_format():
     print(chinese_formatted_output)
     print("=" * 70)
     
+    # Verify that periods and commas are NOT escaped
+    assert "Co., Ltd." in chinese_formatted_output, "Periods and commas should not be escaped"
+    assert "Co.,Ltd." in chinese_formatted_output, "Periods and commas should not be escaped"
+    assert "Plc." in chinese_formatted_output, "Periods should not be escaped"
+    assert "\\." not in chinese_formatted_output, "Periods should not be escaped with backslashes"
+    assert "\\," not in chinese_formatted_output, "Commas should not be escaped with backslashes"
+    
     print("✅ Chinese symbols bullet list format test passed!")
+    print("✅ Verified that periods and commas are NOT over-escaped!")
     
     return True
 
 if __name__ == "__main__":
     try:
         test_bullet_list_format()
-        print("\n🎉 All tests passed! The /list command format has been successfully updated with bold tickers and truncated names.")
+        print("\n🎉 All tests passed! The /list command format has been successfully updated with bold tickers, truncated names, and clean escaping.")
     except Exception as e:
         print(f"\n❌ Test failed: {e}")
         sys.exit(1)

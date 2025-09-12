@@ -1546,10 +1546,7 @@ class ShansAi:
             end_idx = min(start_idx + symbols_per_page, len(symbols_data))
             
             response = f"📊 **{exchange_names.get(namespace, namespace)}**\n\n"
-            response += f"📈 **Статистика:**\n"
-            response += f"• Всего символов: {total_count:,}\n"
-            response += f"• Показываю: {len(symbols_data)}\n\n"
-            response += f"📋 **Навигация:** Показаны символы {start_idx + 1}-{end_idx} из {len(symbols_data)}\n"
+            response += f"📈 Всего: {total_count:,}\n"
             response += f"📄 Страница {current_page + 1} из {total_pages}\n\n"
             
             # Get symbols for current page
@@ -1562,15 +1559,15 @@ class ShansAi:
                 symbol = symbol_info['symbol']
                 name = symbol_info['name']
                 
-                # Escape Markdown characters in company names
-                escaped_name = self._escape_markdown(name)
+                # Simple escaping for list display - only escape characters that interfere with bold formatting
+                escaped_name = name.replace('*', '\\*').replace('_', '\\_')
                 
                 # Truncate name to maximum 40 characters
                 if len(escaped_name) > 40:
                     escaped_name = escaped_name[:37] + "..."
                 
                 # Create bullet list item with bold ticker
-                symbol_list.append(f"• **{symbol}** - {escaped_name}")
+                symbol_list.append(f"• **`{symbol}`** - {escaped_name}")
             
             # Add symbol list to response
             if symbol_list:
@@ -1687,15 +1684,15 @@ class ShansAi:
                 symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
                 name = row['name'] if pd.notna(row['name']) else 'N/A'
                 
-                # Escape Markdown characters in company names
-                escaped_name = self._escape_markdown(name)
+                # Simple escaping for list display - only escape characters that interfere with bold formatting
+                escaped_name = name.replace('*', '\\*').replace('_', '\\_')
                 
                 # Truncate name to maximum 40 characters
                 if len(escaped_name) > 40:
                     escaped_name = escaped_name[:37] + "..."
                 
                 # Create bullet list item with bold ticker
-                symbol_list.append(f"• **{symbol}** - {escaped_name}")
+                symbol_list.append(f"• **`{symbol}** - {escaped_name}")
             
             # Add symbol list to response
             if symbol_list:
@@ -5238,6 +5235,10 @@ class ShansAi:
             elif callback_data == 'clear_all_portfolios':
                 self.logger.info("Clear all portfolios button clicked")
                 await self._handle_clear_all_portfolios_button(update, context)
+            elif callback_data == 'noop':
+                # Handle page number buttons - do nothing
+                self.logger.info("Page number button clicked - no action needed")
+                return
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
