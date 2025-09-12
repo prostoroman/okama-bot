@@ -12542,18 +12542,9 @@ class ShansAi:
         try:
             self.logger.info(f"Handling namespace analysis button for: {namespace}")
             
-            # Set flag that user is waiting for info input
-            user_id = update.effective_user.id
-            self._update_user_context(user_id, waiting_for_info=True)
-            
-            # Send message asking for symbol input
-            await self._send_callback_message(
-                update, context, 
-                f"🔍 **Анализ актива из пространства {namespace}**\n\n"
-                f"Введите символ для анализа:\n"
-                f"Пример: `AAPL.US`, `SBER.MOEX`, `600036.SH`\n\n"
-                f"💡 Используйте `/list {namespace}` для просмотра доступных символов"
-            )
+            # Call info command without arguments
+            context.args = []
+            await self.info_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace analysis button handler: {e}")
@@ -12564,18 +12555,9 @@ class ShansAi:
         try:
             self.logger.info(f"Handling namespace compare button for: {namespace}")
             
-            # Set flag that user is waiting for compare input
-            user_id = update.effective_user.id
-            self._update_user_context(user_id, waiting_for_compare=True)
-            
-            # Send message asking for symbols input
-            await self._send_callback_message(
-                update, context, 
-                f"⚖️ **Сравнение активов из пространства {namespace}**\n\n"
-                f"Введите символы для сравнения через пробел:\n"
-                f"Пример: `AAPL.US TSLA.US MSFT.US`\n\n"
-                f"💡 Используйте `/list {namespace}` для просмотра доступных символов"
-            )
+            # Call compare command without arguments
+            context.args = []
+            await self.compare_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace compare button handler: {e}")
@@ -12586,19 +12568,9 @@ class ShansAi:
         try:
             self.logger.info(f"Handling namespace portfolio button for: {namespace}")
             
-            # Set flag that user is waiting for portfolio input
-            user_id = update.effective_user.id
-            self._update_user_context(user_id, waiting_for_portfolio=True)
-            
-            # Send message asking for portfolio input
-            await self._send_callback_message(
-                update, context, 
-                f"💼 **Создание портфеля из активов пространства {namespace}**\n\n"
-                f"Введите портфель в формате:\n"
-                f"`Символ1:Вес1 Символ2:Вес2 ...`\n\n"
-                f"Пример: `AAPL.US:0.4 TSLA.US:0.3 MSFT.US:0.3`\n\n"
-                f"💡 Используйте `/list {namespace}` для просмотра доступных символов"
-            )
+            # Call portfolio command without arguments
+            context.args = []
+            await self.portfolio_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")
