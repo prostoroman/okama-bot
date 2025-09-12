@@ -1563,10 +1563,39 @@ class ShansAi:
             
             response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
             
-            # Create keyboard with Excel export button
-            keyboard = [
-                [InlineKeyboardButton("📊 Выгрузить в Excel", callback_data=f"excel_namespace_{namespace}")]
-            ]
+            # Create navigation keyboard
+            keyboard = []
+            
+            # Navigation buttons (only if more than one page)
+            if total_pages > 1:
+                nav_buttons = []
+                
+                # Previous button
+                if current_page > 0:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "⬅️ Назад", 
+                        callback_data=f"nav_tushare_{namespace}_{current_page - 1}"
+                    ))
+                
+                # Page indicator
+                nav_buttons.append(InlineKeyboardButton(
+                    f"{current_page + 1}/{total_pages}", 
+                    callback_data="noop"
+                ))
+                
+                # Next button
+                if current_page < total_pages - 1:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "➡️ Вперед", 
+                        callback_data=f"nav_tushare_{namespace}_{current_page + 1}"
+                    ))
+                
+                keyboard.append(nav_buttons)
+            
+            # Excel export button
+            keyboard.append([
+                InlineKeyboardButton("📊 Выгрузить в Excel", callback_data=f"excel_namespace_{namespace}")
+            ])
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             if is_callback:
@@ -3582,10 +3611,36 @@ class ShansAi:
                 return
 
             # Parse currency and period parameters from command arguments
-            symbols, specified_currency, specified_period = self._parse_currency_and_period(context.args)
+            # For portfolio command, we need to preserve the full symbol:weight format
+            valid_currencies = {'USD', 'RUB', 'EUR', 'GBP', 'CNY', 'HKD', 'JPY'}
+            import re
+            period_pattern = re.compile(r'^(\d+)Y$', re.IGNORECASE)
             
-            # Extract symbols and weights from command arguments
-            raw_args = ' '.join(symbols)
+            portfolio_args = []
+            specified_currency = None
+            specified_period = None
+            
+            for arg in context.args:
+                arg_upper = arg.upper()
+                
+                # Check if it's a currency code
+                if arg_upper in valid_currencies:
+                    if specified_currency is None:
+                        specified_currency = arg_upper
+                    continue
+                
+                # Check if it's a period (e.g., '5Y', '10Y')
+                period_match = period_pattern.match(arg)
+                if period_match:
+                    if specified_period is None:
+                        specified_period = arg_upper
+                    continue
+                
+                # If it's neither currency nor period, it's a portfolio argument
+                portfolio_args.append(arg)
+            
+            # Extract symbols and weights from portfolio arguments
+            raw_args = ' '.join(portfolio_args)
             portfolio_data = []
             
             for arg in raw_args.split():
