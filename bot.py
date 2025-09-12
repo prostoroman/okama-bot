@@ -1743,6 +1743,11 @@ class ShansAi:
                 )
             ])
             
+            # Home button first
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+            ])
+            
             # Analysis, Compare, Portfolio buttons
             keyboard.append([
                 InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
@@ -4832,8 +4837,15 @@ class ShansAi:
                 await self._send_long_callback_message(update, context, text, parse_mode)
                 return
             
+            # Добавляем детальное логирование для отладки
+            self.logger.info(f"_send_callback_message: hasattr callback_query: {hasattr(update, 'callback_query')}")
+            self.logger.info(f"_send_callback_message: callback_query is not None: {update.callback_query is not None if hasattr(update, 'callback_query') else 'No attr'}")
+            self.logger.info(f"_send_callback_message: hasattr message: {hasattr(update, 'message')}")
+            self.logger.info(f"_send_callback_message: message is not None: {update.message is not None if hasattr(update, 'message') else 'No attr'}")
+            
             if hasattr(update, 'callback_query') and update.callback_query is not None:
                 # Для callback query используем context.bot.send_message
+                self.logger.info("_send_callback_message: Using callback_query path")
                 try:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
@@ -4852,10 +4864,11 @@ class ShansAi:
                         self.logger.error(f"Fallback callback message sending also failed: {fallback_error}")
             elif hasattr(update, 'message') and update.message is not None:
                 # Для обычных сообщений используем _send_message_safe
+                self.logger.info("_send_callback_message: Using message path")
                 await self._send_message_safe(update, text, parse_mode)
             else:
                 # Если ни то, ни другое - логируем ошибку
-                self.logger.error("Cannot send message: neither callback_query nor message available")
+                self.logger.error("_send_callback_message: Cannot send message - neither callback_query nor message available")
                 self.logger.error(f"Update type: {type(update)}")
                 self.logger.error(f"Update attributes: {dir(update) if update else 'None'}")
         except Exception as e:
@@ -5251,6 +5264,9 @@ class ShansAi:
                 namespace = self.clean_symbol(callback_data.replace('excel_namespace_', ''))
                 self.logger.info(f"Excel namespace button clicked for: {namespace}")
                 await self._handle_excel_namespace_button(update, context, namespace)
+            elif callback_data == 'namespace_home':
+                self.logger.info("Namespace home button clicked")
+                await self.namespace_command(update, context)
             elif callback_data == 'namespace_analysis':
                 self.logger.info("Namespace analysis button clicked")
                 await self._handle_namespace_analysis_button(update, context)
