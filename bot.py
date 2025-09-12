@@ -1604,17 +1604,17 @@ class ShansAi:
                 
                 keyboard.append(nav_buttons)
             
+            # Home button first
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+            ])
+            
             # Excel export button
             keyboard.append([
                 InlineKeyboardButton(
                     f"📊 Полный список в Excel ({total_count:,})", 
                     callback_data=f"excel_namespace_{namespace}"
                 )
-            ])
-            
-            # Home button first
-            keyboard.append([
-                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
             ])
             
             # Analysis, Compare, Portfolio buttons
@@ -1740,17 +1740,17 @@ class ShansAi:
                 
                 keyboard.append(nav_buttons)
             
+            # Home button first
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+            ])
+            
             # Excel export button
             keyboard.append([
                 InlineKeyboardButton(
                     f"📊 Полный список в Excel ({total_symbols:,})", 
                     callback_data=f"excel_namespace_{namespace}"
                 )
-            ])
-            
-            # Home button first
-            keyboard.append([
-                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
             ])
             
             # Analysis, Compare, Portfolio buttons
@@ -5261,7 +5261,10 @@ class ShansAi:
             elif callback_data == 'efficient_frontier_compare':
                 self.logger.info("Efficient Frontier button clicked")
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif callback_data.startswith('namespace_') and callback_data not in ['namespace_analysis', 'namespace_compare', 'namespace_portfolio']:
+            elif callback_data == 'namespace_home':
+                self.logger.info("Namespace home button clicked")
+                await self.namespace_command(update, context)
+            elif callback_data.startswith('namespace_') and callback_data not in ['namespace_analysis', 'namespace_compare', 'namespace_portfolio', 'namespace_home']:
                 namespace = self.clean_symbol(callback_data.replace('namespace_', ''))
                 self.logger.info(f"Namespace button clicked for: {namespace}")
                 await self._handle_namespace_button(update, context, namespace)
@@ -5269,9 +5272,6 @@ class ShansAi:
                 namespace = self.clean_symbol(callback_data.replace('excel_namespace_', ''))
                 self.logger.info(f"Excel namespace button clicked for: {namespace}")
                 await self._handle_excel_namespace_button(update, context, namespace)
-            elif callback_data == 'namespace_home':
-                self.logger.info("Namespace home button clicked")
-                await self.namespace_command(update, context)
             elif callback_data == 'namespace_analysis':
                 self.logger.info("Namespace analysis button clicked")
                 await self._handle_namespace_analysis_button(update, context)
