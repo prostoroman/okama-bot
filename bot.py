@@ -12985,8 +12985,13 @@ class ShansAi:
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            # Send message via callback
-            await self._send_callback_message(update, context, response, reply_markup=reply_markup)
+            # Send message via callback with reply_markup
+            await context.bot.send_message(
+                chat_id=update.callback_query.message.chat_id,
+                text=response,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
                 
         except Exception as e:
             self.logger.error(f"Error handling namespace home button: {e}")
