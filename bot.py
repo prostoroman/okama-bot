@@ -6824,82 +6824,84 @@ class ShansAi:
                     if asset_data is not None:
                         # CAGR (Annual Return)
                         try:
-                            if hasattr(asset_data, 'annual_return') and asset_data.annual_return is not None:
-                                symbol_metrics['cagr'] = asset_data.annual_return
-                            else:
-                                # Calculate CAGR manually
-                                if hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
-                                    wealth_index = asset_data.wealth_index
-                                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
-                                        if hasattr(wealth_index, 'columns'):
-                                            values = wealth_index.iloc[:, 0]
-                                        else:
-                                            values = wealth_index
-                                        # Calculate years based on actual date range
-                                        if len(values) > 1:
-                                            start_date = values.index[0]
-                                            end_date = values.index[-1]
-                                            if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
-                                                years = (end_date - start_date).days / 365.25
-                                            else:
-                                                years = len(values) / 12  # Fallback: assuming monthly data
-                                            
-                                            if years > 0:
-                                                total_return = (values.iloc[-1] / values.iloc[0]) - 1
-                                                symbol_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
+                            # For Asset objects, we need to calculate metrics manually
+                            prices = None
+                            
+                            # Try to get price data from different sources
+                            if hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
+                                prices = asset_data.adj_close
+                            elif hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                prices = asset_data.close_monthly
+                            elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                prices = asset_data.close_daily
+                            elif hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
+                                # For Portfolio objects
+                                wealth_index = asset_data.wealth_index
+                                if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
+                                    if hasattr(wealth_index, 'columns'):
+                                        prices = wealth_index.iloc[:, 0]
+                                    else:
+                                        prices = wealth_index
+                            
+                            if prices is not None and len(prices) > 1:
+                                # Calculate CAGR from price data
+                                start_date = prices.index[0]
+                                end_date = prices.index[-1]
+                                
+                                # Calculate years based on actual date range
+                                if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
+                                    years = (end_date - start_date).days / 365.25
+                                else:
+                                    years = len(prices) / 12  # Fallback: assuming monthly data
+                                
+                                if years > 0:
+                                    total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
+                                    symbol_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
+                                    
                         except Exception as e:
                             self.logger.warning(f"Could not calculate CAGR for {symbol}: {e}")
                             symbol_metrics['cagr'] = None
                         
                         # Volatility
                         try:
-                            if hasattr(asset_data, 'volatility') and asset_data.volatility is not None:
-                                symbol_metrics['volatility'] = asset_data.volatility
-                            else:
-                                # Calculate volatility manually
-                                if hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
-                                    wealth_index = asset_data.wealth_index
-                                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
-                                        if hasattr(wealth_index, 'columns'):
-                                            values = wealth_index.iloc[:, 0]
-                                        else:
-                                            values = wealth_index
-                                        returns = values.pct_change().dropna()
-                                        if len(returns) > 1:
+                            # Use the same price data we found for CAGR calculation
+                            if prices is not None and len(prices) > 1:
+                                returns = prices.pct_change().dropna()
+                                if len(returns) > 1:
+                                    # Annualize volatility based on data frequency
+                                    if hasattr(prices.index, 'freq') and prices.index.freq:
+                                        freq_str = str(prices.index.freq)
+                                        if 'D' in freq_str:  # Daily data
+                                            symbol_metrics['volatility'] = returns.std() * (252 ** 0.5)  # Annualized
+                                        elif 'M' in freq_str:  # Monthly data
                                             symbol_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Annualized
+                                        else:
+                                            symbol_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Default to monthly
+                                    else:
+                                        # Fallback: assume monthly data
+                                        symbol_metrics['volatility'] = returns.std() * (12 ** 0.5)
                         except Exception as e:
                             self.logger.warning(f"Could not calculate volatility for {symbol}: {e}")
                             symbol_metrics['volatility'] = None
                         
                         # Sharpe Ratio
                         try:
-                            if hasattr(asset_data, 'sharpe') and asset_data.sharpe is not None:
-                                symbol_metrics['sharpe'] = asset_data.sharpe
-                            else:
-                                # Calculate Sharpe ratio manually
-                                if symbol_metrics.get('cagr') is not None and symbol_metrics.get('volatility') is not None and symbol_metrics['volatility'] > 0:
-                                    risk_free_rate = 0.02  # 2% annual risk-free rate
-                                    symbol_metrics['sharpe'] = (symbol_metrics['cagr'] - risk_free_rate) / symbol_metrics['volatility']
+                            # Calculate Sharpe ratio manually using CAGR and volatility
+                            if symbol_metrics.get('cagr') is not None and symbol_metrics.get('volatility') is not None and symbol_metrics['volatility'] > 0:
+                                risk_free_rate = 0.02  # 2% annual risk-free rate
+                                symbol_metrics['sharpe'] = (symbol_metrics['cagr'] - risk_free_rate) / symbol_metrics['volatility']
                         except Exception as e:
                             self.logger.warning(f"Could not calculate Sharpe ratio for {symbol}: {e}")
                             symbol_metrics['sharpe'] = None
                         
                         # Max Drawdown
                         try:
-                            if hasattr(asset_data, 'max_drawdown') and asset_data.max_drawdown is not None:
-                                symbol_metrics['max_drawdown'] = asset_data.max_drawdown
-                            else:
-                                # Calculate max drawdown manually
-                                if hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
-                                    wealth_index = asset_data.wealth_index
-                                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
-                                        if hasattr(wealth_index, 'columns'):
-                                            values = wealth_index.iloc[:, 0]
-                                        else:
-                                            values = wealth_index
-                                        running_max = values.expanding().max()
-                                        drawdown = (values - running_max) / running_max
-                                        symbol_metrics['max_drawdown'] = drawdown.min()
+                            # Use the same price data we found for CAGR calculation
+                            if prices is not None and len(prices) > 1:
+                                # Calculate max drawdown from price data
+                                running_max = prices.expanding().max()
+                                drawdown = (prices - running_max) / running_max
+                                symbol_metrics['max_drawdown'] = drawdown.min()
                         except Exception as e:
                             self.logger.warning(f"Could not calculate max drawdown for {symbol}: {e}")
                             symbol_metrics['max_drawdown'] = None
@@ -12715,57 +12717,39 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
 
     async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace analysis button click - show info command help"""
+        """Handle namespace analysis button click - call info command without arguments"""
         try:
             self.logger.info("Handling namespace analysis button")
             
-            # Show info command help instead of calling it without arguments
-            await self._send_callback_message(update, context, 
-                f"📊 *Анализ активов*\n\n"
-                f"Для анализа актива используйте команду `/info` с символом:\n"
-                f"• `/info AAPL.US` - анализ акции Apple\n"
-                f"• `/info SPY.US` - анализ ETF S&P 500\n"
-                f"• `/info SBER.MOEX` - анализ акции Сбербанка\n\n"
-                f"💡 *Доступные символы:*\n"
-                f"Используйте `/list` для просмотра всех доступных пространств имен")
+            # Call info command without arguments to show the same help message
+            context.args = []
+            await self.info_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace analysis button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace compare button click - show compare command help"""
+        """Handle namespace compare button click - call compare command without arguments"""
         try:
             self.logger.info("Handling namespace compare button")
             
-            # Show compare command help instead of calling it without arguments
-            await self._send_callback_message(update, context, 
-                f"⚖️ *Сравнение активов*\n\n"
-                f"Для сравнения активов используйте команду `/compare` с символами:\n"
-                f"• `/compare AAPL.US MSFT.US` - сравнение акций Apple и Microsoft\n"
-                f"• `/compare SPY.US QQQ.US` - сравнение ETF\n"
-                f"• `/compare SBER.MOEX GAZP.MOEX` - сравнение российских акций\n\n"
-                f"💡 *Доступные символы:*\n"
-                f"Используйте `/list` для просмотра всех доступных пространств имен")
+            # Call compare command without arguments to show the same help message
+            context.args = []
+            await self.compare_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace compare button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace portfolio button click - show portfolio command help"""
+        """Handle namespace portfolio button click - call portfolio command without arguments"""
         try:
             self.logger.info("Handling namespace portfolio button")
             
-            # Show portfolio command help instead of calling it without arguments
-            await self._send_callback_message(update, context, 
-                f"💼 *Создание портфеля*\n\n"
-                f"Для создания портфеля используйте команду `/portfolio` с символами и весами:\n"
-                f"• `/portfolio SPY.US:0.6 QQQ.US:0.4` - портфель из ETF\n"
-                f"• `/portfolio AAPL.US:0.5 MSFT.US:0.3 GOOGL.US:0.2` - портфель акций\n"
-                f"• `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский портфель\n\n"
-                f"💡 *Доступные символы:*\n"
-                f"Используйте `/list` для просмотра всех доступных пространств имен")
+            # Call portfolio command without arguments to show the same help message
+            context.args = []
+            await self.portfolio_command(update, context)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")
