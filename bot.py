@@ -1488,7 +1488,7 @@ class ShansAi:
         
         await self._send_message_safe(update, help_text)
     
-    async def _show_tushare_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False):
+    async def _show_tushare_namespace_symbols(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, is_callback: bool = False, page: int = 0):
         """Show symbols for Chinese exchanges using Tushare"""
         try:
             if not self.tushare_service:
@@ -1536,41 +1536,85 @@ class ShansAi:
                 'HKEX': 'Hong Kong Stock Exchange'
             }
             
-            response = f"📊 Биржа: {exchange_names.get(namespace, namespace)}\n\n"
-            response += f"📈 Статистика:\n"
+            # Pagination logic
+            symbols_per_page = 20
+            total_pages = (total_count + symbols_per_page - 1) // symbols_per_page
+            current_page = min(page, total_pages - 1) if total_pages > 0 else 0
+            
+            # Calculate start and end indices for current page
+            start_idx = current_page * symbols_per_page
+            end_idx = min(start_idx + symbols_per_page, len(symbols_data))
+            
+            response = f"📊 **{exchange_names.get(namespace, namespace)}**\n\n"
+            response += f"📈 **Статистика:**\n"
             response += f"• Всего символов: {total_count:,}\n"
             response += f"• Показываю: {len(symbols_data)}\n\n"
+            response += f"📋 **Навигация:** Показаны символы {start_idx + 1}-{end_idx} из {len(symbols_data)}\n"
+            response += f"📄 Страница {current_page + 1} из {total_pages}\n\n"
             
-            # Show first 20 symbols with detailed info using bullet list format
-            display_count = min(20, len(symbols_data))
-            response += f"📋 Первые {display_count} символов:\n\n"
+            # Get symbols for current page
+            page_symbols = symbols_data[start_idx:end_idx]
             
             # Create bullet list format
             symbol_list = []
             
-            for symbol_info in symbols_data[:display_count]:
+            for symbol_info in page_symbols:
                 symbol = symbol_info['symbol']
                 name = symbol_info['name']
                 
                 # Escape Markdown characters in company names
                 escaped_name = self._escape_markdown(name)
                 
-                # Create bullet list item
-                symbol_list.append(f"• `{symbol}` - {escaped_name}")
+                # Truncate name to maximum 40 characters
+                if len(escaped_name) > 40:
+                    escaped_name = escaped_name[:37] + "..."
+                
+                # Create bullet list item with bold ticker
+                symbol_list.append(f"• **{symbol}** - {escaped_name}")
             
             # Add symbol list to response
             if symbol_list:
                 response += "\n".join(symbol_list) + "\n"
             
-            if len(symbols_data) > display_count:
-                response += f"... и еще {len(symbols_data) - display_count} символов\n\n"
+            response += f"\n💡 Используйте `/info <символ>` для получения подробной информации об активе"
             
-            response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
+            # Create navigation keyboard
+            keyboard = []
             
-            # Create keyboard with Excel export button
-            keyboard = [
-                [InlineKeyboardButton("📊 Выгрузить в Excel", callback_data=f"excel_namespace_{namespace}")]
-            ]
+            # Navigation buttons (only if more than one page)
+            if total_pages > 1:
+                nav_buttons = []
+                
+                # Previous button
+                if current_page > 0:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "⬅️ Назад", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
+                    ))
+                
+                # Page indicator
+                nav_buttons.append(InlineKeyboardButton(
+                    f"{current_page + 1}/{total_pages}", 
+                    callback_data="noop"
+                ))
+                
+                # Next button
+                if current_page < total_pages - 1:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "➡️ Вперед", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
+                    ))
+                
+                keyboard.append(nav_buttons)
+            
+            # Excel export button
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📊 Полный список в Excel ({total_count:,})", 
+                    callback_data=f"excel_namespace_{namespace}"
+                )
+            ])
+            
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             if is_callback:
@@ -1646,8 +1690,12 @@ class ShansAi:
                 # Escape Markdown characters in company names
                 escaped_name = self._escape_markdown(name)
                 
-                # Create bullet list item
-                symbol_list.append(f"• `{symbol}` - {escaped_name}")
+                # Truncate name to maximum 40 characters
+                if len(escaped_name) > 40:
+                    escaped_name = escaped_name[:37] + "..."
+                
+                # Create bullet list item with bold ticker
+                symbol_list.append(f"• **{symbol}** - {escaped_name}")
             
             # Add symbol list to response
             if symbol_list:
