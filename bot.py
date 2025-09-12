@@ -5411,7 +5411,7 @@ class ShansAi:
                 await self._handle_efficient_frontier_compare_button(update, context)
             elif callback_data == 'namespace_home':
                 self.logger.info("Namespace home button clicked")
-                await self.namespace_command(update, context)
+                await self._handle_namespace_home_button(update, context)
             elif callback_data.startswith('namespace_') and callback_data not in ['namespace_analysis', 'namespace_compare', 'namespace_portfolio', 'namespace_home']:
                 namespace = self.clean_symbol(callback_data.replace('namespace_', ''))
                 self.logger.info(f"Namespace button clicked for: {namespace}")
@@ -10100,14 +10100,11 @@ class ShansAi:
                             else:
                                 portfolio_metrics['sharpe_ratio'] = 0.0
                     else:
-                        # Calculate manually
+                        # Calculate using unified function
                         annual_return = portfolio_metrics['annual_return'] / 100
                         volatility = portfolio_metrics['volatility'] / 100
-                        if volatility > 0:
-                            sharpe_ratio = (annual_return - 0.02) / volatility
-                            portfolio_metrics['sharpe_ratio'] = sharpe_ratio
-                        else:
-                            portfolio_metrics['sharpe_ratio'] = 0.0
+                        sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=portfolio)
+                        portfolio_metrics['sharpe_ratio'] = sharpe_ratio
                     
                     # Sortino Ratio
                     if hasattr(portfolio, 'sortino_ratio'):
@@ -12888,6 +12885,131 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in Tushare Excel export for {namespace}: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
+
+    async def _handle_namespace_home_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle namespace home button click - show main namespace list"""
+        try:
+            self.logger.info("Handling namespace home button")
+            
+            # Show available namespaces (same as /list command without args)
+            import okama as ok
+            namespaces = ok.namespaces
+            
+            # Prepare data for tabulate
+            headers = ["Код", "Описание", "Категория"]
+            namespace_data = []
+            
+            # Categorize namespaces for better organization
+            categories = {
+                'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE', 'SSE', 'SZSE', 'BSE', 'HKEX'],
+                'Индексы': ['INDX'],
+                'Валюты': ['FX', 'CBR'],
+                'Товары': ['COMM'],
+                'Криптовалюты': ['CC'],
+                'Инфляция': ['INFL'],
+                'Недвижимость': ['RE'],
+                'Портфели': ['PF', 'PIF'],
+                'Депозиты': ['RATE'],
+                'Коэффициенты': ['RATIO']
+            }
+            
+            # Create categorized data
+            for namespace, description in namespaces.items():
+                category = "Другое"
+                for cat_name, cat_namespaces in categories.items():
+                    if namespace in cat_namespaces:
+                        category = cat_name
+                        break
+                
+                namespace_data.append([namespace, description, category])
+            
+            # Add Chinese exchanges manually (not in ok.namespaces)
+            chinese_exchanges = {
+                'SSE': 'Shanghai Stock Exchange',
+                'SZSE': 'Shenzhen Stock Exchange', 
+                'BSE': 'Beijing Stock Exchange',
+                'HKEX': 'Hong Kong Stock Exchange'
+            }
+            
+            for exchange_code, exchange_name in chinese_exchanges.items():
+                namespace_data.append([exchange_code, exchange_name, 'Биржи'])
+            
+            # Sort by category and then by namespace
+            namespace_data.sort(key=lambda x: (x[2], x[0]))
+            response = f"📚 Доступные пространства имен (namespaces): {len(namespaces)}\n\n"
+            
+            # Create table using tabulate or fallback to simple format
+            if TABULATE_AVAILABLE:
+                # Use plain format for best Telegram display
+                table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="plain")
+                response += f"```\n{table}\n```\n\n"
+            else:
+                # Fallback to simple text format
+                response += "Код | Описание | Категория\n"
+                response += "--- | --- | ---\n"
+                for row in namespace_data:
+                    response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
+                response += "\n"
+            
+            response += "💡 Используйте `/list <код>` для просмотра символов в конкретном пространстве"
+            
+            # Создаем кнопки для основных пространств имен
+            keyboard = []
+            
+            # Основные биржи
+            keyboard.append([
+                InlineKeyboardButton("🇺🇸 US", callback_data="namespace_US"),
+                InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX"),
+                InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE")
+            ])
+            
+            # Европейские биржи
+            keyboard.append([
+                InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR"),
+                InlineKeyboardButton("🇫🇷 XFRA", callback_data="namespace_XFRA"),
+                InlineKeyboardButton("🇳🇱 XAMS", callback_data="namespace_XAMS")
+            ])
+            
+            # Китайские биржи
+            keyboard.append([
+                InlineKeyboardButton("🇨🇳 SSE", callback_data="namespace_SSE"),
+                InlineKeyboardButton("🇨🇳 SZSE", callback_data="namespace_SZSE"),
+                InlineKeyboardButton("🇨🇳 BSE", callback_data="namespace_BSE")
+            ])
+            
+            keyboard.append([
+                InlineKeyboardButton("🇭🇰 HKEX", callback_data="namespace_HKEX")
+            ])
+            
+            # Индексы и валюты
+            keyboard.append([
+                InlineKeyboardButton("📊 INDX", callback_data="namespace_INDX"),
+                InlineKeyboardButton("💱 FX", callback_data="namespace_FX"),
+                InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
+            ])
+            
+            # Товары и криптовалюты
+            keyboard.append([
+                InlineKeyboardButton("🛢️ COMM", callback_data="namespace_COMM"),
+                InlineKeyboardButton("₿ CC", callback_data="namespace_CC"),
+                InlineKeyboardButton("🏠 RE", callback_data="namespace_RE")
+            ])
+            
+            # Инфляция и депозиты
+            keyboard.append([
+                InlineKeyboardButton("📈 INFL", callback_data="namespace_INFL"),
+                InlineKeyboardButton("💰 PIF", callback_data="namespace_PIF"),
+                InlineKeyboardButton("🏦 RATE", callback_data="namespace_RATE")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Send message via callback
+            await self._send_callback_message(update, context, response, reply_markup=reply_markup)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling namespace home button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle namespace analysis button click - call info command directly"""
