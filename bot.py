@@ -4842,8 +4842,14 @@ class ShansAi:
                     )
                 except Exception as callback_error:
                     self.logger.error(f"Error sending callback message: {callback_error}")
-                    # Fallback: попробуем отправить через _send_message_safe
-                    await self._send_message_safe(update, text, parse_mode)
+                    # Fallback: попробуем отправить через context.bot напрямую
+                    try:
+                        await context.bot.send_message(
+                            chat_id=update.callback_query.message.chat_id,
+                            text=f"❌ Ошибка отправки сообщения: {text[:500]}..."
+                        )
+                    except Exception as fallback_error:
+                        self.logger.error(f"Fallback callback message sending also failed: {fallback_error}")
             elif hasattr(update, 'message') and update.message is not None:
                 # Для обычных сообщений используем _send_message_safe
                 await self._send_message_safe(update, text, parse_mode)
