@@ -5237,7 +5237,7 @@ class ShansAi:
             elif callback_data == 'efficient_frontier_compare':
                 self.logger.info("Efficient Frontier button clicked")
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif callback_data.startswith('namespace_'):
+            elif callback_data.startswith('namespace_') and callback_data not in ['namespace_analysis', 'namespace_compare', 'namespace_portfolio']:
                 namespace = self.clean_symbol(callback_data.replace('namespace_', ''))
                 self.logger.info(f"Namespace button clicked for: {namespace}")
                 await self._handle_namespace_button(update, context, namespace)
