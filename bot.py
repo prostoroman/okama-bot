@@ -1791,8 +1791,8 @@ class ShansAi:
             await self._handle_portfolio_input(update, context, text)
             return
         
-        # Check if user is waiting for compare input
-        if user_context.get('waiting_for_compare', False):
+        # Check if user is waiting for compare input or has stored compare symbol
+        if user_context.get('waiting_for_compare', False) or user_context.get('compare_first_symbol') or user_context.get('compare_base_symbol'):
             self.logger.info(f"Processing as compare input: {text}")
             # Process as compare input
             await self._handle_compare_input(update, context, text)
