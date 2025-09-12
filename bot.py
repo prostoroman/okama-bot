@@ -6756,20 +6756,10 @@ class ShansAi:
                         
                     # Sharpe ratio calculation
                     try:
-                        if asset_data is not None and hasattr(asset_data, 'get_sharpe_ratio'):
-                            sharpe_ratio = asset_data.get_sharpe_ratio(rf_return=0.02)
-                            detailed_metrics['sharpe_ratio'] = float(sharpe_ratio)
-                        elif asset_data is not None and hasattr(asset_data, 'sharpe_ratio'):
-                            detailed_metrics['sharpe_ratio'] = asset_data.sharpe_ratio
-                        else:
-                            # Manual Sharpe ratio calculation
-                            annual_return = detailed_metrics.get('annual_return', 0)
-                            volatility = detailed_metrics.get('volatility', 0)
-                            if volatility > 0:
-                                sharpe_ratio = (annual_return - 0.02) / volatility
-                                detailed_metrics['sharpe_ratio'] = sharpe_ratio
-                            else:
-                                detailed_metrics['sharpe_ratio'] = 0.0
+                        annual_return = detailed_metrics.get('annual_return', 0)
+                        volatility = detailed_metrics.get('volatility', 0)
+                        sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=asset_data)
+                        detailed_metrics['sharpe_ratio'] = sharpe_ratio
                     except Exception as e:
                         self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
                         detailed_metrics['sharpe_ratio'] = 0.0
@@ -10091,14 +10081,11 @@ class ShansAi:
                         try:
                             portfolio_metrics['sharpe_ratio'] = float(portfolio.sharpe_ratio)
                         except:
-                            # Calculate manually
+                            # Calculate using unified function
                             annual_return = portfolio_metrics['annual_return'] / 100
                             volatility = portfolio_metrics['volatility'] / 100
-                            if volatility > 0:
-                                sharpe_ratio = (annual_return - 0.02) / volatility
-                                portfolio_metrics['sharpe_ratio'] = sharpe_ratio
-                            else:
-                                portfolio_metrics['sharpe_ratio'] = 0.0
+                            sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=portfolio)
+                            portfolio_metrics['sharpe_ratio'] = sharpe_ratio
                     else:
                         # Calculate using unified function
                         annual_return = portfolio_metrics['annual_return'] / 100
@@ -10271,23 +10258,17 @@ class ShansAi:
                             try:
                                 asset_metrics['sharpe_ratio'] = float(asset.sharpe_ratio)
                             except:
-                                # Calculate manually
+                                # Calculate using unified function
                                 annual_return = asset_metrics['annual_return'] / 100
                                 volatility = asset_metrics['volatility'] / 100
-                                if volatility > 0:
-                                    sharpe_ratio = (annual_return - 0.02) / volatility
-                                    asset_metrics['sharpe_ratio'] = sharpe_ratio
-                                else:
-                                    asset_metrics['sharpe_ratio'] = 0.0
+                                sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=asset)
+                                asset_metrics['sharpe_ratio'] = sharpe_ratio
                         else:
-                            # Calculate manually
+                            # Calculate using unified function
                             annual_return = asset_metrics['annual_return'] / 100
                             volatility = asset_metrics['volatility'] / 100
-                            if volatility > 0:
-                                sharpe_ratio = (annual_return - 0.02) / volatility
-                                asset_metrics['sharpe_ratio'] = sharpe_ratio
-                            else:
-                                asset_metrics['sharpe_ratio'] = 0.0
+                            sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=asset)
+                            asset_metrics['sharpe_ratio'] = sharpe_ratio
                         
                         # Sortino Ratio
                         if hasattr(asset, 'sortino_ratio'):
