@@ -646,16 +646,17 @@ class ShansAi:
         }
         return inflation_mapping.get(currency, 'US.INFL')
     
-    def _parse_currency_and_period(self, args: List[str]) -> tuple[List[str], Optional[str], Optional[str]]:
+    def _parse_currency_and_period(self, args: List[str], preserve_weights: bool = False) -> tuple[List[str], Optional[str], Optional[str]]:
         """
         Parse currency and period parameters from command arguments.
         
         Args:
             args: List of command arguments
+            preserve_weights: If True, preserve symbol:weight format; if False, strip weights (for compare command)
             
         Returns:
             Tuple of (symbols, currency, period) where:
-            - symbols: List of symbols without currency/period parameters
+            - symbols: List of symbols (with or without weights depending on preserve_weights)
             - currency: Currency code (e.g., 'USD', 'RUB') or None
             - period: Period string (e.g., '5Y', '10Y') or None
         """
@@ -693,12 +694,16 @@ class ShansAi:
                     self.logger.warning(f"Multiple periods specified, using first: {period}")
                 continue
             
-            # Check if this is a symbol:weight format (for compare command, we ignore weights)
+            # Check if this is a symbol:weight format
             if ':' in arg:
-                # Split on colon and take only the symbol part
-                symbol_part = arg.split(':', 1)[0].strip()
-                if symbol_part:  # Only add non-empty symbols
-                    symbols.append(symbol_part)
+                if preserve_weights:
+                    # For portfolio command, preserve the full symbol:weight format
+                    symbols.append(arg)
+                else:
+                    # For compare command, ignore weights and take only the symbol part
+                    symbol_part = arg.split(':', 1)[0].strip()
+                    if symbol_part:  # Only add non-empty symbols
+                        symbols.append(symbol_part)
                 continue
             
             # If it's neither currency nor period, it's a symbol
@@ -1563,39 +1568,10 @@ class ShansAi:
             
             response += f"💡 Используйте `/info <символ>` для получения подробной информации об активе"
             
-            # Create navigation keyboard
-            keyboard = []
-            
-            # Navigation buttons (only if more than one page)
-            if total_pages > 1:
-                nav_buttons = []
-                
-                # Previous button
-                if current_page > 0:
-                    nav_buttons.append(InlineKeyboardButton(
-                        "⬅️ Назад", 
-                        callback_data=f"nav_tushare_{namespace}_{current_page - 1}"
-                    ))
-                
-                # Page indicator
-                nav_buttons.append(InlineKeyboardButton(
-                    f"{current_page + 1}/{total_pages}", 
-                    callback_data="noop"
-                ))
-                
-                # Next button
-                if current_page < total_pages - 1:
-                    nav_buttons.append(InlineKeyboardButton(
-                        "➡️ Вперед", 
-                        callback_data=f"nav_tushare_{namespace}_{current_page + 1}"
-                    ))
-                
-                keyboard.append(nav_buttons)
-            
-            # Excel export button
-            keyboard.append([
-                InlineKeyboardButton("📊 Выгрузить в Excel", callback_data=f"excel_namespace_{namespace}")
-            ])
+            # Create keyboard with Excel export button
+            keyboard = [
+                [InlineKeyboardButton("📊 Выгрузить в Excel", callback_data=f"excel_namespace_{namespace}")]
+            ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             if is_callback:
@@ -3611,36 +3587,11 @@ class ShansAi:
                 return
 
             # Parse currency and period parameters from command arguments
-            # For portfolio command, we need to preserve the full symbol:weight format
-            valid_currencies = {'USD', 'RUB', 'EUR', 'GBP', 'CNY', 'HKD', 'JPY'}
-            import re
-            period_pattern = re.compile(r'^(\d+)Y$', re.IGNORECASE)
+            # For portfolio command, preserve the symbol:weight format
+            symbols, specified_currency, specified_period = self._parse_currency_and_period(context.args, preserve_weights=True)
             
-            portfolio_args = []
-            specified_currency = None
-            specified_period = None
-            
-            for arg in context.args:
-                arg_upper = arg.upper()
-                
-                # Check if it's a currency code
-                if arg_upper in valid_currencies:
-                    if specified_currency is None:
-                        specified_currency = arg_upper
-                    continue
-                
-                # Check if it's a period (e.g., '5Y', '10Y')
-                period_match = period_pattern.match(arg)
-                if period_match:
-                    if specified_period is None:
-                        specified_period = arg_upper
-                    continue
-                
-                # If it's neither currency nor period, it's a portfolio argument
-                portfolio_args.append(arg)
-            
-            # Extract symbols and weights from portfolio arguments
-            raw_args = ' '.join(portfolio_args)
+            # Extract symbols and weights from command arguments
+            raw_args = ' '.join(symbols)
             portfolio_data = []
             
             for arg in raw_args.split():
