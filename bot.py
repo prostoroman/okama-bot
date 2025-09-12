@@ -6849,18 +6849,9 @@ class ShansAi:
                                 end_date = prices.index[-1]
                                 
                                 # Calculate years based on actual date range
-                                try:
-                                    # Handle different date types (Period, Timestamp, etc.)
-                                    if hasattr(start_date, 'to_timestamp'):
-                                        start_date = start_date.to_timestamp()
-                                    if hasattr(end_date, 'to_timestamp'):
-                                        end_date = end_date.to_timestamp()
-                                    
-                                    if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
-                                        years = (end_date - start_date).days / 365.25
-                                    else:
-                                        years = len(prices) / 12  # Fallback: assuming monthly data
-                                except Exception:
+                                if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
+                                    years = (end_date - start_date).days / 365.25
+                                else:
                                     years = len(prices) / 12  # Fallback: assuming monthly data
                                 
                                 if years > 0:
@@ -12726,39 +12717,96 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при создании Excel файла: {str(e)}")
 
     async def _handle_namespace_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace analysis button click - call info command without arguments"""
+        """Handle namespace analysis button click - show info command help"""
         try:
             self.logger.info("Handling namespace analysis button")
             
-            # Call info command without arguments to show the same help message
-            context.args = []
-            await self.info_command(update, context)
+            # Get random examples for user (same as info command)
+            examples = self.get_random_examples(3)
+            examples_text = ", ".join(examples)
+            
+            # Set flag that user is waiting for info input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, waiting_for_info=True)
+            
+            # Send the same message as info command without arguments
+            await self._send_callback_message(update, context, 
+                f"📊 *Информация об активе*\n\n"
+                f"*Примеры:* {examples_text}\n\n"
+                f"*Просто отправьте название инструмента*")
                 
         except Exception as e:
             self.logger.error(f"Error in namespace analysis button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace compare button click - call compare command without arguments"""
+        """Handle namespace compare button click - show compare command help"""
         try:
             self.logger.info("Handling namespace compare button")
             
-            # Call compare command without arguments to show the same help message
-            context.args = []
-            await self.compare_command(update, context)
+            # Get user's saved portfolios for help message (same as compare command)
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            # Clear any existing compare context when starting fresh
+            self._update_user_context(user_id, compare_first_symbol=None, waiting_for_compare=False)
+            
+            # Get random examples for user
+            examples = self.get_random_examples(3)
+            examples_text = ", ".join(examples)
+            
+            help_text = "📊 Сравнение\n\n"
+            help_text += f"Примеры активов: {examples_text}\n\n"
+
+            # Add saved portfolios information
+            if saved_portfolios:
+                help_text += "💾 *Сохраненные портфели:*\n"
+                for name, portfolio_data in saved_portfolios.items():
+                    symbols = portfolio_data.get('symbols', [])
+                    weights = portfolio_data.get('weights', [])
+                    if symbols and weights:
+                        portfolio_str = " ".join([f"{s}:{w:.1f}" for s, w in zip(symbols, weights)])
+                        help_text += f"• `{name}`: {portfolio_str}\n"
+                help_text += "\n"
+
+            help_text += "💡 *Способы сравнения:*\n"
+            help_text += "• `/compare AAPL.US MSFT.US` - сравнение активов\n"
+            help_text += "• `/compare Портфель1 Портфель2` - сравнение портфелей\n"
+            help_text += "• `/compare AAPL.US Портфель1` - актив vs портфель\n\n"
+            help_text += "💬 *Введите символы для сравнения:*"
+            
+            # Send the same message as compare command without arguments
+            await self._send_callback_message(update, context, help_text)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace compare button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace portfolio button click - call portfolio command without arguments"""
+        """Handle namespace portfolio button click - show portfolio command help"""
         try:
             self.logger.info("Handling namespace portfolio button")
             
-            # Call portfolio command without arguments to show the same help message
-            context.args = []
-            await self.portfolio_command(update, context)
+            # Create the same help message as portfolio command without arguments
+            help_text = "📊 *Создание портфеля*\n\n"
+
+            help_text += "*Примеры:*\n"
+            help_text += "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - американский сбалансированный\n"
+            help_text += "• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский энергетический\n"
+            help_text += "• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - с золотом и облигациями\n"
+            help_text += "• `AAPL.US:0.3 MSFT.US:0.3 TSLA.US:0.2 AGG.US:0.2` - технологический\n"
+            help_text += "• `SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y` - с валютой USD и периодом 10 лет\n\n"
+            help_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
+            help_text += "💡 Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`\n"
+            help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
+            help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n"
+            help_text += "💡 Если не задана базовая валюта, то она определяется по первому символу\n\n"
+
+            help_text += "💬 *Введите символы для создания портфеля:*"
+            
+            # Send the same message as portfolio command without arguments
+            await self._send_callback_message(update, context, help_text)
                 
         except Exception as e:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")
