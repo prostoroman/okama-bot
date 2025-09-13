@@ -6110,6 +6110,10 @@ class ShansAi:
 
     async def _handle_chart_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle chart analysis button click for comparison charts"""
+        # Initialize variables at the beginning to ensure they're available in except block
+        symbols = []
+        currency = 'USD'
+        
         try:
             # Don't remove keyboard yet - wait for successful message creation
             
@@ -6376,6 +6380,10 @@ class ShansAi:
 
     async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle data analysis button click for comparison charts"""
+        # Initialize variables at the beginning to ensure they're available in except block
+        symbols = []
+        currency = 'USD'
+        
         try:
             # Don't remove keyboard yet - wait for successful message creation
             
@@ -6393,10 +6401,10 @@ class ShansAi:
 
             # Check if Gemini service is available
             if not self.gemini_service or not self.gemini_service.is_available():
-                await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен. Проверьте настройки Gemini API.", parse_mode='Markdown')
+                await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные с помощью Gemini AI...", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
@@ -6420,10 +6428,8 @@ class ShansAi:
                             else:
                                 assets_with_names.append(symbol)
                         
-                        analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(assets_with_names)}\n"
-                        analysis_text += f"💰 **Валюта:** {currency}\n"
-                        analysis_text += f"📅 **Период:** полный доступный период данных\n"
-                        analysis_text += f"📊 **Тип анализа:** Данные (не изображение)"
+
+
                         
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
@@ -6453,6 +6459,10 @@ class ShansAi:
 
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle YandexGPT analysis button click for comparison charts"""
+        # Initialize variables at the beginning to ensure they're available in except block
+        symbols = []
+        currency = 'USD'
+        
         try:
             # Don't remove keyboard yet - wait for successful message creation
             
