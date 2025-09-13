@@ -148,6 +148,7 @@ class ShansAi:
             'CAD': 'US_EFFR.RATE',  # Use US rate as proxy for CAD
             'AUD': 'US_EFFR.RATE',  # Use US rate as proxy for AUD
             'ILS': 'ISR_IR.RATE',   # Bank of Israel interest rate
+            'HKD': None,            # Hong Kong Dollar - not supported by okama, use fixed rate
         }
         
         # User session storage (in-memory for fast access)
@@ -167,6 +168,12 @@ class ShansAi:
             Risk-free rate as decimal (e.g., 0.05 for 5%)
         """
         try:
+            # Special handling for HKD - not supported by okama, use fixed rate
+            if currency.upper() == 'HKD':
+                fixed_rate = 0.0285  # 2.85% fixed rate for Hong Kong Dollar
+                self.logger.info(f"Using fixed risk-free rate for HKD: {fixed_rate:.4f}")
+                return fixed_rate
+            
             # Get the appropriate rate symbol for the currency
             rate_symbol = self.risk_free_rate_mapping.get(currency.upper(), 'US_EFFR.RATE')
             
@@ -220,13 +227,14 @@ class ShansAi:
             'USD': 0.05,  # 5% - current Fed funds rate
             'EUR': 0.04,  # 4% - current ECB rate
             'GBP': 0.05,  # 5% - current BoE rate
-            'RUB': 0.16,  # 16% - current CBR rate
+            'RUB': 0.17,  # 17% - current CBR rate
             'CNY': 0.035, # 3.5% - current LPR rate
             'JPY': 0.05,  # 5% - use US rate as proxy
             'CHF': 0.04,  # 4% - use EU rate as proxy
             'CAD': 0.05,  # 5% - use US rate as proxy
             'AUD': 0.05,  # 5% - use US rate as proxy
             'ILS': 0.045, # 4.5% - current BoI rate
+            'HKD': 0.0285, # 2.85% - Hong Kong Dollar fixed rate (not supported by okama)
         }
         
         fallback_rate = fallback_rates.get(currency.upper(), 0.05)  # Default to 5%
