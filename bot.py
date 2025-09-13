@@ -12949,11 +12949,19 @@ class ShansAi:
                 caption = f"💡 График показывает динамику изменения доходноси во времени\n"
 
             
-            # Send the chart
+            # Create keyboard for portfolio command
+            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
+            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+            
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            # Send the chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(caption)
+                caption=self._truncate_caption(caption),
+                reply_markup=keyboard
             )
             
         except Exception as e:
@@ -13249,11 +13257,19 @@ class ShansAi:
                 caption += f"• Эффект диверсификации\n"
                 caption += f"• Сравнение рисков и доходности"
             
-            # Send the chart
+            # Create keyboard for portfolio command
+            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
+            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+            
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            # Send the chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(caption)
+                caption=self._truncate_caption(caption),
+                reply_markup=keyboard
             )
             
         except Exception as e:
