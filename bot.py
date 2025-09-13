@@ -1513,7 +1513,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность"),
+                caption=self._truncate_caption(f"История дивидендных выплат и доходность"),
                 reply_markup=keyboard
             )
             
@@ -7706,7 +7706,7 @@ class ShansAi:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(f"💰 График дивидендной доходности для смешанного сравнения\n\nПоказывает дивидендную доходность портфелей и активов")
+                    caption=self._truncate_caption(f"Дивидендная доходность портфелей и активов")
                 )
                 
             except Exception as chart_error:
