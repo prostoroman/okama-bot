@@ -4157,7 +4157,7 @@ class ShansAi:
                     [InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
                      InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")],
                     [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
-                     InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
+                     InlineKeyboardButton("📊 Метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
                     [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
                      InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
@@ -4761,7 +4761,7 @@ class ShansAi:
                     [InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
                      InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")],
                     [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
-                     InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
+                     InlineKeyboardButton("📊 Метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
                     [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
                      InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
@@ -7522,6 +7522,230 @@ class ShansAi:
             self.logger.error(f"Error creating summary metrics table: {e}")
             return "❌ Ошибка при создании таблицы метрик"
 
+    def _create_portfolio_metrics_table(self, portfolio_symbol: str, symbols: list, weights: list, currency: str, portfolio_object) -> str:
+        """Create metrics table for a single portfolio (similar to _create_summary_metrics_table but for one portfolio)"""
+        try:
+            # Prepare table data
+            table_data = []
+            headers = ["Метрика", "Значение"]
+            
+            # Calculate key metrics for the portfolio
+            portfolio_metrics = {}
+            
+            if portfolio_object is not None:
+                # Get price data from portfolio
+                prices = None
+                
+                # Try to get price data from different sources
+                if hasattr(portfolio_object, 'wealth_index') and portfolio_object.wealth_index is not None:
+                    wealth_index = portfolio_object.wealth_index
+                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
+                        if hasattr(wealth_index, 'columns'):
+                            prices = wealth_index.iloc[:, 0]
+                        else:
+                            prices = wealth_index
+                
+                if prices is not None and len(prices) > 1:
+                    # CAGR (Annual Return)
+                    try:
+                        start_date = prices.index[0]
+                        end_date = prices.index[-1]
+                        
+                        # Calculate years based on actual date range
+                        try:
+                            # Handle different date types (Period, Timestamp, etc.)
+                            if hasattr(start_date, 'to_timestamp'):
+                                start_date = start_date.to_timestamp()
+                            if hasattr(end_date, 'to_timestamp'):
+                                end_date = end_date.to_timestamp()
+                            
+                            if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
+                                years = (end_date - start_date).days / 365.25
+                            else:
+                                years = len(prices) / 12  # Fallback: assuming monthly data
+                        except Exception:
+                            years = len(prices) / 12  # Fallback: assuming monthly data
+                        
+                        if years > 0:
+                            total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
+                            portfolio_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
+                            
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate CAGR for portfolio: {e}")
+                        portfolio_metrics['cagr'] = None
+                    
+                    # Volatility
+                    try:
+                        returns = prices.pct_change().dropna()
+                        if len(returns) > 1:
+                            # Annualize volatility based on data frequency
+                            if hasattr(prices.index, 'freq') and prices.index.freq:
+                                freq_str = str(prices.index.freq)
+                                if 'D' in freq_str:  # Daily data
+                                    portfolio_metrics['volatility'] = returns.std() * (252 ** 0.5)  # Annualized
+                                elif 'M' in freq_str:  # Monthly data
+                                    portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Annualized
+                                else:
+                                    portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Default to monthly
+                            else:
+                                # Fallback: assume monthly data
+                                portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate volatility for portfolio: {e}")
+                        portfolio_metrics['volatility'] = None
+                    
+                    # Sharpe Ratio
+                    try:
+                        # Calculate Sharpe ratio manually using CAGR and volatility
+                        if portfolio_metrics.get('cagr') is not None and portfolio_metrics.get('volatility') is not None and portfolio_metrics['volatility'] > 0:
+                            # Calculate years for period-based rate selection
+                            years = None
+                            if prices is not None and len(prices) > 1:
+                                start_date = prices.index[0]
+                                end_date = prices.index[-1]
+                                if hasattr(start_date, 'to_timestamp'):
+                                    start_date = start_date.to_timestamp()
+                                if hasattr(end_date, 'to_timestamp'):
+                                    end_date = end_date.to_timestamp()
+                                years = (end_date - start_date).days / 365.25
+                            
+                            # Use proper risk-free rate based on currency
+                            risk_free_rate = self.get_risk_free_rate(currency, years)
+                            portfolio_metrics['sharpe'] = (portfolio_metrics['cagr'] - risk_free_rate) / portfolio_metrics['volatility']
+                            portfolio_metrics['risk_free_rate'] = risk_free_rate
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate Sharpe ratio for portfolio: {e}")
+                        portfolio_metrics['sharpe'] = None
+                    
+                    # Max Drawdown
+                    try:
+                        # Calculate max drawdown from price data
+                        running_max = prices.expanding().max()
+                        drawdown = (prices - running_max) / running_max
+                        portfolio_metrics['max_drawdown'] = drawdown.min()
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate max drawdown for portfolio: {e}")
+                        portfolio_metrics['max_drawdown'] = None
+                    
+                    # Sortino Ratio
+                    try:
+                        # Calculate Sortino ratio manually using CAGR and downside deviation
+                        if prices is not None and len(prices) > 1:
+                            returns = prices.pct_change().dropna()
+                            if len(returns) > 1:
+                                # Calculate downside deviation (only negative returns)
+                                downside_returns = returns[returns < 0]
+                                if len(downside_returns) > 1:
+                                    downside_deviation = downside_returns.std()
+                                    if downside_deviation > 0 and portfolio_metrics.get('cagr') is not None:
+                                        # Use the same risk-free rate as calculated for Sharpe ratio
+                                        risk_free_rate = portfolio_metrics.get('risk_free_rate', self.get_risk_free_rate(currency))
+                                        portfolio_metrics['sortino'] = (portfolio_metrics['cagr'] - risk_free_rate) / downside_deviation
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate Sortino ratio for portfolio: {e}")
+                        portfolio_metrics['sortino'] = None
+                    
+                    # Calmar Ratio
+                    try:
+                        # Calculate Calmar ratio using CAGR and max drawdown
+                        if portfolio_metrics.get('cagr') is not None and portfolio_metrics.get('max_drawdown') is not None and portfolio_metrics['max_drawdown'] < 0:
+                            portfolio_metrics['calmar'] = portfolio_metrics['cagr'] / abs(portfolio_metrics['max_drawdown'])
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate Calmar ratio for portfolio: {e}")
+                        portfolio_metrics['calmar'] = None
+                    
+                    # VaR 95% and CVaR 95%
+                    try:
+                        # Use the same price data we found for CAGR calculation
+                        if prices is not None and len(prices) > 1:
+                            returns = prices.pct_change().dropna()
+                            if len(returns) > 1:
+                                # Calculate VaR 95% (5th percentile of returns)
+                                var_95 = returns.quantile(0.05)
+                                portfolio_metrics['var_95'] = var_95
+                                
+                                # Calculate CVaR 95% (expected value of returns below VaR 95%)
+                                cvar_95 = returns[returns <= var_95].mean()
+                                portfolio_metrics['cvar_95'] = cvar_95
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate VaR/CVaR for portfolio: {e}")
+                        portfolio_metrics['var_95'] = None
+                        portfolio_metrics['cvar_95'] = None
+            
+            # Create table rows
+            # CAGR row
+            cagr_row = ["**CAGR**"]
+            if portfolio_metrics.get('cagr') is not None:
+                cagr_row.append(f"{portfolio_metrics['cagr']*100:.2f}%")
+            else:
+                cagr_row.append("N/A")
+            table_data.append(cagr_row)
+            
+            # Volatility row
+            volatility_row = ["**Волатильность**"]
+            if portfolio_metrics.get('volatility') is not None:
+                volatility_row.append(f"{portfolio_metrics['volatility']*100:.2f}%")
+            else:
+                volatility_row.append("N/A")
+            table_data.append(volatility_row)
+            
+            # Sharpe Ratio row
+            sharpe_row = ["**Коэф. Шарпа**"]
+            if portfolio_metrics.get('sharpe') is not None:
+                sharpe_row.append(f"{portfolio_metrics['sharpe']:.3f}")
+            else:
+                sharpe_row.append("N/A")
+            table_data.append(sharpe_row)
+            
+            # Max Drawdown row
+            max_drawdown_row = ["**Макс. просадка**"]
+            if portfolio_metrics.get('max_drawdown') is not None:
+                max_drawdown_row.append(f"{portfolio_metrics['max_drawdown']*100:.2f}%")
+            else:
+                max_drawdown_row.append("N/A")
+            table_data.append(max_drawdown_row)
+            
+            # Sortino Ratio row
+            sortino_row = ["**Коэф. Сортино**"]
+            if portfolio_metrics.get('sortino') is not None:
+                sortino_row.append(f"{portfolio_metrics['sortino']:.3f}")
+            else:
+                sortino_row.append("N/A")
+            table_data.append(sortino_row)
+            
+            # Calmar Ratio row
+            calmar_row = ["**Коэф. Кальмара**"]
+            if portfolio_metrics.get('calmar') is not None:
+                calmar_row.append(f"{portfolio_metrics['calmar']:.3f}")
+            else:
+                calmar_row.append("N/A")
+            table_data.append(calmar_row)
+            
+            # VaR 95% row
+            var_row = ["**VaR 95%**"]
+            if portfolio_metrics.get('var_95') is not None:
+                var_row.append(f"{portfolio_metrics['var_95']*100:.2f}%")
+            else:
+                var_row.append("N/A")
+            table_data.append(var_row)
+            
+            # CVaR 95% row
+            cvar_row = ["**CVaR 95%**"]
+            if portfolio_metrics.get('cvar_95') is not None:
+                cvar_row.append(f"{portfolio_metrics['cvar_95']*100:.2f}%")
+            else:
+                cvar_row.append("N/A")
+            table_data.append(cvar_row)
+            
+            # Create enhanced markdown table with better formatting
+            table_markdown = self._create_enhanced_markdown_table(table_data, headers)
+            
+            return table_markdown
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio metrics table: {e}")
+            return "❌ Ошибка при создании таблицы метрик портфеля"
+
     def _format_period_for_display(self, specified_period: str = None) -> str:
         """Format period string for display in headers"""
         if not specified_period:
@@ -7634,7 +7858,7 @@ class ShansAi:
             ])
             keyboard.append([
                 InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
-                InlineKeyboardButton("📊 Риск метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")
+                InlineKeyboardButton("📊 Метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")
             ])
             keyboard.append([
                 InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
@@ -10173,7 +10397,30 @@ class ShansAi:
             # Create Portfolio with validated symbols and period
             portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
-            await self._create_risk_metrics_report(update, context, portfolio, final_symbols, currency)
+            # Create portfolio metrics table using new method
+            try:
+                metrics_table = self._create_portfolio_metrics_table(
+                    portfolio_symbol, valid_symbols, valid_weights, currency, portfolio
+                )
+                
+                if metrics_table and not metrics_table.startswith("❌"):
+                    # Create keyboard for portfolio command
+                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                    
+                    # Send table as message with keyboard
+                    header_text = f"📊 **Метрики портфеля**"
+                    table_message = f"{header_text}\n\n```\n{metrics_table}\n```"
+                    await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown', reply_markup=keyboard)
+                else:
+                    # Create keyboard for portfolio command
+                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                    await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось создать таблицу метрик", reply_markup=keyboard)
+                    
+            except Exception as metrics_error:
+                self.logger.error(f"Error creating portfolio metrics table: {metrics_error}")
+                # Create keyboard for portfolio command
+                keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio risk metrics by symbol: {e}")
