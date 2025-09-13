@@ -7343,8 +7343,21 @@ class ShansAi:
                         try:
                             # Calculate Sharpe ratio manually using CAGR and volatility
                             if symbol_metrics.get('cagr') is not None and symbol_metrics.get('volatility') is not None and symbol_metrics['volatility'] > 0:
-                                risk_free_rate = 0.02  # 2% annual risk-free rate
+                                # Calculate years for period-based rate selection
+                                years = None
+                                if prices is not None and len(prices) > 1:
+                                    start_date = prices.index[0]
+                                    end_date = prices.index[-1]
+                                    if hasattr(start_date, 'to_timestamp'):
+                                        start_date = start_date.to_timestamp()
+                                    if hasattr(end_date, 'to_timestamp'):
+                                        end_date = end_date.to_timestamp()
+                                    years = (end_date - start_date).days / 365.25
+                                
+                                # Use proper risk-free rate based on currency
+                                risk_free_rate = self.get_risk_free_rate(currency, years)
                                 symbol_metrics['sharpe'] = (symbol_metrics['cagr'] - risk_free_rate) / symbol_metrics['volatility']
+                                symbol_metrics['risk_free_rate'] = risk_free_rate
                         except Exception as e:
                             self.logger.warning(f"Could not calculate Sharpe ratio for {symbol}: {e}")
                             symbol_metrics['sharpe'] = None
@@ -7372,7 +7385,8 @@ class ShansAi:
                                     if len(downside_returns) > 1:
                                         downside_deviation = downside_returns.std()
                                         if downside_deviation > 0 and symbol_metrics.get('cagr') is not None:
-                                            risk_free_rate = 0.02  # 2% annual risk-free rate
+                                            # Use the same risk-free rate as calculated for Sharpe ratio
+                                            risk_free_rate = symbol_metrics.get('risk_free_rate', self.get_risk_free_rate(currency))
                                             symbol_metrics['sortino'] = (symbol_metrics['cagr'] - risk_free_rate) / downside_deviation
                         except Exception as e:
                             self.logger.warning(f"Could not calculate Sortino ratio for {symbol}: {e}")
@@ -7431,6 +7445,16 @@ class ShansAi:
                 else:
                     volatility_row.append("N/A")
             table_data.append(volatility_row)
+            
+            # Risk-free rate row
+            risk_free_row = ["Безрисковая ставка"]
+            for symbol in symbols:
+                risk_free_rate = metrics_data.get(symbol, {}).get('risk_free_rate')
+                if risk_free_rate is not None:
+                    risk_free_row.append(f"{risk_free_rate*100:.2f}%")
+                else:
+                    risk_free_row.append("N/A")
+            table_data.append(risk_free_row)
             
             # Sharpe Ratio row
             sharpe_row = ["Коэфф. Шарпа"]
