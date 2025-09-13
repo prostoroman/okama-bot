@@ -168,59 +168,48 @@ class ShansAi:
             Risk-free rate as decimal (e.g., 0.05 for 5%)
         """
         try:
-            # Special handling for HKD - not supported by okama, use fixed rate
+            # Since okama doesn't support RATE namespace, use fallback rates directly
+            # This avoids multiple warnings in logs and provides more reliable service
+            
+            # Special handling for HKD - fixed rate
             if currency.upper() == 'HKD':
                 fixed_rate = 0.0285  # 2.85% fixed rate for Hong Kong Dollar
                 self.logger.info(f"Using fixed risk-free rate for HKD: {fixed_rate:.4f}")
                 return fixed_rate
             
-            # Get the appropriate rate symbol for the currency
-            rate_symbol = self.risk_free_rate_mapping.get(currency.upper(), 'US_EFFR.RATE')
-            
-            # For RUB currency, select appropriate rate based on period
+            # Special handling for RUB - period-dependent rates
             if currency.upper() == 'RUB':
                 if period_years is not None:
                     if period_years <= 0.25:  # 3 months or less
-                        rate_symbol = 'RUONIA.RATE'  # Overnight rate
+                        fixed_rate = 0.15  # 15% - overnight rate approximation
                     elif period_years <= 0.5:  # 6 months or less
-                        rate_symbol = 'RUONIA_AVG_1M.RATE'  # 1 month average
+                        fixed_rate = 0.155  # 15.5% - 1 month average approximation
                     elif period_years <= 1.0:  # 1 year or less
-                        rate_symbol = 'RUONIA_AVG_3M.RATE'  # 3 month average
+                        fixed_rate = 0.16  # 16% - 3 month average approximation
                     else:  # More than 1 year
-                        rate_symbol = 'RUONIA_AVG_6M.RATE'  # 6 month average
+                        fixed_rate = 0.165  # 16.5% - 6 month average approximation
                 else:
-                    rate_symbol = 'RUS_CBR.RATE'  # Default to central bank rate
+                    fixed_rate = 0.16  # 16% - default central bank rate
+                
+                self.logger.info(f"Using period-based risk-free rate for RUB ({period_years} years): {fixed_rate:.4f}")
+                return fixed_rate
             
-            # For CNY currency, select appropriate rate based on period
-            elif currency.upper() == 'CNY':
+            # Special handling for CNY - period-dependent rates
+            if currency.upper() == 'CNY':
                 if period_years is not None and period_years > 5:
-                    rate_symbol = 'CHN_LPR5.RATE'  # 5-year rate for longer periods
+                    fixed_rate = 0.04  # 4% - 5-year rate approximation
                 else:
-                    rate_symbol = 'CHN_LPR1.RATE'  # 1-year rate for shorter periods
+                    fixed_rate = 0.035  # 3.5% - 1-year rate approximation
+                
+                self.logger.info(f"Using period-based risk-free rate for CNY ({period_years} years): {fixed_rate:.4f}")
+                return fixed_rate
             
-            # Get the rate using okama
-            import okama as ok
-            rate_asset = ok.Asset(rate_symbol)
+            # For all other currencies, use fallback rates directly
+            # This avoids okama API calls that fail due to RATE namespace not being supported
+            self.logger.info(f"Using fallback risk-free rate for {currency} (okama RATE namespace not supported)")
             
-            # Get the most recent rate value
-            if hasattr(rate_asset, 'wealth_index') and not rate_asset.wealth_index.empty:
-                # Get the latest rate value
-                latest_rate = rate_asset.wealth_index.iloc[-1]
-                if hasattr(latest_rate, 'values'):
-                    rate_value = latest_rate.values[0]
-                else:
-                    rate_value = latest_rate
-                
-                # Convert to decimal (okama rates are typically in percentage)
-                risk_free_rate = float(rate_value) / 100.0
-                
-                self.logger.info(f"Retrieved risk-free rate for {currency}: {rate_symbol} = {risk_free_rate:.4f}")
-                return risk_free_rate
-            else:
-                self.logger.warning(f"No wealth_index data available for {rate_symbol}")
-                
         except Exception as e:
-            self.logger.warning(f"Failed to get risk-free rate for {currency}: {e}")
+            self.logger.warning(f"Error in risk-free rate calculation for {currency}: {e}")
         
         # Fallback rates if okama data is not available
         fallback_rates = {
