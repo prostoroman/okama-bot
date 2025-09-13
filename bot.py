@@ -3742,16 +3742,13 @@ class ShansAi:
                 # Hide these buttons for mixed comparisons (portfolio + asset)
                 if not is_mixed_comparison:
                     keyboard.append([
-                        InlineKeyboardButton("📉 Drawdowns", callback_data="drawdowns_compare"),
-                        InlineKeyboardButton("💰 Dividends", callback_data="dividends_compare")
+                        InlineKeyboardButton("💰 Дивиденды", callback_data="dividends_compare")
+                        InlineKeyboardButton("📉 Просадки", callback_data="drawdowns_compare"),
+                        
                     ])
                     keyboard.append([
-                        InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
-                    ])
-
-                # Add Metrics button for detailed statistics
-                keyboard.append([
-                    InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare")
+                        InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare"),
+                        InlineKeyboardButton("🔗 Корреляция", callback_data="correlation_compare")
                     ])
 
                 # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
