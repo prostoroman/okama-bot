@@ -3300,8 +3300,10 @@ class ShansAi:
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
                 return
             
-            if len(symbols) > 10:
-                await self._send_message_safe(update, "❌ Максимум 10 символов для сравнения")
+            if len(symbols) > 5:
+                await self._send_message_safe(update, "❌ Максимум 5 активов для сравнения. Пожалуйста, введите список для сравнения заново (не более 5 активов)")
+                # Clear any stored symbols and reset waiting state
+                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
                 return
 
             # Process portfolio symbols and expand them
@@ -5194,6 +5196,14 @@ class ShansAi:
                     # We have a stored symbol or base symbol, combine with new input
                     base_symbol = stored_first_symbol or compare_base_symbol
                     combined_symbols = [base_symbol] + symbols
+                    
+                    # Check if combined symbols exceed the limit
+                    if len(combined_symbols) > 5:
+                        await self._send_message_safe(update, "❌ Максимум 5 активов для сравнения. Пожалуйста, введите список для сравнения заново (не более 5 активов)")
+                        # Clear both stored symbols and waiting flag
+                        self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
+                        return
+                    
                     # Clear both stored symbols and waiting flag
                     self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
                     
@@ -5211,8 +5221,10 @@ class ShansAi:
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
                 return
             
-            elif len(symbols) > 10:
-                await self._send_message_safe(update, "❌ Максимум 10 символов для сравнения")
+            elif len(symbols) > 5:
+                await self._send_message_safe(update, "❌ Максимум 5 активов для сравнения. Пожалуйста, введите список для сравнения заново (не более 5 активов)")
+                # Clear any stored symbols and reset waiting state
+                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
                 return
             
             # We have 2 or more symbols - clear any stored symbols and process normally
