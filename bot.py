@@ -3713,7 +3713,7 @@ class ShansAi:
                 
                 # Create enhanced caption without summary table
                 caption = self._create_enhanced_chart_caption(
-                    symbols, currency, specified_period, display_symbols
+                    symbols, currency, specified_period
                 )
                 
                 # Describe table will be sent in separate message
