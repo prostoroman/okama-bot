@@ -3654,14 +3654,14 @@ class ShansAi:
                 
                 # Chart analysis is now only available via buttons
                 
-                # Create summary metrics table for caption
+                # Create summary metrics table for separate message
                 summary_table = self._create_summary_metrics_table(
                     symbols, currency, expanded_symbols, portfolio_contexts, specified_period
                 )
                 
-                # Create enhanced caption with markdown formatting
+                # Create enhanced caption without summary table
                 caption = self._create_enhanced_chart_caption(
-                    symbols, currency, specified_period, summary_table
+                    symbols, currency, specified_period
                 )
                 
                 # Describe table will be sent in separate message
@@ -3733,6 +3733,10 @@ class ShansAi:
                     context=context,
                     parse_mode='HTML'  # Try HTML instead of Markdown for better compatibility
                 )
+                
+                # Send summary table as separate message with markdown formatting
+                table_message = f"📊 **Сводная таблица ключевых метрик**\n\n```\n{summary_table}\n```"
+                await self._send_message_safe(update, table_message, parse_mode='Markdown')
                 
                 # Table statistics now available via Metrics button
                 
@@ -7341,7 +7345,7 @@ class ShansAi:
             # Return empty keyboard as fallback
             return InlineKeyboardMarkup([])
 
-    def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str, summary_table: str) -> str:
+    def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str) -> str:
         """Create enhanced chart caption with HTML formatting for better Telegram compatibility"""
         try:
             # Create chart title section
@@ -7358,10 +7362,6 @@ class ShansAi:
             if specified_period:
                 period_info = f"<b>Период:</b> {specified_period}"
             
-            # Create summary section
-            summary_section = f"📊 <b>Сводная таблица ключевых метрик</b>"
-            
-            # Use markdown table directly (Telegram supports markdown tables)
             # Combine all sections with proper HTML formatting
             caption_parts = [
                 chart_title,
@@ -7373,19 +7373,12 @@ class ShansAi:
             if period_info:
                 caption_parts.append(period_info)
             
-            caption_parts.extend([
-                "",
-                summary_section,
-                "",
-                summary_table
-            ])
-            
             return "\n".join(caption_parts)
             
         except Exception as e:
             self.logger.error(f"Error creating enhanced chart caption: {e}")
             # Fallback to simple caption
-            return f"📊 <b>Сводная таблица ключевых метрик</b>\n\n{summary_table}"
+            return f"📈 <b>График накопленной доходности</b>\n\n<b>Активы:</b> {', '.join(symbols)}\n<b>Валюта:</b> {currency}"
 
 
     def _create_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
