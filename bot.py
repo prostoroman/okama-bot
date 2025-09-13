@@ -1472,6 +1472,9 @@ class ShansAi:
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
             
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
             # Send drawdowns chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
@@ -1508,6 +1511,9 @@ class ShansAi:
             
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
+            
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
             
             # Send dividend yield chart with keyboard
             await context.bot.send_photo(
@@ -5507,7 +5513,12 @@ class ShansAi:
                 self.logger.info(f"Tushare dividends button clicked for symbol: {symbol}")
                 await self._handle_tushare_dividends_button(update, context, symbol)
             elif callback_data.startswith('portfolio_risk_metrics_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_risk_metrics_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_risk_metrics_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio risk metrics button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_risk_metrics_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('risk_metrics_'):
@@ -5515,7 +5526,12 @@ class ShansAi:
                 self.logger.info(f"Risk metrics button clicked for symbols: {symbols}")
                 await self._handle_risk_metrics_button(update, context, symbols)
             elif callback_data.startswith('portfolio_monte_carlo_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_monte_carlo_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_monte_carlo_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio monte carlo button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_monte_carlo_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('monte_carlo_'):
@@ -5523,7 +5539,12 @@ class ShansAi:
                 self.logger.info(f"Monte Carlo button clicked for symbols: {symbols}")
                 await self._handle_monte_carlo_button(update, context, symbols)
             elif callback_data.startswith('portfolio_forecast_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_forecast_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_forecast_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio forecast button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_forecast_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('forecast_'):
@@ -5532,7 +5553,12 @@ class ShansAi:
                 await self._handle_forecast_button(update, context, symbols)
 
             elif callback_data.startswith('portfolio_wealth_chart_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_wealth_chart_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_wealth_chart_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio wealth chart button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_wealth_chart_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('wealth_chart_'):
@@ -5544,7 +5570,12 @@ class ShansAi:
                 self.logger.info(f"Symbol lengths: {[len(str(s)) if s else 'None' for s in symbols]}")
                 await self._handle_portfolio_wealth_chart_button(update, context, symbols)
             elif callback_data.startswith('portfolio_returns_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_returns_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_returns_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio returns button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_returns_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('returns_'):
@@ -5552,7 +5583,12 @@ class ShansAi:
                 self.logger.info(f"Returns button clicked for symbols: {symbols}")
                 await self._handle_portfolio_returns_button(update, context, symbols)
             elif callback_data.startswith('portfolio_rolling_cagr_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_rolling_cagr_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_rolling_cagr_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio rolling CAGR button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_rolling_cagr_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('rolling_cagr_'):
@@ -5560,15 +5596,30 @@ class ShansAi:
                 self.logger.info(f"Rolling CAGR button clicked for symbols: {symbols}")
                 await self._handle_portfolio_rolling_cagr_button(update, context, symbols)
             elif callback_data.startswith('portfolio_compare_assets_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_compare_assets_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_compare_assets_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio compare assets button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_compare_assets_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('portfolio_drawdowns_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_drawdowns_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_drawdowns_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio drawdowns button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_drawdowns_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('portfolio_dividends_'):
-                portfolio_symbol = self.clean_symbol(callback_data.replace('portfolio_dividends_', ''))
+                portfolio_symbol_raw = callback_data.replace('portfolio_dividends_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio dividends button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_dividends_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('compare_assets_'):
@@ -8067,6 +8118,9 @@ class ShansAi:
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
                 
+                # Remove keyboard from previous message before sending new message
+                await self._remove_keyboard_before_new_message(update, context)
+                
                 # Send drawdowns chart with keyboard
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
@@ -8910,7 +8964,7 @@ class ShansAi:
             compare_text += "Отправьте название актива для сравнения или выберите из популярных альтернатив:\n\n"
             
             for suggestion in suggestions:
-                compare_text += f"• {suggestion}\n"
+                compare_text += f"• `{suggestion}`\n"
             
             compare_text += f"\nИли отправьте любой другой тикер для сравнения с {symbol}"
             
