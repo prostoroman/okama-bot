@@ -7186,28 +7186,93 @@ class ShansAi:
             # Calculate correlation matrix if we have multiple assets
             if len(expanded_symbols) > 1:
                 try:
-                    # Try to get actual correlation data from okama
                     correlation_matrix = []
                     
-                    # Check if we can get correlation from the first asset
-                    if hasattr(expanded_symbols[0], 'correlation_matrix'):
-                        correlation_matrix = expanded_symbols[0].correlation_matrix.tolist()
+                    # Get user context to access portfolio information
+                    user_context = self._get_user_context(user_id)
+                    portfolio_contexts = user_context.get('portfolio_contexts', [])
+                    
+                    # Separate portfolios and individual assets using expanded_symbols
+                    portfolio_data = []
+                    asset_symbols = []
+                    
+                    for i, expanded_symbol in enumerate(expanded_symbols):
+                        if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
+                            # This is a portfolio wealth index
+                            portfolio_data.append(expanded_symbol)
+                        else:
+                            # This is an individual asset symbol
+                            asset_symbols.append(expanded_symbol)
+                    
+                    # Calculate correlation data for all items (same method as in _create_mixed_comparison_correlation_matrix)
+                    correlation_data = {}
+                    
+                    # Process portfolios separately
+                    for i, portfolio_context in enumerate(portfolio_contexts):
+                        if i < len(portfolio_data):
+                            try:
+                                # Get portfolio details from context
+                                assets = portfolio_context.get('portfolio_symbols', [])
+                                weights = portfolio_context.get('portfolio_weights', [])
+                                symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                                
+                                if assets and weights and len(assets) == len(weights):
+                                    # Create portfolio using ok.Portfolio
+                                    portfolio = ok.Portfolio(
+                                        assets=assets,
+                                        weights=weights,
+                                        rebalancing_strategy=ok.Rebalance(period="year"),
+                                        symbol=symbol
+                                    )
+                                    
+                                    # Calculate returns for portfolio
+                                    wealth_series = portfolio.wealth_index
+                                    returns = wealth_series.pct_change().dropna()
+                                    if len(returns) > 0:
+                                        correlation_data[symbol] = returns
+                            except Exception as portfolio_error:
+                                self.logger.warning(f"Could not process portfolio {i} for correlation: {portfolio_error}")
+                                continue
+                    
+                    # Process individual assets separately
+                    if asset_symbols:
+                        try:
+                            asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
+                            
+                            for symbol in asset_symbols:
+                                if symbol in asset_asset_list.wealth_indexes.columns:
+                                    # Calculate returns for individual asset
+                                    wealth_series = asset_asset_list.wealth_indexes[symbol]
+                                    returns = wealth_series.pct_change().dropna()
+                                    if len(returns) > 0:
+                                        correlation_data[symbol] = returns
+                        except Exception as asset_error:
+                            self.logger.warning(f"Could not process individual assets: {asset_error}")
+                    
+                    # Calculate correlation matrix using the same method as in correlation button
+                    if len(correlation_data) >= 2:
+                        # Combine all returns into a DataFrame
+                        returns_df = pd.DataFrame(correlation_data)
+                        
+                        # Calculate correlation matrix (same as in _create_mixed_comparison_correlation_matrix)
+                        correlation_matrix_df = returns_df.corr()
+                        correlation_matrix = correlation_matrix_df.values.tolist()
+                        
+                        self.logger.info(f"AI analysis correlation matrix calculated successfully, shape: {correlation_matrix_df.shape}")
                     else:
-                        # Create a simple correlation matrix as fallback
+                        # Fallback: create identity matrix
+                        correlation_matrix = []
                         for i in range(len(symbols)):
                             row = []
                             for j in range(len(symbols)):
-                                if i == j:
-                                    row.append(1.0)
-                                else:
-                                    # Estimate correlation based on asset types
-                                    row.append(0.3)  # Conservative estimate
+                                row.append(1.0 if i == j else 0.0)
                             correlation_matrix.append(row)
+                        self.logger.warning(f"Not enough correlation data for AI analysis: {len(correlation_data)}")
                     
                     data_info['correlations'] = correlation_matrix
                     
                 except Exception as e:
-                    self.logger.warning(f"Failed to calculate correlations: {e}")
+                    self.logger.warning(f"Failed to calculate correlations for AI analysis: {e}")
                     # Create identity matrix as fallback
                     correlation_matrix = []
                     for i in range(len(symbols)):
