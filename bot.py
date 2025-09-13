@@ -4162,7 +4162,8 @@ class ShansAi:
                      InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
                      InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
+                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")],
+                    [InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -4766,7 +4767,8 @@ class ShansAi:
                      InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
                      InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
+                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")],
+                    [InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -5604,6 +5606,15 @@ class ShansAi:
                     portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio compare assets button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_compare_assets_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith('portfolio_compare_'):
+                portfolio_symbol_raw = callback_data.replace('portfolio_compare_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
+                self.logger.info(f"Portfolio compare button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_compare_button(update, context, portfolio_symbol)
             elif callback_data.startswith('portfolio_drawdowns_'):
                 portfolio_symbol_raw = callback_data.replace('portfolio_drawdowns_', '')
                 # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
@@ -7870,6 +7881,9 @@ class ShansAi:
             ])
             keyboard.append([
                 InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")
+            ])
+            keyboard.append([
+                InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")
             ])
             
             return InlineKeyboardMarkup(keyboard)
@@ -12987,20 +13001,18 @@ class ShansAi:
                 period_length = "неизвестный период"
             
             # Create comprehensive caption with portfolio info
-            chart_caption = f"📈 Накопленная доходность портфеля\n\n"
-            chart_caption += f"💰 При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}\n\n"
+            chart_caption = f"💰 При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}\n\n"
             
             # Add portfolio composition
             symbols_with_weights = []
             for i, symbol in enumerate(symbols):
                 symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
                 weight = weights[i] if i < len(weights) else 0.0
-                symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                symbols_with_weights.append(f"`{symbol_name}` ({weight:.1%})")
             
-            chart_caption += f"📊 Состав портфеля: {', '.join(symbols_with_weights)}\n"
-            chart_caption += f"🏷️ Символ портфеля: `{portfolio_symbol}`\n"
-            chart_caption += f"💱 Валюта: {currency}\n\n"
-            chart_caption += f"ℹ️ Используйте кнопки ниже для дополнительного анализа"
+            chart_caption += f"📈 `{portfolio_symbol}`: {', '.join(symbols_with_weights)}\n"
+            chart_caption += f"💱 Базовая валюта: {currency}\n\n"
+
 
             # Send the chart with caption and buttons
             await context.bot.send_photo(
@@ -13722,6 +13734,55 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating portfolio compare assets chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
+
+    async def _handle_portfolio_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
+        """Handle portfolio compare button click - execute /compare command with pre-filled portfolio symbol"""
+        try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
+            # Set user context to wait for comparison input with pre-filled portfolio symbol
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, 
+                waiting_for_compare=True,
+                compare_base_symbol=portfolio_symbol
+            )
+            
+            # Get user's saved portfolios for suggestions
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            compare_text = f"⚖️ **Сравнить портфель {portfolio_symbol} с:**\n\n"
+            compare_text += "Отправьте название актива или другого портфеля для сравнения:\n\n"
+            
+            # Add suggestions from saved portfolios (excluding current one)
+            if saved_portfolios:
+                compare_text += "💾 Ваши другие портфели:\n"
+                for other_symbol, portfolio_info in saved_portfolios.items():
+                    if other_symbol != portfolio_symbol:
+                        symbols = portfolio_info.get('symbols', [])
+                        escaped_symbol = other_symbol.replace('_', '\\_')
+                        escaped_symbols = [symbol.replace('_', '\\_') for symbol in symbols]
+                        portfolio_str = ', '.join(escaped_symbols)
+                        compare_text += f"• `{escaped_symbol}` ({portfolio_str})\n"
+                compare_text += "\n"
+            
+            # Add popular asset suggestions
+            suggestions = self._get_popular_alternatives("SPY.US")  # Use SPY as base for suggestions
+            compare_text += "📈 Популярные активы:\n"
+            for suggestion in suggestions[:5]:  # Limit to 5 suggestions
+                compare_text += f"• `{suggestion}`\n"
+            
+            compare_text += f"\nИли отправьте любой другой тикер для сравнения с {portfolio_symbol}"
+            
+            await self._send_callback_message(update, context, compare_text)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio compare button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при подготовке сравнения: {str(e)}")
 
     async def _handle_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle namespace button click - show symbols in specific namespace"""
