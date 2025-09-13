@@ -565,6 +565,61 @@ class ShansAi:
             except Exception as final_error:
                 self.logger.error(f"Final error message sending failed: {final_error}")
         
+    def _find_portfolio_by_symbol(self, portfolio_symbol: str, saved_portfolios: Dict, user_id: int = None) -> Optional[str]:
+        """
+        Найти портфель по символу с использованием различных стратегий поиска.
+        
+        Args:
+            portfolio_symbol: Символ портфеля для поиска
+            saved_portfolios: Словарь сохраненных портфелей
+            user_id: ID пользователя для логирования (опционально)
+            
+        Returns:
+            Найденный ключ портфеля или None, если не найден
+        """
+        log_prefix = f"User {user_id}: " if user_id else ""
+        
+        # 1. Точное совпадение
+        if portfolio_symbol in saved_portfolios:
+            if user_id:
+                self.logger.info(f"{log_prefix}Found exact match for portfolio: '{portfolio_symbol}'")
+            return portfolio_symbol
+        
+        # 2. Поиск по активам (в случае разного порядка или формата символа)
+        try:
+            portfolio_assets = set(portfolio_symbol.split(','))
+            for key, portfolio_info in saved_portfolios.items():
+                saved_assets = set(portfolio_info.get('symbols', []))
+                if portfolio_assets == saved_assets:
+                    if user_id:
+                        self.logger.info(f"{log_prefix}Found portfolio by assets match: '{key}' for requested '{portfolio_symbol}'")
+                    return key
+        except Exception as e:
+            if user_id:
+                self.logger.warning(f"{log_prefix}Error during assets matching: {e}")
+        
+        # 3. Поиск без учета регистра
+        for key in saved_portfolios.keys():
+            if key.lower() == portfolio_symbol.lower():
+                if user_id:
+                    self.logger.info(f"{log_prefix}Found case-insensitive match: '{key}' for requested '{portfolio_symbol}'")
+                return key
+        
+        # 4. Поиск без пробелов
+        portfolio_symbol_no_spaces = portfolio_symbol.replace(' ', '')
+        for key in saved_portfolios.keys():
+            if key.replace(' ', '') == portfolio_symbol_no_spaces:
+                if user_id:
+                    self.logger.info(f"{log_prefix}Found no-spaces match: '{key}' for requested '{portfolio_symbol}'")
+                return key
+        
+        # Не найдено
+        if user_id:
+            self.logger.error(f"{log_prefix}Portfolio not found: '{portfolio_symbol}'")
+            self.logger.error(f"{log_prefix}Available portfolios: {list(saved_portfolios.keys())}")
+        
+        return None
+
     def _check_existing_portfolio(self, symbols: List[str], weights: List[float], saved_portfolios: Dict) -> Optional[str]:
         """
         Проверяет, существует ли портфель с такими же активами и пропорциями.
@@ -1467,7 +1522,7 @@ class ShansAi:
             chart_styles.cleanup_figure(fig)
             
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -1507,7 +1562,7 @@ class ShansAi:
             chart_styles.cleanup_figure(fig)
             
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -1570,7 +1625,7 @@ class ShansAi:
             chart_styles.cleanup_figure(fig)
             
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -3734,7 +3789,7 @@ class ShansAi:
                 # Chart analysis is only available via buttons
                 
                 # Create keyboard using unified function
-                reply_markup = self._create_compare_command_keyboard(symbols, currency, specified_period)
+                reply_markup = self._create_compare_command_keyboard(symbols, currency, update, specified_period)
                 
                 # Delete loading message before sending results
                 if loading_message:
@@ -5899,9 +5954,11 @@ class ShansAi:
             elif callback_data == 'efficient_frontier_compare':
                 self.logger.info("Efficient Frontier button clicked")
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif callback_data.startswith('compare_portfolio_'):
-                symbols_str = callback_data.replace('compare_portfolio_', '')
-                symbols = [self.clean_symbol(s) for s in symbols_str.split('_')]
+            elif callback_data == 'compare_portfolio':
+                # Get symbols from user context instead of callback_data to avoid size limit
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                symbols = user_context.get('compare_portfolio_symbols', [])
                 self.logger.info(f"Compare portfolio button clicked for symbols: {symbols}")
                 await self._handle_compare_portfolio_button(update, context, symbols)
             elif callback_data == 'namespace_home':
@@ -6091,7 +6148,7 @@ class ShansAi:
                     return
 
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -6217,19 +6274,19 @@ class ShansAi:
                     analysis_text += f"🔍 **Анализируемые активы:** {', '.join(proper_asset_names)}"
                     
                     # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                     await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                     
                 else:
                     error_msg = chart_analysis.get('error', 'Неизвестная ошибка') if chart_analysis else 'Анализ не выполнен'
                     # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                     await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа графика: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as chart_error:
                 self.logger.error(f"Error creating chart for analysis: {chart_error}")
                 # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown', reply_markup=keyboard)
                 
                 # Remove keyboard from previous message only after successful message creation
@@ -6238,7 +6295,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling chart analysis button: {e}")
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_efficient_frontier_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -6326,7 +6383,7 @@ class ShansAi:
                 return
 
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -6432,29 +6489,29 @@ class ShansAi:
 
                         
                         # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                         await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                     else:
                         # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                         await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                         
                 else:
                     error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
                     # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                     await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for analysis: {data_error}")
                 # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling data analysis button: {e}")
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -6514,28 +6571,28 @@ class ShansAi:
                             analysis_text += f"🤖 **AI сервис:** YandexGPT"
                             
                             # Create keyboard for compare command
-                            keyboard = self._create_compare_command_keyboard(symbols, currency)
+                            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                             await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                         else:
                             # Create keyboard for compare command
-                            keyboard = self._create_compare_command_keyboard(symbols, currency)
+                            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                             await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                     else:
                         error_msg = yandexgpt_analysis.get('error', 'Неизвестная ошибка') if yandexgpt_analysis else 'Анализ не выполнен'
                         # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                         await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных YandexGPT: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for YandexGPT analysis: {data_error}")
                 # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа YandexGPT: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling YandexGPT analysis button: {e}")
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -6564,7 +6621,7 @@ class ShansAi:
                 
                 if summary_table and not summary_table.startswith("❌"):
                     # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                     
                     # Send table as message with keyboard
                     period_text = self._format_period_for_display(specified_period)
@@ -6575,19 +6632,19 @@ class ShansAi:
                     await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown', reply_markup=keyboard)
                 else:
                     # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                     await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось создать таблицу метрик", reply_markup=keyboard)
                     
             except Exception as metrics_error:
                 self.logger.error(f"Error creating metrics table: {metrics_error}")
                 # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling metrics button: {e}")
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при обработке кнопки метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     def _get_current_timestamp(self) -> str:
@@ -8204,7 +8261,7 @@ class ShansAi:
             # Fallback to simple tabulate
             return tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
 
-    def _create_compare_command_keyboard(self, symbols: list, currency: str, specified_period: str = None) -> InlineKeyboardMarkup:
+    def _create_compare_command_keyboard(self, symbols: list, currency: str, update: Update = None, specified_period: str = None) -> InlineKeyboardMarkup:
         """Create keyboard for compare command button responses"""
         try:
             keyboard = []
@@ -8224,10 +8281,15 @@ class ShansAi:
                 InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
             ])
             
-            # Add Portfolio button - create callback data with symbols
-            symbols_str = '_'.join(symbols)
+            # Add Portfolio button - store symbols in context to avoid callback_data size limit
+            # Store symbols in user context for portfolio button
+            if update:
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                user_context['compare_portfolio_symbols'] = symbols
+            
             keyboard.append([
-                InlineKeyboardButton("💼 В Портфель", callback_data=f"compare_portfolio_{symbols_str}")
+                InlineKeyboardButton("💼 В Портфель", callback_data="compare_portfolio")
             ])
             
             # Add AI analysis buttons if services are available (only Gemini, no YandexGPT)
@@ -8767,7 +8829,7 @@ class ShansAi:
                 chart_styles.cleanup_figure(fig)
                 
                 # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
@@ -8841,7 +8903,7 @@ class ShansAi:
             caption += f"• Периоды восстановления"
             
             # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -9038,7 +9100,7 @@ class ShansAi:
                 chart_styles.cleanup_figure(fig)
                 
                 # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
@@ -9249,7 +9311,7 @@ class ShansAi:
                 chart_styles.cleanup_figure(fig)
                 
                 # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
@@ -10748,9 +10810,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -10952,9 +11020,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -11133,9 +11207,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -12508,9 +12588,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -12969,9 +13055,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -13067,9 +13159,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -13529,9 +13627,16 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
-                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
+                error_msg = f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново."
+                await self._send_callback_message(update, context, error_msg)
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -13670,9 +13775,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -13942,9 +14053,15 @@ class ShansAi:
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
@@ -14199,9 +14316,15 @@ class ShansAi:
             # Get portfolio data from saved portfolios
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            if portfolio_symbol not in saved_portfolios:
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
                 await self._send_callback_message(update, context, f"❌ Портфель {portfolio_symbol} не найден в сохраненных портфелях")
                 return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
             
             portfolio_info = saved_portfolios[portfolio_symbol]
             symbols = portfolio_info.get('symbols', [])
