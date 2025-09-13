@@ -3767,6 +3767,7 @@ class ShansAi:
                 # Add AI analysis buttons if services are available
                 ai_buttons = []
                 if self.gemini_service and self.gemini_service.is_available():
+                    ai_buttons.append(InlineKeyboardButton("🤖 AI-анализ", callback_data="comprehensive_ai_analysis_compare"))
                     ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
                 if self.yandexgpt_service and self.yandexgpt_service.is_available():
                     ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
@@ -7837,6 +7838,7 @@ class ShansAi:
             # Add AI analysis buttons if services are available
             ai_buttons = []
             if self.gemini_service and self.gemini_service.is_available():
+                ai_buttons.append(InlineKeyboardButton("🤖 AI-анализ", callback_data="comprehensive_ai_analysis_compare"))
                 ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
             if self.yandexgpt_service and self.yandexgpt_service.is_available():
                 ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
