@@ -5091,6 +5091,19 @@ class ShansAi:
         except Exception as e:
             self.logger.warning(f"Could not remove keyboard from previous message before sending new message: {e}")
 
+    async def _send_callback_message_with_keyboard_removal(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, reply_markup=None):
+        """Отправить сообщение в callback query с удалением клавиатуры с предыдущего сообщения"""
+        try:
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            # Send new message with keyboard
+            await self._send_callback_message(update, context, text, parse_mode=parse_mode, reply_markup=reply_markup)
+        except Exception as e:
+            self.logger.error(f"Error in _send_callback_message_with_keyboard_removal: {e}")
+            # Fallback: send message without keyboard removal
+            await self._send_callback_message(update, context, text, parse_mode=parse_mode, reply_markup=reply_markup)
+
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
@@ -5871,27 +5884,21 @@ class ShansAi:
                     analysis_text += f"💰 **Валюта:** {currency}\n"
                     analysis_text += f"📅 **Период:** полный доступный период данных"
                     
-                    # Remove keyboard from previous message before sending new message
-                    await self._remove_keyboard_before_new_message(update, context)
-                    
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
-                    await self._send_callback_message(update, context,                     )
+                    await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                     
                 else:
                     error_msg = chart_analysis.get('error', 'Неизвестная ошибка') if chart_analysis else 'Анализ не выполнен'
-                    # Remove keyboard from previous message before sending new message
-                    await self._remove_keyboard_before_new_message(update, context)
-                    
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
-                    await self._send_callback_message(update, context,                     )
+                    await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа графика: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as chart_error:
                 self.logger.error(f"Error creating chart for analysis: {chart_error}")
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
-                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown', reply_markup=keyboard)
                 
                 # Remove keyboard from previous message only after successful message creation
                 await self._remove_keyboard_after_successful_message(update, context)
@@ -5900,7 +5907,7 @@ class ShansAi:
             self.logger.error(f"Error handling chart analysis button: {e}")
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_efficient_frontier_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Efficient Frontier button for all comparison types"""
@@ -6055,43 +6062,31 @@ class ShansAi:
                         analysis_text += f"📅 **Период:** полный доступный период данных\n"
                         analysis_text += f"📊 **Тип анализа:** Данные (не изображение)"
                         
-                        # Remove keyboard from previous message before sending new message
-                        await self._remove_keyboard_before_new_message(update, context)
-                        
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
-                        await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                     else:
-                        # Remove keyboard from previous message before sending new message
-                        await self._remove_keyboard_before_new_message(update, context)
-                        
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
-                        await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                         
                 else:
                     error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
-                    # Remove keyboard from previous message before sending new message
-                    await self._remove_keyboard_before_new_message(update, context)
-                    
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
-                    await self._send_callback_message(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
+                    await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for analysis: {data_error}")
-                # Remove keyboard from previous message before sending new message
-                await self._remove_keyboard_before_new_message(update, context)
-                
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
-                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling data analysis button: {e}")
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle YandexGPT analysis button click for comparison charts"""
@@ -6145,36 +6140,30 @@ class ShansAi:
                             analysis_text += f"📅 **Период:** полный доступный период данных\n"
                             analysis_text += f"🤖 **AI сервис:** YandexGPT"
                             
-                            # Remove keyboard from previous message before sending new message
-                            await self._remove_keyboard_before_new_message(update, context)
-                            
                             # Create keyboard for compare command
                             keyboard = self._create_compare_command_keyboard(symbols, currency)
-                            await self._send_callback_message(update, context,                             )
+                            await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                         else:
-                            # Remove keyboard from previous message before sending new message
-                            await self._remove_keyboard_before_new_message(update, context)
-                            
                             # Create keyboard for compare command
                             keyboard = self._create_compare_command_keyboard(symbols, currency)
-                            await self._send_callback_message(update, context,                             )
+                            await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                     else:
                         error_msg = yandexgpt_analysis.get('error', 'Неизвестная ошибка') if yandexgpt_analysis else 'Анализ не выполнен'
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
-                        await self._send_callback_message(update, context, f"❌ Ошибка анализа данных YandexGPT: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных YandexGPT: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for YandexGPT analysis: {data_error}")
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
-                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа YandexGPT: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа YandexGPT: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling YandexGPT analysis button: {e}")
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle metrics button click for comparison charts - export detailed statistics to Excel"""
@@ -6228,31 +6217,25 @@ class ShansAi:
                             reply_markup=keyboard
                         )
                     else:
-                        # Remove keyboard from previous message before sending new message
-                        await self._remove_keyboard_before_new_message(update, context)
-                        
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
-                        await self._send_callback_message(update, context,                         )
+                        await self._send_callback_message_with_keyboard_removal(update, context, "❌ Ошибка при создании Excel файла", reply_markup=keyboard)
                 else:
-                    # Remove keyboard from previous message before sending new message
-                    await self._remove_keyboard_before_new_message(update, context)
-                    
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
-                    await self._send_callback_message(update, context,                     )
+                    await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось подготовить данные для экспорта", reply_markup=keyboard)
                     
             except Exception as metrics_error:
                 self.logger.error(f"Error preparing metrics data: {metrics_error}")
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
-                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling metrics button: {e}")
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
-            await self._send_callback_message(update, context, f"❌ Ошибка при экспорте метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при экспорте метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
