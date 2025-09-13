@@ -3754,10 +3754,6 @@ class ShansAi:
                     InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare")
                     ])
 
-                # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
-                keyboard.append([
-                    InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
-                ])
                 
                 # Add Efficient Frontier button for all comparisons
                 keyboard.append([
@@ -3767,7 +3763,6 @@ class ShansAi:
                 # Add AI analysis buttons if services are available
                 ai_buttons = []
                 if self.gemini_service and self.gemini_service.is_available():
-                    ai_buttons.append(InlineKeyboardButton("🤖 AI-анализ", callback_data="comprehensive_ai_analysis_compare"))
                     ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
                 if self.yandexgpt_service and self.yandexgpt_service.is_available():
                     ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
@@ -5641,21 +5636,9 @@ class ShansAi:
             elif callback_data == 'clear_all_portfolios':
                 self.logger.info("Clear all portfolios button clicked")
                 await self._handle_clear_all_portfolios_button(update, context)
-            elif callback_data == 'compare_risk_return':
-                self.logger.info("Compare Risk / Return button clicked")
-                await self._handle_risk_return_compare_button(update, context)
-            elif callback_data == 'risk_return_compare':
-                self.logger.info("Risk / Return button clicked")
-                await self._handle_risk_return_compare_button(update, context)
             elif callback_data == 'chart_analysis_compare':
                 self.logger.info("Chart analysis button clicked")
                 await self._handle_chart_analysis_compare_button(update, context)
-            elif callback_data == 'data_analysis_compare':
-                self.logger.info("Data analysis button clicked")
-                await self._handle_data_analysis_compare_button(update, context)
-            elif callback_data == 'yandexgpt_analysis_compare':
-                self.logger.info("YandexGPT analysis button clicked")
-                await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif callback_data == 'metrics_compare':
                 self.logger.info("Metrics button clicked")
                 await self._handle_metrics_compare_button(update, context)
@@ -5954,11 +5937,21 @@ class ShansAi:
                     
                     # Gemini provides comprehensive analysis, no need for additional sections
                     
-                    # Use asset_names if available, otherwise fallback to symbols
-                    display_assets = asset_names if asset_names else symbols
-                    analysis_text += f"🔍 **Анализируемые активы:** {', '.join(display_assets)}\n"
-                    analysis_text += f"💰 **Валюта:** {currency}\n"
-                    analysis_text += f"📅 **Период:** полный доступный период данных"
+                    # Use proper portfolio names from portfolio_contexts
+                    proper_asset_names = []
+                    for i, symbol in enumerate(symbols):
+                        if i < len(portfolio_contexts):
+                            pctx = portfolio_contexts[i]
+                            if 'original_portfolio_symbol' in pctx:
+                                # This is a portfolio - use original portfolio symbol
+                                proper_asset_names.append(pctx['original_portfolio_symbol'])
+                            else:
+                                # This is a regular asset
+                                proper_asset_names.append(symbol)
+                        else:
+                            proper_asset_names.append(symbol)
+                    
+                    analysis_text += f"🔍 **Анализируемые активы:** {', '.join(proper_asset_names)}"
                     
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
@@ -6580,254 +6573,254 @@ class ShansAi:
             
             # Calculate detailed performance metrics for each symbol
             for i, symbol in enumerate(symbols):
-                try:
-                    if i < len(expanded_symbols):
-                        asset_data = expanded_symbols[i]
-                        
-                        # Get asset name
-                        asset_name = symbol  # Default to symbol
-                        try:
-                            if hasattr(asset_data, 'name') and asset_data.name:
-                                asset_name = asset_data.name
-                            elif hasattr(asset_data, 'symbol') and asset_data.symbol:
-                                asset_name = asset_data.symbol
-                        except Exception as e:
-                            self.logger.warning(f"Failed to get asset name for {symbol}: {e}")
-                        
-                        data_info['asset_names'][symbol] = asset_name
-                        
-                        # Get comprehensive performance metrics
-                        performance_metrics = {}
-                        
-                        # Calculate metrics from price data
-                        try:
-                            # Get price data for calculations
-                            if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
-                                prices = asset_data.close_monthly
-                                data_type = "monthly"
-                            elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
-                                prices = asset_data.close_daily
-                                data_type = "daily"
-                            elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
-                                prices = asset_data.adj_close
-                                data_type = "adjusted"
-                            else:
-                                prices = None
-                                data_type = "none"
-                            
-                            self.logger.info(f"Data preparation for {symbol}: type={data_type}, prices_length={len(prices) if prices is not None else 0}")
-                            
-                            if prices is not None and len(prices) > 1:
-                                # Calculate returns from prices
-                                returns = prices.pct_change().dropna()
-                                
-                                # Basic metrics
-                                if hasattr(asset_data, 'total_return'):
-                                    performance_metrics['total_return'] = asset_data.total_return
-                                else:
-                                    # Calculate total return from first and last price
-                                    total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
-                                    performance_metrics['total_return'] = total_return
-                                
-                                # Annual return (CAGR)
-                                if hasattr(asset_data, 'annual_return'):
-                                    performance_metrics['annual_return'] = asset_data.annual_return
-                                else:
-                                    # Calculate CAGR based on data frequency
-                                    periods = len(prices)
-                                    
-                                    # Determine data frequency and calculate years accordingly
-                                    if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
-                                        # Monthly data
-                                        years = periods / 12.0
-                                    elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
-                                        # Daily data - use 252 trading days per year
-                                        years = periods / 252.0
-                                    else:
-                                        # Default to monthly assumption
-                                        years = periods / 12.0
-                                    
-                                    if years > 0:
-                                        cagr = ((prices.iloc[-1] / prices.iloc[0]) ** (1.0 / years)) - 1
-                                        performance_metrics['annual_return'] = cagr
-                                        self.logger.info(f"CAGR calculation for {symbol}: periods={periods}, years={years:.2f}, cagr={cagr:.4f}")
-                                    else:
-                                        performance_metrics['annual_return'] = 0.0
-                                        self.logger.warning(f"CAGR calculation failed for {symbol}: years={years}")
-                                
-                                # Volatility
-                                if hasattr(asset_data, 'volatility'):
-                                    performance_metrics['volatility'] = asset_data.volatility
-                                else:
-                                    # Calculate annualized volatility based on data frequency
-                                    if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
-                                        # Monthly data - annualize by sqrt(12)
-                                        volatility = returns.std() * (12 ** 0.5)
-                                    elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
-                                        # Daily data - annualize by sqrt(252)
-                                        volatility = returns.std() * (252 ** 0.5)
-                                    else:
-                                        # Default to monthly assumption
-                                        volatility = returns.std() * (12 ** 0.5)
-                                    
-                                    performance_metrics['volatility'] = volatility
-                                    self.logger.info(f"Volatility calculation for {symbol}: data_type={data_type}, volatility={volatility:.4f}")
-                                
-                                # Max drawdown
-                                if hasattr(asset_data, 'max_drawdown'):
-                                    performance_metrics['max_drawdown'] = asset_data.max_drawdown
-                                else:
-                                    # Calculate max drawdown
-                                    cumulative = (1 + returns).cumprod()
-                                    running_max = cumulative.expanding().max()
-                                    drawdown = (cumulative - running_max) / running_max
-                                    max_drawdown = drawdown.min()
-                                    performance_metrics['max_drawdown'] = max_drawdown
-                                
-                                # Store returns for Sortino calculation
-                                performance_metrics['_returns'] = returns
-                                
-                            else:
-                                # Fallback values if no price data
-                                performance_metrics['total_return'] = 0.0
-                                performance_metrics['annual_return'] = 0.0
-                                performance_metrics['volatility'] = 0.0
-                                performance_metrics['max_drawdown'] = 0.0
-                                performance_metrics['_returns'] = None
-                        
-                        except Exception as e:
-                            self.logger.warning(f"Failed to calculate basic metrics for {symbol}: {e}")
-                            performance_metrics['total_return'] = 0.0
-                            performance_metrics['annual_return'] = 0.0
-                            performance_metrics['volatility'] = 0.0
-                            performance_metrics['max_drawdown'] = 0.0
-                            performance_metrics['_returns'] = None
-                        
-                        # Sharpe ratio calculation
-                        try:
-                            annual_return = performance_metrics.get('annual_return', 0)
-                            volatility = performance_metrics.get('volatility', 0)
-                            sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=asset_data)
-                            performance_metrics['sharpe_ratio'] = sharpe_ratio
-                        except Exception as e:
-                            self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
-                            performance_metrics['sharpe_ratio'] = 0.0
-                        
-                        # Sortino ratio calculation
-                        try:
-                            if hasattr(asset_data, 'sortino_ratio'):
-                                performance_metrics['sortino_ratio'] = asset_data.sortino_ratio
-                            else:
-                                # Manual Sortino ratio calculation
-                                annual_return = performance_metrics.get('annual_return', 0)
-                                returns = performance_metrics.get('_returns')
-                                
-                                if returns is not None and len(returns) > 0:
-                                    # Calculate downside deviation (only negative returns)
-                                    negative_returns = returns[returns < 0]
-                                    if len(negative_returns) > 0:
-                                        # Annualize downside deviation based on data frequency
-                                        if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
-                                            # Monthly data - annualize by sqrt(12)
-                                            downside_deviation = negative_returns.std() * (12 ** 0.5)
-                                        elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
-                                            # Daily data - annualize by sqrt(252)
-                                            downside_deviation = negative_returns.std() * (252 ** 0.5)
-                                        else:
-                                            # Default to monthly assumption
-                                            downside_deviation = negative_returns.std() * (12 ** 0.5)
-                                        
-                                        if downside_deviation > 0:
-                                            sortino_ratio = (annual_return - 0.02) / downside_deviation
-                                            performance_metrics['sortino_ratio'] = sortino_ratio
-                                        else:
-                                            performance_metrics['sortino_ratio'] = 0.0
-                                    else:
-                                        # No negative returns, use volatility as fallback
-                                        volatility = performance_metrics.get('volatility', 0)
-                                        if volatility > 0:
-                                            sortino_ratio = (annual_return - 0.02) / volatility
-                                            performance_metrics['sortino_ratio'] = sortino_ratio
-                                        else:
-                                            performance_metrics['sortino_ratio'] = 0.0
-                                else:
-                                    # Fallback to Sharpe ratio if no returns data
-                                    performance_metrics['sortino_ratio'] = performance_metrics.get('sharpe_ratio', 0.0)
-                        except Exception as e:
-                            self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
-                            performance_metrics['sortino_ratio'] = 0.0
-                        
-                        # Additional metrics calculation
-                        try:
-                            # Calmar Ratio = Annual Return / Max Drawdown (absolute value)
-                            annual_return = performance_metrics.get('annual_return', 0)
-                            max_drawdown = performance_metrics.get('max_drawdown', 0)
-                            if max_drawdown != 0:
-                                calmar_ratio = annual_return / abs(max_drawdown)
-                                performance_metrics['calmar_ratio'] = calmar_ratio
-                                self.logger.info(f"Calmar ratio for {symbol}: {calmar_ratio:.4f}")
-                            else:
-                                performance_metrics['calmar_ratio'] = 0.0
-                            
-                            # VaR 95% and CVaR 95% calculation
-                            returns = performance_metrics.get('_returns')
-                            if returns is not None and len(returns) > 0:
-                                # VaR 95% - 5th percentile of returns (worst 5% of returns)
-                                var_95 = returns.quantile(0.05)
-                                performance_metrics['var_95'] = var_95
-                                
-                                # CVaR 95% - Expected value of returns below VaR 95%
-                                returns_below_var = returns[returns <= var_95]
-                                if len(returns_below_var) > 0:
-                                    cvar_95 = returns_below_var.mean()
-                                    performance_metrics['cvar_95'] = cvar_95
-                                else:
-                                    performance_metrics['cvar_95'] = var_95
-                                
-                                self.logger.info(f"VaR 95% for {symbol}: {var_95:.4f}, CVaR 95%: {performance_metrics['cvar_95']:.4f}")
-                            else:
-                                performance_metrics['var_95'] = 0.0
-                                performance_metrics['cvar_95'] = 0.0
-                                
-                        except Exception as e:
-                            self.logger.warning(f"Failed to calculate additional metrics for {symbol}: {e}")
-                            performance_metrics['calmar_ratio'] = 0.0
-                            performance_metrics['var_95'] = 0.0
-                            performance_metrics['cvar_95'] = 0.0
-                        
-                        # Clean up temporary data
-                        if '_returns' in performance_metrics:
-                            del performance_metrics['_returns']
-                        
-                        data_info['performance'][symbol] = performance_metrics
-                        
+                asset_data = None
+                
+                if i < len(expanded_symbols):
+                    expanded_item = expanded_symbols[i]
+                    
+                    # Check if this is a portfolio (DataFrame/Series) or a regular asset (string)
+                    if isinstance(expanded_item, (pd.Series, pd.DataFrame)):
+                        # This is a portfolio - use the portfolio object from context
+                        if i < len(portfolio_contexts):
+                            portfolio_context = portfolio_contexts[i]
+                            asset_data = portfolio_context.get('portfolio_object')
                     else:
-                        # Fallback for missing data
-                            data_info['performance'][symbol] = {
-                            'total_return': 0,
-                            'annual_return': 0,
-                            'volatility': 0,
-                            'sharpe_ratio': 0,
-                            'sortino_ratio': 0,
-                            'max_drawdown': 0,
-                            'calmar_ratio': 0,
-                            'var_95': 0,
-                            'cvar_95': 0
-                            }
+                        # This is a regular asset symbol - create Asset object
+                        try:
+                            asset_data = ok.Asset(symbol)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to create Asset object for {symbol}: {e}")
+                            asset_data = None
+                
+                # Fallback: try to create Asset from symbol if we don't have asset_data
+                if asset_data is None:
+                    try:
+                        asset_data = ok.Asset(symbol)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to create Asset object for {symbol}: {e}")
+                        asset_data = None
+                
+                # Get asset name
+                asset_name = symbol  # Default to symbol
+                if asset_data is not None:
+                    try:
+                        if hasattr(asset_data, 'name') and asset_data.name:
+                            asset_name = asset_data.name
+                        elif hasattr(asset_data, 'symbol') and asset_data.symbol:
+                            asset_name = asset_data.symbol
+                    except Exception as e:
+                        self.logger.warning(f"Failed to get asset name for {symbol}: {e}")
+                
+                data_info['asset_names'][symbol] = asset_name
+                
+                # Get comprehensive performance metrics
+                performance_metrics = {}
+                
+                # Calculate metrics from price data
+                try:
+                    # Get price data for calculations
+                    if asset_data is not None:
+                        if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                            prices = asset_data.close_monthly
+                            data_type = "monthly"
+                        elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                            prices = asset_data.close_daily
+                            data_type = "daily"
+                        elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
+                            prices = asset_data.adj_close
+                            data_type = "adjusted"
+                        else:
+                            prices = None
+                            data_type = "none"
+                    else:
+                        prices = None
+                        data_type = "none"
+                    
+                    self.logger.info(f"Data preparation for {symbol}: type={data_type}, prices_length={len(prices) if prices is not None else 0}")
+                    
+                    if prices is not None and len(prices) > 1:
+                        # Calculate returns from prices
+                        returns = prices.pct_change().dropna()
+                        
+                        # Basic metrics
+                        if asset_data is not None and hasattr(asset_data, 'total_return'):
+                            performance_metrics['total_return'] = asset_data.total_return
+                        else:
+                            # Calculate total return from first and last price
+                            total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
+                            performance_metrics['total_return'] = total_return
+                        
+                        # Annual return (CAGR)
+                        if asset_data is not None and hasattr(asset_data, 'annual_return'):
+                            performance_metrics['annual_return'] = asset_data.annual_return
+                        else:
+                            # Calculate CAGR based on data frequency
+                            periods = len(prices)
                             
+                            # Determine data frequency and calculate years accordingly
+                            if asset_data is not None and hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                # Monthly data
+                                years = periods / 12.0
+                            elif asset_data is not None and hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                # Daily data - use 252 trading days per year
+                                years = periods / 252.0
+                            else:
+                                # Default to monthly assumption
+                                years = periods / 12.0
+                            
+                            if years > 0:
+                                cagr = ((prices.iloc[-1] / prices.iloc[0]) ** (1.0 / years)) - 1
+                                performance_metrics['annual_return'] = cagr
+                                self.logger.info(f"CAGR calculation for {symbol}: periods={periods}, years={years:.2f}, cagr={cagr:.4f}")
+                            else:
+                                performance_metrics['annual_return'] = 0.0
+                                self.logger.warning(f"CAGR calculation failed for {symbol}: years={years}")
+                        
+                        # Volatility
+                        if asset_data is not None and hasattr(asset_data, 'volatility'):
+                            performance_metrics['volatility'] = asset_data.volatility
+                        else:
+                            # Calculate annualized volatility based on data frequency
+                            if asset_data is not None and hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                # Monthly data - annualize by sqrt(12)
+                                volatility = returns.std() * (12 ** 0.5)
+                            elif asset_data is not None and hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                # Daily data - annualize by sqrt(252)
+                                volatility = returns.std() * (252 ** 0.5)
+                            else:
+                                # Default to monthly assumption
+                                volatility = returns.std() * (12 ** 0.5)
+                            
+                            performance_metrics['volatility'] = volatility
+                            self.logger.info(f"Volatility calculation for {symbol}: data_type={data_type}, volatility={volatility:.4f}")
+                        
+                        # Max drawdown
+                        if asset_data is not None and hasattr(asset_data, 'max_drawdown'):
+                            performance_metrics['max_drawdown'] = asset_data.max_drawdown
+                        else:
+                            # Calculate max drawdown
+                            cumulative = (1 + returns).cumprod()
+                            running_max = cumulative.expanding().max()
+                            drawdown = (cumulative - running_max) / running_max
+                            max_drawdown = drawdown.min()
+                            performance_metrics['max_drawdown'] = max_drawdown
+                        
+                        # Store returns for Sortino calculation
+                        performance_metrics['_returns'] = returns
+                    
+                    else:
+                        # Fallback values if no price data
+                        performance_metrics['total_return'] = 0.0
+                        performance_metrics['annual_return'] = 0.0
+                        performance_metrics['volatility'] = 0.0
+                        performance_metrics['max_drawdown'] = 0.0
+                        performance_metrics['_returns'] = None
+                
                 except Exception as e:
-                    self.logger.warning(f"Failed to get performance metrics for {symbol}: {e}")
-                    data_info['performance'][symbol] = {
-                        'total_return': 0,
-                        'annual_return': 0,
-                        'volatility': 0,
-                        'sharpe_ratio': 0,
-                        'sortino_ratio': 0,
-                        'max_drawdown': 0,
-                        'calmar_ratio': 0,
-                        'var_95': 0,
-                        'cvar_95': 0
-                    }
+                    self.logger.warning(f"Failed to calculate basic metrics for {symbol}: {e}")
+                    performance_metrics['total_return'] = 0.0
+                    performance_metrics['annual_return'] = 0.0
+                    performance_metrics['volatility'] = 0.0
+                    performance_metrics['max_drawdown'] = 0.0
+                    performance_metrics['_returns'] = None
+                
+                # Sharpe ratio calculation
+                try:
+                    annual_return = performance_metrics.get('annual_return', 0)
+                    volatility = performance_metrics.get('volatility', 0)
+                    sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=asset_data)
+                    performance_metrics['sharpe_ratio'] = sharpe_ratio
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
+                    performance_metrics['sharpe_ratio'] = 0.0
+                
+                # Sortino ratio calculation
+                try:
+                    if asset_data is not None and hasattr(asset_data, 'sortino_ratio'):
+                        performance_metrics['sortino_ratio'] = asset_data.sortino_ratio
+                    else:
+                        # Manual Sortino ratio calculation
+                        annual_return = performance_metrics.get('annual_return', 0)
+                        returns = performance_metrics.get('_returns')
+                        
+                        if returns is not None and len(returns) > 0:
+                            # Calculate downside deviation (only negative returns)
+                            negative_returns = returns[returns < 0]
+                            if len(negative_returns) > 0:
+                                # Annualize downside deviation based on data frequency
+                                if asset_data is not None and hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                                    # Monthly data - annualize by sqrt(12)
+                                    downside_deviation = negative_returns.std() * (12 ** 0.5)
+                                elif asset_data is not None and hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                    # Daily data - annualize by sqrt(252)
+                                    downside_deviation = negative_returns.std() * (252 ** 0.5)
+                                else:
+                                    # Default to monthly assumption
+                                    downside_deviation = negative_returns.std() * (12 ** 0.5)
+                                
+                                if downside_deviation > 0:
+                                    sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                    performance_metrics['sortino_ratio'] = sortino_ratio
+                                else:
+                                    performance_metrics['sortino_ratio'] = 0.0
+                            else:
+                                # No negative returns, use volatility as fallback
+                                volatility = performance_metrics.get('volatility', 0)
+                                if volatility > 0:
+                                    sortino_ratio = (annual_return - 0.02) / volatility
+                                    performance_metrics['sortino_ratio'] = sortino_ratio
+                                else:
+                                    performance_metrics['sortino_ratio'] = 0.0
+                        else:
+                            # Fallback to Sharpe ratio if no returns data
+                            performance_metrics['sortino_ratio'] = performance_metrics.get('sharpe_ratio', 0.0)
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
+                    performance_metrics['sortino_ratio'] = 0.0
+                
+                # Additional metrics calculation
+                try:
+                    # Calmar Ratio = Annual Return / Max Drawdown (absolute value)
+                    annual_return = performance_metrics.get('annual_return', 0)
+                    max_drawdown = performance_metrics.get('max_drawdown', 0)
+                    if max_drawdown != 0:
+                        calmar_ratio = annual_return / abs(max_drawdown)
+                        performance_metrics['calmar_ratio'] = calmar_ratio
+                        self.logger.info(f"Calmar ratio for {symbol}: {calmar_ratio:.4f}")
+                    else:
+                        performance_metrics['calmar_ratio'] = 0.0
+                    
+                    # VaR 95% and CVaR 95% calculation
+                    returns = performance_metrics.get('_returns')
+                    if returns is not None and len(returns) > 0:
+                        # VaR 95% - 5th percentile of returns (worst 5% of returns)
+                        var_95 = returns.quantile(0.05)
+                        performance_metrics['var_95'] = var_95
+                        
+                        # CVaR 95% - Expected value of returns below VaR 95%
+                        returns_below_var = returns[returns <= var_95]
+                        if len(returns_below_var) > 0:
+                            cvar_95 = returns_below_var.mean()
+                            performance_metrics['cvar_95'] = cvar_95
+                        else:
+                            performance_metrics['cvar_95'] = var_95
+                        
+                        self.logger.info(f"VaR 95% for {symbol}: {var_95:.4f}, CVaR 95%: {performance_metrics['cvar_95']:.4f}")
+                    else:
+                        performance_metrics['var_95'] = 0.0
+                        performance_metrics['cvar_95'] = 0.0
+                        
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate additional metrics for {symbol}: {e}")
+                    performance_metrics['calmar_ratio'] = 0.0
+                    performance_metrics['var_95'] = 0.0
+                    performance_metrics['cvar_95'] = 0.0
+                
+                # Clean up temporary data
+                if '_returns' in performance_metrics:
+                    del performance_metrics['_returns']
+                
+                data_info['performance'][symbol] = performance_metrics
             
             # Calculate correlation matrix if we have multiple assets
             if len(expanded_symbols) > 1:
@@ -7838,7 +7831,6 @@ class ShansAi:
             # Add AI analysis buttons if services are available
             ai_buttons = []
             if self.gemini_service and self.gemini_service.is_available():
-                ai_buttons.append(InlineKeyboardButton("🤖 AI-анализ", callback_data="comprehensive_ai_analysis_compare"))
                 ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
             if self.yandexgpt_service and self.yandexgpt_service.is_available():
                 ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
@@ -8734,6 +8726,10 @@ class ShansAi:
             portfolio_contexts = user_context.get('portfolio_contexts', [])
             expanded_symbols = user_context.get('expanded_symbols', [])
             
+            self.logger.info(f"Portfolio contexts: {len(portfolio_contexts)}")
+            self.logger.info(f"Expanded symbols: {len(expanded_symbols)}")
+            self.logger.info(f"Expanded symbols types: {[type(s).__name__ for s in expanded_symbols]}")
+            
             # Separate portfolios and individual assets using expanded_symbols
             portfolio_data = []
             asset_symbols = []
@@ -8742,14 +8738,19 @@ class ShansAi:
                 if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is a portfolio wealth index
                     portfolio_data.append(expanded_symbol)
+                    self.logger.info(f"Found portfolio data at index {i}: {type(expanded_symbol).__name__}")
                 else:
                     # This is an individual asset symbol
                     asset_symbols.append(expanded_symbol)
+                    self.logger.info(f"Found asset symbol at index {i}: {expanded_symbol}")
+            
+            self.logger.info(f"Separated into {len(portfolio_data)} portfolios and {len(asset_symbols)} assets")
             
             # Calculate correlation data for all items
             correlation_data = {}
             
             # Process portfolios separately to avoid AssetList creation issues
+            self.logger.info(f"Processing {len(portfolio_contexts)} portfolio contexts")
             for i, portfolio_context in enumerate(portfolio_contexts):
                 if i < len(portfolio_data):
                     try:
@@ -8812,7 +8813,20 @@ class ShansAi:
             
             if len(correlation_data) < 2:
                 self.logger.warning(f"Not enough correlation data: {len(correlation_data)}")
-                await self._send_callback_message(update, context, "❌ Недостаточно данных для создания корреляционной матрицы")
+                self.logger.warning(f"Available correlation data keys: {list(correlation_data.keys())}")
+                self.logger.warning(f"Portfolio contexts count: {len(portfolio_contexts)}")
+                self.logger.warning(f"Asset symbols count: {len(asset_symbols)}")
+                self.logger.warning(f"Expanded symbols count: {len(expanded_symbols)}")
+                
+                # Provide more specific error message
+                if len(correlation_data) == 0:
+                    error_msg = "❌ Не удалось получить данные о доходности для создания корреляционной матрицы"
+                elif len(correlation_data) == 1:
+                    error_msg = f"❌ Недостаточно данных для корреляционной матрицы (только {list(correlation_data.keys())[0]}). Нужно минимум 2 актива."
+                else:
+                    error_msg = "❌ Недостаточно данных для создания корреляционной матрицы"
+                
+                await self._send_callback_message(update, context, error_msg)
                 return
             
             # Create correlation matrix
