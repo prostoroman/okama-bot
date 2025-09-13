@@ -152,3 +152,4 @@ def fix_keyboard_removal_issues():
 
 if __name__ == "__main__":
     fix_keyboard_removal_issues()
+
