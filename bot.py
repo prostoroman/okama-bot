@@ -3718,7 +3718,8 @@ class ShansAi:
                     photo_bytes=img_bytes,
                     caption=self._truncate_caption(caption),
                     reply_markup=reply_markup,
-                    context=context
+                    context=context,
+                    parse_mode='HTML'  # Try HTML instead of Markdown for better compatibility
                 )
                 
                 # Table statistics now available via Metrics button
@@ -7223,26 +7224,29 @@ class ShansAi:
             return tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
 
     def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str, summary_table: str) -> str:
-        """Create enhanced chart caption with markdown formatting"""
+        """Create enhanced chart caption with HTML formatting for better Telegram compatibility"""
         try:
             # Create chart title section
-            chart_title = f"📈 **График накопленной доходности**"
+            chart_title = f"📈 <b>График накопленной доходности</b>"
             
             # Create assets info section
-            assets_info = f"**Активы:** {', '.join(symbols)}"
+            assets_info = f"<b>Активы:</b> {', '.join(symbols)}"
             
             # Create currency info section
-            currency_info = f"**Валюта:** {currency}"
+            currency_info = f"<b>Валюта:</b> {currency}"
             
             # Create period info section if specified
             period_info = ""
             if specified_period:
-                period_info = f"**Период:** {specified_period}"
+                period_info = f"<b>Период:</b> {specified_period}"
             
             # Create summary section
-            summary_section = f"📊 **Сводная таблица ключевых метрик**"
+            summary_section = f"📊 <b>Сводная таблица ключевых метрик</b>"
             
-            # Combine all sections with proper markdown formatting
+            # Convert markdown table to HTML table
+            html_table = self._convert_markdown_table_to_html(summary_table)
+            
+            # Combine all sections with proper HTML formatting
             caption_parts = [
                 chart_title,
                 "",
@@ -7257,7 +7261,7 @@ class ShansAi:
                 "",
                 summary_section,
                 "",
-                summary_table
+                html_table
             ])
             
             return "\n".join(caption_parts)
@@ -7265,7 +7269,57 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating enhanced chart caption: {e}")
             # Fallback to simple caption
-            return f"📊 **Сводная таблица ключевых метрик**\n\n{summary_table}"
+            return f"📊 <b>Сводная таблица ключевых метрик</b>\n\n{summary_table}"
+
+    def _convert_markdown_table_to_html(self, markdown_table: str) -> str:
+        """Convert markdown table to HTML table for better Telegram compatibility"""
+        try:
+            lines = markdown_table.strip().split('\n')
+            if len(lines) < 3:  # Need at least header, separator, and one data row
+                return markdown_table
+            
+            # Parse header
+            header_line = lines[0]
+            headers = [cell.strip() for cell in header_line.split('|')[1:-1]]  # Remove empty first/last elements
+            
+            # Parse data rows (skip separator line)
+            data_rows = []
+            for line in lines[2:]:  # Skip header and separator
+                if line.strip():
+                    cells = [cell.strip() for cell in line.split('|')[1:-1]]  # Remove empty first/last elements
+                    data_rows.append(cells)
+            
+            # Build HTML table
+            html_lines = []
+            
+            # Table header
+            html_lines.append("<table>")
+            html_lines.append("<tr>")
+            for header in headers:
+                html_lines.append(f"<th>{header}</th>")
+            html_lines.append("</tr>")
+            
+            # Data rows
+            for row in data_rows:
+                html_lines.append("<tr>")
+                for i, cell in enumerate(row):
+                    # First column (metric names) - bold
+                    if i == 0:
+                        # Remove ** from markdown bold formatting
+                        clean_cell = cell.replace('**', '')
+                        html_lines.append(f"<td><b>{clean_cell}</b></td>")
+                    else:
+                        html_lines.append(f"<td>{cell}</td>")
+                html_lines.append("</tr>")
+            
+            html_lines.append("</table>")
+            
+            return '\n'.join(html_lines)
+            
+        except Exception as e:
+            self.logger.error(f"Error converting markdown table to HTML: {e}")
+            # Fallback to original markdown table
+            return markdown_table
 
     def _create_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
         """Create Excel file with comprehensive metrics"""
@@ -8610,14 +8664,15 @@ class ShansAi:
             
             if 'error' not in dividend_info:
                 dividends = dividend_info.get('dividends')
-                if dividends is not None:
-                    currency = dividend_info.get('currency', '')
+                currency = dividend_info.get('currency', '')
                 
                 # Проверяем, что дивиденды не пустые (исправляем проблему с pandas Series)
-                if isinstance(dividends, pd.Series):
-                    has_dividends = not dividends.empty and dividends.size > 0
-                else:
-                    has_dividends = bool(dividends) and len(dividends) > 0
+                has_dividends = False
+                if dividends is not None:
+                    if isinstance(dividends, pd.Series):
+                        has_dividends = not dividends.empty and dividends.size > 0
+                    else:
+                        has_dividends = bool(dividends) and len(dividends) > 0
                 
                 if has_dividends:
                     # Получаем график дивидендов
@@ -8631,9 +8686,9 @@ class ShansAi:
                     else:
                         await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен")
                 else:
-                    await self._send_callback_message(update, context, "💵 Дивиденды не выплачивались в указанный период")
+                    await self._send_callback_message(update, context, f"💵 Дивиденды по активу {symbol} не найдены")
             else:
-                await self._send_callback_message(update, context, "💵 Информация о дивидендах недоступна")
+                await self._send_callback_message(update, context, f"💵 Информация о дивидендах по активу {symbol} недоступна")
                 
         except Exception as e:
             self.logger.error(f"Error handling dividends button: {e}")
