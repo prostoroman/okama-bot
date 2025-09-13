@@ -288,10 +288,17 @@ class GeminiService:
 
 4. **ИНВЕСТИЦИОННЫЕ РЕКОМЕНДАЦИИ:**
    - Дай конкретные рекомендации по каждому активу
-   - Предложи оптимальные веса для портфеля
+   - Предложи оптимальные веса для портфеля на основе эффективной границы
    - Укажи подходящие стратегии использования
+   - Проанализируй данные эффективной границы и дай рекомендации по весам активов
 
-5. **СИЛЬНЫЕ И СЛАБЫЕ СТОРОНЫ:**
+5. **АНАЛИЗ ЭФФЕКТИВНОЙ ГРАНИЦЫ (если доступно):**
+   - Проанализируй данные эффективной границы из okama
+   - Сравни портфели минимального риска, максимальной доходности и максимального коэффициента Шарпа
+   - Дай рекомендации по оптимальному распределению весов активов
+   - Объясни, какой портфель лучше подходит для разных типов инвесторов
+
+6. **СИЛЬНЫЕ И СЛАБЫЕ СТОРОНЫ:**
    - Выдели преимущества каждого актива
    - Укажи на недостатки и риски
    - Предложи способы минимизации рисков
@@ -497,6 +504,53 @@ class GeminiService:
                         
                         description_parts.append(f"  • {name1} ↔ {name2}: {corr:.3f}")
         
+        # Efficient frontier data
+        if 'efficient_frontier' in data_info and data_info['efficient_frontier']:
+            ef_data = data_info['efficient_frontier']
+            description_parts.append("\n**📈 ДАННЫЕ ЭФФЕКТИВНОЙ ГРАНИЦЫ (okama.EfficientFrontier):**")
+            description_parts.append(f"**Валюта:** {ef_data.get('currency', 'USD')}")
+            description_parts.append(f"**Активы:** {', '.join(ef_data.get('asset_names', []))}")
+            
+            # Min risk portfolio
+            min_risk = ef_data.get('min_risk_portfolio', {})
+            if min_risk.get('risk') is not None and min_risk.get('return') is not None:
+                description_parts.append(f"\n**🎯 ПОРТФЕЛЬ МИНИМАЛЬНОГО РИСКА:**")
+                description_parts.append(f"  • Риск: {min_risk['risk']:.2%}")
+                description_parts.append(f"  • Доходность: {min_risk['return']:.2%}")
+                if min_risk.get('weights'):
+                    weights_str = []
+                    for i, weight in enumerate(min_risk['weights']):
+                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        weights_str.append(f"{asset_name}: {weight:.1%}")
+                    description_parts.append(f"  • Веса: {', '.join(weights_str)}")
+            
+            # Max return portfolio
+            max_return = ef_data.get('max_return_portfolio', {})
+            if max_return.get('risk') is not None and max_return.get('return') is not None:
+                description_parts.append(f"\n**🚀 ПОРТФЕЛЬ МАКСИМАЛЬНОЙ ДОХОДНОСТИ:**")
+                description_parts.append(f"  • Риск: {max_return['risk']:.2%}")
+                description_parts.append(f"  • Доходность: {max_return['return']:.2%}")
+                if max_return.get('weights'):
+                    weights_str = []
+                    for i, weight in enumerate(max_return['weights']):
+                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        weights_str.append(f"{asset_name}: {weight:.1%}")
+                    description_parts.append(f"  • Веса: {', '.join(weights_str)}")
+            
+            # Max Sharpe portfolio
+            max_sharpe = ef_data.get('max_sharpe_portfolio', {})
+            if max_sharpe.get('risk') is not None and max_sharpe.get('return') is not None:
+                description_parts.append(f"\n**⭐ ПОРТФЕЛЬ МАКСИМАЛЬНОГО КОЭФФИЦИЕНТА ШАРПА:**")
+                description_parts.append(f"  • Риск: {max_sharpe['risk']:.2%}")
+                description_parts.append(f"  • Доходность: {max_sharpe['return']:.2%}")
+                description_parts.append(f"  • Коэффициент Шарпа: {max_sharpe.get('sharpe_ratio', 'N/A')}")
+                if max_sharpe.get('weights'):
+                    weights_str = []
+                    for i, weight in enumerate(max_sharpe['weights']):
+                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        weights_str.append(f"{asset_name}: {weight:.1%}")
+                    description_parts.append(f"  • Веса: {', '.join(weights_str)}")
+
         # Additional data
         if 'additional_info' in data_info and data_info['additional_info']:
             description_parts.append(f"\n**ℹ️ ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ:** {data_info['additional_info']}")
@@ -509,7 +563,8 @@ class GeminiService:
         description_parts.append("2. Проанализируй соотношение риск-доходность")
         description_parts.append("3. Оцени корреляции между активами")
         description_parts.append("4. Дай рекомендации по инвестированию")
-        description_parts.append("5. Выдели сильные и слабые стороны каждого актива")
+        description_parts.append("5. Проанализируй данные эффективной границы и дай рекомендации по весам активов")
+        description_parts.append("6. Выдели сильные и слабые стороны каждого актива")
         description_parts.append("В ответе не нужно дублировать таблицу describe и корреляционную матрицу, постарайся уложиться в 4000 символов")
         
         return "\n".join(description_parts)

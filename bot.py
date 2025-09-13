@@ -3749,7 +3749,7 @@ class ShansAi:
                 # Hide these buttons for mixed comparisons (portfolio + asset)
                 if not is_mixed_comparison:
                     keyboard.append([
-                        InlineKeyboardButton("💰 Дивиденды", callback_data="dividends_compare")
+                        InlineKeyboardButton("💰 Дивиденды", callback_data="dividends_compare"),
                         InlineKeyboardButton("📉 Просадки", callback_data="drawdowns_compare"),
                         
                     ])
@@ -3758,25 +3758,17 @@ class ShansAi:
                         InlineKeyboardButton("🔗 Корреляция", callback_data="correlation_compare")
                     ])
 
-                # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
-                keyboard.append([
-                    InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
-                ])
                 
                 # Add Efficient Frontier button for all comparisons
                 keyboard.append([
                     InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
                 ])
                 
-                # Add AI analysis buttons if services are available
-                ai_buttons = []
+                # Add AI analysis button if Gemini service is available
                 if self.gemini_service and self.gemini_service.is_available():
-                    ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
-                if self.yandexgpt_service and self.yandexgpt_service.is_available():
-                    ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
-                
-                if ai_buttons:
-                    keyboard.append(ai_buttons)
+                    keyboard.append([
+                        InlineKeyboardButton("AI-анализ", callback_data="data_analysis_compare")
+                    ])
                 
                 # Add chart analysis button if Gemini is available
                 if self.gemini_service and self.gemini_service.is_available():
@@ -7207,13 +7199,85 @@ class ShansAi:
                     portfolio_info.append(f"Портфель {pctx.get('symbol', 'Unknown')}: {len(pctx.get('portfolio_symbols', []))} активов")
                 data_info['additional_info'] = f"Включает портфели: {'; '.join(portfolio_info)}"
             
+            # Add efficient frontier data if we have multiple assets
+            if len(expanded_symbols) > 1:
+                try:
+                    # Prepare assets for efficient frontier calculation
+                    asset_list_items = []
+                    asset_names = []
+                    
+                    for i, symbol in enumerate(symbols):
+                        if i < len(expanded_symbols):
+                            if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
+                                # This is a portfolio - recreate it
+                                if i < len(portfolio_contexts):
+                                    pctx = portfolio_contexts[i]
+                                    try:
+                                        p = ok.Portfolio(
+                                            pctx.get('portfolio_symbols', []),
+                                            weights=pctx.get('portfolio_weights', []),
+                                            ccy=pctx.get('portfolio_currency') or currency,
+                                        )
+                                        asset_list_items.append(p)
+                                        asset_names.append(symbol)
+                                    except Exception as pe:
+                                        self.logger.warning(f"Failed to recreate portfolio for Efficient Frontier: {pe}")
+                            else:
+                                # This is a regular asset
+                                asset_list_items.append(symbol)
+                                asset_names.append(symbol)
+                    
+                    if len(asset_list_items) > 1:
+                        # Create AssetList and EfficientFrontier
+                        asset_list = ok.AssetList(asset_list_items, ccy=currency)
+                        ef = ok.EfficientFrontier(asset_list, ccy=currency)
+                        
+                        # Get efficient frontier data
+                        try:
+                            # Get transition map data (risk vs weights)
+                            transition_data = ef.transition_map(x_axe='risk')
+                            
+                            # Extract key points from efficient frontier
+                            efficient_frontier_data = {
+                                'min_risk_portfolio': {
+                                    'risk': ef.min_risk_point[0] if hasattr(ef, 'min_risk_point') else None,
+                                    'return': ef.min_risk_point[1] if hasattr(ef, 'min_risk_point') else None,
+                                    'weights': ef.min_risk_weights.tolist() if hasattr(ef, 'min_risk_weights') else None
+                                },
+                                'max_return_portfolio': {
+                                    'risk': ef.max_return_point[0] if hasattr(ef, 'max_return_point') else None,
+                                    'return': ef.max_return_point[1] if hasattr(ef, 'max_return_point') else None,
+                                    'weights': ef.max_return_weights.tolist() if hasattr(ef, 'max_return_weights') else None
+                                },
+                                'max_sharpe_portfolio': {
+                                    'risk': ef.max_sharpe_point[0] if hasattr(ef, 'max_sharpe_point') else None,
+                                    'return': ef.max_sharpe_point[1] if hasattr(ef, 'max_sharpe_point') else None,
+                                    'weights': ef.max_sharpe_weights.tolist() if hasattr(ef, 'max_sharpe_weights') else None,
+                                    'sharpe_ratio': ef.max_sharpe_ratio if hasattr(ef, 'max_sharpe_ratio') else None
+                                },
+                                'asset_names': asset_names,
+                                'currency': currency
+                            }
+                            
+                            data_info['efficient_frontier'] = efficient_frontier_data
+                            self.logger.info(f"Efficient frontier data prepared for {len(asset_names)} assets")
+                            
+                        except Exception as ef_error:
+                            self.logger.warning(f"Failed to extract efficient frontier data: {ef_error}")
+                            data_info['efficient_frontier'] = None
+                    
+                except Exception as e:
+                    self.logger.warning(f"Failed to calculate efficient frontier: {e}")
+                    data_info['efficient_frontier'] = None
+            
             # Add analysis metadata
             data_info['analysis_metadata'] = {
                 'timestamp': self._get_current_timestamp(),
                 'data_source': 'okama.AssetList.describe()',
                 'analysis_depth': 'comprehensive',
                 'includes_correlations': len(data_info['correlations']) > 0,
-                'includes_describe_table': bool(describe_table)
+                'includes_describe_table': bool(describe_table),
+                'includes_efficient_frontier': 'efficient_frontier' in data_info and data_info['efficient_frontier'] is not None
             }
             
             return data_info
