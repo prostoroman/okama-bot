@@ -1469,11 +1469,15 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
-            # Send drawdowns chart
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            
+            # Send drawdowns chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"📉 График Drawdowns для {len(symbols)} активов\n\nПоказывает периоды падения активов и их восстановление")
+                caption=self._truncate_caption(f"📉 График Drawdowns для {len(symbols)} активов\n\nПоказывает периоды падения активов и их восстановление"),
+                reply_markup=keyboard
             )
             
         except Exception as e:
@@ -1502,18 +1506,22 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
-            # Send dividend yield chart
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            
+            # Send dividend yield chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
+                caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность"),
+                reply_markup=keyboard
             )
             
         except Exception as e:
             self.logger.error(f"Error creating dividend yield chart: {e}")
             await self._send_message_safe(update, f"⚠️ Не удалось создать график дивидендной доходности: {str(e)}")
     
-    async def _create_correlation_matrix(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list):
+    async def _create_correlation_matrix(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
         """Создать корреляционную матрицу активов"""
         try:
             self.logger.info(f"Starting correlation matrix creation for symbols: {symbols}")
@@ -1558,12 +1566,16 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
-            # Send correlation matrix
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            
+            # Send correlation matrix with keyboard
             self.logger.info("Sending correlation matrix image...")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция")
+                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"),
+                reply_markup=keyboard
             )
             self.logger.info("Correlation matrix image sent successfully")
             
@@ -5655,11 +5667,15 @@ class ShansAi:
                     await self._send_callback_message(update, context, "❌ Не удалось построить график Risk / Return (CAGR)")
                     return
 
-            # Send image
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            
+            # Send image with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(f"📊 Risk / Return (CAGR) для сравнения: {', '.join(asset_names)}")
+                caption=self._truncate_caption(f"📊 Risk / Return (CAGR) для сравнения: {', '.join(asset_names)}"),
+                reply_markup=keyboard
             )
 
         except Exception as e:
@@ -5761,19 +5777,27 @@ class ShansAi:
                     analysis_text += f"💰 **Валюта:** {currency}\n"
                     analysis_text += f"📅 **Период:** полный доступный период данных"
                     
-                    await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown')
+                    # Create keyboard for compare command
+                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                     
                 else:
                     error_msg = chart_analysis.get('error', 'Неизвестная ошибка') if chart_analysis else 'Анализ не выполнен'
-                    await self._send_callback_message(update, context, f"❌ Ошибка анализа графика: {error_msg}", parse_mode='Markdown')
+                    # Create keyboard for compare command
+                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    await self._send_callback_message(update, context, f"❌ Ошибка анализа графика: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as chart_error:
                 self.logger.error(f"Error creating chart for analysis: {chart_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown')
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling chart analysis button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown')
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_efficient_frontier_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Efficient Frontier button for all comparison types"""
@@ -5860,11 +5884,15 @@ class ShansAi:
                 await self._send_callback_message(update, context, f"❌ Не удалось построить график эффективной границы: {str(plot_error)}")
                 return
 
-            # Send image
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            
+            # Send image with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}")
+                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}"),
+                reply_markup=keyboard
             )
 
         except Exception as e:
@@ -5923,21 +5951,31 @@ class ShansAi:
                         analysis_text += f"📅 **Период:** полный доступный период данных\n"
                         analysis_text += f"📊 **Тип анализа:** Данные (не изображение)"
                         
-                        await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown')
+                        # Create keyboard for compare command
+                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                     else:
-                        await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown')
+                        # Create keyboard for compare command
+                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                         
                 else:
                     error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
-                    await self._send_callback_message(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown')
+                    # Create keyboard for compare command
+                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    await self._send_callback_message(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for analysis: {data_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown')
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling data analysis button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown')
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle YandexGPT analysis button click for comparison charts"""
@@ -5992,21 +6030,31 @@ class ShansAi:
                             analysis_text += f"📅 **Период:** полный доступный период данных\n"
                             analysis_text += f"🤖 **AI сервис:** YandexGPT"
                             
-                            await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown')
+                            # Create keyboard for compare command
+                            keyboard = self._create_compare_command_keyboard(symbols, currency)
+                            await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                         else:
-                            await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown')
+                            # Create keyboard for compare command
+                            keyboard = self._create_compare_command_keyboard(symbols, currency)
+                            await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                             
                     else:
                         error_msg = yandexgpt_analysis.get('error', 'Неизвестная ошибка') if yandexgpt_analysis else 'Анализ не выполнен'
-                        await self._send_callback_message(update, context, f"❌ Ошибка анализа данных YandexGPT: {error_msg}", parse_mode='Markdown')
+                        # Create keyboard for compare command
+                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        await self._send_callback_message(update, context, f"❌ Ошибка анализа данных YandexGPT: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for YandexGPT analysis: {data_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа YandexGPT: {str(data_error)}", parse_mode='Markdown')
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа YandexGPT: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling YandexGPT analysis button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown')
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle metrics button click for comparison charts - export detailed statistics to Excel"""
@@ -6048,26 +6096,38 @@ class ShansAi:
                             else:
                                 assets_with_names.append(symbol)
                         
-                        # Send Excel file
+                        # Create keyboard for compare command
+                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        
+                        # Send Excel file with keyboard
                         await context.bot.send_document(
                             chat_id=update.effective_chat.id,
                             document=io.BytesIO(excel_buffer.getvalue()),
                             filename=f"metrics_{'_'.join(symbols[:3])}_{currency}.xlsx",
-                            caption=f""
+                            caption=f"📊 Детальная статистика для {', '.join(assets_with_names)}",
+                            reply_markup=keyboard
                         )
                     else:
-                        await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла")
+                        # Create keyboard for compare command
+                        keyboard = self._create_compare_command_keyboard(symbols, currency)
+                        await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла", reply_markup=keyboard)
                         
                 else:
-                    await self._send_callback_message(update, context, "❌ Не удалось подготовить данные для экспорта")
+                    # Create keyboard for compare command
+                    keyboard = self._create_compare_command_keyboard(symbols, currency)
+                    await self._send_callback_message(update, context, "❌ Не удалось подготовить данные для экспорта", reply_markup=keyboard)
                     
             except Exception as metrics_error:
                 self.logger.error(f"Error preparing metrics data: {metrics_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке метрик: {str(metrics_error)}", parse_mode='Markdown')
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                await self._send_callback_message(update, context, f"❌ Ошибка при подготовке метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling metrics button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при экспорте метрик: {str(e)}", parse_mode='Markdown')
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            await self._send_callback_message(update, context, f"❌ Ошибка при экспорте метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
@@ -7229,6 +7289,58 @@ class ShansAi:
             # Fallback to simple tabulate
             return tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
 
+    def _create_compare_command_keyboard(self, symbols: list, currency: str, specified_period: str = None) -> InlineKeyboardMarkup:
+        """Create keyboard for compare command button responses"""
+        try:
+            keyboard = []
+            
+            # Add basic analysis buttons
+            keyboard.append([
+                InlineKeyboardButton("📉 Drawdowns", callback_data="drawdowns_compare"),
+                InlineKeyboardButton("💰 Dividends", callback_data="dividends_compare")
+            ])
+            keyboard.append([
+                InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
+            ])
+            
+            # Add Metrics button
+            keyboard.append([
+                InlineKeyboardButton("📊 Metrics", callback_data="metrics_compare")
+            ])
+            
+            # Add Risk / Return button
+            keyboard.append([
+                InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
+            ])
+            
+            # Add Efficient Frontier button
+            keyboard.append([
+                InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
+            ])
+            
+            # Add AI analysis buttons if services are available
+            ai_buttons = []
+            if self.gemini_service and self.gemini_service.is_available():
+                ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
+            if self.yandexgpt_service and self.yandexgpt_service.is_available():
+                ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
+            
+            if ai_buttons:
+                keyboard.append(ai_buttons)
+            
+            # Add chart analysis button if Gemini is available
+            if self.gemini_service and self.gemini_service.is_available():
+                keyboard.append([
+                    InlineKeyboardButton("Анализ графика Gemini", callback_data="chart_analysis_compare")
+                ])
+            
+            return InlineKeyboardMarkup(keyboard)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating compare command keyboard: {e}")
+            # Return empty keyboard as fallback
+            return InlineKeyboardMarkup([])
+
     def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str, summary_table: str) -> str:
         """Create enhanced chart caption with HTML formatting for better Telegram compatibility"""
         try:
@@ -7672,11 +7784,15 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Send drawdowns chart
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                
+                # Send drawdowns chart with keyboard
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(f"📉 График просадок для смешанного сравнения\n\nПоказывает просадки портфелей и активов")
+                    caption=self._truncate_caption(f"📉 График просадок для смешанного сравнения\n\nПоказывает просадки портфелей и активов"),
+                    reply_markup=keyboard
                 )
                 
             except Exception as chart_error:
@@ -7989,7 +8105,7 @@ class ShansAi:
                                             last_date=end_date.strftime('%Y-%m-%d'))
                 else:
                     asset_list = ok.AssetList(symbols, ccy=currency)
-                await self._create_correlation_matrix(update, context, asset_list, symbols)
+                await self._create_correlation_matrix(update, context, asset_list, symbols, currency)
             
         except Exception as e:
             self.logger.error(f"Error handling correlation button: {e}")
