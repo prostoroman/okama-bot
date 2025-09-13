@@ -3706,14 +3706,11 @@ class ShansAi:
                 
                 # Chart analysis is now only available via buttons
                 
-                # Create summary metrics table for separate message
-                summary_table = self._create_summary_metrics_table(
-                    symbols, currency, expanded_symbols, portfolio_contexts, specified_period
-                )
+                # Summary metrics table is now available via Metrics button
                 
                 # Create enhanced caption without summary table
                 caption = self._create_enhanced_chart_caption(
-                    symbols, currency, specified_period
+                    symbols, currency, specified_period, expanded_symbols, portfolio_contexts
                 )
                 
                 # Describe table will be sent in separate message
@@ -3745,7 +3742,7 @@ class ShansAi:
 
                 # Add Metrics button for detailed statistics
                 keyboard.append([
-                    InlineKeyboardButton("📊 Metrics", callback_data="metrics_compare")
+                    InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare")
                     ])
 
                 # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
@@ -3793,9 +3790,7 @@ class ShansAi:
                     parse_mode='HTML'  # Try HTML instead of Markdown for better compatibility
                 )
                 
-                # Send summary table as separate message with markdown formatting
-                table_message = f"📊 **Сводная таблица ключевых метрик**\n\n```\n{summary_table}\n```"
-                await self._send_message_safe(update, table_message, parse_mode='Markdown')
+                # Summary table is now available via Metrics button
                 
                 # Table statistics now available via Metrics button
                 
@@ -6183,76 +6178,52 @@ class ShansAi:
             await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle metrics button click for comparison charts - export detailed statistics to Excel"""
+        """Handle metrics button click for comparison charts - show summary metrics table"""
         try:
-            # Don\'t remove keyboard yet - wait for successful message creation
-            
-            
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
             currency = user_context.get('current_currency', 'USD')
             expanded_symbols = user_context.get('expanded_symbols', [])
             portfolio_contexts = user_context.get('portfolio_contexts', [])
+            specified_period = user_context.get('specified_period')
 
             # Validate that we have symbols to compare
             if not expanded_symbols:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_ephemeral_message(update, context, "📊 Подготавливаю детальную статистику...", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "📊 Подготавливаю таблицу метрик...", parse_mode='Markdown', delete_after=3)
 
-            # Create comprehensive metrics data
+            # Create summary metrics table
             try:
-                metrics_data = self._prepare_comprehensive_metrics(symbols, currency, expanded_symbols, portfolio_contexts, user_id)
+                summary_table = self._create_summary_metrics_table(
+                    symbols, currency, expanded_symbols, portfolio_contexts, specified_period
+                )
                 
-                if metrics_data:
-                    # Create Excel file
-                    excel_buffer = self._create_metrics_excel(metrics_data, symbols, currency)
+                if summary_table and not summary_table.startswith("❌"):
+                    # Create keyboard for compare command
+                    keyboard = self._create_compare_command_keyboard(symbols, currency)
                     
-                    if excel_buffer:
-                        # Get asset names from metrics_data for display
-                        asset_names = metrics_data.get('asset_names', {})
-                        
-                        # Create list with asset names if available
-                        assets_with_names = []
-                        for symbol in symbols:
-                            if symbol in asset_names and asset_names[symbol] != symbol:
-                                assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
-                            else:
-                                assets_with_names.append(symbol)
-                        
-                        # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency)
-                        
-                        # Send Excel file with keyboard
-                        await context.bot.send_document(
-                            chat_id=update.effective_chat.id,
-                            document=io.BytesIO(excel_buffer.getvalue()),
-                            filename=f"metrics_{'_'.join(symbols[:3])}_{currency}.xlsx",
-                            caption=f"📊 Детальная статистика для {', '.join(assets_with_names)}",
-                            reply_markup=keyboard
-                        )
-                    else:
-                        # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency)
-                        await self._send_callback_message_with_keyboard_removal(update, context, "❌ Ошибка при создании Excel файла", reply_markup=keyboard)
+                    # Send summary table as message
+                    table_message = f"📊 **Сводная таблица ключевых метрик**\n\n```\n{summary_table}\n```"
+                    await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown', reply_markup=keyboard)
                 else:
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
-                    await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось подготовить данные для экспорта", reply_markup=keyboard)
+                    await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось создать таблицу метрик", reply_markup=keyboard)
                     
             except Exception as metrics_error:
-                self.logger.error(f"Error preparing metrics data: {metrics_error}")
+                self.logger.error(f"Error creating summary metrics table: {metrics_error}")
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
             self.logger.error(f"Error handling metrics button: {e}")
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
-            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при экспорте метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при обработке метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
@@ -6863,339 +6834,6 @@ class ShansAi:
                 }
             }
 
-    def _prepare_comprehensive_metrics(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, user_id: int) -> Dict[str, Any]:
-        """Prepare comprehensive metrics data for Excel export"""
-        try:
-            # Get user context to access describe table
-            describe_table = ""
-            if user_id:
-                user_context = self._get_user_context(user_id)
-                describe_table = user_context.get('describe_table', '')
-            
-            metrics_data = {
-                'symbols': symbols,
-                'currency': currency,
-                'period': 'полный доступный период данных',
-                'performance': {},
-                'detailed_metrics': {},
-                'correlations': [],
-                'describe_table': describe_table,
-                'asset_count': len(symbols),
-                'analysis_type': 'metrics_export',
-                'timestamp': self._get_current_timestamp(),
-                'asset_names': {}  # Dictionary to store asset names
-            }
-            
-            # Calculate detailed performance metrics for each symbol
-            for i, symbol in enumerate(symbols):
-                try:
-                    # Get the actual asset/portfolio object from portfolio_contexts
-                    asset_data = None
-                    if i < len(portfolio_contexts):
-                        portfolio_context = portfolio_contexts[i]
-                        portfolio_object = portfolio_context.get('portfolio_object')
-                        
-                        if portfolio_object is not None:
-                            # This is a portfolio - use portfolio object
-                            asset_data = portfolio_object
-                        else:
-                            # This is a regular asset - create Asset object
-                            asset_symbol = portfolio_context.get('portfolio_symbols', [symbol])[0]
-                            try:
-                                asset_data = ok.Asset(asset_symbol)
-                            except Exception as e:
-                                self.logger.warning(f"Failed to create Asset object for {asset_symbol}: {e}")
-                                asset_data = None
-                    
-                    if asset_data is None:
-                        # Fallback: try to create Asset from symbol
-                        try:
-                            asset_data = ok.Asset(symbol)
-                        except Exception as e:
-                            self.logger.warning(f"Failed to create Asset object for {symbol}: {e}")
-                            asset_data = None
-                    
-                    # Get asset name
-                    asset_name = symbol  # Default to symbol
-                    try:
-                        if asset_data is not None:
-                            if hasattr(asset_data, 'name') and asset_data.name:
-                                asset_name = asset_data.name
-                            elif hasattr(asset_data, 'symbol') and asset_data.symbol:
-                                asset_name = asset_data.symbol
-                    except Exception as e:
-                        self.logger.warning(f"Failed to get asset name for {symbol}: {e}")
-                    
-                    metrics_data['asset_names'][symbol] = asset_name
-                    
-                    # Get comprehensive performance metrics
-                    detailed_metrics = {}
-                    
-                    if asset_data is not None:
-                        # Calculate metrics from asset/portfolio data
-                        try:
-                            # Get price data for calculations
-                            if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
-                                prices = asset_data.close_monthly
-                            elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
-                                prices = asset_data.close_daily
-                            elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
-                                prices = asset_data.adj_close
-                            elif hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
-                                prices = asset_data.wealth_index
-                            else:
-                                prices = None
-                            
-                            if prices is not None and len(prices) > 1:
-                                # Calculate returns from prices
-                                returns = prices.pct_change().dropna()
-                                
-                                # Basic metrics
-                                if hasattr(asset_data, 'total_return'):
-                                    detailed_metrics['total_return'] = asset_data.total_return
-                                else:
-                                    # Calculate total return from first and last price
-                                    total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
-                                    detailed_metrics['total_return'] = total_return
-                                
-                                # Annual return (CAGR)
-                                if hasattr(asset_data, 'annual_return'):
-                                    detailed_metrics['annual_return'] = asset_data.annual_return
-                                else:
-                                    # Calculate CAGR
-                                    periods = len(prices)
-                                    years = periods / 12.0  # Assuming monthly data
-                                    if years > 0:
-                                        cagr = ((prices.iloc[-1] / prices.iloc[0]) ** (1.0 / years)) - 1
-                                        detailed_metrics['annual_return'] = cagr
-                                    else:
-                                        detailed_metrics['annual_return'] = 0.0
-                                
-                                # Volatility
-                                if hasattr(asset_data, 'volatility'):
-                                    detailed_metrics['volatility'] = asset_data.volatility
-                                else:
-                                    # Calculate annualized volatility
-                                    volatility = returns.std() * (12 ** 0.5)  # Annualized for monthly data
-                                    detailed_metrics['volatility'] = volatility
-                                
-                                # Max drawdown
-                                if hasattr(asset_data, 'max_drawdown'):
-                                    detailed_metrics['max_drawdown'] = asset_data.max_drawdown
-                                else:
-                                    # Calculate max drawdown
-                                    cumulative = (1 + returns).cumprod()
-                                    running_max = cumulative.expanding().max()
-                                    drawdown = (cumulative - running_max) / running_max
-                                    max_drawdown = drawdown.min()
-                                    detailed_metrics['max_drawdown'] = max_drawdown
-                                
-                                # Store returns for Sharpe and Sortino calculations
-                                detailed_metrics['_returns'] = returns
-                                
-                            else:
-                                # Fallback values if no price data
-                                detailed_metrics['total_return'] = 0.0
-                                detailed_metrics['annual_return'] = 0.0
-                                detailed_metrics['volatility'] = 0.0
-                                detailed_metrics['max_drawdown'] = 0.0
-                                detailed_metrics['_returns'] = None
-                        
-                        except Exception as e:
-                            self.logger.warning(f"Failed to calculate basic metrics for {symbol}: {e}")
-                            detailed_metrics['total_return'] = 0.0
-                            detailed_metrics['annual_return'] = 0.0
-                            detailed_metrics['volatility'] = 0.0
-                            detailed_metrics['max_drawdown'] = 0.0
-                            detailed_metrics['_returns'] = None
-                    else:
-                        # No asset data available
-                        detailed_metrics['total_return'] = 0.0
-                        detailed_metrics['annual_return'] = 0.0
-                        detailed_metrics['volatility'] = 0.0
-                        detailed_metrics['max_drawdown'] = 0.0
-                        detailed_metrics['_returns'] = None
-                        
-                    # Sharpe ratio calculation
-                    try:
-                        annual_return = detailed_metrics.get('annual_return', 0)
-                        volatility = detailed_metrics.get('volatility', 0)
-                        sharpe_ratio = self.calculate_sharpe_ratio(annual_return, volatility, currency, asset_data=asset_data)
-                        detailed_metrics['sharpe_ratio'] = sharpe_ratio
-                    except Exception as e:
-                        self.logger.warning(f"Failed to calculate Sharpe ratio for {symbol}: {e}")
-                        detailed_metrics['sharpe_ratio'] = 0.0
-                    
-                    # Sortino ratio calculation
-                    try:
-                        if asset_data is not None and hasattr(asset_data, 'sortino_ratio'):
-                            detailed_metrics['sortino_ratio'] = asset_data.sortino_ratio
-                        else:
-                            # Manual Sortino ratio calculation
-                            annual_return = detailed_metrics.get('annual_return', 0)
-                            returns = detailed_metrics.get('_returns')
-                            
-                            if returns is not None and len(returns) > 0:
-                                # Calculate downside deviation (only negative returns)
-                                negative_returns = returns[returns < 0]
-                                if len(negative_returns) > 0:
-                                    downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
-                                    if downside_deviation > 0:
-                                        sortino_ratio = (annual_return - 0.02) / downside_deviation
-                                        detailed_metrics['sortino_ratio'] = sortino_ratio
-                                    else:
-                                        detailed_metrics['sortino_ratio'] = 0.0
-                                else:
-                                    # No negative returns, use volatility as fallback
-                                    volatility = detailed_metrics.get('volatility', 0)
-                                    if volatility > 0:
-                                        sortino_ratio = (annual_return - 0.02) / volatility
-                                        detailed_metrics['sortino_ratio'] = sortino_ratio
-                                    else:
-                                        detailed_metrics['sortino_ratio'] = 0.0
-                            else:
-                                # Fallback to Sharpe ratio if no returns data
-                                detailed_metrics['sortino_ratio'] = detailed_metrics.get('sharpe_ratio', 0.0)
-                    except Exception as e:
-                        self.logger.warning(f"Failed to calculate Sortino ratio for {symbol}: {e}")
-                        detailed_metrics['sortino_ratio'] = 0.0
-                    
-                    # Additional metrics calculation
-                    try:
-                        # Calmar Ratio = Annual Return / Max Drawdown (absolute value)
-                        annual_return = detailed_metrics.get('annual_return', 0)
-                        max_drawdown = detailed_metrics.get('max_drawdown', 0)
-                        if max_drawdown != 0:
-                            calmar_ratio = annual_return / abs(max_drawdown)
-                            detailed_metrics['calmar_ratio'] = calmar_ratio
-                        else:
-                            detailed_metrics['calmar_ratio'] = 0.0
-                        
-                        # VaR 95% and CVaR 95% calculation
-                        returns = detailed_metrics.get('_returns')
-                        if returns is not None and len(returns) > 0:
-                            # VaR 95% - 5th percentile of returns (worst 5% of returns)
-                            var_95 = returns.quantile(0.05)
-                            detailed_metrics['var_95'] = var_95
-                            
-                            # CVaR 95% - Expected value of returns below VaR 95%
-                            returns_below_var = returns[returns <= var_95]
-                            if len(returns_below_var) > 0:
-                                cvar_95 = returns_below_var.mean()
-                                detailed_metrics['cvar_95'] = cvar_95
-                            else:
-                                detailed_metrics['cvar_95'] = var_95
-                        else:
-                            detailed_metrics['var_95'] = 0.0
-                            detailed_metrics['cvar_95'] = 0.0
-                            
-                    except Exception as e:
-                        self.logger.warning(f"Failed to calculate additional metrics for {symbol}: {e}")
-                        detailed_metrics['calmar_ratio'] = 0.0
-                        detailed_metrics['var_95'] = 0.0
-                        detailed_metrics['cvar_95'] = 0.0
-                    
-                    # Clean up temporary data
-                    if '_returns' in detailed_metrics:
-                        del detailed_metrics['_returns']
-                    
-                    metrics_data['detailed_metrics'][symbol] = detailed_metrics
-                        
-                except Exception as e:
-                    self.logger.warning(f"Failed to get detailed metrics for {symbol}: {e}")
-                    metrics_data['detailed_metrics'][symbol] = {
-                        'total_return': 0.0,
-                        'annual_return': 0.0,
-                        'volatility': 0.0,
-                        'sharpe_ratio': 0.0,
-                        'sortino_ratio': 0.0,
-                        'max_drawdown': 0.0,
-                        'calmar_ratio': 0.0,
-                        'var_95': 0.0,
-                        'cvar_95': 0.0
-                    }
-            
-            # Calculate correlations if we have multiple assets
-            if len(symbols) > 1:
-                try:
-                    # Try to create AssetList for correlation calculation
-                    correlation_matrix = []
-                    
-                    # Create AssetList from symbols for correlation calculation
-                    try:
-                        # Get clean symbols for correlation calculation
-                        clean_symbols = []
-                        for i, symbol in enumerate(symbols):
-                            if i < len(portfolio_contexts):
-                                portfolio_context = portfolio_contexts[i]
-                                portfolio_symbols = portfolio_context.get('portfolio_symbols', [symbol])
-                                clean_symbols.extend(portfolio_symbols)
-                            else:
-                                clean_symbols.append(symbol)
-                        
-                        # Remove duplicates while preserving order
-                        clean_symbols = list(dict.fromkeys(clean_symbols))
-                        
-                        if len(clean_symbols) > 1:
-                            # Create AssetList for correlation calculation
-                            asset_list = ok.AssetList(clean_symbols)
-                            if hasattr(asset_list, 'correlation_matrix'):
-                                correlation_matrix = asset_list.correlation_matrix.tolist()
-                            else:
-                                # Fallback correlation matrix
-                                correlation_matrix = []
-                                for i in range(len(clean_symbols)):
-                                    row = []
-                                    for j in range(len(clean_symbols)):
-                                        if i == j:
-                                            row.append(1.0)
-                                        else:
-                                            row.append(0.3)  # Conservative estimate
-                                    correlation_matrix.append(row)
-                        else:
-                            # Single asset - identity matrix
-                            correlation_matrix = [[1.0]]
-                    
-                    except Exception as e:
-                        self.logger.warning(f"Failed to calculate correlations with AssetList: {e}")
-                        # Create a simple correlation matrix as fallback
-                        correlation_matrix = []
-                        for i in range(len(symbols)):
-                            row = []
-                            for j in range(len(symbols)):
-                                if i == j:
-                                    row.append(1.0)
-                                else:
-                                    # Estimate correlation based on asset types
-                                    row.append(0.3)  # Conservative estimate
-                            correlation_matrix.append(row)
-                    
-                    metrics_data['correlations'] = correlation_matrix
-                    
-                except Exception as e:
-                    self.logger.warning(f"Failed to calculate correlations: {e}")
-                    # Create identity matrix as fallback
-                    correlation_matrix = []
-                    for i in range(len(symbols)):
-                        row = []
-                        for j in range(len(symbols)):
-                            row.append(1.0 if i == j else 0.0)
-                        correlation_matrix.append(row)
-                    metrics_data['correlations'] = correlation_matrix
-            
-            # Add portfolio context information
-            if portfolio_contexts:
-                portfolio_info = []
-                for portfolio_context in portfolio_contexts:
-                    portfolio_symbol = portfolio_context.get('symbol', 'Unknown')
-                    portfolio_info.append(f"{portfolio_symbol}")
-                metrics_data['additional_info'] = f"Включает портфели: {'; '.join(portfolio_info)}"
-            
-            return metrics_data
-            
-        except Exception as e:
-            self.logger.error(f"Error preparing comprehensive metrics: {e}")
-            return None
 
     def _create_summary_metrics_table(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, specified_period: str = None) -> str:
         """Create summary metrics table with key performance indicators"""
@@ -7330,6 +6968,66 @@ class ShansAi:
                         except Exception as e:
                             self.logger.warning(f"Could not calculate max drawdown for {symbol}: {e}")
                             symbol_metrics['max_drawdown'] = None
+                        
+                        # Sortino Ratio
+                        try:
+                            if prices is not None and len(prices) > 1:
+                                returns = prices.pct_change().dropna()
+                                if len(returns) > 0:
+                                    # Calculate downside deviation (only negative returns)
+                                    negative_returns = returns[returns < 0]
+                                    if len(negative_returns) > 0:
+                                        downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
+                                        if downside_deviation > 0 and symbol_metrics.get('cagr') is not None:
+                                            risk_free_rate = 0.02  # 2% annual risk-free rate
+                                            symbol_metrics['sortino'] = (symbol_metrics['cagr'] - risk_free_rate) / downside_deviation
+                                        else:
+                                            symbol_metrics['sortino'] = None
+                                    else:
+                                        # No negative returns, use volatility as fallback
+                                        if symbol_metrics.get('volatility') is not None and symbol_metrics['volatility'] > 0:
+                                            risk_free_rate = 0.02
+                                            symbol_metrics['sortino'] = (symbol_metrics['cagr'] - risk_free_rate) / symbol_metrics['volatility']
+                                        else:
+                                            symbol_metrics['sortino'] = None
+                        except Exception as e:
+                            self.logger.warning(f"Could not calculate Sortino ratio for {symbol}: {e}")
+                            symbol_metrics['sortino'] = None
+                        
+                        # Calmar Ratio
+                        try:
+                            if symbol_metrics.get('cagr') is not None and symbol_metrics.get('max_drawdown') is not None:
+                                if symbol_metrics['max_drawdown'] != 0:
+                                    symbol_metrics['calmar'] = symbol_metrics['cagr'] / abs(symbol_metrics['max_drawdown'])
+                                else:
+                                    symbol_metrics['calmar'] = None
+                        except Exception as e:
+                            self.logger.warning(f"Could not calculate Calmar ratio for {symbol}: {e}")
+                            symbol_metrics['calmar'] = None
+                        
+                        # VaR 95% and CVaR 95%
+                        try:
+                            if prices is not None and len(prices) > 1:
+                                returns = prices.pct_change().dropna()
+                                if len(returns) > 0:
+                                    # VaR 95% - 5th percentile of returns (worst 5% of returns)
+                                    var_95 = returns.quantile(0.05)
+                                    symbol_metrics['var_95'] = var_95
+                                    
+                                    # CVaR 95% - Expected value of returns below VaR 95%
+                                    returns_below_var = returns[returns <= var_95]
+                                    if len(returns_below_var) > 0:
+                                        cvar_95 = returns_below_var.mean()
+                                        symbol_metrics['cvar_95'] = cvar_95
+                                    else:
+                                        symbol_metrics['cvar_95'] = var_95
+                                else:
+                                    symbol_metrics['var_95'] = None
+                                    symbol_metrics['cvar_95'] = None
+                        except Exception as e:
+                            self.logger.warning(f"Could not calculate VaR/CVaR for {symbol}: {e}")
+                            symbol_metrics['var_95'] = None
+                            symbol_metrics['cvar_95'] = None
                     
                     metrics_data[symbol] = symbol_metrics
                     
@@ -7377,6 +7075,46 @@ class ShansAi:
                 else:
                     drawdown_row.append("N/A")
             table_data.append(drawdown_row)
+            
+            # Sortino Ratio row
+            sortino_row = ["Коэф. Сортино"]
+            for symbol in symbols:
+                sortino = metrics_data.get(symbol, {}).get('sortino')
+                if sortino is not None:
+                    sortino_row.append(f"{sortino:.2f}")
+                else:
+                    sortino_row.append("N/A")
+            table_data.append(sortino_row)
+            
+            # Calmar Ratio row
+            calmar_row = ["Коэф. Кальмара"]
+            for symbol in symbols:
+                calmar = metrics_data.get(symbol, {}).get('calmar')
+                if calmar is not None:
+                    calmar_row.append(f"{calmar:.2f}")
+                else:
+                    calmar_row.append("N/A")
+            table_data.append(calmar_row)
+            
+            # VaR 95% row
+            var_row = ["VaR 95%"]
+            for symbol in symbols:
+                var_95 = metrics_data.get(symbol, {}).get('var_95')
+                if var_95 is not None:
+                    var_row.append(f"{var_95*100:.2f}%")
+                else:
+                    var_row.append("N/A")
+            table_data.append(var_row)
+            
+            # CVaR 95% row
+            cvar_row = ["CVaR 95%"]
+            for symbol in symbols:
+                cvar_95 = metrics_data.get(symbol, {}).get('cvar_95')
+                if cvar_95 is not None:
+                    cvar_row.append(f"{cvar_95*100:.2f}%")
+                else:
+                    cvar_row.append("N/A")
+            table_data.append(cvar_row)
             
             # Create enhanced markdown table with better formatting
             table_markdown = self._create_enhanced_markdown_table(table_data, headers)
@@ -7430,7 +7168,7 @@ class ShansAi:
             
             # Add Metrics button
             keyboard.append([
-                InlineKeyboardButton("📊 Metrics", callback_data="metrics_compare")
+                InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare")
             ])
             
             # Add Risk / Return button
@@ -7466,14 +7204,48 @@ class ShansAi:
             # Return empty keyboard as fallback
             return InlineKeyboardMarkup([])
 
-    def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str) -> str:
+    def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str, expanded_symbols: list = None, portfolio_contexts: list = None) -> str:
         """Create enhanced chart caption with HTML formatting for better Telegram compatibility"""
         try:
             # Create chart title section
             chart_title = f"📈 <b>График накопленной доходности</b>"
             
-            # Create assets info section
-            assets_info = f"<b>Активы:</b> {', '.join(symbols)}"
+            # Create assets info section with names
+            assets_with_names = []
+            for i, symbol in enumerate(symbols):
+                asset_name = symbol  # Default to symbol
+                
+                # Try to get asset name from portfolio contexts
+                if expanded_symbols and portfolio_contexts and i < len(portfolio_contexts):
+                    portfolio_context = portfolio_contexts[i]
+                    portfolio_object = portfolio_context.get('portfolio_object')
+                    
+                    if portfolio_object is not None:
+                        # This is a portfolio - use portfolio symbol
+                        asset_name = symbol
+                    else:
+                        # This is a regular asset - try to get name
+                        try:
+                            asset_symbol = portfolio_context.get('portfolio_symbols', [symbol])[0]
+                            asset_obj = ok.Asset(asset_symbol)
+                            if hasattr(asset_obj, 'name') and asset_obj.name:
+                                asset_name = f"{symbol} ({asset_obj.name})"
+                        except Exception:
+                            asset_name = symbol
+                else:
+                    # Try to get asset name directly
+                    try:
+                        asset_obj = ok.Asset(symbol)
+                        if hasattr(asset_obj, 'name') and asset_obj.name:
+                            asset_name = f"{symbol} ({asset_obj.name})"
+                    except Exception:
+                        asset_name = symbol
+                
+                assets_with_names.append(asset_name)
+            
+            # Format assets as list items
+            assets_list = "\n".join([f"• {asset}" for asset in assets_with_names])
+            assets_info = f"<b>Активы:</b>\n{assets_list}"
             
             # Create currency info section
             currency_info = f"<b>Валюта:</b> {currency}"
@@ -7502,235 +7274,6 @@ class ShansAi:
             return f"📈 <b>График накопленной доходности</b>\n\n<b>Активы:</b> {', '.join(symbols)}\n<b>Валюта:</b> {currency}"
 
 
-    def _create_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
-        """Create Excel file with comprehensive metrics"""
-        try:
-            buffer = io.BytesIO()
-            
-            if EXCEL_AVAILABLE:
-                # Create Excel file with openpyxl
-                from openpyxl import Workbook
-                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-                from openpyxl.utils import get_column_letter
-                
-                wb = Workbook()
-                
-                # Remove default sheet
-                wb.remove(wb.active)
-                
-                # Create Summary sheet
-                ws_summary = wb.create_sheet("Summary", 0)
-                
-                # Summary data
-                asset_names = metrics_data.get('asset_names', {})
-                
-                # Create assets list with names if available
-                assets_with_names = []
-                for symbol in symbols:
-                    if symbol in asset_names and asset_names[symbol] != symbol:
-                        assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
-                    else:
-                        assets_with_names.append(symbol)
-                
-                summary_data = [
-                    ["Metric", "Value"],
-                    ["Analysis Date", metrics_data['timestamp']],
-                    ["Currency", currency],
-                    ["Assets Count", len(symbols)],
-                    ["Assets", ", ".join(assets_with_names)],
-                    ["Period", metrics_data['period']]
-                ]
-                
-                for row in summary_data:
-                    ws_summary.append(row)
-                
-                # Style summary sheet
-                header_font = Font(bold=True, color="FFFFFF")
-                header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-                
-                for cell in ws_summary[1]:
-                    cell.font = header_font
-                    cell.fill = header_fill
-                
-                # Create Detailed Metrics sheet
-                ws_metrics = wb.create_sheet("Detailed Metrics", 1)
-                
-                # Prepare detailed metrics data
-                detailed_metrics = metrics_data.get('detailed_metrics', {})
-                
-                # Create headers with asset names
-                headers = ["Metric"]
-                for symbol in symbols:
-                    if symbol in asset_names and asset_names[symbol] != symbol:
-                        headers.append(f"{symbol} ({asset_names[symbol]})")
-                    else:
-                        headers.append(symbol)
-                
-                ws_metrics.append(headers)
-                
-                # Define metrics to include
-                metric_names = [
-                    ("Total Return", "total_return"),
-                    ("Annual Return (CAGR)", "annual_return"),
-                    ("Volatility", "volatility"),
-                    ("Sharpe Ratio", "sharpe_ratio"),
-                    ("Sortino Ratio", "sortino_ratio"),
-                    ("Max Drawdown", "max_drawdown"),
-                    ("Calmar Ratio", "calmar_ratio"),
-                    ("VaR 95%", "var_95"),
-                    ("CVaR 95%", "cvar_95")
-                ]
-                
-                # Add data rows
-                for metric_name, metric_key in metric_names:
-                    row = [metric_name]
-                    for symbol in symbols:
-                        value = detailed_metrics.get(symbol, {}).get(metric_key, 0.0)
-                        if isinstance(value, (int, float)):
-                            row.append(round(value, 4))
-                        elif hasattr(value, '__class__') and 'Mock' in str(value.__class__):
-                            # Handle Mock objects
-                            row.append(0.0)
-                        else:
-                            row.append(value)
-                    ws_metrics.append(row)
-                
-                # Style metrics sheet
-                for cell in ws_metrics[1]:
-                    cell.font = header_font
-                    cell.fill = header_fill
-                
-                # Auto-adjust column widths
-                for column in ws_metrics.columns:
-                    max_length = 0
-                    column_letter = get_column_letter(column[0].column)
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = min(max_length + 2, 20)
-                    ws_metrics.column_dimensions[column_letter].width = adjusted_width
-                
-                # Create Correlation Matrix sheet
-                if metrics_data.get('correlations'):
-                    ws_corr = wb.create_sheet("Correlation Matrix", 2)
-                    
-                    # Add headers with asset names
-                    corr_headers = [""]
-                    for symbol in symbols:
-                        if symbol in asset_names and asset_names[symbol] != symbol:
-                            corr_headers.append(f"{symbol} ({asset_names[symbol]})")
-                        else:
-                            corr_headers.append(symbol)
-                    ws_corr.append(corr_headers)
-                    
-                    # Add correlation data
-                    correlations = metrics_data['correlations']
-                    for i, symbol in enumerate(symbols):
-                        # Use asset name for row header
-                        row_header = symbol
-                        if symbol in asset_names and asset_names[symbol] != symbol:
-                            row_header = f"{symbol} ({asset_names[symbol]})"
-                        
-                        row = [row_header]
-                        for j in range(len(symbols)):
-                            try:
-                                corr_value = correlations[i][j]
-                                if isinstance(corr_value, (int, float)):
-                                    row.append(round(corr_value, 4))
-                                else:
-                                    row.append(0.0)
-                            except (IndexError, TypeError):
-                                row.append(0.0)
-                        ws_corr.append(row)
-                    
-                    # Style correlation sheet
-                    for cell in ws_corr[1]:
-                        cell.font = header_font
-                        cell.fill = header_fill
-                    
-                    # Auto-adjust column widths
-                    for column in ws_corr.columns:
-                        max_length = 0
-                        column_letter = get_column_letter(column[0].column)
-                        for cell in column:
-                            try:
-                                if len(str(cell.value)) > max_length:
-                                    max_length = len(str(cell.value))
-                            except:
-                                pass
-                        adjusted_width = min(max_length + 2, 15)
-                        ws_corr.column_dimensions[column_letter].width = adjusted_width
-                
-                # Save to buffer
-                wb.save(buffer)
-                buffer.seek(0)
-                
-            else:
-                # Fallback to CSV format
-                import csv
-                import io as csv_io
-                
-                # Create CSV content
-                csv_content = []
-                
-                # Summary
-                csv_content.append(["SUMMARY"])
-                csv_content.append(["Metric", "Value"])
-                csv_content.append(["Analysis Date", metrics_data['timestamp']])
-                csv_content.append(["Currency", currency])
-                csv_content.append(["Assets Count", len(symbols)])
-                csv_content.append(["Assets", ", ".join(symbols)])
-                csv_content.append([])
-                
-                # Detailed metrics
-                csv_content.append(["DETAILED METRICS"])
-                detailed_metrics = metrics_data.get('detailed_metrics', {})
-                
-                headers = ["Metric"] + symbols
-                csv_content.append(headers)
-                
-                metric_names = [
-                    ("Total Return", "total_return"),
-                    ("Annual Return (CAGR)", "annual_return"),
-                    ("Volatility", "volatility"),
-                    ("Sharpe Ratio", "sharpe_ratio"),
-                    ("Sortino Ratio", "sortino_ratio"),
-                    ("Max Drawdown", "max_drawdown"),
-                    ("Calmar Ratio", "calmar_ratio"),
-                    ("VaR 95%", "var_95"),
-                    ("CVaR 95%", "cvar_95")
-                ]
-                
-                for metric_name, metric_key in metric_names:
-                    row = [metric_name]
-                    for symbol in symbols:
-                        value = detailed_metrics.get(symbol, {}).get(metric_key, 0.0)
-                        if isinstance(value, (int, float)):
-                            row.append(round(value, 4))
-                        elif hasattr(value, '__class__') and 'Mock' in str(value.__class__):
-                            # Handle Mock objects
-                            row.append(0.0)
-                        else:
-                            row.append(value)
-                    csv_content.append(row)
-                
-                # Write CSV to buffer
-                csv_buffer = csv_io.StringIO()
-                writer = csv.writer(csv_buffer)
-                for row in csv_content:
-                    writer.writerow(row)
-                
-                buffer.write(csv_buffer.getvalue().encode('utf-8'))
-                buffer.seek(0)
-            
-            return buffer
-            
-        except Exception as e:
-            self.logger.error(f"Error creating metrics Excel: {e}")
-            return None
 
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
