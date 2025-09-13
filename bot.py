@@ -3754,6 +3754,10 @@ class ShansAi:
                     InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare")
                     ])
 
+                # Add Risk / Return for all comparisons (portfolios + assets, assets only, portfolios only)
+                keyboard.append([
+                    InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
+                ])
                 
                 # Add Efficient Frontier button for all comparisons
                 keyboard.append([
@@ -5636,9 +5640,21 @@ class ShansAi:
             elif callback_data == 'clear_all_portfolios':
                 self.logger.info("Clear all portfolios button clicked")
                 await self._handle_clear_all_portfolios_button(update, context)
+            elif callback_data == 'compare_risk_return':
+                self.logger.info("Compare Risk / Return button clicked")
+                await self._handle_risk_return_compare_button(update, context)
+            elif callback_data == 'risk_return_compare':
+                self.logger.info("Risk / Return button clicked")
+                await self._handle_risk_return_compare_button(update, context)
             elif callback_data == 'chart_analysis_compare':
                 self.logger.info("Chart analysis button clicked")
                 await self._handle_chart_analysis_compare_button(update, context)
+            elif callback_data == 'data_analysis_compare':
+                self.logger.info("Data analysis button clicked")
+                await self._handle_data_analysis_compare_button(update, context)
+            elif callback_data == 'yandexgpt_analysis_compare':
+                self.logger.info("YandexGPT analysis button clicked")
+                await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif callback_data == 'metrics_compare':
                 self.logger.info("Metrics button clicked")
                 await self._handle_metrics_compare_button(update, context)
@@ -8738,19 +8754,14 @@ class ShansAi:
                 if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is a portfolio wealth index
                     portfolio_data.append(expanded_symbol)
-                    self.logger.info(f"Found portfolio data at index {i}: {type(expanded_symbol).__name__}")
                 else:
                     # This is an individual asset symbol
                     asset_symbols.append(expanded_symbol)
-                    self.logger.info(f"Found asset symbol at index {i}: {expanded_symbol}")
-            
-            self.logger.info(f"Separated into {len(portfolio_data)} portfolios and {len(asset_symbols)} assets")
             
             # Calculate correlation data for all items
             correlation_data = {}
             
             # Process portfolios separately to avoid AssetList creation issues
-            self.logger.info(f"Processing {len(portfolio_contexts)} portfolio contexts")
             for i, portfolio_context in enumerate(portfolio_contexts):
                 if i < len(portfolio_data):
                     try:
