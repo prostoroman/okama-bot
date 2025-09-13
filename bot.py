@@ -10379,7 +10379,14 @@ class ShansAi:
                 excel_buffer = self._create_portfolio_metrics_excel(metrics_data, symbols, currency)
                 
                 if excel_buffer:
-                    # Send Excel file
+                    # Create keyboard for portfolio command
+                    portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
+                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                    
+                    # Remove keyboard from previous message before sending new message
+                    await self._remove_keyboard_before_new_message(update, context)
+                    
+                    # Send Excel file with keyboard
                     await context.bot.send_document(
                         chat_id=update.effective_chat.id,
                         document=io.BytesIO(excel_buffer.getvalue()),
@@ -10392,7 +10399,8 @@ class ShansAi:
                                f"• Основные метрики производительности\n"
                                f"• Коэффициенты Шарпа и Сортино\n"
                                f"• Анализ рисков и доходности\n"
-                               f"• Детальная статистика портфеля"
+                               f"• Детальная статистика портфеля",
+                        reply_markup=keyboard
                     )
                 else:
                     await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла")
@@ -11553,13 +11561,21 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(current_fig)
             
-            # Send the chart
+            # Create keyboard for portfolio command
+            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
+            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+            
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            # Send the chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(
                     f"💡 Показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
-                )
+                ),
+                reply_markup=keyboard
             )
             
         except Exception as e:
@@ -11611,7 +11627,14 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(current_fig)
             
-            # Send the chart
+            # Create keyboard for portfolio command
+            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
+            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+            
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            # Send the chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
@@ -11625,7 +11648,8 @@ class ShansAi:
                     f"• 10% процентиль: пессимистичный сценарий\n"
                     f"• 50% процентиль: средний сценарий\n"
                     f"• 90% процентиль: оптимистичный сценарий"
-                )
+                ),
+                reply_markup=keyboard
             )
             
         except Exception as e:
