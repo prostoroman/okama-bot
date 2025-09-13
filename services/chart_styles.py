@@ -815,6 +815,18 @@ class ChartStyles:
         ax.set_xticklabels(correlation_matrix.columns, rotation=45, ha='right', va='top')
         ax.set_yticklabels(correlation_matrix.index)
         
+        # Специальная настройка для корреляционной матрицы - ось Y слева
+        ax.yaxis.tick_left()  # Перемещаем тики оси Y влево для корреляционной матрицы
+        
+        # Рамки - для корреляционной матрицы показываем все рамки
+        for spine in ['top', 'left', 'right', 'bottom']:
+            ax.spines[spine].set_visible(True)
+            ax.spines[spine].set_color(self.spines['color'])
+            ax.spines[spine].set_linewidth(self.spines['linewidth'])
+        
+        # Отключаем сетку для корреляционной матрицы
+        ax.grid(False)
+        
         # Цветовая шкала
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
         cbar.set_label('Корреляция', rotation=270, labelpad=15)

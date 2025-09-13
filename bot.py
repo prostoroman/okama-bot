@@ -4978,6 +4978,14 @@ class ShansAi:
             text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)  # Remove code blocks
             return text
 
+    async def _remove_keyboard_from_previous_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Удалить клавиатуру с предыдущего сообщения для улучшения UX"""
+        try:
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+        except Exception as e:
+            self.logger.warning(f"Could not remove keyboard from previous message: {e}")
+
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
@@ -5517,6 +5525,9 @@ class ShansAi:
     async def _handle_risk_return_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Risk / Return (CAGR) button for all comparison types"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
@@ -5658,6 +5669,9 @@ class ShansAi:
     async def _handle_chart_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle chart analysis button click for comparison charts"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
@@ -5764,6 +5778,9 @@ class ShansAi:
     async def _handle_efficient_frontier_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Efficient Frontier button for all comparison types"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
@@ -5857,6 +5874,9 @@ class ShansAi:
     async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle data analysis button click for comparison charts"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
@@ -5922,6 +5942,9 @@ class ShansAi:
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle YandexGPT analysis button click for comparison charts"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
@@ -5988,6 +6011,9 @@ class ShansAi:
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle metrics button click for comparison charts - export detailed statistics to Excel"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             symbols = user_context.get('current_symbols', [])
@@ -7554,6 +7580,9 @@ class ShansAi:
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             self.logger.info(f"Handling drawdowns button for user {user_id}")
             
@@ -7795,6 +7824,9 @@ class ShansAi:
     async def _handle_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle dividends button click"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             self.logger.info(f"Handling dividends button for user {user_id}")
             
@@ -7986,6 +8018,9 @@ class ShansAi:
     async def _handle_correlation_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle correlation matrix button click"""
         try:
+            # Remove keyboard from previous message for better UX
+            await self._remove_keyboard_from_previous_message(update, context)
+            
             user_id = update.effective_user.id
             self.logger.info(f"Handling correlation button for user {user_id}")
             
@@ -9175,9 +9210,11 @@ class ShansAi:
             # Проверяем, что дивиденды не пустые (исправляем проблему с pandas Series)
             if isinstance(dividends, pd.Series):
                 if dividends.empty or dividends.size == 0:
+                    self.logger.info(f"No dividends data found for {symbol} (empty Series)")
                     return None
             else:
                 if not dividends or len(dividends) == 0:
+                    self.logger.info(f"No dividends data found for {symbol} (empty data)")
                     return None
             
             # Получаем название компании
