@@ -6207,7 +6207,11 @@ class ShansAi:
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
                     
                     # Send table as message with keyboard
-                    table_message = f"📊 **Сводная таблица ключевых метрик**\n\n```\n{summary_table}\n```"
+                    period_text = self._format_period_for_display(specified_period)
+                    header_text = f"📊 **Сводная таблица ключевых метрик**"
+                    if period_text:
+                        header_text += f" {period_text}"
+                    table_message = f"{header_text}\n\n```\n{summary_table}\n```"
                     await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown', reply_markup=keyboard)
                 else:
                     # Create keyboard for compare command
@@ -7443,6 +7447,27 @@ class ShansAi:
             self.logger.error(f"Error creating summary metrics table: {e}")
             return "❌ Ошибка при создании таблицы метрик"
 
+    def _format_period_for_display(self, specified_period: str = None) -> str:
+        """Format period string for display in headers"""
+        if not specified_period:
+            return ""
+        
+        # Handle different period formats
+        if specified_period.upper().endswith('Y'):
+            years = specified_period[:-1]
+            try:
+                years_int = int(years)
+                if years_int == 1:
+                    return "за 1 год"
+                elif years_int in [2, 3, 4]:
+                    return f"за {years_int} года"
+                else:
+                    return f"за {years_int} лет"
+            except ValueError:
+                return f"за {specified_period}"
+        
+        return f"за {specified_period}"
+
     def _create_enhanced_markdown_table(self, table_data: list, headers: list) -> str:
         """Create Telegram-compatible markdown table with better formatting"""
         try:
@@ -8058,11 +8083,18 @@ class ShansAi:
             caption += f"• Сравнение рисков\n"
             caption += f"• Периоды восстановления"
             
-            # Send chart
+            # Create keyboard for compare command
+            keyboard = self._create_compare_command_keyboard(symbols, currency)
+            
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            # Send chart with keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(caption)
+                caption=self._truncate_caption(caption),
+                reply_markup=keyboard
             )
             
         except Exception as e:
@@ -8248,11 +8280,18 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Send dividend yield chart
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                
+                # Remove keyboard from previous message before sending new message
+                await self._remove_keyboard_before_new_message(update, context)
+                
+                # Send dividend yield chart with keyboard
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(f"💰 График дивидендной доходности для смешанного сравнения\n\nПоказывает дивидендную доходность портфелей и активов")
+                    caption=self._truncate_caption(f"💰 График дивидендной доходности для смешанного сравнения\n\nПоказывает дивидендную доходность портфелей и активов"),
+                    reply_markup=keyboard
                 )
                 
             except Exception as chart_error:
@@ -8435,12 +8474,19 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Send correlation matrix
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency)
+                
+                # Remove keyboard from previous message before sending new message
+                await self._remove_keyboard_before_new_message(update, context)
+                
+                # Send correlation matrix with keyboard
                 self.logger.info("Sending correlation matrix image...")
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(f"🔗 Корреляционная матрица для смешанного сравнения\n\nПоказывает корреляцию между доходностями портфелей и активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция")
+                    caption=self._truncate_caption(f"🔗 Корреляционная матрица для смешанного сравнения\n\nПоказывает корреляцию между доходностями портфелей и активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"),
+                    reply_markup=keyboard
                 )
                 self.logger.info("Correlation matrix image sent successfully")
                 
