@@ -7580,6 +7580,58 @@ class ShansAi:
             # Return empty keyboard as fallback
             return InlineKeyboardMarkup([])
 
+    async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                                   message_type: str, content: any, caption: str = None, 
+                                                   keyboard: InlineKeyboardMarkup = None, parse_mode: str = None):
+        """
+        Универсальная функция для отправки сообщений с правильным управлением клавиатурой
+        
+        Args:
+            update: Telegram update object
+            context: Telegram context object
+            message_type: Тип сообщения ('photo', 'text', 'document')
+            content: Содержимое сообщения (фото, текст, документ)
+            caption: Подпись для фото/документа
+            keyboard: Клавиатура для добавления к сообщению
+            parse_mode: Режим парсинга (Markdown, HTML)
+        """
+        try:
+            # Удаляем клавиатуру с предыдущего сообщения
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            # Отправляем новое сообщение с клавиатурой
+            if message_type == 'photo':
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=content,
+                    caption=caption,
+                    reply_markup=keyboard,
+                    parse_mode=parse_mode
+                )
+            elif message_type == 'text':
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=content,
+                    reply_markup=keyboard,
+                    parse_mode=parse_mode
+                )
+            elif message_type == 'document':
+                await context.bot.send_document(
+                    chat_id=update.effective_chat.id,
+                    document=content,
+                    caption=caption,
+                    reply_markup=keyboard,
+                    parse_mode=parse_mode
+                )
+            else:
+                self.logger.error(f"Unsupported message type: {message_type}")
+                await self._send_callback_message(update, context, f"❌ Неподдерживаемый тип сообщения: {message_type}")
+                
+        except Exception as e:
+            self.logger.error(f"Error in _send_message_with_keyboard_management: {e}")
+            # Fallback: отправляем сообщение без клавиатуры
+            await self._send_callback_message(update, context, f"❌ Ошибка при отправке сообщения: {str(e)}")
+
     def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str) -> str:
         """Create enhanced chart caption with HTML formatting for better Telegram compatibility"""
         try:
