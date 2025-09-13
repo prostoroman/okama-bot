@@ -1575,6 +1575,9 @@ class ShansAi:
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency)
             
+            # Remove keyboard from previous message before sending new message
+            await self._remove_keyboard_before_new_message(update, context)
+            
             # Send correlation matrix with keyboard
             self.logger.info("Sending correlation matrix image...")
             await context.bot.send_photo(
