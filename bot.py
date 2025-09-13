@@ -5086,23 +5086,40 @@ class ShansAi:
         """Удалить клавиатуру с предыдущего сообщения перед отправкой нового сообщения"""
         try:
             if hasattr(update, 'callback_query') and update.callback_query is not None:
+                self.logger.info(f"Attempting to remove keyboard from message ID: {update.callback_query.message.message_id}")
                 await update.callback_query.edit_message_reply_markup(reply_markup=None)
                 self.logger.info("Successfully removed keyboard from previous message before sending new message")
+            else:
+                self.logger.warning("No callback_query found, cannot remove keyboard")
         except Exception as e:
             self.logger.warning(f"Could not remove keyboard from previous message before sending new message: {e}")
 
     async def _send_callback_message_with_keyboard_removal(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, reply_markup=None):
         """Отправить сообщение в callback query с удалением клавиатуры с предыдущего сообщения"""
         try:
+            self.logger.info("Starting _send_callback_message_with_keyboard_removal")
+            
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
             
-            # Send new message with keyboard
-            await self._send_callback_message(update, context, text, parse_mode=parse_mode, reply_markup=reply_markup)
+            # Send new message with keyboard using context.bot.send_message directly
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                self.logger.info(f"Sending new message to chat_id: {update.callback_query.message.chat_id}")
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup
+                )
+                self.logger.info("Successfully sent new message with keyboard")
+            else:
+                # Fallback to regular callback message if no callback_query
+                self.logger.warning("No callback_query found, using fallback")
+                await self._send_callback_message(update, context, text, parse_mode=parse_mode)
         except Exception as e:
             self.logger.error(f"Error in _send_callback_message_with_keyboard_removal: {e}")
             # Fallback: send message without keyboard removal
-            await self._send_callback_message(update, context, text, parse_mode=parse_mode, reply_markup=reply_markup)
+            await self._send_callback_message(update, context, text, parse_mode=parse_mode)
 
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
