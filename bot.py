@@ -3712,12 +3712,13 @@ class ShansAi:
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # Send comparison chart with buttons
-                await context.bot.send_photo(
-                    chat_id=update.effective_chat.id,
-                    photo=io.BytesIO(img_bytes),
+                # Send comparison chart with buttons using _send_photo_safe for Markdown formatting
+                await self._send_photo_safe(
+                    update=update,
+                    photo_bytes=img_bytes,
                     caption=self._truncate_caption(caption),
-                    reply_markup=reply_markup
+                    reply_markup=reply_markup,
+                    context=context
                 )
                 
                 # Table statistics now available via Metrics button
