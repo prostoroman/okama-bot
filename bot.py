@@ -1583,7 +1583,11 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error creating correlation matrix: {e}")
-            await self._send_message_safe(update, f"⚠️ Не удалось создать корреляционную матрицу: {str(e)}")
+            # Check if this is an FX-related error
+            if "FX" in str(e) and "not found" in str(e):
+                await self._send_message_safe(update, f"⚠️ Не удалось создать корреляционную матрицу: некоторые валютные пары недоступны в базе данных okama.\n\nПопробуйте использовать другие активы или проверьте доступность символов.")
+            else:
+                await self._send_message_safe(update, f"⚠️ Не удалось создать корреляционную матрицу: {str(e)}")
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with welcome message and interactive buttons"""
@@ -3356,7 +3360,7 @@ class ShansAi:
             for i, exp_sym in enumerate(expanded_symbols):
                 self.logger.info(f"DEBUG: expanded_symbols[{i}]: '{exp_sym}' (type: {type(exp_sym)})")
             
-            await self._send_message_safe(update, f"🔄 Сравниваю активы: {', '.join(symbols)}...")
+            loading_message = await self._send_message_safe(update, f"🔄 Сравниваю активы: {', '.join(symbols)}...")
 
             # Create comparison using okama
             
@@ -3436,6 +3440,12 @@ class ShansAi:
                                     self.logger.info(f"Added portfolio {portfolio_context['symbol']} to comparison")
                                 except Exception as portfolio_error:
                                     self.logger.error(f"Error creating portfolio {portfolio_context['symbol']}: {portfolio_error}")
+                                    # Delete loading message before showing error
+                                    if loading_message:
+                                        try:
+                                            await loading_message.delete()
+                                        except Exception as delete_error:
+                                            self.logger.warning(f"Could not delete loading message: {delete_error}")
                                     await self._send_message_safe(update, f"❌ Ошибка при создании портфеля {portfolio_context['symbol']}: {str(portfolio_error)}")
                                     return
                             else:
@@ -3452,10 +3462,22 @@ class ShansAi:
                                         self.logger.info(f"Added generic portfolio to comparison")
                                     else:
                                         self.logger.error(f"Could not extract portfolio symbols from description: {desc}")
+                                        # Delete loading message before showing error
+                                        if loading_message:
+                                            try:
+                                                await loading_message.delete()
+                                            except Exception as delete_error:
+                                                self.logger.warning(f"Could not delete loading message: {delete_error}")
                                         await self._send_message_safe(update, f"❌ Ошибка при обработке портфеля: {desc}")
                                         return
                                 except Exception as e:
                                     self.logger.error(f"Error creating generic portfolio: {e}")
+                                    # Delete loading message before showing error
+                                    if loading_message:
+                                        try:
+                                            await loading_message.delete()
+                                        except Exception as delete_error:
+                                            self.logger.warning(f"Could not delete loading message: {delete_error}")
                                     await self._send_message_safe(update, f"❌ Ошибка при создании портфеля: {str(e)}")
                                     return
                         else:
@@ -3505,10 +3527,22 @@ class ShansAi:
                         
                         # Check if we have only Chinese symbols (pure Chinese comparison)
                         if len(chinese_symbols) == len(symbols):
+                            # Delete loading message before hybrid comparison
+                            if loading_message:
+                                try:
+                                    await loading_message.delete()
+                                except Exception as e:
+                                    self.logger.warning(f"Could not delete loading message: {e}")
                             # Pure Chinese comparison - use hybrid approach
                             await self._create_hybrid_chinese_comparison(update, context, chinese_symbols)
                             return
                         else:
+                            # Delete loading message before showing mixed comparison message
+                            if loading_message:
+                                try:
+                                    await loading_message.delete()
+                                except Exception as e:
+                                    self.logger.warning(f"Could not delete loading message: {e}")
                             # Mixed comparison - show message
                             await self._send_message_safe(update, 
                                 f"⚠️ Смешанное сравнение (китайские + прочие символы) пока не поддерживается.\n"
@@ -3543,6 +3577,12 @@ class ShansAi:
                             self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
                     except Exception as asset_list_error:
                         self.logger.error(f"Error creating AssetList: {asset_list_error}")
+                        # Delete loading message before showing error
+                        if loading_message:
+                            try:
+                                await loading_message.delete()
+                            except Exception as delete_error:
+                                self.logger.warning(f"Could not delete loading message: {delete_error}")
                         await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(asset_list_error)}")
                         return
                     
@@ -3566,10 +3606,22 @@ class ShansAi:
                         
                         # Check if we have only Chinese symbols (pure Chinese comparison)
                         if len(chinese_symbols) == len(symbols):
+                            # Delete loading message before hybrid comparison
+                            if loading_message:
+                                try:
+                                    await loading_message.delete()
+                                except Exception as e:
+                                    self.logger.warning(f"Could not delete loading message: {e}")
                             # Pure Chinese comparison - use hybrid approach
                             await self._create_hybrid_chinese_comparison(update, context, chinese_symbols)
                             return
                         else:
+                            # Delete loading message before showing mixed comparison message
+                            if loading_message:
+                                try:
+                                    await loading_message.delete()
+                                except Exception as e:
+                                    self.logger.warning(f"Could not delete loading message: {e}")
                             # Mixed comparison - show message
                             await self._send_message_safe(update, 
                                 f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
@@ -3724,6 +3776,13 @@ class ShansAi:
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
+                # Delete loading message before sending results
+                if loading_message:
+                    try:
+                        await loading_message.delete()
+                    except Exception as e:
+                        self.logger.warning(f"Could not delete loading message: {e}")
+                
                 # Send comparison chart with buttons using _send_photo_safe for Markdown formatting
                 await self._send_photo_safe(
                     update=update,
@@ -3744,10 +3803,22 @@ class ShansAi:
                 
             except Exception as e:
                 self.logger.error(f"Error creating comparison: {e}")
+                # Delete loading message before showing error
+                if loading_message:
+                    try:
+                        await loading_message.delete()
+                    except Exception as delete_error:
+                        self.logger.warning(f"Could not delete loading message: {delete_error}")
                 await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(e)}")
                 
         except Exception as e:
             self.logger.error(f"Error in compare command: {e}")
+            # Delete loading message before showing error
+            if loading_message:
+                try:
+                    await loading_message.delete()
+                except Exception as delete_error:
+                    self.logger.warning(f"Could not delete loading message: {delete_error}")
             await self._send_message_safe(update, f"❌ Ошибка в команде сравнения: {str(e)}")
 
     async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -5002,6 +5073,15 @@ class ShansAi:
         except Exception as e:
             self.logger.warning(f"Could not remove keyboard from previous message: {e}")
 
+    async def _remove_keyboard_after_successful_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Удалить клавиатуру с предыдущего сообщения только после успешного создания нового сообщения"""
+        try:
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+                self.logger.info("Successfully removed keyboard from previous message")
+        except Exception as e:
+            self.logger.warning(f"Could not remove keyboard from previous message after successful message creation: {e}")
+
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
@@ -5541,8 +5621,7 @@ class ShansAi:
     async def _handle_risk_return_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Risk / Return (CAGR) button for all comparison types"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don't remove keyboard yet - wait for successful message creation
             
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
@@ -5681,6 +5760,9 @@ class ShansAi:
                 caption=self._truncate_caption(f"📊 Risk / Return (CAGR) для сравнения: {', '.join(asset_names)}"),
                 reply_markup=keyboard
             )
+            
+            # Remove keyboard from previous message only after successful message creation
+            await self._remove_keyboard_after_successful_message(update, context)
 
         except Exception as e:
             self.logger.error(f"Error handling Risk / Return button: {e}")
@@ -5689,8 +5771,7 @@ class ShansAi:
     async def _handle_chart_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle chart analysis button click for comparison charts"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don't remove keyboard yet - wait for successful message creation
             
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
@@ -5785,17 +5866,26 @@ class ShansAi:
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
                     await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
                     
+                    # Remove keyboard from previous message only after successful message creation
+                    await self._remove_keyboard_after_successful_message(update, context)
+                    
                 else:
                     error_msg = chart_analysis.get('error', 'Неизвестная ошибка') if chart_analysis else 'Анализ не выполнен'
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
                     await self._send_callback_message(update, context, f"❌ Ошибка анализа графика: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
+                    # Remove keyboard from previous message only after successful message creation
+                    await self._remove_keyboard_after_successful_message(update, context)
+                    
             except Exception as chart_error:
                 self.logger.error(f"Error creating chart for analysis: {chart_error}")
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
                 await self._send_callback_message(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                
+                # Remove keyboard from previous message only after successful message creation
+                await self._remove_keyboard_after_successful_message(update, context)
 
         except Exception as e:
             self.logger.error(f"Error handling chart analysis button: {e}")
@@ -5806,8 +5896,7 @@ class ShansAi:
     async def _handle_efficient_frontier_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Efficient Frontier button for all comparison types"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don't remove keyboard yet - wait for successful message creation
             
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
@@ -5898,6 +5987,9 @@ class ShansAi:
                 caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}"),
                 reply_markup=keyboard
             )
+            
+            # Remove keyboard from previous message only after successful message creation
+            await self._remove_keyboard_after_successful_message(update, context)
 
         except Exception as e:
             self.logger.error(f"Error handling Efficient Frontier button: {e}")
@@ -5906,8 +5998,7 @@ class ShansAi:
     async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle data analysis button click for comparison charts"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don't remove keyboard yet - wait for successful message creation
             
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
@@ -5958,10 +6049,16 @@ class ShansAi:
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
                         await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
+                        
+                        # Remove keyboard from previous message only after successful message creation
+                        await self._remove_keyboard_after_successful_message(update, context)
                     else:
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
                         await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
+                        
+                        # Remove keyboard from previous message only after successful message creation
+                        await self._remove_keyboard_after_successful_message(update, context)
                         
                 else:
                     error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
@@ -5969,11 +6066,17 @@ class ShansAi:
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
                     await self._send_callback_message(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
+                    # Remove keyboard from previous message only after successful message creation
+                    await self._remove_keyboard_after_successful_message(update, context)
+                    
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for analysis: {data_error}")
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency)
                 await self._send_callback_message(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                
+                # Remove keyboard from previous message only after successful message creation
+                await self._remove_keyboard_after_successful_message(update, context)
 
         except Exception as e:
             self.logger.error(f"Error handling data analysis button: {e}")
@@ -5984,8 +6087,7 @@ class ShansAi:
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle YandexGPT analysis button click for comparison charts"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don't remove keyboard yet - wait for successful message creation
             
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
@@ -6037,11 +6139,16 @@ class ShansAi:
                             # Create keyboard for compare command
                             keyboard = self._create_compare_command_keyboard(symbols, currency)
                             await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
+                            
+                            # Remove keyboard from previous message only after successful message creation
+                            await self._remove_keyboard_after_successful_message(update, context)
                         else:
                             # Create keyboard for compare command
                             keyboard = self._create_compare_command_keyboard(symbols, currency)
                             await self._send_callback_message(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                             
+                            # Remove keyboard from previous message only after successful message creation
+                            await self._remove_keyboard_after_successful_message(update, context)
                     else:
                         error_msg = yandexgpt_analysis.get('error', 'Неизвестная ошибка') if yandexgpt_analysis else 'Анализ не выполнен'
                         # Create keyboard for compare command
@@ -6063,8 +6170,8 @@ class ShansAi:
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle metrics button click for comparison charts - export detailed statistics to Excel"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don\'t remove keyboard yet - wait for successful message creation
+            
             
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
@@ -6116,10 +6223,15 @@ class ShansAi:
                         keyboard = self._create_compare_command_keyboard(symbols, currency)
                         await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла", reply_markup=keyboard)
                         
+                        # Remove keyboard from previous message only after successful message creation
+                        await self._remove_keyboard_after_successful_message(update, context)
                 else:
                     # Create keyboard for compare command
                     keyboard = self._create_compare_command_keyboard(symbols, currency)
                     await self._send_callback_message(update, context, "❌ Не удалось подготовить данные для экспорта", reply_markup=keyboard)
+                    
+                    # Remove keyboard from previous message only after successful message creation
+                    await self._remove_keyboard_after_successful_message(update, context)
                     
             except Exception as metrics_error:
                 self.logger.error(f"Error preparing metrics data: {metrics_error}")
@@ -7614,8 +7726,8 @@ class ShansAi:
     async def _handle_drawdowns_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle drawdowns button click"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don\'t remove keyboard yet - wait for successful message creation
+            
             
             user_id = update.effective_user.id
             self.logger.info(f"Handling drawdowns button for user {user_id}")
@@ -7862,8 +7974,8 @@ class ShansAi:
     async def _handle_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle dividends button click"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don\'t remove keyboard yet - wait for successful message creation
+            
             
             user_id = update.effective_user.id
             self.logger.info(f"Handling dividends button for user {user_id}")
@@ -8056,8 +8168,8 @@ class ShansAi:
     async def _handle_correlation_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
         """Handle correlation matrix button click"""
         try:
-            # Remove keyboard from previous message for better UX
-            await self._remove_keyboard_from_previous_message(update, context)
+            # Don\'t remove keyboard yet - wait for successful message creation
+            
             
             user_id = update.effective_user.id
             self.logger.info(f"Handling correlation button for user {user_id}")
