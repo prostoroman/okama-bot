@@ -2078,6 +2078,13 @@ class ShansAi:
             await self._handle_portfolio_input(update, context, text)
             return
         
+        # Check if user is waiting for portfolio weights input (from compare command)
+        if user_context.get('waiting_for_portfolio_weights', False):
+            self.logger.info(f"Processing as portfolio weights input: {text}")
+            # Process as portfolio weights input
+            await self._handle_portfolio_weights_input(update, context, text)
+            return
+        
         # Check if user is waiting for info input
         if user_context.get('waiting_for_info', False):
             self.logger.info(f"Processing as info input: {text}")
@@ -4862,6 +4869,290 @@ class ShansAi:
             self.logger.error(f"Error in portfolio input handler: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}")
 
+    async def _handle_portfolio_weights_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle portfolio weights input from compare command"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Get base symbols from context
+            base_symbols = user_context.get('portfolio_base_symbols', [])
+            if not base_symbols:
+                await self._send_message_safe(update, "❌ Ошибка: не найдены базовые символы для портфеля")
+                return
+            
+            # Clear waiting flag
+            self._update_user_context(user_id, 
+                waiting_for_portfolio_weights=False,
+                portfolio_base_symbols=None
+            )
+            
+            # Parse currency and period parameters from input text
+            text_args = text.split()
+            
+            # For portfolio command, we need to preserve the full symbol:weight format
+            # So we'll parse currency and period manually, keeping the original arguments
+            valid_currencies = {'USD', 'RUB', 'EUR', 'GBP', 'CNY', 'HKD', 'JPY'}
+            import re
+            period_pattern = re.compile(r'^(\d+)Y$', re.IGNORECASE)
+            
+            portfolio_args = []
+            specified_currency = None
+            specified_period = None
+            
+            for arg in text_args:
+                arg_upper = arg.upper()
+                
+                # Check if it's a currency code
+                if arg_upper in valid_currencies:
+                    if specified_currency is None:
+                        specified_currency = arg_upper
+                    continue
+                
+                # Check if it's a period (e.g., '5Y', '10Y')
+                period_match = period_pattern.match(arg)
+                if period_match:
+                    if specified_period is None:
+                        specified_period = arg_upper
+                    continue
+                
+                # If it's neither currency nor period, it's a portfolio argument
+                portfolio_args.append(arg)
+            
+            # Extract symbols and weights from portfolio arguments
+            portfolio_data = []
+            
+            for arg in portfolio_args:
+                if ':' in arg:
+                    symbol_part, weight_part = arg.split(':', 1)
+                    original_symbol = self.clean_symbol(symbol_part.strip())
+                    # Преобразуем символ в верхний регистр
+                    symbol = original_symbol.upper()
+                    
+                    try:
+                        weight_str = weight_part.strip()
+                        self.logger.info(f"DEBUG: Converting weight '{weight_str}' to float for symbol '{symbol}'")
+                        weight = float(weight_str)
+                    except Exception as e:
+                        self.logger.error(f"Error converting weight '{weight_part.strip()}' to float: {e}")
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1")
+                        return
+                    
+                    if weight <= 0 or weight > 1:
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: {weight}. Доля должна быть от 0 до 1")
+                        return
+                    
+                    portfolio_data.append((symbol, weight))
+                    
+                else:
+                    await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
+                    return
+            
+            if not portfolio_data:
+                await self._send_message_safe(update, "❌ Не указаны активы для портфеля")
+                return
+            
+            # Check if weights sum to approximately 1.0
+            total_weight = sum(weight for _, weight in portfolio_data)
+            if abs(total_weight - 1.0) > 0.01:
+                # Предлагаем исправление, если сумма близка к 1
+                if abs(total_weight - 1.0) <= 0.1:
+                    corrected_weights = []
+                    for symbol, weight in portfolio_data:
+                        corrected_weight = weight / total_weight
+                        corrected_weights.append((symbol, corrected_weight))
+                    
+                    await self._send_message_safe(update, 
+                        f"⚠️ Сумма долей ({total_weight:.3f}) не равна 1.0\n\n"
+                        f"Исправленные доли:\n"
+                        f"{chr(10).join([f'• {symbol}: {weight:.3f}' for symbol, weight in corrected_weights])}\n\n"
+                        f"Попробуйте команду:\n"
+                        f"`/portfolio {' '.join([f'{symbol}:{weight:.3f}' for symbol, weight in corrected_weights])}`"
+                    )
+                else:
+                    await self._send_message_safe(update, 
+                        f"❌ Сумма долей должна быть равна 1.0, текущая сумма: {total_weight:.3f}\n\n"
+                        f"Пример правильной команды:\n"
+                        f"`/portfolio {base_symbols[0]}:0.6 {base_symbols[1] if len(base_symbols) > 1 else 'QQQ.US'}:0.4`"
+                    )
+                return
+            
+            if len(portfolio_data) > 10:
+                await self._send_message_safe(update, "❌ Максимум 10 активов в портфеле")
+                return
+            
+            symbols = [symbol for symbol, _ in portfolio_data]
+            weights = [weight for _, weight in portfolio_data]
+            
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            
+            # Create portfolio using okama
+            self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
+            self.logger.info(f"DEBUG: Symbols types: {[type(s) for s in symbols]}")
+            self.logger.info(f"DEBUG: Weights types: {[type(w) for w in weights]}")
+            
+            # Determine base currency - use specified currency if provided, otherwise auto-detect
+            if specified_currency:
+                currency = specified_currency
+                currency_info = f"указана пользователем ({specified_currency})"
+                self.logger.info(f"Using user-specified currency for portfolio: {currency}")
+            else:
+                # Auto-detect currency from the first asset
+                first_symbol = symbols[0]
+                try:
+                    # Create asset to get its currency
+                    first_asset = ok.Asset(first_symbol)
+                    currency = first_asset.currency
+                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    self.logger.info(f"Currency determined from asset {first_symbol}: {currency}")
+                except Exception as e:
+                    self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
+                    # Fallback to namespace-based detection using our function
+                    currency, currency_info = self._get_currency_by_symbol(first_symbol)
+            
+            # Create portfolio using okama with period support
+            try:
+                # Apply period filter if specified
+                if specified_period:
+                    years = int(specified_period[:-1])  # Extract number from '5Y'
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                           first_date=start_date.strftime('%Y-%m-%d'), 
+                                           last_date=end_date.strftime('%Y-%m-%d'))
+                    self.logger.info(f"Created portfolio with period {specified_period}")
+                else:
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                    self.logger.info(f"Created portfolio with maximum available period")
+                
+                # Create portfolio information text (without raw object)
+                portfolio_text = f"💼 **Портфель создан успешно!**\n\n"
+                
+                # Add basic metrics to portfolio text
+                try:
+                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
+                    portfolio_text += metrics_text
+                except Exception as e:
+                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
+                
+                # Generate portfolio symbol using PF namespace and okama's assigned symbol
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                
+                # Count existing portfolios for this user
+                portfolio_count = user_context.get('portfolio_count', 0) + 1
+                
+                # Use PF namespace with okama's assigned symbol
+                # Get the portfolio symbol that okama assigned
+                if hasattr(portfolio, 'symbol'):
+                    portfolio_symbol = portfolio.symbol
+                else:
+                    # Fallback to custom symbol if okama doesn't provide one
+                    portfolio_symbol = f"PF_{portfolio_count}"
+                try:
+                    portfolio_symbol = portfolio.symbol
+                except Exception as e:
+                    self.logger.warning(f"Could not get okama portfolio symbol: {e}")
+                    portfolio_symbol = f"PF_{portfolio_count}"
+                
+                # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
+                portfolio_data_str = ','.join(symbols)
+                
+                # Add portfolio symbol display
+                portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
+                
+                # Add buttons in 2 columns
+                keyboard = [
+                    [InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
+                     InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
+                     InlineKeyboardButton("📊 Метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
+                     InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
+                     InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💰 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
+                ]
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Send portfolio information with buttons
+                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup, parse_mode='Markdown')
+                
+                # Update user context with portfolio information
+                self._update_user_context(
+                    user_id, 
+                    last_assets=symbols,
+                    last_analysis_type='portfolio',
+                    last_period=specified_period or 'MAX',
+                    current_symbols=symbols,
+                    current_currency=currency,
+                    current_currency_info=currency_info,
+                    portfolio_weights=weights,
+                    portfolio_count=portfolio_count,
+                    current_period=specified_period
+                )
+                
+                # Verify what was saved
+                saved_context = self._get_user_context(user_id)
+                self.logger.info(f"Saved context keys: {list(saved_context.keys())}")
+                self.logger.info(f"Saved current_symbols: {saved_context.get('current_symbols')}")
+                self.logger.info(f"Saved current_currency: {saved_context.get('current_currency')}")
+                self.logger.info(f"Saved portfolio_weights: {saved_context.get('portfolio_weights')}")
+                
+                # Get current saved portfolios and add the new portfolio
+                saved_portfolios = user_context.get('saved_portfolios', {})
+                
+                # Generate portfolio name
+                portfolio_name = self._generate_portfolio_name(symbols, weights)
+                
+                # Create portfolio attributes for storage
+                portfolio_attributes = {
+                    'symbols': symbols,
+                    'weights': weights,
+                    'currency': currency,
+                    'created_at': datetime.now().isoformat(),
+                    'description': f"Портфель: {', '.join(symbols)}",
+                    'portfolio_symbol': portfolio_symbol,
+                    'portfolio_name': portfolio_name,
+                    'total_weight': sum(weights),
+                    'asset_count': len(symbols),
+                    'period': specified_period
+                }
+                
+                # Add portfolio to saved portfolios
+                saved_portfolios[portfolio_symbol] = portfolio_attributes
+                
+                # Update saved portfolios in context
+                self._update_user_context(
+                    user_id,
+                    saved_portfolios=saved_portfolios,
+                    portfolio_count=portfolio_count
+                )
+                
+                # Verify what was saved
+                final_saved_context = self._get_user_context(user_id)
+                self.logger.info(f"Final saved portfolios count: {len(final_saved_context.get('saved_portfolios', {}))}")
+                self.logger.info(f"Final saved portfolios keys: {list(final_saved_context.get('saved_portfolios', {}).keys())}")
+                
+            except Exception as e:
+                self.logger.error(f"Error creating portfolio: {e}")
+                await self._send_message_safe(update, 
+                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
+                    "💡 Возможные причины:\n"
+                    "• Один из символов недоступен\n"
+                    "• Проблемы с данными\n"
+                    "• Неверный формат символа\n\n"
+                    "Проверьте:\n"
+                    "• Правильность написания символов\n"
+                    "• Доступность данных для указанных активов"
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error in portfolio weights input handler: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}")
+
     async def _handle_compare_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle compare input from user message"""
         try:
@@ -5658,6 +5949,11 @@ class ShansAi:
             elif callback_data == 'efficient_frontier_compare':
                 self.logger.info("Efficient Frontier button clicked")
                 await self._handle_efficient_frontier_compare_button(update, context)
+            elif callback_data.startswith('compare_portfolio_'):
+                symbols_str = callback_data.replace('compare_portfolio_', '')
+                symbols = [self.clean_symbol(s) for s in symbols_str.split('_')]
+                self.logger.info(f"Compare portfolio button clicked for symbols: {symbols}")
+                await self._handle_compare_portfolio_button(update, context, symbols)
             elif callback_data == 'namespace_home':
                 self.logger.info("Namespace home button clicked")
                 await self._handle_namespace_home_button(update, context)
@@ -6092,6 +6388,41 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling Efficient Frontier button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при построении эффективной границы: {str(e)}")
+
+    async def _handle_compare_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Handle portfolio button for compare command - add compared assets to portfolio"""
+        try:
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
+            # Set user context to wait for portfolio weights input
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, 
+                waiting_for_portfolio_weights=True,
+                portfolio_base_symbols=symbols
+            )
+            
+            # Create message with symbols and request for weights
+            symbols_text = ' '.join(symbols)
+            portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
+            portfolio_text += f"Активы для добавления: `{symbols_text}`\n\n"
+            portfolio_text += "**Укажите доли для каждого актива:**\n"
+            portfolio_text += f"• `{symbols[0]}:0.4 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.3 {symbols[2] if len(symbols) > 2 else 'BND.US'}:0.3`\n\n"
+            portfolio_text += "**Примеры:**\n"
+            portfolio_text += f"• `{symbols[0]}:0.6 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.4`\n"
+            portfolio_text += f"• `{symbols[0]}:0.5 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.3 {symbols[2] if len(symbols) > 2 else 'BND.US'}:0.2`\n\n"
+            portfolio_text += "💡 Сумма долей должна равняться 1.0 (100%)\n"
+            portfolio_text += "💡 Можно добавить дополнительные активы к сравниваемым\n\n"
+            portfolio_text += "*💬 Введите состав портфеля:*"
+            
+            await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
+            
+        except Exception as e:
+            self.logger.error(f"Error handling compare portfolio button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при подготовке портфеля: {str(e)}", parse_mode='Markdown')
 
     async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle data analysis button click for comparison charts"""
@@ -7839,6 +8170,12 @@ class ShansAi:
             # Add Efficient Frontier button
             keyboard.append([
                 InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
+            ])
+            
+            # Add Portfolio button - create callback data with symbols
+            symbols_str = '_'.join(symbols)
+            keyboard.append([
+                InlineKeyboardButton("💼 В Портфель", callback_data=f"compare_portfolio_{symbols_str}")
             ])
             
             # Add AI analysis buttons if services are available
