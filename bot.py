@@ -3733,50 +3733,8 @@ class ShansAi:
                 
                 # Chart analysis is only available via buttons
                 
-                # Create keyboard with analysis buttons conditionally
-                # Determine composition: portfolios vs assets
-                try:
-                    has_portfolios_only = all(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
-                    has_assets_only = all(not isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols)
-                    is_mixed_comparison = not (has_portfolios_only or has_assets_only)
-                except Exception:
-                    # Safe fallback
-                    has_portfolios_only = False
-                    is_mixed_comparison = False
-
-                keyboard = []
-
-                # Hide these buttons for mixed comparisons (portfolio + asset)
-                if not is_mixed_comparison:
-                    keyboard.append([
-                        InlineKeyboardButton("💰 Дивиденды", callback_data="dividends_compare"),
-                        InlineKeyboardButton("📉 Просадки", callback_data="drawdowns_compare"),
-                        
-                    ])
-                    keyboard.append([
-                        InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare"),
-                        InlineKeyboardButton("🔗 Корреляция", callback_data="correlation_compare")
-                    ])
-
-                
-                # Add Efficient Frontier button for all comparisons
-                keyboard.append([
-                    InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
-                ])
-                
-                # Add AI analysis button if Gemini service is available
-                if self.gemini_service and self.gemini_service.is_available():
-                    keyboard.append([
-                        InlineKeyboardButton("AI-анализ", callback_data="data_analysis_compare")
-                    ])
-                
-                # Add chart analysis button if Gemini is available
-                if self.gemini_service and self.gemini_service.is_available():
-                    keyboard.append([
-                        InlineKeyboardButton("Анализ графика Gemini", callback_data="chart_analysis_compare")
-                    ])
-                
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                # Create keyboard using unified function
+                reply_markup = self._create_compare_command_keyboard(symbols, currency, specified_period)
                 
                 # Delete loading message before sending results
                 if loading_message:
@@ -7234,30 +7192,59 @@ class ShansAi:
                         
                         # Get efficient frontier data
                         try:
-                            # Get transition map data (risk vs weights)
-                            transition_data = ef.transition_map(x_axe='risk')
-                            
-                            # Extract key points from efficient frontier
+                            # Extract key points from efficient frontier using correct okama methods
                             efficient_frontier_data = {
                                 'min_risk_portfolio': {
-                                    'risk': ef.min_risk_point[0] if hasattr(ef, 'min_risk_point') else None,
-                                    'return': ef.min_risk_point[1] if hasattr(ef, 'min_risk_point') else None,
-                                    'weights': ef.min_risk_weights.tolist() if hasattr(ef, 'min_risk_weights') else None
+                                    'risk': ef.gmv_annualized[0] if hasattr(ef, 'gmv_annualized') and ef.gmv_annualized is not None else None,
+                                    'return': ef.gmv_annualized[1] if hasattr(ef, 'gmv_annualized') and ef.gmv_annualized is not None else None,
+                                    'weights': ef.gmv_weights.tolist() if hasattr(ef, 'gmv_weights') and ef.gmv_weights is not None else None
                                 },
                                 'max_return_portfolio': {
-                                    'risk': ef.max_return_point[0] if hasattr(ef, 'max_return_point') else None,
-                                    'return': ef.max_return_point[1] if hasattr(ef, 'max_return_point') else None,
-                                    'weights': ef.max_return_weights.tolist() if hasattr(ef, 'max_return_weights') else None
+                                    'risk': None,  # Will be calculated from optimize_return
+                                    'return': None,  # Will be calculated from optimize_return
+                                    'weights': None  # Will be calculated from optimize_return
                                 },
                                 'max_sharpe_portfolio': {
-                                    'risk': ef.max_sharpe_point[0] if hasattr(ef, 'max_sharpe_point') else None,
-                                    'return': ef.max_sharpe_point[1] if hasattr(ef, 'max_sharpe_point') else None,
-                                    'weights': ef.max_sharpe_weights.tolist() if hasattr(ef, 'max_sharpe_weights') else None,
-                                    'sharpe_ratio': ef.max_sharpe_ratio if hasattr(ef, 'max_sharpe_ratio') else None
+                                    'risk': None,  # Will be calculated from get_tangency_portfolio
+                                    'return': None,  # Will be calculated from get_tangency_portfolio
+                                    'weights': None,  # Will be calculated from get_tangency_portfolio
+                                    'sharpe_ratio': None
                                 },
                                 'asset_names': asset_names,
                                 'currency': currency
                             }
+                            
+                            # Get max return portfolio
+                            try:
+                                max_return_result = ef.optimize_return()
+                                if max_return_result and 'Weights' in max_return_result:
+                                    efficient_frontier_data['max_return_portfolio']['weights'] = max_return_result['Weights'].tolist()
+                                    efficient_frontier_data['max_return_portfolio']['return'] = max_return_result.get('Mean_return_monthly', 0) * 12  # Annualize
+                                    efficient_frontier_data['max_return_portfolio']['risk'] = max_return_result.get('Risk_monthly', 0) * (12 ** 0.5)  # Annualize
+                            except Exception as e:
+                                self.logger.warning(f"Failed to get max return portfolio: {e}")
+                            
+                            # Get max Sharpe portfolio (tangency portfolio)
+                            try:
+                                tangency_result = ef.get_tangency_portfolio()
+                                if tangency_result and 'Weights' in tangency_result:
+                                    efficient_frontier_data['max_sharpe_portfolio']['weights'] = tangency_result['Weights'].tolist()
+                                    efficient_frontier_data['max_sharpe_portfolio']['return'] = tangency_result.get('Rate_of_return', 0)
+                                    efficient_frontier_data['max_sharpe_portfolio']['risk'] = tangency_result.get('Risk', 0)
+                                    # Calculate Sharpe ratio
+                                    if efficient_frontier_data['max_sharpe_portfolio']['risk'] > 0:
+                                        efficient_frontier_data['max_sharpe_portfolio']['sharpe_ratio'] = (
+                                            efficient_frontier_data['max_sharpe_portfolio']['return'] / 
+                                            efficient_frontier_data['max_sharpe_portfolio']['risk']
+                                        )
+                            except Exception as e:
+                                self.logger.warning(f"Failed to get tangency portfolio: {e}")
+                            
+                            # Log the extracted data for debugging
+                            self.logger.info(f"Efficient frontier data extracted:")
+                            self.logger.info(f"  Min risk: risk={efficient_frontier_data['min_risk_portfolio']['risk']}, return={efficient_frontier_data['min_risk_portfolio']['return']}")
+                            self.logger.info(f"  Max return: risk={efficient_frontier_data['max_return_portfolio']['risk']}, return={efficient_frontier_data['max_return_portfolio']['return']}")
+                            self.logger.info(f"  Max Sharpe: risk={efficient_frontier_data['max_sharpe_portfolio']['risk']}, return={efficient_frontier_data['max_sharpe_portfolio']['return']}")
                             
                             data_info['efficient_frontier'] = efficient_frontier_data
                             self.logger.info(f"Efficient frontier data prepared for {len(asset_names)} assets")
@@ -8212,23 +8199,14 @@ class ShansAi:
         try:
             keyboard = []
             
-            # Add basic analysis buttons
+            # Add basic analysis buttons (same as first message)
             keyboard.append([
-                InlineKeyboardButton("📉 Drawdowns", callback_data="drawdowns_compare"),
-                InlineKeyboardButton("💰 Dividends", callback_data="dividends_compare")
+                InlineKeyboardButton("💰 Дивиденды", callback_data="dividends_compare"),
+                InlineKeyboardButton("📉 Просадки", callback_data="drawdowns_compare")
             ])
             keyboard.append([
-                InlineKeyboardButton("🔗 Correlation Matrix", callback_data="correlation_compare")
-            ])
-            
-            # Add Metrics button
-            keyboard.append([
-                InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare")
-            ])
-            
-            # Add Risk / Return button
-            keyboard.append([
-                InlineKeyboardButton("📊 Risk / Return", callback_data="risk_return_compare")
+                InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare"),
+                InlineKeyboardButton("🔗 Корреляция", callback_data="correlation_compare")
             ])
             
             # Add Efficient Frontier button
@@ -8242,18 +8220,11 @@ class ShansAi:
                 InlineKeyboardButton("💼 В Портфель", callback_data=f"compare_portfolio_{symbols_str}")
             ])
             
-            # Add AI analysis buttons if services are available
-            ai_buttons = []
+            # Add AI analysis buttons if services are available (only Gemini, no YandexGPT)
             if self.gemini_service and self.gemini_service.is_available():
-                ai_buttons.append(InlineKeyboardButton("Анализ Gemini", callback_data="data_analysis_compare"))
-            if self.yandexgpt_service and self.yandexgpt_service.is_available():
-                ai_buttons.append(InlineKeyboardButton("Анализ YandexGPT", callback_data="yandexgpt_analysis_compare"))
-            
-            if ai_buttons:
-                keyboard.append(ai_buttons)
-            
-            # Add chart analysis button if Gemini is available
-            if self.gemini_service and self.gemini_service.is_available():
+                keyboard.append([
+                    InlineKeyboardButton("AI-анализ", callback_data="data_analysis_compare")
+                ])
                 keyboard.append([
                     InlineKeyboardButton("Анализ графика Gemini", callback_data="chart_analysis_compare")
                 ])
@@ -14209,6 +14180,62 @@ class ShansAi:
             self.logger.error(f"Error handling portfolio compare button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при подготовке сравнения: {str(e)}")
 
+    async def _handle_portfolio_main_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
+        """Handle portfolio main button click - show portfolio main information with keyboard"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Get portfolio data from saved portfolios
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            if portfolio_symbol not in saved_portfolios:
+                await self._send_callback_message(update, context, f"❌ Портфель {portfolio_symbol} не найден в сохраненных портфелях")
+                return
+            
+            portfolio_info = saved_portfolios[portfolio_symbol]
+            symbols = portfolio_info.get('symbols', [])
+            weights = portfolio_info.get('weights', [])
+            currency = portfolio_info.get('currency', 'USD')
+            
+            # Create portfolio information text
+            portfolio_text = f"💼 **Портфель {portfolio_symbol}**\n\n"
+            
+            # Add portfolio composition
+            portfolio_text += "📊 **Состав портфеля:**\n"
+            for i, (symbol, weight) in enumerate(zip(symbols, weights)):
+                portfolio_text += f"• {symbol}: {weight:.1%}\n"
+            
+            portfolio_text += f"\n💰 **Валюта:** {currency}\n"
+            
+            # Add basic metrics if available
+            try:
+                # Create portfolio for metrics calculation
+                portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
+                portfolio_text += metrics_text
+            except Exception as e:
+                self.logger.warning(f"Could not add metrics to portfolio text: {e}")
+            
+            portfolio_text += f"\n🏷️ Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
+            
+            # Create keyboard using unified function
+            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+            
+            # Remove keyboard from previous message and send new message with keyboard
+            await self._remove_keyboard_before_new_message(update, context)
+            
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=portfolio_text,
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio main button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при отображении портфеля: {str(e)}")
+
     async def _handle_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
         """Handle namespace button click - show symbols in specific namespace"""
         try:
@@ -14707,3 +14734,4 @@ if __name__ == "__main__":
         logger.error(f"Python executable: {sys.executable}")
         traceback.print_exc()
         sys.exit(1)
+
