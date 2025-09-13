@@ -7203,46 +7203,26 @@ class ShansAi:
             return "❌ Ошибка при создании таблицы метрик"
 
     def _create_enhanced_markdown_table(self, table_data: list, headers: list) -> str:
-        """Create enhanced markdown table with better formatting and alignment"""
+        """Create Telegram-compatible markdown table with better formatting"""
         try:
-            # Create table with proper alignment
-            # First column (metric names) - left aligned
-            # Other columns (values) - center aligned for better readability
+            # Use tabulate with pipe format for Telegram compatibility
+            # This ensures proper markdown table format without HTML elements
             
-            # Build the table manually for better control over formatting
-            table_lines = []
-            
-            # Create header row
-            header_row = "| " + " | ".join(headers) + " |"
-            table_lines.append(header_row)
-            
-            # Create separator row with alignment
-            separator_parts = ["|"]
-            for i, header in enumerate(headers):
-                if i == 0:
-                    # First column (metric names) - left aligned
-                    separator_parts.append(":---" + "-" * (len(header) - 4) + "|")
-                else:
-                    # Other columns (values) - center aligned
-                    separator_parts.append(":---:" + "-" * (len(header) - 5) + "|")
-            separator_row = "".join(separator_parts)
-            table_lines.append(separator_row)
-            
-            # Add data rows
+            # Format the data for better readability
+            formatted_data = []
             for row in table_data:
-                # Format the first column (metric name) with bold
-                formatted_row = ["**" + str(row[0]) + "**"]
-                
-                # Format other columns with proper spacing
+                formatted_row = []
+                # First column: metric name (keep as is)
+                formatted_row.append(str(row[0]))
+                # Other columns: values with proper spacing
                 for i in range(1, len(row)):
-                    value = str(row[i])
-                    # Add extra spaces for better alignment
-                    formatted_row.append(f" {value} ")
-                
-                data_row = "| " + " | ".join(formatted_row) + " |"
-                table_lines.append(data_row)
+                    formatted_row.append(str(row[i]))
+                formatted_data.append(formatted_row)
             
-            return "\n".join(table_lines)
+            # Create markdown table using tabulate
+            table_markdown = tabulate.tabulate(formatted_data, headers=headers, tablefmt="pipe")
+            
+            return table_markdown
             
         except Exception as e:
             self.logger.error(f"Error creating enhanced markdown table: {e}")
@@ -7269,9 +7249,7 @@ class ShansAi:
             # Create summary section
             summary_section = f"📊 <b>Сводная таблица ключевых метрик</b>"
             
-            # Convert markdown table to HTML table
-            html_table = self._convert_markdown_table_to_html(summary_table)
-            
+            # Use markdown table directly (Telegram supports markdown tables)
             # Combine all sections with proper HTML formatting
             caption_parts = [
                 chart_title,
@@ -7287,7 +7265,7 @@ class ShansAi:
                 "",
                 summary_section,
                 "",
-                html_table
+                summary_table
             ])
             
             return "\n".join(caption_parts)
@@ -7297,55 +7275,6 @@ class ShansAi:
             # Fallback to simple caption
             return f"📊 <b>Сводная таблица ключевых метрик</b>\n\n{summary_table}"
 
-    def _convert_markdown_table_to_html(self, markdown_table: str) -> str:
-        """Convert markdown table to HTML table for better Telegram compatibility"""
-        try:
-            lines = markdown_table.strip().split('\n')
-            if len(lines) < 3:  # Need at least header, separator, and one data row
-                return markdown_table
-            
-            # Parse header
-            header_line = lines[0]
-            headers = [cell.strip() for cell in header_line.split('|')[1:-1]]  # Remove empty first/last elements
-            
-            # Parse data rows (skip separator line)
-            data_rows = []
-            for line in lines[2:]:  # Skip header and separator
-                if line.strip():
-                    cells = [cell.strip() for cell in line.split('|')[1:-1]]  # Remove empty first/last elements
-                    data_rows.append(cells)
-            
-            # Build HTML table
-            html_lines = []
-            
-            # Table header
-            html_lines.append("<table>")
-            html_lines.append("<tr>")
-            for header in headers:
-                html_lines.append(f"<th>{header}</th>")
-            html_lines.append("</tr>")
-            
-            # Data rows
-            for row in data_rows:
-                html_lines.append("<tr>")
-                for i, cell in enumerate(row):
-                    # First column (metric names) - bold
-                    if i == 0:
-                        # Remove ** from markdown bold formatting
-                        clean_cell = cell.replace('**', '')
-                        html_lines.append(f"<td><b>{clean_cell}</b></td>")
-                    else:
-                        html_lines.append(f"<td>{cell}</td>")
-                html_lines.append("</tr>")
-            
-            html_lines.append("</table>")
-            
-            return '\n'.join(html_lines)
-            
-        except Exception as e:
-            self.logger.error(f"Error converting markdown table to HTML: {e}")
-            # Fallback to original markdown table
-            return markdown_table
 
     def _create_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
         """Create Excel file with comprehensive metrics"""
@@ -8714,20 +8643,44 @@ class ShansAi:
                     dividend_chart = await self._get_dividend_chart(symbol)
                     
                     if dividend_chart:
+                        # Создаем клавиатуру для возврата к информации об активе
+                        keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        
                         await update.callback_query.message.reply_photo(
                             photo=dividend_chart,
-                            caption=f"💵 Дивиденды {symbol}"
+                            caption=f"💵 Дивиденды {symbol}",
+                            reply_markup=reply_markup
                         )
                     else:
-                        await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен")
+                        # Создаем клавиатуру для возврата к информации об активе
+                        keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        
+                        await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен", reply_markup=reply_markup)
                 else:
-                    await self._send_callback_message(update, context, f"💵 Дивиденды по активу {symbol} не найдены")
+                    # Создаем клавиатуру для возврата к информации об активе
+                    keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await self._send_callback_message(update, context, f"💵 Дивиденды по активу {symbol} не найдены", reply_markup=reply_markup)
             else:
-                await self._send_callback_message(update, context, f"💵 Информация о дивидендах по активу {symbol} недоступна")
+                # Создаем клавиатуру для возврата к информации об активе
+                keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_callback_message(update, context, f"💵 Информация о дивидендах по активу {symbol} недоступна", reply_markup=reply_markup)
                 
         except Exception as e:
             self.logger.error(f"Error handling dividends button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
+            # Создаем клавиатуру для возврата к информации об активе
+            try:
+                keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}", reply_markup=reply_markup)
+            except Exception as keyboard_error:
+                self.logger.error(f"Error creating keyboard for dividends error: {keyboard_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _handle_tushare_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare daily chart button click"""
