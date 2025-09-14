@@ -2562,7 +2562,7 @@ class ShansAi:
             await self._send_message_safe(update, 
                 f"📊 *Анализ*\n\n"
                 f"*Примеры:* {examples_text}\n\n"
-                f"Просто отправьте название, тикер или ISIN инструмента")
+                f"💬 Просто напишите название, тикер или ISIN инструмента")
             return
         
         symbol = context.args[0]
@@ -2645,8 +2645,14 @@ class ShansAi:
         # Check if user is waiting for portfolio weights input (from compare command)
         if user_context.get('waiting_for_portfolio_weights', False):
             self.logger.info(f"Processing as portfolio weights input: {text}")
-            # Process as portfolio weights input
-            await self._handle_portfolio_weights_input(update, context, text)
+            
+            # Check if this is from portfolio command (tickers only) or compare command
+            if user_context.get('portfolio_tickers'):
+                # This is from portfolio command with tickers only
+                await self._handle_portfolio_tickers_weights_input(update, context, text)
+            else:
+                # This is from compare command
+                await self._handle_portfolio_weights_input(update, context, text)
             return
         
         # Check if user is waiting for info input
@@ -2998,7 +3004,7 @@ class ShansAi:
             # Current price
             if 'current_price' in symbol_info:
                 price = symbol_info['current_price']
-                price_text = f"Цена: {price:.2f} CNY"
+                price_text = f"• Цена: {price:.2f} CNY"
                 
                 # Show only percentage change to avoid duplicate brackets
                 if 'pct_chg' in symbol_info:
@@ -3011,7 +3017,7 @@ class ShansAi:
             # Volume
             if 'volume' in symbol_info:
                 volume = symbol_info['volume']
-                metrics_text += f"Объем торгов: {volume:,.0f}\n"
+                metrics_text += f"• Объем торгов: {volume:,.0f}\n"
             
             # Add calculated metrics for the specific period
             period_metrics = self._calculate_tushare_period_metrics(symbol_info, symbol, period)
@@ -3019,17 +3025,17 @@ class ShansAi:
                 if 'annual_return' in period_metrics:
                     annual_return = period_metrics['annual_return']
                     return_sign = "+" if annual_return >= 0 else ""
-                    metrics_text += f"Доходность (годовая): {return_sign}{annual_return:.1%}\n"
+                    metrics_text += f"• Доходность (годовая): {return_sign}{annual_return:.1%}\n"
                 
                 if 'volatility' in period_metrics:
                     volatility = period_metrics['volatility']
-                    metrics_text += f"Волатильность: {volatility:.1%}\n"
+                    metrics_text += f"• Волатильность: {volatility:.1%}\n"
             else:
                 # Fallback to original metrics if period calculation fails
                 if 'annual_return' in symbol_info:
                     annual_return = symbol_info['annual_return']
                     return_sign = "+" if annual_return >= 0 else ""
-                    metrics_text += f"Доходность (годовая): {return_sign}{annual_return:.1%}\n"
+                    metrics_text += f"• Доходность (годовая): {return_sign}{annual_return:.1%}\n"
                 
                 if 'volatility' in symbol_info:
                     volatility = symbol_info['volatility']
@@ -3038,7 +3044,7 @@ class ShansAi:
             # List date
             if 'list_date' in symbol_info:
                 list_date = symbol_info['list_date']
-                metrics_text += f"Дата листинга: {list_date}\n"
+                metrics_text += f"• Дата листинга: {list_date}\n"
             
             return header + metrics_text
             
@@ -3766,7 +3772,7 @@ class ShansAi:
                         
                         # Escape underscores in portfolio symbol for markdown
                         escaped_symbol = portfolio_symbol.replace('_', '\\_')
-                        help_text += f"• {escaped_symbol} ({portfolio_str})\n"
+                        help_text += f"• `{escaped_symbol}` ({portfolio_str})\n"
                     
                 # Add recently analyzed tickers
                 analyzed_tickers = user_context.get('analyzed_tickers', [])
@@ -3780,17 +3786,10 @@ class ShansAi:
                 
                 help_text += "\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
-                help_text += "• `SBER.MOEX LKOH.MOEX RUB 5Y` - сравнение с валютой RUB и периодом 5 лет\n"
-                help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (гибридный подход)\n"
-                help_text += "• `600000.SH 000001.SZ` - сравнение китайских акций (гибридный подход)\n"
-                help_text += "• `portfolio\\_5642.PF portfolio\\_5642.PF` - сравнение двух портефелей\n"
-                help_text += "• `portfolio\\_5642.PF MCFTR.INDX RGBITR.INDX` - смешанное сравнение\n\n"                                    
-                help_text += "📋 Для просмотра всех портфелей используйте команду `/my`\n\n"
-                help_text += "💡 Первый актив в списке определяет базовую валюту, если не определено -> USD\n"
-                help_text += "💡 Можно указать валюту и период в конце: `символы ВАЛЮТА ПЕРИОД`\n"
-                help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
-                help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n\n"
-                help_text += "*💬 Введите символы для сравнения:*"
+                help_text += "• `SBER.MOEX LKOH.MOEX` - сравить Сбербанк и Лукойл\n\n"              
+                help_text += "💡 Можно сравнивать портфели и обычные активы\n"
+                help_text += "💡 Первый актив в списке определяет базовую валюту\n\n"
+                help_text += "💬 Введите тикеры для сравнения через пробел:"
                 
                 await self._send_message_safe(update, help_text, parse_mode='Markdown')
                 
@@ -4498,15 +4497,14 @@ class ShansAi:
                 help_text += "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - американский сбалансированный\n"
                 help_text += "• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский энергетический\n"
                 help_text += "• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - с золотом и облигациями\n"
-                help_text += "• `AAPL.US:0.3 MSFT.US:0.3 TSLA.US:0.2 AGG.US:0.2` - технологический\n"
-                help_text += "• `SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y` - с валютой USD и периодом 10 лет\n\n"
-                help_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
-                help_text += "💡 Можно указать валюту и период в конце: `активы ВАЛЮТА ПЕРИОД`\n"
-                help_text += "💡 Поддерживаемые валюты: USD, RUB, EUR, GBP, CNY, HKD, JPY\n"
-                help_text += "💡 Поддерживаемые периоды: 1Y, 2Y, 5Y, 10Y и т.д.\n"
-                help_text += "💡 Если не задана базовая валюта, то она определяется по первому символу\n\n"
+                help_text += "• `SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y` - с базовой валютой USD и периодом 10 лет\n\n"
+                help_text += "💡 **Форматы весов:**\n"
+                help_text += "• Десятичные: `0.5` (50%)\n"
+                help_text += "• Проценты: `50%`\n"
+                help_text += "• Только тикеры: `SPY.US QQQ.US BND.US` (запросит веса)\n\n"
+                help_text += "⚠️ Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
 
-                help_text += "💬 *Введите символы для создания портфеля:*"
+                help_text += "💬 Введите тикеры для создания портфеля:"
                 
                 await self._send_message_safe(update, help_text, parse_mode='Markdown')
                 
@@ -4526,6 +4524,7 @@ class ShansAi:
             # Extract symbols and weights from command arguments
             raw_args = ' '.join(symbols)
             portfolio_data = []
+            tickers_only = []
             
             for arg in raw_args.split():
                 if ':' in arg:
@@ -4537,10 +4536,16 @@ class ShansAi:
                     try:
                         weight_str = weight_part.strip()
                         self.logger.info(f"DEBUG: Converting weight '{weight_str}' to float for symbol '{symbol}'")
-                        weight = float(weight_str)
+                        
+                        # Поддержка процентов
+                        if weight_str.endswith('%'):
+                            weight = float(weight_str[:-1]) / 100.0
+                        else:
+                            weight = float(weight_str)
+                            
                     except Exception as e:
                         self.logger.error(f"Error converting weight '{weight_part.strip()}' to float: {e}")
-                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1")
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1 или процентом (например, 50%)")
                         return
                     
                     if weight <= 0 or weight > 1:
@@ -4550,8 +4555,26 @@ class ShansAi:
                     portfolio_data.append((symbol, weight))
                     
                 else:
-                    await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
-                    return
+                    # Это тикер без веса
+                    original_symbol = self.clean_symbol(arg.strip())
+                    symbol = original_symbol.upper()
+                    tickers_only.append(symbol)
+            
+            # Если есть только тикеры без весов, запрашиваем веса
+            if tickers_only and not portfolio_data:
+                await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                return
+            
+            # Если есть смешанный ввод (тикеры с весами и без), это ошибка
+            if tickers_only and portfolio_data:
+                await self._send_message_safe(update, 
+                    "❌ Некорректный формат ввода.\n\n"
+                    "Укажите веса для всех активов или только тикеры для равномерного распределения.\n\n"
+                    "Примеры:\n"
+                    "• `SPY.US QQQ.US BND.US` - только тикеры\n"
+                    "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - тикеры с весами"
+                )
+                return
             
             if not portfolio_data:
                 await self._send_message_safe(update, "❌ Не указаны активы для портфеля")
@@ -5132,6 +5155,44 @@ class ShansAi:
         
         return message
 
+    async def _request_portfolio_weights(self, update: Update, tickers: list, currency: str = None, period: str = None):
+        """Request portfolio weights from user when only tickers are provided"""
+        try:
+            user_id = update.effective_user.id
+            
+            # Set context to wait for portfolio weights
+            self._update_user_context(user_id, 
+                waiting_for_portfolio_weights=True,
+                portfolio_tickers=tickers,
+                portfolio_currency=currency,
+                portfolio_period=period
+            )
+            
+            # Create message with tickers and request for weights
+            tickers_text = ' '.join(tickers)
+            message = f"💼 **Укажите доли активов**\n\n"
+            message += f"Активы: `{tickers_text}`\n\n"
+            message += "**Введите веса в том же порядке:**\n"
+            
+            # Show suggested equal weights
+            equal_weight = 1.0 / len(tickers)
+            suggested_weights = []
+            for i, ticker in enumerate(tickers):
+                suggested_weights.append(f"{ticker}:{equal_weight:.3f}")
+            
+            message += f"• Равномерное распределение: `{' '.join(suggested_weights)}`\n"
+            message += f"• Или укажите свои доли: `{' '.join([f'{ticker}:0.XX' for ticker in tickers])}`\n\n"
+            message += "**Форматы весов:**\n"
+            message += "• Десятичные: `0.5` (50%)\n"
+            message += "• Проценты: `50%`\n\n"
+            message += "⚠️ Сумма долей должна быть равна 1.0 (100%)"
+            
+            await self._send_message_safe(update, message, parse_mode='Markdown')
+            
+        except Exception as e:
+            self.logger.error(f"Error requesting portfolio weights: {e}")
+            await self._send_message_safe(update, "❌ Ошибка при запросе весов портфеля")
+
     async def _handle_portfolio_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle portfolio input from user message"""
         try:
@@ -5174,6 +5235,7 @@ class ShansAi:
             
             # Extract symbols and weights from portfolio arguments
             portfolio_data = []
+            tickers_only = []
             
             for arg in portfolio_args:
                 if ':' in arg:
@@ -5185,10 +5247,16 @@ class ShansAi:
                     try:
                         weight_str = weight_part.strip()
                         self.logger.info(f"DEBUG: Converting weight '{weight_str}' to float for symbol '{symbol}'")
-                        weight = float(weight_str)
+                        
+                        # Поддержка процентов
+                        if weight_str.endswith('%'):
+                            weight = float(weight_str[:-1]) / 100.0
+                        else:
+                            weight = float(weight_str)
+                            
                     except Exception as e:
                         self.logger.error(f"Error converting weight '{weight_part.strip()}' to float: {e}")
-                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1")
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1 или процентом (например, 50%)")
                         return
                     
                     if weight <= 0 or weight > 1:
@@ -5198,8 +5266,26 @@ class ShansAi:
                     portfolio_data.append((symbol, weight))
                     
                 else:
-                    await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
-                    return
+                    # Это тикер без веса
+                    original_symbol = self.clean_symbol(arg.strip())
+                    symbol = original_symbol.upper()
+                    tickers_only.append(symbol)
+            
+            # Если есть только тикеры без весов, запрашиваем веса
+            if tickers_only and not portfolio_data:
+                await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                return
+            
+            # Если есть смешанный ввод (тикеры с весами и без), это ошибка
+            if tickers_only and portfolio_data:
+                await self._send_message_safe(update, 
+                    "❌ Некорректный формат ввода.\n\n"
+                    "Укажите веса для всех активов или только тикеры для равномерного распределения.\n\n"
+                    "Примеры:\n"
+                    "• `SPY.US QQQ.US BND.US` - только тикеры\n"
+                    "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - тикеры с весами"
+                )
+                return
             
             if not portfolio_data:
                 await self._send_message_safe(update, "❌ Не указаны активы для портфеля")
@@ -5674,6 +5760,265 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in portfolio weights input handler: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}")
+
+    async def _handle_portfolio_tickers_weights_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle portfolio weights input when user provided only tickers"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Get tickers from context
+            tickers = user_context.get('portfolio_tickers', [])
+            if not tickers:
+                await self._send_message_safe(update, "❌ Ошибка: не найдены тикеры для портфеля")
+                return
+            
+            # Clear waiting flag and context
+            self._update_user_context(user_id, 
+                waiting_for_portfolio_weights=False,
+                portfolio_tickers=None,
+                portfolio_currency=None,
+                portfolio_period=None
+            )
+            
+            # Parse currency and period parameters from input text
+            text_args = text.split()
+            
+            valid_currencies = {'USD', 'RUB', 'EUR', 'GBP', 'CNY', 'HKD', 'JPY'}
+            import re
+            period_pattern = re.compile(r'^(\d+)Y$', re.IGNORECASE)
+            
+            portfolio_args = []
+            specified_currency = None
+            specified_period = None
+            
+            for arg in text_args:
+                arg_upper = arg.upper()
+                
+                # Check if it's a currency code
+                if arg_upper in valid_currencies:
+                    if specified_currency is None:
+                        specified_currency = arg_upper
+                    continue
+                
+                # Check if it's a period (e.g., '5Y', '10Y')
+                period_match = period_pattern.match(arg)
+                if period_match:
+                    if specified_period is None:
+                        specified_period = arg_upper
+                    continue
+                
+                # If it's neither currency nor period, it's a portfolio argument
+                portfolio_args.append(arg)
+            
+            # Parse portfolio arguments
+            portfolio_data = []
+            
+            for arg in portfolio_args:
+                if ':' in arg:
+                    symbol_part, weight_part = arg.split(':', 1)
+                    original_symbol = self.clean_symbol(symbol_part.strip())
+                    symbol = original_symbol.upper()
+                    
+                    try:
+                        weight_str = weight_part.strip()
+                        
+                        # Поддержка процентов
+                        if weight_str.endswith('%'):
+                            weight = float(weight_str[:-1]) / 100.0
+                        else:
+                            weight = float(weight_str)
+                            
+                    except Exception as e:
+                        self.logger.error(f"Error converting weight '{weight_part.strip()}' to float: {e}")
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1 или процентом (например, 50%)")
+                        return
+                    
+                    if weight <= 0 or weight > 1:
+                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: {weight}. Доля должна быть от 0 до 1")
+                        return
+                    
+                    portfolio_data.append((symbol, weight))
+                    
+                else:
+                    # Это только число - попробуем сопоставить с тикерами по порядку
+                    try:
+                        weight_str = arg.strip()
+                        
+                        # Поддержка процентов
+                        if weight_str.endswith('%'):
+                            weight = float(weight_str[:-1]) / 100.0
+                        else:
+                            weight = float(weight_str)
+                            
+                        if weight <= 0 or weight > 1:
+                            await self._send_message_safe(update, f"❌ Некорректная доля: {weight}. Доля должна быть от 0 до 1")
+                            return
+                        
+                        # Добавляем вес без символа - будет сопоставлен позже
+                        portfolio_data.append((None, weight))
+                        
+                    except Exception as e:
+                        await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля или только доли")
+                        return
+            
+            # Если пользователь указал только числа, сопоставляем их с тикерами по порядку
+            if portfolio_data and all(symbol is None for symbol, _ in portfolio_data):
+                if len(portfolio_data) != len(tickers):
+                    await self._send_message_safe(update, 
+                        f"❌ Количество долей ({len(portfolio_data)}) не совпадает с количеством тикеров ({len(tickers)})\n\n"
+                        f"Тикеры: {', '.join(tickers)}\n"
+                        f"Укажите доли для каждого тикера в том же порядке"
+                    )
+                    return
+                
+                # Сопоставляем доли с тикерами
+                portfolio_data = [(tickers[i], weight) for i, (_, weight) in enumerate(portfolio_data)]
+            
+            # Проверяем, что все тикеры имеют доли
+            portfolio_symbols = [symbol for symbol, _ in portfolio_data]
+            missing_tickers = [ticker for ticker in tickers if ticker not in portfolio_symbols]
+            
+            if missing_tickers:
+                await self._send_message_safe(update, 
+                    f"❌ Не указаны доли для тикеров: {', '.join(missing_tickers)}\n\n"
+                    f"Укажите доли для всех тикеров в том же порядке:\n"
+                    f"`{' '.join([f'{ticker}:0.XX' for ticker in tickers])}`"
+                )
+                return
+            
+            # Проверяем сумму долей
+            total_weight = sum(weight for _, weight in portfolio_data)
+            if abs(total_weight - 1.0) > 0.01:
+                # Предлагаем исправление, если сумма близка к 1
+                if abs(total_weight - 1.0) <= 0.1:
+                    corrected_weights = []
+                    for symbol, weight in portfolio_data:
+                        corrected_weight = weight / total_weight
+                        corrected_weights.append((symbol, corrected_weight))
+                    
+                    await self._send_message_safe(update, 
+                        f"⚠️ Сумма долей ({total_weight:.3f}) не равна 1.0\n\n"
+                        f"Исправленные доли:\n"
+                        f"{chr(10).join([f'• {symbol}: {weight:.3f}' for symbol, weight in corrected_weights])}\n\n"
+                        f"Попробуйте команду:\n"
+                        f"`/portfolio {' '.join([f'{symbol}:{weight:.3f}' for symbol, weight in corrected_weights])}`"
+                    )
+                else:
+                    await self._send_message_safe(update, 
+                        f"❌ Сумма долей должна быть равна 1.0, текущая сумма: {total_weight:.3f}\n\n"
+                        f"Пример правильной команды:\n"
+                        f"`/portfolio {' '.join([f'{ticker}:0.XX' for ticker in tickers])}`"
+                    )
+                return
+            
+            if len(portfolio_data) > 10:
+                await self._send_message_safe(update, "❌ Максимум 10 активов в портфеле")
+                return
+            
+            symbols = [symbol for symbol, _ in portfolio_data]
+            weights = [weight for _, weight in portfolio_data]
+            
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            
+            # Create portfolio using okama
+            self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
+            
+            # Determine base currency
+            if specified_currency:
+                currency = specified_currency
+                currency_info = f"указана пользователем ({specified_currency})"
+            else:
+                # Auto-detect currency from the first asset
+                first_symbol = symbols[0]
+                try:
+                    first_asset = ok.Asset(first_symbol)
+                    currency = first_asset.currency
+                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                except Exception as e:
+                    self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
+                    currency, currency_info = self._get_currency_by_symbol(first_symbol)
+            
+            # Create portfolio using okama with period support
+            try:
+                if specified_period:
+                    years = int(specified_period[:-1])
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                           first_date=start_date.strftime('%Y-%m-%d'), 
+                                           last_date=end_date.strftime('%Y-%m-%d'))
+                else:
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                
+                # Create portfolio information text
+                portfolio_text = f"💼 **Портфель создан успешно!**\n\n"
+                
+                # Add basic metrics to portfolio text
+                try:
+                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
+                    portfolio_text += metrics_text
+                except Exception as e:
+                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
+                
+                # Generate portfolio symbol
+                user_context = self._get_user_context(user_id)
+                portfolio_count = user_context.get('portfolio_count', 0) + 1
+                portfolio_symbol = f"PF_{portfolio_count}"
+                
+                # Add portfolio symbol display
+                portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
+                
+                # Add buttons
+                keyboard = [
+                    [InlineKeyboardButton("📊 Анализ портфеля", callback_data=f"portfolio_analysis_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 График доходности", callback_data=f"portfolio_chart_{portfolio_symbol}"),
+                     InlineKeyboardButton("📋 Метрики риска", callback_data=f"portfolio_risk_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💾 Сохранить портфель", callback_data=f"portfolio_save_{portfolio_symbol}")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_message_safe(update, portfolio_text, parse_mode='Markdown', reply_markup=reply_markup)
+                
+                # Save portfolio to user context
+                portfolio_attributes = {
+                    'symbols': symbols,
+                    'weights': weights,
+                    'currency': currency,
+                    'created_at': datetime.now().isoformat(),
+                    'description': f"Портфель: {', '.join(symbols)}",
+                    'portfolio_symbol': portfolio_symbol,
+                    'total_weight': sum(weights),
+                    'asset_count': len(symbols),
+                    'period': specified_period
+                }
+                
+                saved_portfolios = user_context.get('saved_portfolios', {})
+                saved_portfolios[portfolio_symbol] = portfolio_attributes
+                
+                self._update_user_context(
+                    user_id,
+                    saved_portfolios=saved_portfolios,
+                    portfolio_count=portfolio_count
+                )
+                
+            except Exception as e:
+                self.logger.error(f"Error creating portfolio: {e}")
+                await self._send_message_safe(update, 
+                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
+                    "💡 Возможные причины:\n"
+                    "• Один из символов недоступен\n"
+                    "• Проблемы с данными\n"
+                    "• Неверный формат символа\n\n"
+                    "Проверьте:\n"
+                    "• Правильность написания символов\n"
+                    "• Доступность данных для указанных активов"
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error in portfolio tickers weights input handler: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода весов портфеля: {str(e)}")
 
     async def _handle_compare_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle compare input from user message"""
@@ -6856,7 +7201,7 @@ class ShansAi:
             portfolio_text += f"• `{symbols[0]}:0.5 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.3 {symbols[2] if len(symbols) > 2 else 'BND.US'}:0.2`\n\n"
             portfolio_text += "💡 Сумма долей должна равняться 1.0 (100%)\n"
             portfolio_text += "💡 Можно добавить дополнительные активы к сравниваемым\n\n"
-            portfolio_text += "*💬 Введите состав портфеля:*"
+            portfolio_text += "💬 Введите тикеры для включения в состав портфеля:"
             
             await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
             
@@ -15623,7 +15968,7 @@ class ShansAi:
             help_text += "• `/compare AAPL.US MSFT.US` - сравнение активов\n"
             help_text += "• `/compare Портфель1 Портфель2` - сравнение портфелей\n"
             help_text += "• `/compare AAPL.US Портфель1` - актив vs портфель\n\n"
-            help_text += "💬 *Введите символы для сравнения:*"
+            help_text += "💬 Введите тикеры для сравнения:"
             
             # Send the same message as compare command without arguments
             await self._send_callback_message(update, context, help_text)

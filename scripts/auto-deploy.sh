@@ -16,7 +16,7 @@ echo "📝 Adding all changes..."
 git add .
 
 # Создаем коммит с временной меткой
-COMMIT_MESSAGE="Feature: Add currency and period parameters to /compare and /portfolio commands $(date '+%Y-%m-%d %H:%M:%S')"
+COMMIT_MESSAGE="Feature: Enhanced /portfolio command - support for tickers only and percentage weights $(date '+%Y-%m-%d %H:%M:%S')"
 echo "💾 Committing changes: $COMMIT_MESSAGE"
 git commit -m "$COMMIT_MESSAGE"
 
