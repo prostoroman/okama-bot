@@ -8380,7 +8380,7 @@ class ShansAi:
             table_data.append(cagr_5y_row)
             
             # CAGR row (full period)
-            cagr_row = ["Среднегодовая доходность (CAGR)"]
+            cagr_row = ["Средн. доходность (CAGR)"]
             for symbol in symbols:
                 cagr = metrics_data.get(symbol, {}).get('cagr')
                 if cagr is not None:
@@ -8398,6 +8398,16 @@ class ShansAi:
                 else:
                     volatility_row.append("N/A")
             table_data.append(volatility_row)
+            
+            # Max Drawdown row (moved after Volatility)
+            drawdown_row = ["Макс. просадка"]
+            for symbol in symbols:
+                max_drawdown = metrics_data.get(symbol, {}).get('max_drawdown')
+                if max_drawdown is not None:
+                    drawdown_row.append(f"{max_drawdown*100:.2f}%")
+                else:
+                    drawdown_row.append("N/A")
+            table_data.append(drawdown_row)
             
             # Risk-free rate row
             risk_free_row = ["Безрисковая ставка"]
@@ -8419,15 +8429,6 @@ class ShansAi:
                     sharpe_row.append("N/A")
             table_data.append(sharpe_row)
             
-            # Max Drawdown row
-            drawdown_row = ["Макс. просадка"]
-            for symbol in symbols:
-                max_drawdown = metrics_data.get(symbol, {}).get('max_drawdown')
-                if max_drawdown is not None:
-                    drawdown_row.append(f"{max_drawdown*100:.2f}%")
-                else:
-                    drawdown_row.append("N/A")
-            table_data.append(drawdown_row)
             
             # Sortino Ratio row
             sortino_row = ["Коэф. Сортино"]
@@ -8502,10 +8503,18 @@ class ShansAi:
             
             # Convert describe data to table format
             # describe_data has different structure - it's a DataFrame with symbols as columns
-            # Use property names instead of numeric indices
+            # Use property names with period information instead of numeric indices
             for idx in describe_data.index:
                 property_name = describe_data.loc[idx, 'property']
-                row = [str(property_name)]  # Use property name instead of numeric index
+                period = describe_data.loc[idx, 'period']
+                
+                # Create metric name with period information
+                if pd.isna(period) or period == 'None' or period == '':
+                    metric_name = str(property_name)
+                else:
+                    metric_name = f"{property_name} ({period})"
+                
+                row = [metric_name]
                 for symbol in symbols:
                     if symbol in describe_data.columns:
                         value = describe_data.loc[idx, symbol]
