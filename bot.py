@@ -4493,17 +4493,8 @@ class ShansAi:
                 # Count existing portfolios for this user
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
                 
-                # Use PF namespace with okama's assigned symbol
-                try:
-                    # Get the portfolio symbol that okama assigned
-                    if hasattr(portfolio, 'symbol'):
-                        portfolio_symbol = portfolio.symbol
-                    else:
-                        # Fallback to custom symbol if okama doesn't provide one
-                        portfolio_symbol = f"PF_{portfolio_count}"
-                except Exception as e:
-                    self.logger.warning(f"Could not get okama portfolio symbol: {e}")
-                    portfolio_symbol = f"PF_{portfolio_count}"
+                # Use PF namespace with custom symbol (okama's symbol is composition string, not suitable for bot)
+                portfolio_symbol = f"PF_{portfolio_count}"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
@@ -5103,13 +5094,8 @@ class ShansAi:
                 # Count existing portfolios for this user
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
                 
-                # Use PF namespace with okama's assigned symbol
-                # Get the portfolio symbol that okama assigned
-                if hasattr(portfolio, 'symbol'):
-                    portfolio_symbol = portfolio.symbol
-                else:
-                    # Fallback to custom symbol if okama doesn't provide one
-                    portfolio_symbol = f"PF_{portfolio_count}"
+                # Use PF namespace with custom symbol (okama's symbol is composition string, not suitable for bot)
+                portfolio_symbol = f"PF_{portfolio_count}"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
@@ -5385,18 +5371,8 @@ class ShansAi:
                 # Count existing portfolios for this user
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
                 
-                # Use PF namespace with okama's assigned symbol
-                # Get the portfolio symbol that okama assigned
-                if hasattr(portfolio, 'symbol'):
-                    portfolio_symbol = portfolio.symbol
-                else:
-                    # Fallback to custom symbol if okama doesn't provide one
-                    portfolio_symbol = f"PF_{portfolio_count}"
-                try:
-                    portfolio_symbol = portfolio.symbol
-                except Exception as e:
-                    self.logger.warning(f"Could not get okama portfolio symbol: {e}")
-                    portfolio_symbol = f"PF_{portfolio_count}"
+                # Use PF namespace with custom symbol (okama's symbol is composition string, not suitable for bot)
+                portfolio_symbol = f"PF_{portfolio_count}"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
