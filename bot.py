@@ -494,14 +494,56 @@ class ShansAi:
         
         # Сначала заменяем запятые в числах на точки, чтобы они не мешали разбору
         # Ищем паттерн "число,число" и заменяем на "число.число"
+        import re
         cleaned_text = re.sub(r'(\d+),(\d+)', r'\1.\2', cleaned_text)
         
         # Удаляем лишние пробелы вокруг запятых и двоеточий
         cleaned_text = re.sub(r'\s*,\s*', ', ', cleaned_text)
         cleaned_text = re.sub(r'\s*:\s*', ':', cleaned_text)
         
-        # Разбиваем по запятым
-        parts = [part.strip() for part in cleaned_text.split(',') if part.strip()]
+        # Определяем разделитель: если есть запятые, используем их, иначе пробелы
+        if ',' in cleaned_text:
+            # Разбиваем по запятым
+            parts = [part.strip() for part in cleaned_text.split(',') if part.strip()]
+        else:
+            # Разбиваем по пробелам, но только между парами символ:вес
+            # Используем регулярное выражение для поиска паттернов "символ:вес"
+            import re
+            # Ищем все паттерны "символ:число" и разделяем по ним
+            pattern = r'([A-Za-z0-9._]+:\d+(?:\.\d+)?)'
+            matches = re.findall(pattern, cleaned_text)
+            
+            if matches:
+                # Если найдены паттерны с весами, используем их
+                parts = []
+                remaining_text = cleaned_text
+                
+                for match in matches:
+                    # Находим позицию паттерна в тексте
+                    pos = remaining_text.find(match)
+                    if pos > 0:
+                        # Добавляем текст до паттерна как отдельные символы
+                        before = remaining_text[:pos].strip()
+                        if before:
+                            # Разделяем по пробелам и добавляем как отдельные символы
+                            for symbol in before.split():
+                                if symbol.strip():
+                                    parts.append(symbol.strip())
+                    
+                    # Добавляем найденный паттерн
+                    parts.append(match)
+                    
+                    # Обновляем оставшийся текст
+                    remaining_text = remaining_text[pos + len(match):].strip()
+                
+                # Добавляем оставшиеся символы
+                if remaining_text:
+                    for symbol in remaining_text.split():
+                        if symbol.strip():
+                            parts.append(symbol.strip())
+            else:
+                # Если паттерны не найдены, просто разделяем по пробелам
+                parts = [part.strip() for part in cleaned_text.split() if part.strip()]
         
         if not parts:
             return {
