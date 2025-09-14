@@ -8067,7 +8067,7 @@ class ShansAi:
             # Create markdown table
             table_markdown = self._create_enhanced_markdown_table(table_data, headers)
             
-            return f"## 📊 Метрики активов\n\n{table_markdown}"
+            return f"{table_markdown}"
             
         except Exception as e:
             self.logger.error(f"Error creating summary metrics table: {e}")
@@ -8238,8 +8238,22 @@ class ShansAi:
                 else:
                     metric_name = f"{property_name} ({period})"
                 
-                # Get value from describe data (portfolio has single column)
-                value = describe_data.iloc[idx, 0]  # First (and only) column
+                # Get value from describe data - find the portfolio column
+                portfolio_column = None
+                for col in describe_data.columns:
+                    if col.startswith('portfolio_') and col.endswith('.PF'):
+                        portfolio_column = col
+                        break
+                
+                if portfolio_column:
+                    value = describe_data.loc[idx, portfolio_column]
+                else:
+                    # Fallback: use first non-property, non-period column
+                    value_cols = [col for col in describe_data.columns if col not in ['property', 'period', 'inflation']]
+                    if value_cols:
+                        value = describe_data.loc[idx, value_cols[0]]
+                    else:
+                        value = None
                 
                 if pd.isna(value):
                     formatted_value = "N/A"
@@ -8297,16 +8311,24 @@ class ShansAi:
             cagr_value = None
             risk_value = None
             
-            for idx in describe_data.index:
-                property_name = describe_data.loc[idx, 'property']
-                period = describe_data.loc[idx, 'period']
-                
-                value = describe_data.iloc[idx, 0]  # First column
-                if not pd.isna(value):
-                    if property_name == 'CAGR' and period == '5 years, 1 months':
-                        cagr_value = value
-                    elif property_name == 'Risk' and period == '5 years, 1 months':
-                        risk_value = value
+            # Find the portfolio column
+            portfolio_column = None
+            for col in describe_data.columns:
+                if col.startswith('portfolio_') and col.endswith('.PF'):
+                    portfolio_column = col
+                    break
+            
+            if portfolio_column:
+                for idx in describe_data.index:
+                    property_name = describe_data.loc[idx, 'property']
+                    period = describe_data.loc[idx, 'period']
+                    
+                    value = describe_data.loc[idx, portfolio_column]
+                    if not pd.isna(value):
+                        if property_name == 'CAGR' and period == '5 years':
+                            cagr_value = value
+                        elif property_name == 'Risk' and period == '19 years, 0 months':
+                            risk_value = value
             
             if cagr_value is not None and risk_value is not None and risk_value > 0:
                 sharpe = (cagr_value - risk_free_rate) / risk_value
@@ -8341,12 +8363,21 @@ class ShansAi:
                                 # Get CAGR from describe data
                                 describe_data = portfolio.describe()
                                 cagr_value = None
-                                for idx in describe_data.index:
-                                    property_name = describe_data.loc[idx, 'property']
-                                    period = describe_data.loc[idx, 'period']
-                                    if property_name == 'CAGR' and period == '5 years, 1 months':
-                                        cagr_value = describe_data.iloc[idx, 0]
+                                
+                                # Find the portfolio column
+                                portfolio_column = None
+                                for col in describe_data.columns:
+                                    if col.startswith('portfolio_') and col.endswith('.PF'):
+                                        portfolio_column = col
                                         break
+                                
+                                if portfolio_column:
+                                    for idx in describe_data.index:
+                                        property_name = describe_data.loc[idx, 'property']
+                                        period = describe_data.loc[idx, 'period']
+                                        if property_name == 'CAGR' and period == '5 years':
+                                            cagr_value = describe_data.loc[idx, portfolio_column]
+                                            break
                                 
                                 if cagr_value is not None:
                                     sortino = (cagr_value - risk_free_rate) / downside_deviation
@@ -8377,16 +8408,24 @@ class ShansAi:
             cagr_value = None
             max_drawdown_value = None
             
-            for idx in describe_data.index:
-                property_name = describe_data.loc[idx, 'property']
-                period = describe_data.loc[idx, 'period']
-                
-                value = describe_data.iloc[idx, 0]  # First column
-                if not pd.isna(value):
-                    if property_name == 'CAGR' and period == '5 years, 1 months':
-                        cagr_value = value
-                    elif property_name == 'Max drawdowns' and period == '5 years, 1 months':
-                        max_drawdown_value = value
+            # Find the portfolio column
+            portfolio_column = None
+            for col in describe_data.columns:
+                if col.startswith('portfolio_') and col.endswith('.PF'):
+                    portfolio_column = col
+                    break
+            
+            if portfolio_column:
+                for idx in describe_data.index:
+                    property_name = describe_data.loc[idx, 'property']
+                    period = describe_data.loc[idx, 'period']
+                    
+                    value = describe_data.loc[idx, portfolio_column]
+                    if not pd.isna(value):
+                        if property_name == 'CAGR' and period == '5 years':
+                            cagr_value = value
+                        elif property_name == 'Max drawdown' and period == '19 years, 0 months':
+                            max_drawdown_value = value
             
             if cagr_value is not None and max_drawdown_value is not None and max_drawdown_value < 0:
                 calmar = cagr_value / abs(max_drawdown_value)
