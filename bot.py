@@ -107,7 +107,7 @@ class ShansAi:
             self.tushare_service = None
             self.logger.warning("Tushare service not initialized - API key not provided")
         
-        # Initialize Gemini service for chart analysis
+        # Initialize Gemini service for data analysis
         try:
             self.gemini_service = GeminiService()
             if self.gemini_service.is_available():
@@ -175,6 +175,28 @@ class ShansAi:
                 self.logger.info(f"Using fixed risk-free rate for HKD: {fixed_rate:.4f}")
                 return fixed_rate
             
+            # Special handling for RUB - use more realistic rates based on current OFZ yields
+            # Skip okama API for RUB as it returns unrealistic values (33%+)
+            if currency.upper() == 'RUB':
+                if period_years is not None:
+                    if period_years <= 0.25:  # 3 months or less
+                        fixed_rate = 0.08  # 8% - OFZ 3M approximation
+                    elif period_years <= 0.5:  # 6 months or less
+                        fixed_rate = 0.085  # 8.5% - OFZ 6M approximation
+                    elif period_years <= 1.0:  # 1 year or less
+                        fixed_rate = 0.09  # 9% - OFZ 1Y approximation
+                    elif period_years <= 3.0:  # 3 years or less
+                        fixed_rate = 0.095  # 9.5% - OFZ 3Y approximation
+                    elif period_years <= 5.0:  # 5 years or less
+                        fixed_rate = 0.10  # 10% - OFZ 5Y approximation
+                    else:  # More than 5 years
+                        fixed_rate = 0.105  # 10.5% - OFZ 10Y approximation
+                else:
+                    fixed_rate = 0.09  # 9% - default OFZ 1Y rate
+                
+                self.logger.info(f"Using OFZ-based risk-free rate for RUB ({period_years} years): {fixed_rate:.4f}")
+                return fixed_rate
+            
             # Try to get rate from okama.Rate for other currencies
             try:
                 rate_data = self._get_okama_rate_data(currency, period_years)
@@ -183,29 +205,6 @@ class ShansAi:
                     return rate_data
             except Exception as e:
                 self.logger.warning(f"Could not get okama rate for {currency}: {e}")
-            
-            # Fallback to fixed rates if okama fails
-            
-            # Special handling for RUB - use more realistic rates based on OFZ yields
-            if currency.upper() == 'RUB':
-                if period_years is not None:
-                    if period_years <= 0.25:  # 3 months or less
-                        fixed_rate = 0.12  # 12% - OFZ 3M approximation
-                    elif period_years <= 0.5:  # 6 months or less
-                        fixed_rate = 0.125  # 12.5% - OFZ 6M approximation
-                    elif period_years <= 1.0:  # 1 year or less
-                        fixed_rate = 0.13  # 13% - OFZ 1Y approximation
-                    elif period_years <= 3.0:  # 3 years or less
-                        fixed_rate = 0.135  # 13.5% - OFZ 3Y approximation
-                    elif period_years <= 5.0:  # 5 years or less
-                        fixed_rate = 0.14  # 14% - OFZ 5Y approximation
-                    else:  # More than 5 years
-                        fixed_rate = 0.145  # 14.5% - OFZ 10Y approximation
-                else:
-                    fixed_rate = 0.13  # 13% - default OFZ 1Y rate
-                
-                self.logger.info(f"Using OFZ-based risk-free rate for RUB ({period_years} years): {fixed_rate:.4f}")
-                return fixed_rate
             
             # Special handling for CNY - period-dependent rates
             if currency.upper() == 'CNY':
@@ -229,7 +228,7 @@ class ShansAi:
             'USD': 0.05,  # 5% - current Fed funds rate
             'EUR': 0.04,  # 4% - current ECB rate
             'GBP': 0.05,  # 5% - current BoE rate
-            'RUB': 0.14,  # 14% - OFZ 5Y rate (more realistic than 17%)
+            'RUB': 0.10,  # 10% - OFZ 5Y rate (updated to realistic current rate)
             'CNY': 0.035, # 3.5% - current LPR rate
             'JPY': 0.05,  # 5% - use US rate as proxy
             'CHF': 0.04,  # 4% - use EU rate as proxy
@@ -6285,9 +6284,6 @@ class ShansAi:
             elif callback_data == 'risk_return_compare':
                 self.logger.info("Risk / Return button clicked")
                 await self._handle_risk_return_compare_button(update, context)
-            elif callback_data == 'chart_analysis_compare':
-                self.logger.info("Chart analysis button clicked")
-                await self._handle_chart_analysis_compare_button(update, context)
             elif callback_data == 'data_analysis_compare':
                 self.logger.info("Data analysis button clicked")
                 await self._handle_data_analysis_compare_button(update, context)
@@ -6511,138 +6507,6 @@ class ShansAi:
             self.logger.error(f"Error handling Risk / Return button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при построении Risk / Return: {str(e)}")
 
-    async def _handle_chart_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle chart analysis button click for comparison charts"""
-        # Initialize variables at the beginning to ensure they're available in except block
-        symbols = []
-        currency = 'USD'
-        
-        try:
-            # Don't remove keyboard yet - wait for successful message creation
-            
-            user_id = update.effective_user.id
-            user_context = self._get_user_context(user_id)
-            symbols = user_context.get('current_symbols', [])
-            display_symbols = user_context.get('display_symbols', symbols)  # Use descriptive names for display
-            currency = user_context.get('current_currency', 'USD')
-            expanded_symbols = user_context.get('expanded_symbols', [])
-            portfolio_contexts = user_context.get('portfolio_contexts', [])
-
-            # Validate that we have symbols to compare
-            if not expanded_symbols:
-                await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
-                return
-
-            # Check if Gemini service is available
-            if not self.gemini_service or not self.gemini_service.is_available():
-                await self._send_callback_message(update, context, "❌ Сервис анализа графиков недоступен. Проверьте настройки Gemini API.", parse_mode='Markdown')
-                return
-
-            await self._send_callback_message(update, context, "Анализ графика с помощью AI...", parse_mode='Markdown')
-
-            # Recreate the comparison chart for analysis
-            try:
-                # Prepare assets for comparison
-                asset_list_items = []
-                asset_names = []
-                
-                # Use display_symbols for proper naming - they already contain descriptive names
-                for i, symbol in enumerate(symbols):
-                    if i < len(expanded_symbols):
-                        if isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
-                            # This is a portfolio - recreate it
-                            if i < len(portfolio_contexts):
-                                pctx = portfolio_contexts[i]
-                                try:
-                                    p = ok.Portfolio(
-                                        pctx.get('portfolio_symbols', []),
-                                        weights=pctx.get('portfolio_weights', []),
-                                        ccy=pctx.get('portfolio_currency') or currency,
-                                    )
-                                    asset_list_items.append(p)
-                                    asset_names.append(display_symbols[i])  # Use descriptive name
-                                except Exception as pe:
-                                    self.logger.warning(f"Failed to recreate portfolio for analysis: {pe}")
-                        else:
-                            # This is a regular asset
-                            asset_list_items.append(symbol)
-                            asset_names.append(display_symbols[i])  # Use descriptive name
-
-                if not asset_list_items:
-                    await self._send_callback_message(update, context, "❌ Не удалось подготовить активы для анализа", parse_mode='Markdown')
-                    return
-
-                # Create comparison
-                comparison = ok.AssetList(asset_list_items, ccy=currency)
-                
-                # Create comparison chart
-                fig, ax = chart_styles.create_comparison_chart(
-                    comparison.wealth_indexes, symbols, currency
-                )
-                
-                # Save chart to bytes
-                img_buffer = io.BytesIO()
-                chart_styles.save_figure(fig, img_buffer)
-                img_buffer.seek(0)
-                img_bytes = img_buffer.getvalue()
-                
-                # Clear matplotlib cache
-                chart_styles.cleanup_figure(fig)
-                
-                # Analyze chart with Gemini API
-                chart_analysis = self.gemini_service.analyze_chart(img_bytes)
-                
-                if chart_analysis and chart_analysis.get('success'):
-                    # Format detailed analysis
-                    analysis_text = "🤖 **Анализ графика**\n\n"
-                    
-                    # Add full analysis from Gemini
-                    full_analysis = chart_analysis.get('full_analysis', '')
-                    if full_analysis:
-                        analysis_text += full_analysis
-                    
-                    # Gemini provides comprehensive analysis, no need for additional sections
-                    
-                    # Use proper portfolio names from portfolio_contexts
-                    proper_asset_names = []
-                    for i, symbol in enumerate(symbols):
-                        if i < len(portfolio_contexts):
-                            pctx = portfolio_contexts[i]
-                            if 'original_portfolio_symbol' in pctx:
-                                # This is a portfolio - use original portfolio symbol
-                                proper_asset_names.append(pctx['original_portfolio_symbol'])
-                            else:
-                                # This is a regular asset
-                                proper_asset_names.append(symbol)
-                        else:
-                            proper_asset_names.append(symbol)
-                    
-                    analysis_text += f"🔍 **Анализируемые активы:** {', '.join(proper_asset_names)}"
-                    
-                    # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                    await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
-                    
-                else:
-                    error_msg = chart_analysis.get('error', 'Неизвестная ошибка') if chart_analysis else 'Анализ не выполнен'
-                    # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                    await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа графика: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
-                    
-            except Exception as chart_error:
-                self.logger.error(f"Error creating chart for analysis: {chart_error}")
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании графика для анализа: {str(chart_error)}", parse_mode='Markdown', reply_markup=keyboard)
-                
-                # Remove keyboard from previous message only after successful message creation
-                await self._remove_keyboard_after_successful_message(update, context)
-
-        except Exception as e:
-            self.logger.error(f"Error handling chart analysis button: {e}")
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе графика: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_efficient_frontier_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Efficient Frontier button for all comparison types"""
@@ -8645,9 +8509,6 @@ class ShansAi:
             if self.gemini_service and self.gemini_service.is_available():
                 keyboard.append([
                     InlineKeyboardButton("AI-анализ", callback_data="data_analysis_compare")
-                ])
-                keyboard.append([
-                    InlineKeyboardButton("Анализ графика Gemini", callback_data="chart_analysis_compare")
                 ])
             
             return InlineKeyboardMarkup(keyboard)
