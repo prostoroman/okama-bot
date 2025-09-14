@@ -8214,6 +8214,167 @@ class ShansAi:
             table_data.append(calmar_row)
 
 
+    def _create_portfolio_summary_metrics_table(self, portfolio, symbols: list, weights: list, currency: str) -> str:
+        """Create summary metrics table for a single portfolio (similar to _create_summary_metrics_table but for one portfolio)"""
+        try:
+            # Prepare table data
+            table_data = []
+            headers = ["Метрика", "Значение"]
+            
+            # Calculate key metrics for the portfolio
+            portfolio_metrics = {}
+            
+            if portfolio is not None:
+                # Get price data from portfolio
+                prices = None
+                
+                # Try to get price data from different sources
+                if hasattr(portfolio, 'wealth_index') and portfolio.wealth_index is not None:
+                    wealth_index = portfolio.wealth_index
+                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
+                        if hasattr(wealth_index, 'columns'):
+                            prices = wealth_index.iloc[:, 0]
+                        else:
+                            prices = wealth_index
+                
+                if prices is not None and len(prices) > 1:
+                    # CAGR (Annual Return)
+                    try:
+                        start_date = prices.index[0]
+                        end_date = prices.index[-1]
+                        
+                        # Calculate years based on actual date range
+                        try:
+                            # Handle different date types (Period, Timestamp, etc.)
+                            if hasattr(start_date, 'to_timestamp'):
+                                start_date = start_date.to_timestamp()
+                            if hasattr(end_date, 'to_timestamp'):
+                                end_date = end_date.to_timestamp()
+                            
+                            if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
+                                years = (end_date - start_date).days / 365.25
+                            else:
+                                years = len(prices) / 12  # Fallback: assuming monthly data
+                        except Exception:
+                            years = len(prices) / 12  # Fallback: assuming monthly data
+                        
+                        if years > 0:
+                            total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
+                            portfolio_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
+                            
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate CAGR for portfolio: {e}")
+                        portfolio_metrics['cagr'] = None
+                    
+                    # Volatility
+                    try:
+                        returns = prices.pct_change().dropna()
+                        if len(returns) > 1:
+                            # Annualize volatility based on data frequency
+                            if hasattr(prices.index, 'freq') and prices.index.freq:
+                                freq_str = str(prices.index.freq)
+                                if 'D' in freq_str:  # Daily data
+                                    portfolio_metrics['volatility'] = returns.std() * (252 ** 0.5)  # Annualized
+                                elif 'M' in freq_str:  # Monthly data
+                                    portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Annualized
+                                else:
+                                    portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Default to monthly
+                            else:
+                                # Fallback: assume monthly data
+                                portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate volatility for portfolio: {e}")
+                        portfolio_metrics['volatility'] = None
+                    
+                    # Sharpe Ratio
+                    try:
+                        # Calculate Sharpe ratio manually using CAGR and volatility
+                        if portfolio_metrics.get('cagr') is not None and portfolio_metrics.get('volatility') is not None and portfolio_metrics['volatility'] > 0:
+                            # Calculate years for period-based rate selection
+                            years = None
+                            if prices is not None and len(prices) > 1:
+                                start_date = prices.index[0]
+                                end_date = prices.index[-1]
+                                if hasattr(start_date, 'to_timestamp'):
+                                    start_date = start_date.to_timestamp()
+                                if hasattr(end_date, 'to_timestamp'):
+                                    end_date = end_date.to_timestamp()
+                                years = (end_date - start_date).days / 365.25
+                            
+                            # Use proper risk-free rate based on currency
+                            risk_free_rate = self.get_risk_free_rate(currency, years)
+                            portfolio_metrics['sharpe'] = (portfolio_metrics['cagr'] - risk_free_rate) / portfolio_metrics['volatility']
+                            portfolio_metrics['risk_free_rate'] = risk_free_rate
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate Sharpe ratio for portfolio: {e}")
+                        portfolio_metrics['sharpe'] = None
+                    
+                    # Max Drawdown
+                    try:
+                        # Calculate max drawdown from price data
+                        running_max = prices.expanding().max()
+                        drawdown = (prices - running_max) / running_max
+                        portfolio_metrics['max_drawdown'] = drawdown.min()
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate max drawdown for portfolio: {e}")
+                        portfolio_metrics['max_drawdown'] = None
+            
+            # Add metrics to table
+            # CAGR
+            cagr_value = portfolio_metrics.get('cagr')
+            if cagr_value is not None:
+                table_data.append(["Среднегодовая доходность (CAGR)", f"{cagr_value*100:.2f}%"])
+            else:
+                table_data.append(["Среднегодовая доходность (CAGR)", "N/A"])
+            
+            # Volatility
+            volatility_value = portfolio_metrics.get('volatility')
+            if volatility_value is not None:
+                table_data.append(["Волатильность", f"{volatility_value*100:.2f}%"])
+            else:
+                table_data.append(["Волатильность", "N/A"])
+            
+            # Sharpe Ratio
+            sharpe_value = portfolio_metrics.get('sharpe')
+            if sharpe_value is not None:
+                table_data.append(["Коэфф. Шарпа", f"{sharpe_value:.3f}"])
+            else:
+                table_data.append(["Коэфф. Шарпа", "N/A"])
+            
+            # Max Drawdown
+            max_drawdown_value = portfolio_metrics.get('max_drawdown')
+            if max_drawdown_value is not None:
+                table_data.append(["Макс. просадка", f"{max_drawdown_value*100:.2f}%"])
+            else:
+                table_data.append(["Макс. просадка", "N/A"])
+            
+            # Risk-free rate
+            risk_free_rate_value = portfolio_metrics.get('risk_free_rate')
+            if risk_free_rate_value is not None:
+                table_data.append(["Безрисковая ставка", f"{risk_free_rate_value*100:.2f}%"])
+            else:
+                table_data.append(["Безрисковая ставка", "N/A"])
+            
+            # Portfolio composition
+            composition_text = ", ".join([f"{symbol} ({weight*100:.1f}%)" for symbol, weight in zip(symbols, weights)])
+            table_data.append(["Состав портфеля", composition_text])
+            
+            # Create markdown table
+            if table_data:
+                table_text = "| " + " | ".join(headers) + " |\n"
+                table_text += "| " + " | ".join([":---" for _ in headers]) + " |\n"
+                
+                for row in table_data:
+                    table_text += "| " + " | ".join(row) + " |\n"
+                
+                return table_text
+            else:
+                return "❌ Не удалось создать таблицу метрик"
+                
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio summary metrics table: {e}")
+            return f"❌ Ошибка при создании таблицы метрик: {str(e)}"
+
     def _create_portfolio_metrics_table(self, portfolio_symbol: str, symbols: list, weights: list, currency: str, portfolio_object) -> str:
         """Create metrics table for a single portfolio (similar to _create_summary_metrics_table but for one portfolio)"""
         try:
@@ -11114,23 +11275,14 @@ class ShansAi:
             # Create Portfolio with validated symbols and period
             portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
-            # Create summary metrics table using the same logic as compare command
+            # Create portfolio metrics table using portfolio-specific logic
             try:
-                # Prepare data for _create_summary_metrics_table
-                # For portfolio, we need to create expanded_symbols and portfolio_contexts
-                expanded_symbols = [portfolio_symbol]  # Portfolio symbol as single item
-                portfolio_contexts = [{
-                    'symbols': valid_symbols,
-                    'weights': valid_weights,
-                    'currency': currency
-                }]
+                # Create portfolio object for metrics calculation
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
                 
-                summary_table = self._create_summary_metrics_table(
-                    symbols=[portfolio_symbol], 
-                    currency=currency, 
-                    expanded_symbols=expanded_symbols, 
-                    portfolio_contexts=portfolio_contexts, 
-                    specified_period=None
+                # Create portfolio-specific metrics table
+                summary_table = self._create_portfolio_summary_metrics_table(
+                    portfolio, valid_symbols, valid_weights, currency
                 )
                 
                 if summary_table and not summary_table.startswith("❌"):
@@ -14581,8 +14733,9 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Prepare data for _create_summary_metrics_table
-            expanded_symbols = [portfolio_symbol]  # Portfolio symbol as single item
+            # Prepare data for analysis using individual assets
+            # For AI analysis, we need to pass the individual assets, not the portfolio symbol
+            expanded_symbols = valid_symbols  # Individual assets
             portfolio_contexts = [{
                 'symbols': valid_symbols,
                 'weights': valid_weights,
@@ -14591,7 +14744,7 @@ class ShansAi:
             
             # Prepare data for analysis
             try:
-                data_info = await self._prepare_data_for_analysis([portfolio_symbol], currency, expanded_symbols, portfolio_contexts, user_id)
+                data_info = await self._prepare_data_for_analysis(valid_symbols, currency, expanded_symbols, portfolio_contexts, user_id)
                 
                 # Analyze data with Gemini
                 data_analysis = self.gemini_service.analyze_data(data_info)
