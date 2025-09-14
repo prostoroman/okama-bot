@@ -53,6 +53,8 @@ class InMemoryUserContextStore:
                     "compare_first_symbol": None,
                     "compare_base_symbol": None,
                     "waiting_for_compare": False,
+                    # History of analyzed tickers for quick access
+                    "analyzed_tickers": [],
                 }
                 self._data[key] = ctx
             return ctx

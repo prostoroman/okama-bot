@@ -660,6 +660,98 @@ class ShansAi:
 
     # --- Asset Service Methods ---
     
+    def search_assets_with_selection(self, identifier: str) -> Dict[str, Union[str, Any]]:
+        """
+        Search for assets with possibility to select from multiple results.
+        
+        Returns:
+        - Single result: {'symbol': str, 'type': str, 'source': str, 'name': str}
+        - Multiple results: {'results': list, 'type': str, 'query': str}
+        - Error: {'error': str}
+        """
+        try:
+            raw = (identifier or '').strip()
+            if not raw:
+                return {'error': 'Пустой идентификатор актива'}
+
+            upper = raw.upper()
+
+            # If already okama-style ticker like XXX.SUFFIX
+            if '.' in upper and len(upper.split('.')) == 2 and all(part for part in upper.split('.')):
+                # Check if it's a Chinese exchange symbol
+                if self.tushare_service and self.tushare_service.is_tushare_symbol(upper):
+                    return {'symbol': upper, 'type': 'ticker', 'source': 'tushare'}
+                else:
+                    return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
+
+            # Search in okama database
+            okama_results = []
+            try:
+                import okama as ok
+                search_result = ok.search(raw)
+                if len(search_result) > 0:
+                    # Convert to list of results
+                    for _, row in search_result.iterrows():
+                        okama_results.append({
+                            'symbol': row['symbol'],
+                            'name': row.get('name', ''),
+                            'source': 'okama'
+                        })
+            except Exception as e:
+                self.logger.warning(f"Okama search failed for '{raw}': {e}")
+
+            # Search in tushare database
+            tushare_results = []
+            if self.tushare_service:
+                try:
+                    tushare_search = self.tushare_service.search_symbols(raw)
+                    if tushare_search:
+                        for result in tushare_search:
+                            tushare_results.append({
+                                'symbol': result['symbol'],
+                                'name': result['name'],
+                                'source': 'tushare'
+                            })
+                except Exception as e:
+                    self.logger.warning(f"Tushare search failed for '{raw}': {e}")
+
+            # Combine and deduplicate results
+            all_results = okama_results + tushare_results
+            unique_results = []
+            seen_symbols = set()
+            
+            for result in all_results:
+                if result['symbol'] not in seen_symbols:
+                    unique_results.append(result)
+                    seen_symbols.add(result['symbol'])
+
+            # If no results found
+            if not unique_results:
+                if self._looks_like_ticker(raw):
+                    return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
+                else:
+                    return {'error': f'"{raw}" не найден в базе данных okama и tushare'}
+
+            # If only one result, return it directly
+            if len(unique_results) == 1:
+                result = unique_results[0]
+                return {
+                    'symbol': result['symbol'],
+                    'type': 'ticker' if self._looks_like_ticker(raw) else 'company_name',
+                    'source': result['source'],
+                    'name': result['name']
+                }
+
+            # Multiple results - return for selection
+            return {
+                'results': unique_results[:20],  # Limit to 20 results
+                'type': 'ticker' if self._looks_like_ticker(raw) else 'company_name',
+                'query': raw
+            }
+
+        except Exception as e:
+            return {'error': f"Ошибка при поиске активов: {str(e)}"}
+
     def resolve_symbol_or_isin(self, identifier: str) -> Dict[str, Union[str, Any]]:
         """
         Resolve user-provided identifier to an okama-compatible ticker.
@@ -768,6 +860,37 @@ class ShansAi:
             return 'okama'
         
         return 'tushare' if self.tushare_service.is_tushare_symbol(symbol) else 'okama'
+
+    def _create_asset_selection_keyboard(self, results: List[Dict], query: str) -> InlineKeyboardMarkup:
+        """Создать клавиатуру для выбора актива из множественных результатов"""
+        keyboard = []
+        
+        # Ограничиваем количество результатов для удобства
+        max_results = min(len(results), 10)
+        
+        for i in range(max_results):
+            result = results[i]
+            symbol = result['symbol']
+            name = result['name']
+            source = result['source']
+            
+            # Создаем иконку для источника
+            source_icon = "🌍" if source == "okama" else "🇨🇳"
+            
+            # Ограничиваем длину названия для читаемости
+            display_name = name[:30] + "..." if len(name) > 30 else name
+            
+            button_text = f"{source_icon} {symbol} - {display_name}"
+            
+            # Создаем callback_data с символом и запросом
+            callback_data = f"select_asset_{symbol}_{query}"
+            
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+        
+        # Добавить кнопку отмены
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_selection_{query}")])
+        
+        return InlineKeyboardMarkup(keyboard)
 
     def _looks_like_isin(self, val: str) -> bool:
         """
@@ -1115,6 +1238,24 @@ class ShansAi:
         # Update persistent store; keep in-memory mirror in sync
         updated = self.context_store.update_user_context(user_id, **kwargs)
         self.user_sessions[user_id] = updated
+
+    def _add_to_analyzed_tickers(self, user_id: int, symbol: str):
+        """Добавить тикер в историю анализируемых активов пользователя"""
+        user_context = self._get_user_context(user_id)
+        analyzed_tickers = user_context.get('analyzed_tickers', [])
+        
+        # Удаляем тикер если он уже есть (чтобы переместить в начало)
+        if symbol in analyzed_tickers:
+            analyzed_tickers.remove(symbol)
+        
+        # Добавляем в начало списка
+        analyzed_tickers.insert(0, symbol)
+        
+        # Ограничиваем историю до 20 тикеров
+        analyzed_tickers = analyzed_tickers[:20]
+        
+        # Обновляем контекст
+        self._update_user_context(user_id, analyzed_tickers=analyzed_tickers)
     
     def _add_to_conversation_history(self, user_id: int, message: str, response: str):
         """Добавить сообщение в историю разговора (с сохранением)."""
@@ -2419,29 +2560,49 @@ class ShansAi:
             self._update_user_context(user_id, waiting_for_info=True)
             
             await self._send_message_safe(update, 
-                f"📊 *Информация об активе*\n\n"
+                f"📊 *Анализ*\n\n"
                 f"*Примеры:* {examples_text}\n\n"
-                f"*Просто отправьте название инструмента*")
+                f"Просто отправьте название, тикер или ISIN инструмента")
             return
         
-        symbol = self.clean_symbol(context.args[0]).upper()
+        symbol = context.args[0]
         
         # Update user context
         user_id = update.effective_user.id
-        self._update_user_context(user_id, 
-                                last_assets=[symbol] + self._get_user_context(user_id).get('last_assets', []),
-                                waiting_for_info=False)
+        self._update_user_context(user_id, waiting_for_info=False)
         
-        await self._send_ephemeral_message(update, context, f"📊 Получаю информацию об активе {symbol}...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"📊 Ищу актив '{symbol}'...", delete_after=3)
         
         try:
-            # Get the resolved symbol from asset service
-            resolved = self.resolve_symbol_or_isin(symbol)
-            if 'error' in resolved:
-                await self._send_message_safe(update, f"❌ Ошибка: {resolved['error']}")
+            # Search for assets with selection possibility
+            search_result = self.search_assets_with_selection(symbol)
+            
+            if 'error' in search_result:
+                await self._send_message_safe(update, f"❌ Ошибка: {search_result['error']}")
                 return
             
-            resolved_symbol = resolved['symbol']
+            # If multiple results, show selection menu
+            if 'results' in search_result:
+                results = search_result['results']
+                query = search_result['query']
+                
+                message = f"🔍 *Найдено {len(results)} активов по запросу '{query}':*\n\n"
+                message += "Выберите нужный актив:"
+                
+                keyboard = self._create_asset_selection_keyboard(results, query)
+                
+                await self._send_message_safe(update, message, reply_markup=keyboard)
+                return
+            
+            # Single result - proceed with info
+            resolved_symbol = search_result['symbol']
+            
+            # Update user context with the selected asset
+            self._update_user_context(user_id, 
+                                    last_assets=[resolved_symbol] + self._get_user_context(user_id).get('last_assets', []))
+            
+            # Add to analyzed tickers history
+            self._add_to_analyzed_tickers(user_id, resolved_symbol)
             
             # Determine data source
             data_source = self.determine_data_source(resolved_symbol)
@@ -2535,22 +2696,40 @@ class ShansAi:
             return
         
         # Treat text as single asset symbol and process with /info logic
-        symbol = self.clean_symbol(text).upper()
+        symbol = text
         
-        # Update user context
-        self._update_user_context(user_id, 
-                                last_assets=[symbol] + user_context.get('last_assets', []))
-        
-        await self._send_ephemeral_message(update, context, f"📊 Получаю информацию об активе {symbol}...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"📊 Ищу актив '{symbol}'...", delete_after=3)
         
         try:
-            # Get the resolved symbol from asset service
-            resolved = self.resolve_symbol_or_isin(symbol)
-            if 'error' in resolved:
-                await self._send_message_safe(update, f"❌ Ошибка: {resolved['error']}")
+            # Search for assets with selection possibility
+            search_result = self.search_assets_with_selection(symbol)
+            
+            if 'error' in search_result:
+                await self._send_message_safe(update, f"❌ Ошибка: {search_result['error']}")
                 return
             
-            resolved_symbol = resolved['symbol']
+            # If multiple results, show selection menu
+            if 'results' in search_result:
+                results = search_result['results']
+                query = search_result['query']
+                
+                message = f"🔍 *Найдено {len(results)} активов по запросу '{query}':*\n\n"
+                message += "Выберите нужный актив:"
+                
+                keyboard = self._create_asset_selection_keyboard(results, query)
+                
+                await self._send_message_safe(update, message, reply_markup=keyboard)
+                return
+            
+            # Single result - proceed with info
+            resolved_symbol = search_result['symbol']
+            
+            # Update user context with the selected asset
+            self._update_user_context(user_id, 
+                                    last_assets=[resolved_symbol] + user_context.get('last_assets', []))
+            
+            # Add to analyzed tickers history
+            self._add_to_analyzed_tickers(user_id, resolved_symbol)
             
             # Determine data source
             data_source = self.determine_data_source(resolved_symbol)
@@ -3589,7 +3768,17 @@ class ShansAi:
                         escaped_symbol = portfolio_symbol.replace('_', '\\_')
                         help_text += f"• {escaped_symbol} ({portfolio_str})\n"
                     
-                help_text += "\n\nПримеры:\n"
+                # Add recently analyzed tickers
+                analyzed_tickers = user_context.get('analyzed_tickers', [])
+                if analyzed_tickers:
+                    recent_tickers = analyzed_tickers[:5]  # Show last 5 tickers
+                    help_text += "\n🕒 *Последние анализируемые активы:*\n"
+                    for ticker in recent_tickers:
+                        escaped_ticker = ticker.replace('_', '\\_')
+                        help_text += f"• `{escaped_ticker}`\n"
+                    help_text += "\n"
+                
+                help_text += "\nПримеры:\n"
                 help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
                 help_text += "• `SBER.MOEX LKOH.MOEX RUB 5Y` - сравнение с валютой RUB и периодом 5 лет\n"
                 help_text += "• `00001.HK 00005.HK` - сравнение гонконгских акций (гибридный подход)\n"
@@ -4289,7 +4478,21 @@ class ShansAi:
             if not context.args:
 
                 
+                # Get user context for recently analyzed tickers
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                
                 help_text = "📊 *Создание портфеля*\n\n"
+                
+                # Add recently analyzed tickers
+                analyzed_tickers = user_context.get('analyzed_tickers', [])
+                if analyzed_tickers:
+                    recent_tickers = analyzed_tickers[:5]  # Show last 5 tickers
+                    help_text += "🕒 *Последние анализируемые активы:*\n"
+                    for ticker in recent_tickers:
+                        escaped_ticker = ticker.replace('_', '\\_')
+                        help_text += f"• `{escaped_ticker}`\n"
+                    help_text += "\n"
 
                 help_text += "*Примеры:*\n"
                 help_text += "• `SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` - американский сбалансированный\n"
@@ -4308,7 +4511,6 @@ class ShansAi:
                 await self._send_message_safe(update, help_text, parse_mode='Markdown')
                 
                 # Set flag to wait for portfolio input
-                user_id = update.effective_user.id
                 self.logger.info(f"Setting waiting_for_portfolio=True for user {user_id}")
                 self._update_user_context(user_id, waiting_for_portfolio=True)
                 
@@ -5371,6 +5573,7 @@ class ShansAi:
                 # Count existing portfolios for this user
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
                 
+                # Use PF namespace with okama's assigned symbol
                 # Use PF namespace with custom symbol (okama's symbol is composition string, not suitable for bot)
                 portfolio_symbol = f"PF_{portfolio_count}"
                 
@@ -6000,6 +6203,34 @@ class ShansAi:
                             portfolio_args.append(part)
                     context.args = portfolio_args
                     await self.portfolio_command(update, context)
+                return
+            
+            # Handle asset selection callbacks
+            if callback_data.startswith("select_asset_"):
+                # Extract symbol and query from callback data
+                parts = callback_data.replace("select_asset_", "").split("_")
+                if len(parts) >= 2:
+                    symbol = parts[0]
+                    query = "_".join(parts[1:])  # Reconstruct query in case it contains underscores
+                    
+                    # Update user context with selected asset
+                    user_id = update.effective_user.id
+                    user_context = self._get_user_context(user_id)
+                    self._update_user_context(user_id, 
+                                            last_assets=[symbol] + user_context.get('last_assets', []))
+                    
+                    # Add to analyzed tickers history
+                    self._add_to_analyzed_tickers(user_id, symbol)
+                    
+                    # Execute info command with selected symbol
+                    context.args = [symbol]
+                    await self.info_command(update, context)
+                return
+            
+            # Handle cancel selection callbacks
+            if callback_data.startswith("cancel_selection_"):
+                query = callback_data.replace("cancel_selection_", "")
+                await query.edit_message_text(f"❌ Выбор актива отменен для запроса '{query}'")
                 return
             
             if callback_data == "drawdowns" or callback_data == "drawdowns_compare" or callback_data == "compare_drawdowns":
@@ -14082,7 +14313,7 @@ class ShansAi:
                 period_length = "неизвестный период"
             
             # Create comprehensive caption with portfolio info
-            chart_caption = f"💰 При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}\n\n"
+            #chart_caption = f"💰 При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}\n\n"
             
             # Add portfolio composition
             symbols_with_weights = []
@@ -14091,8 +14322,9 @@ class ShansAi:
                 weight = weights[i] if i < len(weights) else 0.0
                 symbols_with_weights.append(f"`{symbol_name}` ({weight:.1%})")
             
-            chart_caption += f"📈 `{portfolio_symbol}`: {', '.join(symbols_with_weights)}\n"
-            chart_caption += f"💱 Базовая валюта: {currency}\n\n"
+            chart_caption = f"📈 Имя портфеля: **{portfolio_symbol}** (использовать при сравнении)\n"
+            chart_caption += f"{'\n'.join(symbols_with_weights)}\n"
+            chart_caption += f"💱 Базовая валюта: {currency}\n"
 
 
             # Send the chart with caption and buttons
