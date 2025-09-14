@@ -7129,6 +7129,151 @@ class ShansAi:
             
             return f"\n\n📊 **Основные метрики:**\n• **Состав:** {', '.join(symbols_with_weights)}\n• **Валюта:** {currency}\n• **Период ребалансировки:** Ежегодно\n• **CAGR (Среднегодовая доходность):** Недоступно\n• **Волатильность:** Недоступно\n• **Коэфф. Шарпа:** Недоступно\n• **Макс. просадка:** Недоступно\n"
 
+    async def _prepare_portfolio_data_for_analysis(self, portfolio, symbols: list, weights: list, currency: str, user_id: int) -> Dict[str, Any]:
+        """Prepare comprehensive portfolio data for Gemini portfolio analysis"""
+        try:
+            # Create portfolio metrics table using the specialized function
+            portfolio_metrics_table = ""
+            try:
+                portfolio_metrics_table = self._create_portfolio_summary_metrics_table(
+                    portfolio=portfolio,
+                    symbols=symbols,
+                    weights=weights,
+                    currency=currency
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to create portfolio metrics table: {e}")
+            
+            # Create individual assets metrics table for comparison
+            individual_assets_metrics = ""
+            try:
+                individual_assets_metrics = self._create_summary_metrics_table(
+                    symbols=symbols,
+                    currency=currency,
+                    expanded_symbols=symbols,  # Individual assets
+                    portfolio_contexts=[],  # No portfolio contexts for individual assets
+                    specified_period=None
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to create individual assets metrics table: {e}")
+            
+            # Calculate correlations
+            correlations = []
+            try:
+                if len(symbols) > 1:
+                    asset_list = ok.AssetList(symbols, ccy=currency)
+                    corr_matrix = asset_list.corr_matrix
+                    if corr_matrix is not None:
+                        correlations = corr_matrix.values.tolist()
+            except Exception as e:
+                self.logger.warning(f"Failed to calculate correlations: {e}")
+            
+            # Calculate efficient frontier data
+            efficient_frontier_data = None
+            try:
+                if len(symbols) > 1:
+                    asset_list = ok.AssetList(symbols, ccy=currency)
+                    ef = ok.EfficientFrontier(asset_list, ccy=currency)
+                    
+                    # Extract key points from efficient frontier
+                    efficient_frontier_data = {
+                        'min_risk_portfolio': {
+                            'risk': ef.gmv_annualized[0] if hasattr(ef, 'gmv_annualized') and ef.gmv_annualized is not None else None,
+                            'return': ef.gmv_annualized[1] if hasattr(ef, 'gmv_annualized') and ef.gmv_annualized is not None else None,
+                            'weights': ef.gmv_weights.tolist() if hasattr(ef, 'gmv_weights') and ef.gmv_weights is not None else None
+                        },
+                        'max_return_portfolio': {
+                            'risk': None,  # Will be calculated from optimize_return
+                            'return': None,  # Will be calculated from optimize_return
+                            'weights': None  # Will be calculated from optimize_return
+                        },
+                        'max_sharpe_portfolio': {
+                            'risk': None,  # Will be calculated from get_tangency_portfolio
+                            'return': None,  # Will be calculated from get_tangency_portfolio
+                            'weights': None,  # Will be calculated from get_tangency_portfolio
+                            'sharpe_ratio': None
+                        },
+                        'asset_names': symbols,
+                        'currency': currency
+                    }
+                    
+                    # Try to get max return portfolio
+                    try:
+                        max_return_result = ef.optimize_return()
+                        if max_return_result is not None and len(max_return_result) >= 2:
+                            efficient_frontier_data['max_return_portfolio']['risk'] = max_return_result[0]
+                            efficient_frontier_data['max_return_portfolio']['return'] = max_return_result[1]
+                            if hasattr(ef, 'weights') and ef.weights is not None:
+                                efficient_frontier_data['max_return_portfolio']['weights'] = ef.weights.tolist()
+                    except Exception as e:
+                        self.logger.warning(f"Failed to get max return portfolio: {e}")
+                    
+                    # Try to get tangency portfolio (max Sharpe)
+                    try:
+                        tangency_result = ef.get_tangency_portfolio()
+                        if tangency_result is not None and len(tangency_result) >= 2:
+                            efficient_frontier_data['max_sharpe_portfolio']['risk'] = tangency_result[0]
+                            efficient_frontier_data['max_sharpe_portfolio']['return'] = tangency_result[1]
+                            if hasattr(ef, 'weights') and ef.weights is not None:
+                                efficient_frontier_data['max_sharpe_portfolio']['weights'] = ef.weights.tolist()
+                                # Calculate Sharpe ratio
+                                risk_free_rate = self.get_risk_free_rate(currency, 5.0)
+                                if tangency_result[0] > 0:
+                                    efficient_frontier_data['max_sharpe_portfolio']['sharpe_ratio'] = (tangency_result[1] - risk_free_rate) / tangency_result[0]
+                    except Exception as e:
+                        self.logger.warning(f"Failed to get tangency portfolio: {e}")
+                        
+            except Exception as e:
+                self.logger.warning(f"Failed to calculate efficient frontier: {e}")
+            
+            # Get asset names
+            asset_names = {}
+            try:
+                for symbol in symbols:
+                    try:
+                        asset = ok.Asset(symbol)
+                        if hasattr(asset, 'name') and asset.name:
+                            asset_names[symbol] = asset.name
+                        else:
+                            asset_names[symbol] = symbol
+                    except Exception as e:
+                        asset_names[symbol] = symbol
+                        self.logger.warning(f"Could not get name for asset {symbol}: {e}")
+            except Exception as e:
+                self.logger.warning(f"Failed to get asset names: {e}")
+            
+            portfolio_data = {
+                'symbols': symbols,
+                'weights': weights,
+                'currency': currency,
+                'period': 'полный доступный период данных',
+                'portfolio_metrics_table': portfolio_metrics_table,
+                'individual_assets_metrics': individual_assets_metrics,
+                'correlations': correlations,
+                'efficient_frontier': efficient_frontier_data,
+                'asset_names': asset_names,
+                'analysis_type': 'portfolio_analysis',
+                'additional_info': f'Портфель состоит из {len(symbols)} активов с весами: {", ".join([f"{symbol}: {weight:.1%}" for symbol, weight in zip(symbols, weights)])}'
+            }
+            
+            return portfolio_data
+            
+        except Exception as e:
+            self.logger.error(f"Error preparing portfolio data for analysis: {e}")
+            return {
+                'symbols': symbols,
+                'weights': weights,
+                'currency': currency,
+                'period': 'полный доступный период данных',
+                'portfolio_metrics_table': '❌ Ошибка при создании таблицы метрик портфеля',
+                'individual_assets_metrics': '❌ Ошибка при создании таблицы метрик активов',
+                'correlations': [],
+                'efficient_frontier': None,
+                'asset_names': {symbol: symbol for symbol in symbols},
+                'analysis_type': 'portfolio_analysis',
+                'additional_info': f'Ошибка при подготовке данных: {str(e)}'
+            }
+
     async def _prepare_data_for_analysis(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, user_id: int) -> Dict[str, Any]:
         """Prepare comprehensive financial data for Gemini analysis"""
         try:
@@ -8286,7 +8431,7 @@ class ShansAi:
             # Create markdown table using the same function as _create_summary_metrics_table
             table_markdown = self._create_enhanced_markdown_table(table_data, headers)
             
-            return f"## 📊 Метрики портфеля\n\n{table_markdown}"
+            return f"{table_markdown}"
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio summary metrics table: {e}")
@@ -14795,24 +14940,29 @@ class ShansAi:
             else:
                 valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
             
-            # Prepare data for analysis using individual assets
-            # For AI analysis, we need to pass the individual assets, not the portfolio symbol
-            expanded_symbols = valid_symbols  # Individual assets
-            portfolio_contexts = [{
-                'symbols': valid_symbols,
-                'weights': valid_weights,
-                'currency': currency
-            }]
-            
-            # Prepare data for analysis
+            # Create portfolio object for analysis
             try:
-                data_info = await self._prepare_data_for_analysis(valid_symbols, currency, expanded_symbols, portfolio_contexts, user_id)
+                portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
+            except Exception as e:
+                self.logger.error(f"Failed to create portfolio object: {e}")
+                await self._send_callback_message(update, context, f"❌ Ошибка создания портфеля: {str(e)}")
+                return
+            
+            # Prepare portfolio data for analysis using the new specialized function
+            try:
+                portfolio_data = await self._prepare_portfolio_data_for_analysis(
+                    portfolio=portfolio,
+                    symbols=valid_symbols,
+                    weights=valid_weights,
+                    currency=currency,
+                    user_id=user_id
+                )
                 
-                # Analyze data with Gemini
-                data_analysis = self.gemini_service.analyze_data(data_info)
+                # Analyze portfolio with Gemini using the new portfolio analysis method
+                portfolio_analysis = self.gemini_service.analyze_portfolio(portfolio_data)
                 
-                if data_analysis and data_analysis.get('success'):
-                    analysis_text = data_analysis.get('analysis', '')
+                if portfolio_analysis and portfolio_analysis.get('success'):
+                    analysis_text = portfolio_analysis.get('analysis', '')
                     
                     if analysis_text:
                         # Create keyboard for portfolio command
@@ -14824,7 +14974,7 @@ class ShansAi:
                         await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ портфеля выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                         
                 else:
-                    error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
+                    error_msg = portfolio_analysis.get('error', 'Неизвестная ошибка') if portfolio_analysis else 'Анализ не выполнен'
                     # Create keyboard for portfolio command
                     keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
                     await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа портфеля: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
