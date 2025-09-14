@@ -38,9 +38,9 @@ def test_optimized_compare_metrics():
         # Проверяем Risk-free rate
         print("\n1. Risk-free rate:")
         try:
-            # Имитируем логику из bot.py
+            # Имитируем логику из bot.py (обновленные значения)
             if currency.upper() == 'RUB':
-                risk_free_rate = 0.13  # 13% - default OFZ 1Y rate
+                risk_free_rate = 0.10  # 10% - OFZ 5Y rate (обновлено)
             else:
                 risk_free_rate = 0.05  # Default for other currencies
             print(f"   Risk-free rate для {currency}: {risk_free_rate*100:.2f}%")

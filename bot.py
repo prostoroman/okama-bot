@@ -8489,10 +8489,16 @@ class ShansAi:
                 InlineKeyboardButton("🔗 Корреляция", callback_data="correlation_compare")
             ])
             
-            # Add Efficient Frontier button
-            keyboard.append([
-                InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
-            ])
+            # Add Efficient Frontier and AI analysis buttons in the same row
+            if self.gemini_service and self.gemini_service.is_available():
+                keyboard.append([
+                    InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare"),
+                    InlineKeyboardButton("🧠 AI-анализ", callback_data="data_analysis_compare")
+                ])
+            else:
+                keyboard.append([
+                    InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
+                ])
             
             # Add Portfolio button - store symbols in context to avoid callback_data size limit
             # Store symbols in user context for portfolio button
@@ -8504,12 +8510,6 @@ class ShansAi:
             keyboard.append([
                 InlineKeyboardButton("💼 В Портфель", callback_data="compare_portfolio")
             ])
-            
-            # Add AI analysis buttons if services are available (only Gemini, no YandexGPT)
-            if self.gemini_service and self.gemini_service.is_available():
-                keyboard.append([
-                    InlineKeyboardButton("AI-анализ", callback_data="data_analysis_compare")
-                ])
             
             return InlineKeyboardMarkup(keyboard)
             
