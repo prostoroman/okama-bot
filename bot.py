@@ -4522,6 +4522,7 @@ class ShansAi:
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
                      InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
                     [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🤖 AI-анализ", callback_data=f"portfolio_ai_analysis_{portfolio_symbol}")] if self.gemini_service and self.gemini_service.is_available() else [],
                     [InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -5127,6 +5128,7 @@ class ShansAi:
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
                      InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
                     [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🤖 AI-анализ", callback_data=f"portfolio_ai_analysis_{portfolio_symbol}")] if self.gemini_service and self.gemini_service.is_available() else [],
                     [InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -5412,7 +5414,8 @@ class ShansAi:
                      InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
                     [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
                      InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💰 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")]
+                    [InlineKeyboardButton("💰 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")],
+                    [InlineKeyboardButton("🤖 AI-анализ", callback_data=f"portfolio_ai_analysis_{portfolio_symbol}")] if self.gemini_service and self.gemini_service.is_available() else []
                 ]
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -6244,6 +6247,15 @@ class ShansAi:
                     portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio compare assets button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_compare_assets_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith('portfolio_ai_analysis_'):
+                portfolio_symbol_raw = callback_data.replace('portfolio_ai_analysis_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
+                self.logger.info(f"Portfolio AI analysis button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_ai_analysis_button(update, context, portfolio_symbol)
             elif callback_data.startswith('portfolio_compare_'):
                 portfolio_symbol_raw = callback_data.replace('portfolio_compare_', '')
                 # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
@@ -8543,6 +8555,13 @@ class ShansAi:
             keyboard.append([
                 InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")
             ])
+            
+            # Add AI analysis button if Gemini service is available
+            if self.gemini_service and self.gemini_service.is_available():
+                keyboard.append([
+                    InlineKeyboardButton("🤖 AI-анализ", callback_data=f"portfolio_ai_analysis_{portfolio_symbol}")
+                ])
+            
             keyboard.append([
                 InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")
             ])
@@ -11095,19 +11114,32 @@ class ShansAi:
             # Create Portfolio with validated symbols and period
             portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
-            # Create portfolio metrics table using new method
+            # Create summary metrics table using the same logic as compare command
             try:
-                metrics_table = self._create_portfolio_metrics_table(
-                    portfolio_symbol, valid_symbols, valid_weights, currency, portfolio
+                # Prepare data for _create_summary_metrics_table
+                # For portfolio, we need to create expanded_symbols and portfolio_contexts
+                expanded_symbols = [portfolio_symbol]  # Portfolio symbol as single item
+                portfolio_contexts = [{
+                    'symbols': valid_symbols,
+                    'weights': valid_weights,
+                    'currency': currency
+                }]
+                
+                summary_table = self._create_summary_metrics_table(
+                    symbols=[portfolio_symbol], 
+                    currency=currency, 
+                    expanded_symbols=expanded_symbols, 
+                    portfolio_contexts=portfolio_contexts, 
+                    specified_period=None
                 )
                 
-                if metrics_table and not metrics_table.startswith("❌"):
+                if summary_table and not summary_table.startswith("❌"):
                     # Create keyboard for portfolio command
                     keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
                     
                     # Send table as message with keyboard
-                    header_text = f"📊 **Метрики портфеля**"
-                    table_message = f"{header_text}\n\n```\n{metrics_table}\n```"
+                    header_text = f"📊 **Сводная таблица ключевых метрик**"
+                    table_message = f"{header_text}\n\n```\n{summary_table}\n```"
                     await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown', reply_markup=keyboard)
                 else:
                     # Create keyboard for portfolio command
@@ -11115,7 +11147,7 @@ class ShansAi:
                     await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось создать таблицу метрик", reply_markup=keyboard)
                     
             except Exception as metrics_error:
-                self.logger.error(f"Error creating portfolio metrics table: {metrics_error}")
+                self.logger.error(f"Error creating summary metrics table: {metrics_error}")
                 # Create keyboard for portfolio command
                 keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
                 await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
@@ -14467,6 +14499,131 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating portfolio compare assets chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
+
+    async def _handle_portfolio_ai_analysis_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
+        """Handle portfolio AI analysis button click"""
+        try:
+            user_id = update.effective_user.id
+            self.logger.info(f"Handling portfolio AI analysis for user {user_id}, portfolio: {portfolio_symbol}")
+            
+            user_context = self._get_user_context(user_id)
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            # Use the new portfolio finder function
+            found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
+            
+            if not found_portfolio_key:
+                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
+                return
+            
+            # Use the found portfolio key
+            portfolio_symbol = found_portfolio_key
+            
+            portfolio_info = saved_portfolios[portfolio_symbol]
+            symbols = portfolio_info.get('symbols', [])
+            weights = portfolio_info.get('weights', [])
+            currency = portfolio_info.get('currency', 'USD')
+            
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            
+            if not symbols:
+                await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
+                return
+            
+            # Check if Gemini service is available
+            if not self.gemini_service or not self.gemini_service.is_available():
+                await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
+                return
+            
+            await self._send_ephemeral_message(update, context, "🤖 Анализирую портфель...", parse_mode='Markdown', delete_after=3)
+            
+            # Filter out None values and empty strings
+            final_symbols = [s for s in symbols if s is not None and str(s).strip()]
+            if not final_symbols:
+                self.logger.warning("All symbols were None or empty after filtering")
+                await self._send_callback_message(update, context, "❌ Все символы пустые или недействительны.")
+                return
+            
+            # Validate symbols before creating portfolio
+            valid_symbols = []
+            valid_weights = []
+            invalid_symbols = []
+            
+            for i, symbol in enumerate(final_symbols):
+                try:
+                    # Test if symbol exists in database
+                    test_asset = ok.Asset(symbol)
+                    # If asset was created successfully, consider it valid
+                    valid_symbols.append(symbol)
+                    valid_weights.append(weights[i])
+                    self.logger.info(f"Symbol {symbol} validated successfully")
+                except Exception as e:
+                    invalid_symbols.append(symbol)
+                    self.logger.warning(f"Symbol {symbol} is invalid: {e}")
+            
+            if not valid_symbols:
+                error_msg = f"❌ Все символы недействительны: {', '.join(invalid_symbols)}"
+                if any('.FX' in s for s in invalid_symbols):
+                    error_msg += "\n\n💡 Валютные пары (.FX) могут быть недоступны в базе данных okama."
+                await self._send_callback_message(update, context, error_msg)
+                return
+            
+            if invalid_symbols:
+                await self._send_callback_message(update, context, f"⚠️ Некоторые символы недоступны: {', '.join(invalid_symbols)}")
+            
+            # Normalize weights for valid symbols
+            if valid_weights:
+                total_weight = sum(valid_weights)
+                if total_weight > 0:
+                    valid_weights = [w / total_weight for w in valid_weights]
+                else:
+                    valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            else:
+                valid_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+            
+            # Prepare data for _create_summary_metrics_table
+            expanded_symbols = [portfolio_symbol]  # Portfolio symbol as single item
+            portfolio_contexts = [{
+                'symbols': valid_symbols,
+                'weights': valid_weights,
+                'currency': currency
+            }]
+            
+            # Prepare data for analysis
+            try:
+                data_info = await self._prepare_data_for_analysis([portfolio_symbol], currency, expanded_symbols, portfolio_contexts, user_id)
+                
+                # Analyze data with Gemini
+                data_analysis = self.gemini_service.analyze_data(data_info)
+                
+                if data_analysis and data_analysis.get('success'):
+                    analysis_text = data_analysis.get('analysis', '')
+                    
+                    if analysis_text:
+                        # Create keyboard for portfolio command
+                        keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                        await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
+                    else:
+                        # Create keyboard for portfolio command
+                        keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                        await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ портфеля выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
+                        
+                else:
+                    error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
+                    # Create keyboard for portfolio command
+                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                    await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа портфеля: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
+                    
+            except Exception as data_error:
+                self.logger.error(f"Error preparing data for portfolio analysis: {data_error}")
+                # Create keyboard for portfolio command
+                keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio AI analysis: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при анализе портфеля: {str(e)}", parse_mode='Markdown')
 
     async def _handle_portfolio_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
         """Handle portfolio compare button click - execute /compare command with pre-filled portfolio symbol"""
