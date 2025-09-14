@@ -8215,165 +8215,188 @@ class ShansAi:
 
 
     def _create_portfolio_summary_metrics_table(self, portfolio, symbols: list, weights: list, currency: str) -> str:
-        """Create summary metrics table for a single portfolio (similar to _create_summary_metrics_table but for one portfolio)"""
+        """Create summary metrics table for a single portfolio using ok.Portfolio.describe() (same format as _create_summary_metrics_table)"""
         try:
-            # Prepare table data
+            # Use portfolio.describe() to get the same metrics as AssetList.describe()
+            describe_data = portfolio.describe()
+            
+            if describe_data is None or describe_data.empty:
+                return "❌ Не удалось получить данные для анализа"
+            
+            # Prepare table data - single column for portfolio
             table_data = []
             headers = ["Метрика", "Значение"]
             
-            # Calculate key metrics for the portfolio
-            portfolio_metrics = {}
-            
-            if portfolio is not None:
-                # Get price data from portfolio
-                prices = None
+            # Convert describe data to table format (same logic as _create_summary_metrics_table)
+            for idx in describe_data.index:
+                property_name = describe_data.loc[idx, 'property']
+                period = describe_data.loc[idx, 'period']
                 
-                # Try to get price data from different sources
-                if hasattr(portfolio, 'wealth_index') and portfolio.wealth_index is not None:
-                    wealth_index = portfolio.wealth_index
-                    if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
-                        if hasattr(wealth_index, 'columns'):
-                            prices = wealth_index.iloc[:, 0]
+                # Create metric name with period information
+                if pd.isna(period) or period == 'None' or period == '':
+                    metric_name = str(property_name)
+                else:
+                    metric_name = f"{property_name} ({period})"
+                
+                # Get value from describe data (portfolio has single column)
+                value = describe_data.iloc[idx, 0]  # First (and only) column
+                
+                if pd.isna(value):
+                    formatted_value = "N/A"
+                else:
+                    # Format based on metric type (same logic as _create_summary_metrics_table)
+                    if isinstance(value, (int, float)):
+                        if 'return' in str(property_name).lower() or 'cagr' in str(property_name).lower():
+                            formatted_value = f"{value*100:.2f}%"
+                        elif 'volatility' in str(property_name).lower() or 'risk' in str(property_name).lower():
+                            formatted_value = f"{value*100:.2f}%"
+                        elif 'ratio' in str(property_name).lower():
+                            formatted_value = f"{value:.3f}"
+                        elif 'drawdown' in str(property_name).lower():
+                            formatted_value = f"{value*100:.2f}%"
+                        elif 'yield' in str(property_name).lower():
+                            formatted_value = f"{value*100:.2f}%"
                         else:
-                            prices = wealth_index
+                            formatted_value = f"{value:.4f}"
+                    else:
+                        formatted_value = str(value)
                 
-                if prices is not None and len(prices) > 1:
-                    # CAGR (Annual Return)
-                    try:
-                        start_date = prices.index[0]
-                        end_date = prices.index[-1]
-                        
-                        # Calculate years based on actual date range
-                        try:
-                            # Handle different date types (Period, Timestamp, etc.)
-                            if hasattr(start_date, 'to_timestamp'):
-                                start_date = start_date.to_timestamp()
-                            if hasattr(end_date, 'to_timestamp'):
-                                end_date = end_date.to_timestamp()
-                            
-                            if hasattr(start_date, 'year') and hasattr(end_date, 'year'):
-                                years = (end_date - start_date).days / 365.25
-                            else:
-                                years = len(prices) / 12  # Fallback: assuming monthly data
-                        except Exception:
-                            years = len(prices) / 12  # Fallback: assuming monthly data
-                        
-                        if years > 0:
-                            total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
-                            portfolio_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
-                            
-                    except Exception as e:
-                        self.logger.warning(f"Could not calculate CAGR for portfolio: {e}")
-                        portfolio_metrics['cagr'] = None
-                    
-                    # Volatility
-                    try:
-                        returns = prices.pct_change().dropna()
-                        if len(returns) > 1:
-                            # Annualize volatility based on data frequency
-                            if hasattr(prices.index, 'freq') and prices.index.freq:
-                                freq_str = str(prices.index.freq)
-                                if 'D' in freq_str:  # Daily data
-                                    portfolio_metrics['volatility'] = returns.std() * (252 ** 0.5)  # Annualized
-                                elif 'M' in freq_str:  # Monthly data
-                                    portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Annualized
-                                else:
-                                    portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)  # Default to monthly
-                            else:
-                                # Fallback: assume monthly data
-                                portfolio_metrics['volatility'] = returns.std() * (12 ** 0.5)
-                    except Exception as e:
-                        self.logger.warning(f"Could not calculate volatility for portfolio: {e}")
-                        portfolio_metrics['volatility'] = None
-                    
-                    # Sharpe Ratio
-                    try:
-                        # Calculate Sharpe ratio manually using CAGR and volatility
-                        if portfolio_metrics.get('cagr') is not None and portfolio_metrics.get('volatility') is not None and portfolio_metrics['volatility'] > 0:
-                            # Calculate years for period-based rate selection
-                            years = None
-                            if prices is not None and len(prices) > 1:
-                                start_date = prices.index[0]
-                                end_date = prices.index[-1]
-                                if hasattr(start_date, 'to_timestamp'):
-                                    start_date = start_date.to_timestamp()
-                                if hasattr(end_date, 'to_timestamp'):
-                                    end_date = end_date.to_timestamp()
-                                years = (end_date - start_date).days / 365.25
-                            
-                            # Use proper risk-free rate based on currency
-                            risk_free_rate = self.get_risk_free_rate(currency, years)
-                            portfolio_metrics['sharpe'] = (portfolio_metrics['cagr'] - risk_free_rate) / portfolio_metrics['volatility']
-                            portfolio_metrics['risk_free_rate'] = risk_free_rate
-                    except Exception as e:
-                        self.logger.warning(f"Could not calculate Sharpe ratio for portfolio: {e}")
-                        portfolio_metrics['sharpe'] = None
-                    
-                    # Max Drawdown
-                    try:
-                        # Calculate max drawdown from price data
-                        running_max = prices.expanding().max()
-                        drawdown = (prices - running_max) / running_max
-                        portfolio_metrics['max_drawdown'] = drawdown.min()
-                    except Exception as e:
-                        self.logger.warning(f"Could not calculate max drawdown for portfolio: {e}")
-                        portfolio_metrics['max_drawdown'] = None
+                table_data.append([metric_name, formatted_value])
             
-            # Add metrics to table
-            # CAGR
-            cagr_value = portfolio_metrics.get('cagr')
-            if cagr_value is not None:
-                table_data.append(["Среднегодовая доходность (CAGR)", f"{cagr_value*100:.2f}%"])
-            else:
-                table_data.append(["Среднегодовая доходность (CAGR)", "N/A"])
+            # Add additional metrics at the end (same as _create_summary_metrics_table)
+            self._add_portfolio_risk_free_rate_row(table_data, currency)
+            self._add_portfolio_sharpe_ratio_row(table_data, currency, portfolio)
+            self._add_portfolio_sortino_ratio_row(table_data, currency, portfolio)
+            self._add_portfolio_calmar_ratio_row(table_data, currency, portfolio)
             
-            # Volatility
-            volatility_value = portfolio_metrics.get('volatility')
-            if volatility_value is not None:
-                table_data.append(["Волатильность", f"{volatility_value*100:.2f}%"])
-            else:
-                table_data.append(["Волатильность", "N/A"])
+            # Create markdown table using the same function as _create_summary_metrics_table
+            table_markdown = self._create_enhanced_markdown_table(table_data, headers)
             
-            # Sharpe Ratio
-            sharpe_value = portfolio_metrics.get('sharpe')
-            if sharpe_value is not None:
-                table_data.append(["Коэфф. Шарпа", f"{sharpe_value:.3f}"])
-            else:
-                table_data.append(["Коэфф. Шарпа", "N/A"])
+            return f"## 📊 Метрики портфеля\n\n{table_markdown}"
             
-            # Max Drawdown
-            max_drawdown_value = portfolio_metrics.get('max_drawdown')
-            if max_drawdown_value is not None:
-                table_data.append(["Макс. просадка", f"{max_drawdown_value*100:.2f}%"])
-            else:
-                table_data.append(["Макс. просадка", "N/A"])
-            
-            # Risk-free rate
-            risk_free_rate_value = portfolio_metrics.get('risk_free_rate')
-            if risk_free_rate_value is not None:
-                table_data.append(["Безрисковая ставка", f"{risk_free_rate_value*100:.2f}%"])
-            else:
-                table_data.append(["Безрисковая ставка", "N/A"])
-            
-            # Portfolio composition
-            composition_text = ", ".join([f"{symbol} ({weight*100:.1f}%)" for symbol, weight in zip(symbols, weights)])
-            table_data.append(["Состав портфеля", composition_text])
-            
-            # Create markdown table
-            if table_data:
-                table_text = "| " + " | ".join(headers) + " |\n"
-                table_text += "| " + " | ".join([":---" for _ in headers]) + " |\n"
-                
-                for row in table_data:
-                    table_text += "| " + " | ".join(row) + " |\n"
-                
-                return table_text
-            else:
-                return "❌ Не удалось создать таблицу метрик"
-                
         except Exception as e:
             self.logger.error(f"Error creating portfolio summary metrics table: {e}")
-            return f"❌ Ошибка при создании таблицы метрик: {str(e)}"
+            return "❌ Ошибка при создании таблицы метрик"
+
+    def _add_portfolio_risk_free_rate_row(self, table_data: list, currency: str):
+        """Add risk-free rate row to portfolio table"""
+        try:
+            risk_free_rate = self.get_risk_free_rate(currency, 5.0)  # Use 5-year period
+            table_data.append(["Risk free rate", f"{risk_free_rate*100:.2f}%"])
+        except Exception as e:
+            self.logger.warning(f"Could not add risk-free rate row: {e}")
+            table_data.append(["Risk free rate", "N/A"])
+
+    def _add_portfolio_sharpe_ratio_row(self, table_data: list, currency: str, portfolio):
+        """Add Sharpe ratio row for portfolio using describe data"""
+        try:
+            risk_free_rate = self.get_risk_free_rate(currency, 5.0)
+            describe_data = portfolio.describe()
+            
+            # Find CAGR and Risk values from describe data
+            cagr_value = None
+            risk_value = None
+            
+            for idx in describe_data.index:
+                property_name = describe_data.loc[idx, 'property']
+                period = describe_data.loc[idx, 'period']
+                
+                value = describe_data.iloc[idx, 0]  # First column
+                if not pd.isna(value):
+                    if property_name == 'CAGR' and period == '5 years, 1 months':
+                        cagr_value = value
+                    elif property_name == 'Risk' and period == '5 years, 1 months':
+                        risk_value = value
+            
+            if cagr_value is not None and risk_value is not None and risk_value > 0:
+                sharpe = (cagr_value - risk_free_rate) / risk_value
+                table_data.append(["Sharpe Ratio", f"{sharpe:.3f}"])
+            else:
+                table_data.append(["Sharpe Ratio", "N/A"])
+                
+        except Exception as e:
+            self.logger.warning(f"Could not add Sharpe ratio row: {e}")
+            table_data.append(["Sharpe Ratio", "N/A"])
+
+    def _add_portfolio_sortino_ratio_row(self, table_data: list, currency: str, portfolio):
+        """Add Sortino ratio row for portfolio"""
+        try:
+            risk_free_rate = self.get_risk_free_rate(currency, 5.0)
+            
+            # Get price data from portfolio
+            if hasattr(portfolio, 'wealth_index') and portfolio.wealth_index is not None:
+                prices = portfolio.wealth_index
+                if hasattr(prices, 'iloc') and len(prices) > 1:
+                    if hasattr(prices, 'columns'):
+                        prices = prices.iloc[:, 0]
+                    
+                    returns = prices.pct_change().dropna()
+                    
+                    if len(returns) > 1:
+                        # Calculate downside deviation (only negative returns)
+                        downside_returns = returns[returns < 0]
+                        if len(downside_returns) > 1:
+                            downside_deviation = downside_returns.std() * np.sqrt(12)  # Annualized
+                            if downside_deviation > 0:
+                                # Get CAGR from describe data
+                                describe_data = portfolio.describe()
+                                cagr_value = None
+                                for idx in describe_data.index:
+                                    property_name = describe_data.loc[idx, 'property']
+                                    period = describe_data.loc[idx, 'period']
+                                    if property_name == 'CAGR' and period == '5 years, 1 months':
+                                        cagr_value = describe_data.iloc[idx, 0]
+                                        break
+                                
+                                if cagr_value is not None:
+                                    sortino = (cagr_value - risk_free_rate) / downside_deviation
+                                    table_data.append(["Sortino Ratio", f"{sortino:.3f}"])
+                                else:
+                                    table_data.append(["Sortino Ratio", "N/A"])
+                            else:
+                                table_data.append(["Sortino Ratio", "N/A"])
+                        else:
+                            table_data.append(["Sortino Ratio", "N/A"])
+                    else:
+                        table_data.append(["Sortino Ratio", "N/A"])
+                else:
+                    table_data.append(["Sortino Ratio", "N/A"])
+            else:
+                table_data.append(["Sortino Ratio", "N/A"])
+                
+        except Exception as e:
+            self.logger.warning(f"Could not add Sortino ratio row: {e}")
+            table_data.append(["Sortino Ratio", "N/A"])
+
+    def _add_portfolio_calmar_ratio_row(self, table_data: list, currency: str, portfolio):
+        """Add Calmar ratio row for portfolio using describe data"""
+        try:
+            describe_data = portfolio.describe()
+            
+            # Find CAGR and Max drawdown values from describe data
+            cagr_value = None
+            max_drawdown_value = None
+            
+            for idx in describe_data.index:
+                property_name = describe_data.loc[idx, 'property']
+                period = describe_data.loc[idx, 'period']
+                
+                value = describe_data.iloc[idx, 0]  # First column
+                if not pd.isna(value):
+                    if property_name == 'CAGR' and period == '5 years, 1 months':
+                        cagr_value = value
+                    elif property_name == 'Max drawdowns' and period == '5 years, 1 months':
+                        max_drawdown_value = value
+            
+            if cagr_value is not None and max_drawdown_value is not None and max_drawdown_value < 0:
+                calmar = cagr_value / abs(max_drawdown_value)
+                table_data.append(["Calmar Ratio", f"{calmar:.3f}"])
+            else:
+                table_data.append(["Calmar Ratio", "N/A"])
+                
+        except Exception as e:
+            self.logger.warning(f"Could not add Calmar ratio row: {e}")
+            table_data.append(["Calmar Ratio", "N/A"])
 
     def _create_portfolio_metrics_table(self, portfolio_symbol: str, symbols: list, weights: list, currency: str, portfolio_object) -> str:
         """Create metrics table for a single portfolio (similar to _create_summary_metrics_table but for one portfolio)"""
