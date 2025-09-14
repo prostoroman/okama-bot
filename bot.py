@@ -4498,11 +4498,7 @@ class ShansAi:
                 help_text += "• `SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` - российский энергетический\n"
                 help_text += "• `VOO.US:0.6 GC.COMM:0.2 BND.US:0.2` - с золотом и облигациями\n"
                 help_text += "• `SBER.MOEX:0.5 LKOH.MOEX:0.5 USD 10Y` - с базовой валютой USD и периодом 10 лет\n\n"
-                help_text += "💡 **Форматы весов:**\n"
-                help_text += "• Десятичные: `0.5` (50%)\n"
-                help_text += "• Проценты: `50%`\n"
-                help_text += "• Только тикеры: `SPY.US QQQ.US BND.US` (запросит веса)\n\n"
-                help_text += "⚠️ Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
+                help_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n\n"
 
                 help_text += "💬 Введите тикеры для создания портфеля:"
                 
@@ -14657,19 +14653,106 @@ class ShansAi:
                 final_value = 0.0
                 period_length = "неизвестный период"
             
-            # Create comprehensive caption with portfolio info
-            #chart_caption = f"💰 При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}\n\n"
+            # Create comprehensive caption with portfolio info in new format
+            # Get portfolio metrics for caption
+            try:
+                # Get CAGR
+                cagr_value = None
+                if hasattr(portfolio, 'get_cagr'):
+                    try:
+                        cagr = portfolio.get_cagr()
+                        if hasattr(cagr, 'iloc'):
+                            cagr_value = cagr.iloc[0]
+                        elif hasattr(cagr, '__getitem__'):
+                            cagr_value = cagr[0]
+                        else:
+                            cagr_value = cagr
+                    except Exception as e:
+                        self.logger.warning(f"Could not get CAGR: {e}")
+                
+                # Get volatility (risk_annual)
+                volatility_value = None
+                if hasattr(portfolio, 'risk_annual'):
+                    try:
+                        risk_annual = portfolio.risk_annual
+                        if hasattr(risk_annual, 'iloc'):
+                            volatility_value = risk_annual.iloc[-1]
+                        elif hasattr(risk_annual, '__getitem__'):
+                            volatility_value = risk_annual[-1]
+                        else:
+                            volatility_value = risk_annual
+                    except Exception as e:
+                        self.logger.warning(f"Could not get volatility: {e}")
+                
+                # Get Sharpe ratio
+                sharpe_value = None
+                if hasattr(portfolio, 'get_sharpe_ratio'):
+                    try:
+                        sharpe = portfolio.get_sharpe_ratio()
+                        if hasattr(sharpe, 'iloc'):
+                            sharpe_value = sharpe.iloc[0]
+                        elif hasattr(sharpe, '__getitem__'):
+                            sharpe_value = sharpe[0]
+                        else:
+                            sharpe_value = sharpe
+                    except Exception as e:
+                        self.logger.warning(f"Could not get Sharpe ratio: {e}")
+                
+                # Get max drawdown from wealth_index
+                max_drawdown_value = None
+                if hasattr(portfolio, 'wealth_index'):
+                    try:
+                        wealth_index = portfolio.wealth_index
+                        if hasattr(wealth_index, 'iloc'):
+                            if hasattr(wealth_index, 'columns'):
+                                portfolio_values = wealth_index.iloc[:, 0]
+                            else:
+                                portfolio_values = wealth_index
+                        else:
+                            portfolio_values = wealth_index
+                        
+                        running_max = portfolio_values.expanding().max()
+                        drawdown = (portfolio_values - running_max) / running_max
+                        max_drawdown_value = drawdown.min()
+                    except Exception as e:
+                        self.logger.warning(f"Could not calculate max drawdown: {e}")
+                        
+            except Exception as e:
+                self.logger.warning(f"Could not get portfolio metrics for caption: {e}")
+            
+            # Create caption in new format
+            chart_caption = f"💼 Имя: {portfolio_symbol}\n"
+            chart_caption += f"💵 Базовая валюта: {currency}\n"
+            chart_caption += f"📊 Состав:\n"
             
             # Add portfolio composition
-            symbols_with_weights = []
             for i, symbol in enumerate(symbols):
                 symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
                 weight = weights[i] if i < len(weights) else 0.0
-                symbols_with_weights.append(f"`{symbol_name}` ({weight:.1%})")
+                chart_caption += f"• {symbol_name} — {weight:.1%}\n"
             
-            chart_caption = f"📈 Имя портфеля: **{portfolio_symbol}** (использовать при сравнении)\n"
-            chart_caption += f"{'\n'.join(symbols_with_weights)}\n"
-            chart_caption += f"💱 Базовая валюта: {currency}\n"
+            # Add key metrics
+            chart_caption += f"📊 Ключевые показатели:\n"
+            
+            if cagr_value is not None:
+                chart_caption += f"• CAGR: {cagr_value:+.1%}\n"
+            else:
+                chart_caption += f"• CAGR: Недоступно\n"
+                
+            if volatility_value is not None:
+                chart_caption += f"• Волатильность: {volatility_value:.1%}\n"
+            else:
+                chart_caption += f"• Волатильность: Недоступно\n"
+                
+            if sharpe_value is not None:
+                chart_caption += f"• Sharpe: {sharpe_value:.2f}\n"
+            else:
+                chart_caption += f"• Sharpe: Недоступно\n"
+                
+            if max_drawdown_value is not None:
+                chart_caption += f"• Макс. просадка: {max_drawdown_value:.1%}\n"
+            else:
+                chart_caption += f"• Макс. просадка: Недоступно\n"
 
 
             # Send the chart with caption and buttons
