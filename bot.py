@@ -6865,10 +6865,7 @@ class ShansAi:
                                 else:
                                     assets_with_names.append(symbol)
                             
-                            analysis_text += f"\n\n🔍 **Анализируемые активы:** {', '.join(assets_with_names)}\n"
-                            analysis_text += f"💰 **Валюта:** {currency}\n"
-                            analysis_text += f"📅 **Период:** полный доступный период данных\n"
-                            analysis_text += f"🤖 **AI сервис:** YandexGPT"
+
                             
                             # Create keyboard for compare command
                             keyboard = self._create_compare_command_keyboard(symbols, currency, update)
@@ -7293,17 +7290,11 @@ class ShansAi:
                 
                 # Calculate metrics from price data
                 try:
-                    # Get price data for calculations (синхронизировано с _create_summary_metrics_table)
+                    # Get price data for calculations (синхронизировано с AssetList - приоритет месячным данным)
                     if asset_data is not None:
-                        if hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
-                            prices = asset_data.adj_close
-                            data_type = "adjusted"
-                        elif hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                        if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
                             prices = asset_data.close_monthly
                             data_type = "monthly"
-                        elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
-                            prices = asset_data.close_daily
-                            data_type = "daily"
                         elif hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
                             # For Portfolio objects
                             wealth_index = asset_data.wealth_index
@@ -7313,6 +7304,12 @@ class ShansAi:
                                 else:
                                     prices = wealth_index
                             data_type = "wealth_index"
+                        elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
+                            prices = asset_data.adj_close
+                            data_type = "adjusted"
+                        elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                            prices = asset_data.close_daily
+                            data_type = "daily"
                         else:
                             prices = None
                             data_type = "none"
@@ -8133,13 +8130,9 @@ class ShansAi:
                             # For Asset objects, we need to calculate metrics manually
                             prices = None
                             
-                            # Try to get price data from different sources
-                            if hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
-                                prices = asset_data.adj_close
-                            elif hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                            # Try to get price data from different sources (приоритет месячным данным как в AssetList)
+                            if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
                                 prices = asset_data.close_monthly
-                            elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
-                                prices = asset_data.close_daily
                             elif hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
                                 # For Portfolio objects
                                 wealth_index = asset_data.wealth_index
@@ -8148,6 +8141,10 @@ class ShansAi:
                                         prices = wealth_index.iloc[:, 0]
                                     else:
                                         prices = wealth_index
+                            elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
+                                prices = asset_data.adj_close
+                            elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
+                                prices = asset_data.close_daily
                             
                             if prices is not None and len(prices) > 1:
                                 # Calculate CAGR from price data
@@ -8173,6 +8170,26 @@ class ShansAi:
                                     total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
                                     symbol_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
                                     symbol_metrics['period_years'] = years
+                                    
+                                    # Calculate CAGR for 1 year and 5 years if we have enough data
+                                    try:
+                                        # CAGR 1 year (last 12 months)
+                                        if len(prices) >= 12:
+                                            prices_1y = prices.tail(12)
+                                            if len(prices_1y) > 1:
+                                                total_return_1y = (prices_1y.iloc[-1] / prices_1y.iloc[0]) - 1
+                                                symbol_metrics['cagr_1y'] = (1 + total_return_1y) ** (12 / len(prices_1y)) - 1
+                                        
+                                        # CAGR 5 years (last 60 months)
+                                        if len(prices) >= 60:
+                                            prices_5y = prices.tail(60)
+                                            if len(prices_5y) > 1:
+                                                total_return_5y = (prices_5y.iloc[-1] / prices_5y.iloc[0]) - 1
+                                                symbol_metrics['cagr_5y'] = (1 + total_return_5y) ** (12 / len(prices_5y)) - 1
+                                    except Exception as e:
+                                        self.logger.warning(f"Could not calculate 1y/5y CAGR for {symbol}: {e}")
+                                        symbol_metrics['cagr_1y'] = None
+                                        symbol_metrics['cagr_5y'] = None
                                     
                         except Exception as e:
                             self.logger.warning(f"Could not calculate CAGR for {symbol}: {e}")
@@ -8300,7 +8317,27 @@ class ShansAi:
                     period_row.append("N/A")
             table_data.append(period_row)
             
-            # CAGR row
+            # CAGR 1 year row
+            cagr_1y_row = ["Средн. доходность (CAGR) 1 год"]
+            for symbol in symbols:
+                cagr_1y = metrics_data.get(symbol, {}).get('cagr_1y')
+                if cagr_1y is not None:
+                    cagr_1y_row.append(f"{cagr_1y*100:.2f}%")
+                else:
+                    cagr_1y_row.append("N/A")
+            table_data.append(cagr_1y_row)
+            
+            # CAGR 5 years row
+            cagr_5y_row = ["Средн. доходность (CAGR) 5 лет"]
+            for symbol in symbols:
+                cagr_5y = metrics_data.get(symbol, {}).get('cagr_5y')
+                if cagr_5y is not None:
+                    cagr_5y_row.append(f"{cagr_5y*100:.2f}%")
+                else:
+                    cagr_5y_row.append("N/A")
+            table_data.append(cagr_5y_row)
+            
+            # CAGR row (full period)
             cagr_row = ["Среднегодовая доходность (CAGR)"]
             for symbol in symbols:
                 cagr = metrics_data.get(symbol, {}).get('cagr')
@@ -8423,23 +8460,27 @@ class ShansAi:
             
             # Convert describe data to table format
             # describe_data has different structure - it's a DataFrame with symbols as columns
-            for metric_name in describe_data.index:
-                row = [str(metric_name)]  # Convert index to string
+            # Use property names instead of numeric indices
+            for idx in describe_data.index:
+                property_name = describe_data.loc[idx, 'property']
+                row = [str(property_name)]  # Use property name instead of numeric index
                 for symbol in symbols:
                     if symbol in describe_data.columns:
-                        value = describe_data.loc[metric_name, symbol]
+                        value = describe_data.loc[idx, symbol]
                         if pd.isna(value):
                             row.append("N/A")
                         else:
                             # Format based on metric type
                             if isinstance(value, (int, float)):
-                                if 'return' in str(metric_name).lower() or 'cagr' in str(metric_name).lower():
+                                if 'return' in str(property_name).lower() or 'cagr' in str(property_name).lower():
                                     row.append(f"{value*100:.2f}%")
-                                elif 'volatility' in str(metric_name).lower() or 'std' in str(metric_name).lower():
+                                elif 'volatility' in str(property_name).lower() or 'risk' in str(property_name).lower():
                                     row.append(f"{value*100:.2f}%")
-                                elif 'ratio' in str(metric_name).lower():
+                                elif 'ratio' in str(property_name).lower():
                                     row.append(f"{value:.3f}")
-                                elif 'drawdown' in str(metric_name).lower():
+                                elif 'drawdown' in str(property_name).lower():
+                                    row.append(f"{value*100:.2f}%")
+                                elif 'yield' in str(property_name).lower():
                                     row.append(f"{value*100:.2f}%")
                                 else:
                                     row.append(f"{value:.4f}")

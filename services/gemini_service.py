@@ -433,10 +433,7 @@ class GeminiService:
             
             symbols_list = ', '.join(assets_with_names)
             description_parts.append(f"**Анализируемые активы:** {symbols_list}")
-            description_parts.append(f"**Количество активов:** {len(symbols)}")
-        
-        if 'asset_count' in data_info:
-            description_parts.append(f"**Общее количество активов:** {data_info['asset_count']}")
+
         
         if 'analysis_type' in data_info:
             description_parts.append(f"**Тип анализа:** {data_info['analysis_type']}")
@@ -465,45 +462,8 @@ class GeminiService:
             description_parts.append("\n**📊 ДОПОЛНИТЕЛЬНАЯ СТАТИСТИКА (okama.AssetList.describe):**")
             description_parts.append(data_info['describe_table'])
         
-        # Performance metrics (только уникальные метрики, не дублирующие основную таблицу)
-        if 'performance' in data_info and data_info['performance']:
-            perf = data_info['performance']
-            asset_names = data_info.get('asset_names', {})
-            
-            # Проверяем, есть ли уникальные метрики, не представленные в основной таблице
-            has_unique_metrics = False
-            for symbol, metrics in perf.items():
-                # Проверяем наличие метрик, которых нет в основной таблице
-                if ('total_return' in metrics and metrics['total_return'] is not None) or \
-                   ('var_95' in metrics and metrics['var_95'] is not None) or \
-                   ('cvar_95' in metrics and metrics['cvar_95'] is not None) or \
-                   ('calmar_ratio' in metrics and metrics['calmar_ratio'] is not None):
-                    has_unique_metrics = True
-                    break
-            
-            if has_unique_metrics:
-                description_parts.append("\n**📈 ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ:**")
-                
-                for symbol, metrics in perf.items():
-                    # Use asset name if available
-                    display_name = symbol
-                    if symbol in asset_names and asset_names[symbol] != symbol:
-                        display_name = f"{symbol} ({asset_names[symbol]})"
-                    
-                    # Добавляем только уникальные метрики
-                    symbol_metrics = []
-                    if 'total_return' in metrics and metrics['total_return'] is not None:
-                        symbol_metrics.append(f"  • Общая доходность: {metrics['total_return']:.2%}")
-                    if 'var_95' in metrics and metrics['var_95'] is not None:
-                        symbol_metrics.append(f"  • VaR 95%: {metrics['var_95']:.2%}")
-                    if 'cvar_95' in metrics and metrics['cvar_95'] is not None:
-                        symbol_metrics.append(f"  • CVaR 95%: {metrics['cvar_95']:.2%}")
-                    if 'calmar_ratio' in metrics and metrics['calmar_ratio'] is not None:
-                        symbol_metrics.append(f"  • Коэффициент Кальмара: {metrics['calmar_ratio']:.2f}")
-                    
-                    if symbol_metrics:
-                        description_parts.append(f"\n**{display_name}:**")
-                        description_parts.extend(symbol_metrics)
+        # Performance metrics удалены - все метрики теперь в основной таблице
+        # Это исключает дублирование данных в анализе Gemini
         
         # Correlation matrix
         if 'correlations' in data_info and data_info['correlations']:
