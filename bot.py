@@ -7262,7 +7262,7 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 describe_table = user_context.get('describe_table', '')
             
-            # Create summary metrics table for Gemini analysis
+            # Create summary metrics table for Gemini analysis (using the same optimized table)
             summary_metrics_table = ""
             try:
                 summary_metrics_table = self._create_summary_metrics_table(
@@ -7282,8 +7282,8 @@ class ShansAi:
                 'performance': {},
                 'correlations': [],
                 'additional_info': '',
-                'summary_metrics_table': summary_metrics_table,
-                'describe_table': describe_table,
+                'summary_metrics_table': summary_metrics_table,  # This now contains the optimized table
+                'describe_table': '',  # No longer needed since summary_metrics_table contains the same data
                 'asset_count': len(symbols),
                 'analysis_type': 'asset_comparison',
                 'asset_names': {}  # Dictionary to store asset names
@@ -8131,392 +8131,20 @@ class ShansAi:
             return None
 
     def _create_summary_metrics_table(self, symbols: list, currency: str, expanded_symbols: list, portfolio_contexts: list, specified_period: str = None) -> str:
-        """Create summary metrics table with key performance indicators"""
-        try:
-            # Prepare table data
-            table_data = []
-            headers = ["Метрика"] + symbols
-            
-            # Get metrics for each symbol using okama.AssetList.describe approach
-            metrics_data = {}
-            
-            # Create AssetList to get consistent data across all symbols
-            try:
-                asset_list = ok.AssetList(symbols, ccy=currency)
-                describe_data = asset_list.describe()
-                
-                if describe_data is not None and not describe_data.empty:
-                    # Extract metrics from describe data
-                    for symbol in symbols:
-                        symbol_metrics = {}
-                        
-                        # Extract key metrics from describe data
-                        for idx in describe_data.index:
-                            property_name = describe_data.loc[idx, 'property']
-                            period = describe_data.loc[idx, 'period']
-                            
-                            if symbol in describe_data.columns:
-                                value = describe_data.loc[idx, symbol]
-                                if not pd.isna(value):
-                                    # Map okama properties to our metrics
-                                    if property_name == 'CAGR' and period == '5 years, 1 months':
-                                        symbol_metrics['cagr'] = value
-                                    elif property_name == 'CAGR' and period == '1 years':
-                                        symbol_metrics['cagr_1y'] = value
-                                    elif property_name == 'CAGR' and period == '5 years':
-                                        symbol_metrics['cagr_5y'] = value
-                                    elif property_name == 'Risk' and period == '5 years, 1 months':
-                                        symbol_metrics['volatility'] = value
-                                    elif property_name == 'Max drawdowns' and period == '5 years, 1 months':
-                                        symbol_metrics['max_drawdown'] = value
-                                    elif property_name == 'Inception date':
-                                        symbol_metrics['inception_date'] = value
-                                    elif property_name == 'Common last data date':
-                                        symbol_metrics['last_data_date'] = value
-                        
-                        # Calculate additional metrics using the same period as okama
-                        if symbol_metrics.get('cagr') is not None and symbol_metrics.get('volatility') is not None:
-                            # Calculate Sharpe ratio
-                            try:
-                                # Use 5-year period for risk-free rate (as in okama 5y1m)
-                                risk_free_rate = self.get_risk_free_rate(currency, 5.0)
-                                if symbol_metrics['volatility'] > 0:
-                                    symbol_metrics['sharpe'] = (symbol_metrics['cagr'] - risk_free_rate) / symbol_metrics['volatility']
-                                    symbol_metrics['risk_free_rate'] = risk_free_rate
-                                else:
-                                    symbol_metrics['risk_free_rate'] = risk_free_rate
-                            except Exception as e:
-                                self.logger.warning(f"Could not calculate Sharpe ratio for {symbol}: {e}")
-                                symbol_metrics['sharpe'] = None
-                            
-                            # Calculate Calmar ratio
-                            try:
-                                if symbol_metrics.get('max_drawdown') is not None and symbol_metrics['max_drawdown'] < 0:
-                                    symbol_metrics['calmar'] = symbol_metrics['cagr'] / abs(symbol_metrics['max_drawdown'])
-                            except Exception as e:
-                                self.logger.warning(f"Could not calculate Calmar ratio for {symbol}: {e}")
-                                symbol_metrics['calmar'] = None
-                            
-                            # Calculate Sortino ratio
-                            try:
-                                # Get asset data for downside deviation calculation
-                                asset = ok.Asset(symbol)
-                                if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
-                                    prices = asset.close_monthly
-                                    returns = prices.pct_change().dropna()
-                                    if len(returns) > 1:
-                                        downside_returns = returns[returns < 0]
-                                        if len(downside_returns) > 1:
-                                            downside_deviation = downside_returns.std() * np.sqrt(12)  # Annualized
-                                            if downside_deviation > 0:
-                                                risk_free_rate = symbol_metrics.get('risk_free_rate', self.get_risk_free_rate(currency, 5.0))
-                                                symbol_metrics['sortino'] = (symbol_metrics['cagr'] - risk_free_rate) / downside_deviation
-                            except Exception as e:
-                                self.logger.warning(f"Could not calculate Sortino ratio for {symbol}: {e}")
-                                symbol_metrics['sortino'] = None
-                            
-                            # Calculate VaR and CVaR using the same period as okama (5y1m)
-                            try:
-                                asset = ok.Asset(symbol)
-                                if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
-                                    prices = asset.close_monthly
-                                    # Use last 5 years + 1 month of data (same as okama)
-                                    if len(prices) >= 61:  # 5 years + 1 month
-                                        prices_5y1m = prices.tail(61)
-                                    else:
-                                        prices_5y1m = prices
-                                    
-                                    returns = prices_5y1m.pct_change().dropna()
-                                    if len(returns) > 1:
-                                        # VaR 95% (5th percentile of returns) - report as positive loss
-                                        var_95 = abs(returns.quantile(0.05))
-                                        symbol_metrics['var_95'] = var_95
-                                        
-                                        # CVaR 95% (expected value of returns below VaR 95%) - report as positive loss
-                                        returns_below_var = returns[returns <= returns.quantile(0.05)]
-                                        cvar_95 = abs(returns_below_var.mean()) if len(returns_below_var) > 0 else var_95
-                                        symbol_metrics['cvar_95'] = cvar_95
-                            except Exception as e:
-                                self.logger.warning(f"Could not calculate VaR/CVaR for {symbol}: {e}")
-                                symbol_metrics['var_95'] = None
-                                symbol_metrics['cvar_95'] = None
-                        
-                        # Calculate period years from inception to common last date
-                        try:
-                            if symbol_metrics.get('inception_date') and symbol_metrics.get('last_data_date'):
-                                inception = pd.to_datetime(symbol_metrics['inception_date'])
-                                last_date = pd.to_datetime(symbol_metrics['last_data_date'])
-                                years = (last_date - inception).days / 365.25
-                                symbol_metrics['period_years'] = years
-                        except Exception as e:
-                            self.logger.warning(f"Could not calculate period years for {symbol}: {e}")
-                            symbol_metrics['period_years'] = None
-                        
-                        metrics_data[symbol] = symbol_metrics
-                
-            except Exception as e:
-                self.logger.warning(f"Could not create AssetList for metrics calculation: {e}")
-                # Fallback to individual asset calculation
-                for i, symbol in enumerate(symbols):
-                    try:
-                        asset_data = None
-                        if i < len(portfolio_contexts):
-                            portfolio_context = portfolio_contexts[i]
-                            portfolio_object = portfolio_context.get('portfolio_object')
-                            
-                            if portfolio_object is not None:
-                                asset_data = portfolio_object
-                            else:
-                                asset_symbol = portfolio_context.get('portfolio_symbols', [symbol])[0]
-                                try:
-                                    asset_data = ok.Asset(asset_symbol)
-                                except Exception as e:
-                                    self.logger.warning(f"Failed to create Asset object for {asset_symbol}: {e}")
-                                    asset_data = None
-                        
-                        if asset_data is None:
-                            try:
-                                asset_data = ok.Asset(symbol)
-                            except Exception as e:
-                                self.logger.warning(f"Failed to create Asset object for {symbol}: {e}")
-                                asset_data = None
-                        
-                        symbol_metrics = {}
-                        
-                        if asset_data is not None:
-                            # Use the same approach as okama - get data for common period
-                            prices = None
-                            
-                            if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
-                                prices = asset_data.close_monthly
-                            elif hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
-                                wealth_index = asset_data.wealth_index
-                                if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
-                                    if hasattr(wealth_index, 'columns'):
-                                        prices = wealth_index.iloc[:, 0]
-                                    else:
-                                        prices = wealth_index
-                            
-                            if prices is not None and len(prices) > 1:
-                                # Calculate metrics for the same period as okama (5y1m equivalent)
-                                # Use last 5 years + 1 month of data
-                                if len(prices) >= 61:  # 5 years + 1 month
-                                    prices_5y1m = prices.tail(61)
-                                else:
-                                    prices_5y1m = prices
-                                
-                                # CAGR calculation
-                                start_date = prices_5y1m.index[0]
-                                end_date = prices_5y1m.index[-1]
-                                
-                                try:
-                                    if hasattr(start_date, 'to_timestamp'):
-                                        start_date = start_date.to_timestamp()
-                                    if hasattr(end_date, 'to_timestamp'):
-                                        end_date = end_date.to_timestamp()
-                                    
-                                    years = (end_date - start_date).days / 365.25
-                                except Exception:
-                                    years = len(prices_5y1m) / 12
-                                
-                                if years > 0:
-                                    total_return = (prices_5y1m.iloc[-1] / prices_5y1m.iloc[0]) - 1
-                                    symbol_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
-                                    symbol_metrics['period_years'] = years
-                                
-                                # Volatility calculation
-                                returns = prices_5y1m.pct_change().dropna()
-                                if len(returns) > 1:
-                                    symbol_metrics['volatility'] = returns.std() * np.sqrt(12)  # Annualized for monthly data
-                                
-                                # Max drawdown calculation
-                                running_max = prices_5y1m.expanding().max()
-                                drawdown = (prices_5y1m - running_max) / running_max
-                                symbol_metrics['max_drawdown'] = drawdown.min()
-                                
-                                # Additional metrics
-                                if symbol_metrics.get('cagr') is not None and symbol_metrics.get('volatility') is not None:
-                                    risk_free_rate = self.get_risk_free_rate(currency, 5.0)
-                                    symbol_metrics['risk_free_rate'] = risk_free_rate
-                                    if symbol_metrics['volatility'] > 0:
-                                        symbol_metrics['sharpe'] = (symbol_metrics['cagr'] - risk_free_rate) / symbol_metrics['volatility']
-                                    
-                                    if symbol_metrics.get('max_drawdown') is not None and symbol_metrics['max_drawdown'] < 0:
-                                        symbol_metrics['calmar'] = symbol_metrics['cagr'] / abs(symbol_metrics['max_drawdown'])
-                                
-                                # VaR and CVaR (report as positive loss)
-                                if len(returns) > 1:
-                                    var_95 = abs(returns.quantile(0.05))
-                                    symbol_metrics['var_95'] = var_95
-                                    returns_below_var = returns[returns <= returns.quantile(0.05)]
-                                    cvar_95 = abs(returns_below_var.mean()) if len(returns_below_var) > 0 else var_95
-                                    symbol_metrics['cvar_95'] = cvar_95
-                        
-                        metrics_data[symbol] = symbol_metrics
-                        
-                    except Exception as e:
-                        self.logger.warning(f"Error processing symbol {symbol}: {e}")
-                        metrics_data[symbol] = {}
-            
-            # Create table rows
-            # Investment period row
-            period_row = ["Период инвестиций"]
-            for symbol in symbols:
-                period_years = metrics_data.get(symbol, {}).get('period_years')
-                if period_years is not None:
-                    if period_years < 1:
-                        period_row.append(f"{period_years*12:.1f} мес")
-                    else:
-                        period_row.append(f"{period_years:.1f} лет")
-                else:
-                    period_row.append("N/A")
-            table_data.append(period_row)
-            
-            # CAGR 1 year row
-            cagr_1y_row = ["Средн. доходность (CAGR) 1 год"]
-            for symbol in symbols:
-                cagr_1y = metrics_data.get(symbol, {}).get('cagr_1y')
-                if cagr_1y is not None:
-                    cagr_1y_row.append(f"{cagr_1y*100:.2f}%")
-                else:
-                    cagr_1y_row.append("N/A")
-            table_data.append(cagr_1y_row)
-            
-            # CAGR 5 years row
-            cagr_5y_row = ["Средн. доходность (CAGR) 5 лет"]
-            for symbol in symbols:
-                cagr_5y = metrics_data.get(symbol, {}).get('cagr_5y')
-                if cagr_5y is not None:
-                    cagr_5y_row.append(f"{cagr_5y*100:.2f}%")
-                else:
-                    cagr_5y_row.append("N/A")
-            table_data.append(cagr_5y_row)
-            
-            # CAGR row (full period)
-            cagr_row = ["Средн. доходность (CAGR)"]
-            for symbol in symbols:
-                cagr = metrics_data.get(symbol, {}).get('cagr')
-                if cagr is not None:
-                    cagr_row.append(f"{cagr*100:.2f}%")
-                else:
-                    cagr_row.append("N/A")
-            table_data.append(cagr_row)
-            
-            # Volatility row
-            volatility_row = ["Волатильность"]
-            for symbol in symbols:
-                volatility = metrics_data.get(symbol, {}).get('volatility')
-                if volatility is not None:
-                    volatility_row.append(f"{volatility*100:.2f}%")
-                else:
-                    volatility_row.append("N/A")
-            table_data.append(volatility_row)
-            
-            # Max Drawdown row (moved after Volatility)
-            drawdown_row = ["Макс. просадка"]
-            for symbol in symbols:
-                max_drawdown = metrics_data.get(symbol, {}).get('max_drawdown')
-                if max_drawdown is not None:
-                    drawdown_row.append(f"{max_drawdown*100:.2f}%")
-                else:
-                    drawdown_row.append("N/A")
-            table_data.append(drawdown_row)
-            
-            # Risk-free rate row
-            risk_free_row = ["Безрисковая ставка"]
-            for symbol in symbols:
-                risk_free_rate = metrics_data.get(symbol, {}).get('risk_free_rate')
-                if risk_free_rate is not None:
-                    risk_free_row.append(f"{risk_free_rate*100:.2f}%")
-                else:
-                    risk_free_row.append("N/A")
-            table_data.append(risk_free_row)
-            
-            # Sharpe Ratio row
-            sharpe_row = ["Коэфф. Шарпа"]
-            for symbol in symbols:
-                sharpe = metrics_data.get(symbol, {}).get('sharpe')
-                if sharpe is not None:
-                    sharpe_row.append(f"{sharpe:.2f}")
-                else:
-                    sharpe_row.append("N/A")
-            table_data.append(sharpe_row)
-            
-            
-            # Sortino Ratio row
-            sortino_row = ["Коэф. Сортино"]
-            for symbol in symbols:
-                sortino = metrics_data.get(symbol, {}).get('sortino')
-                if sortino is not None:
-                    sortino_row.append(f"{sortino:.2f}")
-                else:
-                    sortino_row.append("N/A")
-            table_data.append(sortino_row)
-            
-            # Calmar Ratio row
-            calmar_row = ["Коэф. Кальмара"]
-            for symbol in symbols:
-                calmar = metrics_data.get(symbol, {}).get('calmar')
-                if calmar is not None:
-                    calmar_row.append(f"{calmar:.2f}")
-                else:
-                    calmar_row.append("N/A")
-            table_data.append(calmar_row)
-            
-            # VaR 95% row
-            var_row = ["VaR 95%"]
-            for symbol in symbols:
-                var_95 = metrics_data.get(symbol, {}).get('var_95')
-                if var_95 is not None:
-                    var_row.append(f"{var_95*100:.2f}%")
-                else:
-                    var_row.append("N/A")
-            table_data.append(var_row)
-            
-            # CVaR 95% row
-            cvar_row = ["CVaR 95%"]
-            for symbol in symbols:
-                cvar_95 = metrics_data.get(symbol, {}).get('cvar_95')
-                if cvar_95 is not None:
-                    cvar_row.append(f"{cvar_95*100:.2f}%")
-                else:
-                    cvar_row.append("N/A")
-            table_data.append(cvar_row)
-            
-            # Create enhanced markdown table with better formatting
-            table_markdown = self._create_enhanced_markdown_table(table_data, headers)
-            
-            # Add second table with okama.AssetList.describe data
-            try:
-                describe_table = self._create_describe_table(symbols, currency)
-                if describe_table:
-                    table_markdown += "\n\n" + describe_table
-            except Exception as e:
-                self.logger.warning(f"Could not create describe table: {e}")
-            
-            return table_markdown
-            
-        except Exception as e:
-            self.logger.error(f"Error creating summary metrics table: {e}")
-            return "❌ Ошибка при создании таблицы метрик"
-
-    def _create_describe_table(self, symbols: list, currency: str) -> str:
-        """Create table with okama.AssetList.describe data"""
+        """Create optimized metrics table using only okama.AssetList.describe data with additional metrics"""
         try:
             # Create AssetList for describe data
             asset_list = ok.AssetList(symbols, ccy=currency)
             describe_data = asset_list.describe()
             
             if describe_data is None or describe_data.empty:
-                return ""
+                return "❌ Не удалось получить данные для анализа"
             
             # Prepare table data
             table_data = []
             headers = ["Метрика"] + symbols
             
             # Convert describe data to table format
-            # describe_data has different structure - it's a DataFrame with symbols as columns
-            # Use property names with period information instead of numeric indices
             for idx in describe_data.index:
                 property_name = describe_data.loc[idx, 'property']
                 period = describe_data.loc[idx, 'period']
@@ -8554,15 +8182,161 @@ class ShansAi:
                         row.append("N/A")
                 table_data.append(row)
             
-            # Create markdown table
-            describe_table_markdown = self._create_enhanced_markdown_table(table_data, headers)
+            # Add additional metrics at the end
+            self._add_risk_free_rate_row(table_data, symbols, currency)
+            self._add_sharpe_ratio_row(table_data, symbols, currency, asset_list)
+            self._add_sortino_ratio_row(table_data, symbols, currency)
+            self._add_calmar_ratio_row(table_data, symbols, currency)
             
-            # Add header
-            return f"## 📊 Данные из okama.AssetList.describe\n\n{describe_table_markdown}"
+            # Create markdown table
+            table_markdown = self._create_enhanced_markdown_table(table_data, headers)
+            
+            return f"## 📊 Метрики активов\n\n{table_markdown}"
             
         except Exception as e:
-            self.logger.warning(f"Error creating describe table: {e}")
-            return ""
+            self.logger.error(f"Error creating summary metrics table: {e}")
+            return "❌ Ошибка при создании таблицы метрик"
+
+    def _add_risk_free_rate_row(self, table_data: list, symbols: list, currency: str):
+        """Add risk-free rate row to table"""
+        try:
+            risk_free_rate = self.get_risk_free_rate(currency, 5.0)  # Use 5-year period
+            risk_free_row = ["Risk free rate"]
+            for symbol in symbols:
+                risk_free_row.append(f"{risk_free_rate*100:.2f}%")
+            table_data.append(risk_free_row)
+        except Exception as e:
+            self.logger.warning(f"Could not add risk-free rate row: {e}")
+            risk_free_row = ["Risk free rate"] + ["N/A"] * len(symbols)
+            table_data.append(risk_free_row)
+
+    def _add_sharpe_ratio_row(self, table_data: list, symbols: list, currency: str, asset_list):
+        """Add Sharpe ratio row using manual calculation with okama data"""
+        try:
+            risk_free_rate = self.get_risk_free_rate(currency, 5.0)
+            sharpe_row = ["Sharpe Ratio"]
+            
+            for symbol in symbols:
+                try:
+                    # Calculate Sharpe ratio manually using CAGR and Risk from describe data
+                    describe_data = asset_list.describe()
+                    
+                    # Find CAGR and Risk values for the symbol
+                    cagr_value = None
+                    risk_value = None
+                    
+                    for idx in describe_data.index:
+                        property_name = describe_data.loc[idx, 'property']
+                        period = describe_data.loc[idx, 'period']
+                        
+                        if symbol in describe_data.columns:
+                            value = describe_data.loc[idx, symbol]
+                            if not pd.isna(value):
+                                if property_name == 'CAGR' and period == '5 years, 1 months':
+                                    cagr_value = value
+                                elif property_name == 'Risk' and period == '5 years, 1 months':
+                                    risk_value = value
+                    
+                    if cagr_value is not None and risk_value is not None and risk_value > 0:
+                        sharpe = (cagr_value - risk_free_rate) / risk_value
+                        sharpe_row.append(f"{sharpe:.3f}")
+                    else:
+                        sharpe_row.append("N/A")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Could not calculate Sharpe ratio for {symbol}: {e}")
+                    sharpe_row.append("N/A")
+            
+            table_data.append(sharpe_row)
+        except Exception as e:
+            self.logger.warning(f"Could not add Sharpe ratio row: {e}")
+            sharpe_row = ["Sharpe Ratio"] + ["N/A"] * len(symbols)
+            table_data.append(sharpe_row)
+
+    def _add_sortino_ratio_row(self, table_data: list, symbols: list, currency: str):
+        """Add Sortino ratio row"""
+        try:
+            risk_free_rate = self.get_risk_free_rate(currency, 5.0)
+            sortino_row = ["Sortino Ratio"]
+            
+            for symbol in symbols:
+                try:
+                    asset = ok.Asset(symbol)
+                    if hasattr(asset, 'close_monthly') and asset.close_monthly is not None:
+                        prices = asset.close_monthly
+                        returns = prices.pct_change().dropna()
+                        
+                        if len(returns) > 1:
+                            # Calculate downside deviation (only negative returns)
+                            downside_returns = returns[returns < 0]
+                            if len(downside_returns) > 1:
+                                downside_deviation = downside_returns.std() * np.sqrt(12)  # Annualized
+                                if downside_deviation > 0:
+                                    # Get CAGR from asset
+                                    cagr = asset.annual_return if hasattr(asset, 'annual_return') else 0
+                                    sortino = (cagr - risk_free_rate) / downside_deviation
+                                    sortino_row.append(f"{sortino:.3f}")
+                                else:
+                                    sortino_row.append("N/A")
+                            else:
+                                sortino_row.append("N/A")
+                        else:
+                            sortino_row.append("N/A")
+                    else:
+                        sortino_row.append("N/A")
+                except Exception as e:
+                    self.logger.warning(f"Could not calculate Sortino ratio for {symbol}: {e}")
+                    sortino_row.append("N/A")
+            
+            table_data.append(sortino_row)
+        except Exception as e:
+            self.logger.warning(f"Could not add Sortino ratio row: {e}")
+            sortino_row = ["Sortino Ratio"] + ["N/A"] * len(symbols)
+            table_data.append(sortino_row)
+
+    def _add_calmar_ratio_row(self, table_data: list, symbols: list, currency: str):
+        """Add Calmar ratio row using describe data"""
+        try:
+            calmar_row = ["Calmar Ratio"]
+            
+            # Create AssetList to get describe data
+            asset_list = ok.AssetList(symbols, ccy=currency)
+            describe_data = asset_list.describe()
+            
+            for symbol in symbols:
+                try:
+                    # Find CAGR and Max drawdown values for the symbol
+                    cagr_value = None
+                    max_drawdown_value = None
+                    
+                    for idx in describe_data.index:
+                        property_name = describe_data.loc[idx, 'property']
+                        period = describe_data.loc[idx, 'period']
+                        
+                        if symbol in describe_data.columns:
+                            value = describe_data.loc[idx, symbol]
+                            if not pd.isna(value):
+                                if property_name == 'CAGR' and period == '5 years, 1 months':
+                                    cagr_value = value
+                                elif property_name == 'Max drawdowns' and period == '5 years, 1 months':
+                                    max_drawdown_value = value
+                    
+                    if cagr_value is not None and max_drawdown_value is not None and max_drawdown_value < 0:
+                        calmar = cagr_value / abs(max_drawdown_value)
+                        calmar_row.append(f"{calmar:.3f}")
+                    else:
+                        calmar_row.append("N/A")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Could not calculate Calmar ratio for {symbol}: {e}")
+                    calmar_row.append("N/A")
+            
+            table_data.append(calmar_row)
+        except Exception as e:
+            self.logger.warning(f"Could not add Calmar ratio row: {e}")
+            calmar_row = ["Calmar Ratio"] + ["N/A"] * len(symbols)
+            table_data.append(calmar_row)
+
 
     def _create_portfolio_metrics_table(self, portfolio_symbol: str, symbols: list, weights: list, currency: str, portfolio_object) -> str:
         """Create metrics table for a single portfolio (similar to _create_summary_metrics_table but for one portfolio)"""
