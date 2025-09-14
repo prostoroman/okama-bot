@@ -455,36 +455,55 @@ class GeminiService:
             description_parts.append(f"**Включает корреляции:** {'Да' if metadata.get('includes_correlations', False) else 'Нет'}")
             description_parts.append(f"**Включает таблицу describe:** {'Да' if metadata.get('includes_describe_table', False) else 'Нет'}")
         
-        # Describe table data - это основная информация для анализа
+        # Summary metrics table - основная таблица метрик с периодом инвестиций
+        if 'summary_metrics_table' in data_info and data_info['summary_metrics_table']:
+            description_parts.append("\n**📊 ОСНОВНЫЕ МЕТРИКИ АКТИВОВ:**")
+            description_parts.append(data_info['summary_metrics_table'])
+        
+        # Describe table data - дополнительная статистика из okama
         if 'describe_table' in data_info and data_info['describe_table']:
-            description_parts.append("\n**📊 ДЕТАЛЬНАЯ СТАТИСТИКА АКТИВОВ (okama.AssetList.describe):**")
+            description_parts.append("\n**📊 ДОПОЛНИТЕЛЬНАЯ СТАТИСТИКА (okama.AssetList.describe):**")
             description_parts.append(data_info['describe_table'])
         
-        # Performance metrics (дополнительные метрики)
+        # Performance metrics (только уникальные метрики, не дублирующие основную таблицу)
         if 'performance' in data_info and data_info['performance']:
             perf = data_info['performance']
             asset_names = data_info.get('asset_names', {})
-            description_parts.append("\n**📈 ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ:**")
             
+            # Проверяем, есть ли уникальные метрики, не представленные в основной таблице
+            has_unique_metrics = False
             for symbol, metrics in perf.items():
-                # Use asset name if available
-                display_name = symbol
-                if symbol in asset_names and asset_names[symbol] != symbol:
-                    display_name = f"{symbol} ({asset_names[symbol]})"
+                # Проверяем наличие метрик, которых нет в основной таблице
+                if ('total_return' in metrics and metrics['total_return'] is not None) or \
+                   ('var_95' in metrics and metrics['var_95'] is not None) or \
+                   ('cvar_95' in metrics and metrics['cvar_95'] is not None) or \
+                   ('calmar_ratio' in metrics and metrics['calmar_ratio'] is not None):
+                    has_unique_metrics = True
+                    break
+            
+            if has_unique_metrics:
+                description_parts.append("\n**📈 ДОПОЛНИТЕЛЬНЫЕ МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ:**")
                 
-                description_parts.append(f"\n**{display_name}:**")
-                if 'total_return' in metrics and metrics['total_return'] is not None:
-                    description_parts.append(f"  • Общая доходность: {metrics['total_return']:.2%}")
-                if 'annual_return' in metrics and metrics['annual_return'] is not None:
-                    description_parts.append(f"  • Годовая доходность: {metrics['annual_return']:.2%}")
-                if 'volatility' in metrics and metrics['volatility'] is not None:
-                    description_parts.append(f"  • Волатильность: {metrics['volatility']:.2%}")
-                if 'sharpe_ratio' in metrics and metrics['sharpe_ratio'] is not None:
-                    description_parts.append(f"  • Коэффициент Шарпа: {metrics['sharpe_ratio']:.2f}")
-                if 'sortino_ratio' in metrics and metrics['sortino_ratio'] is not None:
-                    description_parts.append(f"  • Коэффициент Сортино: {metrics['sortino_ratio']:.2f}")
-                if 'max_drawdown' in metrics and metrics['max_drawdown'] is not None:
-                    description_parts.append(f"  • Максимальная просадка: {metrics['max_drawdown']:.2%}")
+                for symbol, metrics in perf.items():
+                    # Use asset name if available
+                    display_name = symbol
+                    if symbol in asset_names and asset_names[symbol] != symbol:
+                        display_name = f"{symbol} ({asset_names[symbol]})"
+                    
+                    # Добавляем только уникальные метрики
+                    symbol_metrics = []
+                    if 'total_return' in metrics and metrics['total_return'] is not None:
+                        symbol_metrics.append(f"  • Общая доходность: {metrics['total_return']:.2%}")
+                    if 'var_95' in metrics and metrics['var_95'] is not None:
+                        symbol_metrics.append(f"  • VaR 95%: {metrics['var_95']:.2%}")
+                    if 'cvar_95' in metrics and metrics['cvar_95'] is not None:
+                        symbol_metrics.append(f"  • CVaR 95%: {metrics['cvar_95']:.2%}")
+                    if 'calmar_ratio' in metrics and metrics['calmar_ratio'] is not None:
+                        symbol_metrics.append(f"  • Коэффициент Кальмара: {metrics['calmar_ratio']:.2f}")
+                    
+                    if symbol_metrics:
+                        description_parts.append(f"\n**{display_name}:**")
+                        description_parts.extend(symbol_metrics)
         
         # Correlation matrix
         if 'correlations' in data_info and data_info['correlations']:
@@ -563,10 +582,12 @@ class GeminiService:
         description_parts.append("\n" + "="*50)
         description_parts.append("**ИНСТРУКЦИИ ДЛЯ АНАЛИЗА:**")
         description_parts.append("Используй все предоставленные данные для комплексного анализа:")
-        description_parts.append("1. Сравни активы по всем метрикам из таблицы describe")
-        description_parts.append("2. Проанализируй соотношение риск-доходность")
-        description_parts.append("3. Оцени корреляции между активами")
-        description_parts.append("4. Проанализируй данные эффективной границы и дай рекомендации по конкретным весам активов")
-        description_parts.append("В ответе не нужно дублировать исходные данные, пользователь в этот момент и так видит графики и те же данные,  уложиться в 4000 символов")
+        description_parts.append("1. Проанализируй основные метрики (период инвестиций, CAGR, волатильность, Sharpe, Sortino, просадки)")
+        description_parts.append("2. Сравни активы по всем метрикам")
+        description_parts.append("3. Проанализируй соотношение риск-доходность с учетом реальных безрисковых ставок")
+        description_parts.append("4. Оцени корреляции между активами")
+        description_parts.append("5. Проанализируй данные эффективной границы и дай рекомендации по конкретным весам активов")
+        description_parts.append("6. Учти период инвестиций при анализе - разные активы могут иметь разную историю")
+        description_parts.append("Добавь юридически правильный дисклеймер о том, что анализ не учитывает макроэкономические факторы, политическую ситуацию и пр, не является инвестиционной рекомендацией")
         
         return "\n".join(description_parts)

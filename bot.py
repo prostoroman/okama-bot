@@ -168,30 +168,42 @@ class ShansAi:
             Risk-free rate as decimal (e.g., 0.05 for 5%)
         """
         try:
-            # Since okama doesn't support RATE namespace, use fallback rates directly
-            # This avoids multiple warnings in logs and provides more reliable service
-            
-            # Special handling for HKD - fixed rate
+            # Special handling for HKD - fixed rate (as requested)
             if currency.upper() == 'HKD':
                 fixed_rate = 0.0285  # 2.85% fixed rate for Hong Kong Dollar
                 self.logger.info(f"Using fixed risk-free rate for HKD: {fixed_rate:.4f}")
                 return fixed_rate
             
-            # Special handling for RUB - period-dependent rates
+            # Try to get rate from okama.Rate for other currencies
+            try:
+                rate_data = self._get_okama_rate_data(currency, period_years)
+                if rate_data is not None:
+                    self.logger.info(f"Using okama rate for {currency}: {rate_data:.4f}")
+                    return rate_data
+            except Exception as e:
+                self.logger.warning(f"Could not get okama rate for {currency}: {e}")
+            
+            # Fallback to fixed rates if okama fails
+            
+            # Special handling for RUB - use more realistic rates based on OFZ yields
             if currency.upper() == 'RUB':
                 if period_years is not None:
                     if period_years <= 0.25:  # 3 months or less
-                        fixed_rate = 0.15  # 15% - overnight rate approximation
+                        fixed_rate = 0.12  # 12% - OFZ 3M approximation
                     elif period_years <= 0.5:  # 6 months or less
-                        fixed_rate = 0.155  # 15.5% - 1 month average approximation
+                        fixed_rate = 0.125  # 12.5% - OFZ 6M approximation
                     elif period_years <= 1.0:  # 1 year or less
-                        fixed_rate = 0.16  # 16% - 3 month average approximation
-                    else:  # More than 1 year
-                        fixed_rate = 0.165  # 16.5% - 6 month average approximation
+                        fixed_rate = 0.13  # 13% - OFZ 1Y approximation
+                    elif period_years <= 3.0:  # 3 years or less
+                        fixed_rate = 0.135  # 13.5% - OFZ 3Y approximation
+                    elif period_years <= 5.0:  # 5 years or less
+                        fixed_rate = 0.14  # 14% - OFZ 5Y approximation
+                    else:  # More than 5 years
+                        fixed_rate = 0.145  # 14.5% - OFZ 10Y approximation
                 else:
-                    fixed_rate = 0.16  # 16% - default central bank rate
+                    fixed_rate = 0.13  # 13% - default OFZ 1Y rate
                 
-                self.logger.info(f"Using period-based risk-free rate for RUB ({period_years} years): {fixed_rate:.4f}")
+                self.logger.info(f"Using OFZ-based risk-free rate for RUB ({period_years} years): {fixed_rate:.4f}")
                 return fixed_rate
             
             # Special handling for CNY - period-dependent rates
@@ -229,6 +241,86 @@ class ShansAi:
         fallback_rate = fallback_rates.get(currency.upper(), 0.05)  # Default to 5%
         self.logger.info(f"Using fallback risk-free rate for {currency}: {fallback_rate:.4f}")
         return fallback_rate
+
+    def _get_okama_rate_data(self, currency: str, period_years: float = None) -> float:
+        """
+        Get risk-free rate from okama.Rate for given currency and period
+        
+        Args:
+            currency: Currency code
+            period_years: Investment period in years
+            
+        Returns:
+            Risk-free rate as decimal
+        """
+        try:
+            # Map currencies to appropriate okama rate symbols
+            rate_symbols = self._get_rate_symbol_for_currency(currency, period_years)
+            
+            if not rate_symbols:
+                return None
+            
+            # Try to get rate data from okama
+            for rate_symbol in rate_symbols:
+                try:
+                    rate_obj = ok.Rate(rate_symbol)
+                    rate_values = rate_obj.values_monthly
+                    
+                    if rate_values is not None and len(rate_values) > 0:
+                        # Calculate average rate over the period
+                        avg_rate = rate_values.mean()
+                        return float(avg_rate)
+                        
+                except Exception as e:
+                    self.logger.debug(f"Could not get rate for {rate_symbol}: {e}")
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            self.logger.warning(f"Error getting okama rate data: {e}")
+            return None
+
+    def _get_rate_symbol_for_currency(self, currency: str, period_years: float = None) -> list:
+        """
+        Get appropriate rate symbols for currency and period
+        
+        Args:
+            currency: Currency code
+            period_years: Investment period in years
+            
+        Returns:
+            List of rate symbols to try
+        """
+        currency_upper = currency.upper()
+        
+        if currency_upper == 'USD':
+            return ['US_EFFR.RATE']
+        elif currency_upper == 'EUR':
+            return ['EU_DFR.RATE', 'EU_MLR.RATE', 'EU_MRO.RATE']
+        elif currency_upper == 'RUB':
+            if period_years is not None:
+                if period_years <= 0.25:  # 3 months or less
+                    return ['RUONIA.RATE', 'RUONIA_AVG_1M.RATE']
+                elif period_years <= 0.5:  # 6 months or less
+                    return ['RUONIA_AVG_3M.RATE', 'RUONIA_AVG_1M.RATE']
+                elif period_years <= 1.0:  # 1 year or less
+                    return ['RUONIA_AVG_6M.RATE', 'RUONIA_AVG_3M.RATE']
+                else:  # More than 1 year
+                    return ['RUS_CBR.RATE', 'RUONIA_AVG_6M.RATE']
+            else:
+                return ['RUS_CBR.RATE', 'RUONIA_AVG_6M.RATE']
+        elif currency_upper == 'CNY':
+            if period_years is not None and period_years > 5:
+                return ['CHN_LPR5.RATE']
+            else:
+                return ['CHN_LPR1.RATE']
+        elif currency_upper == 'GBP':
+            return ['UK_BR.RATE']
+        elif currency_upper == 'ILS':
+            return ['ISR_IR.RATE']
+        else:
+            return []
 
     def calculate_sharpe_ratio(self, returns: Union[float, pd.Series], volatility: float, 
                               currency: str = 'USD', period_years: float = None, 
@@ -310,7 +402,218 @@ class ShansAi:
         cleaned = self._normalize_symbol_namespace(cleaned)
         
         return cleaned
+    
+    def _clean_symbol_for_parsing(self, symbol: str) -> str:
+        """Очищает символ для парсинга портфеля, сохраняя двоеточие"""
+        if not symbol:
+            return symbol
+            
+        # Удаляем обратные слеши и другие проблемные символы, но НЕ двоеточие
+        cleaned = symbol.replace('\\', '').replace('/', '').replace('"', '').replace("'", '')
         
+        # Удаляем лишние пробелы
+        cleaned = cleaned.strip()
+        
+        # Удаляем множественные пробелы
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        
+        # Нормализуем namespace (конвертируем lowercase в uppercase)
+        cleaned = self._normalize_symbol_namespace_for_parsing(cleaned)
+        
+        return cleaned
+    
+    def _normalize_symbol_namespace_for_parsing(self, symbol: str) -> str:
+        """
+        Нормализовать регистр namespace в символе для парсинга портфеля
+        
+        Args:
+            symbol: Символ в формате TICKER.NAMESPACE
+            
+        Returns:
+            str: Символ с нормализованным namespace (uppercase)
+        """
+        if '.' not in symbol:
+            return symbol
+        
+        ticker, namespace = symbol.split('.', 1)
+        
+        # Known namespace mappings (lowercase -> uppercase)
+        namespace_mappings = {
+            'moex': 'MOEX',
+            'us': 'US',
+            'lse': 'LSE',
+            'xetr': 'XETR',
+            'xfra': 'XFRA',
+            'xstu': 'XSTU',
+            'xams': 'XAMS',
+            'xtae': 'XTAE',
+            'pif': 'PIF',
+            'fx': 'FX',
+            'cc': 'CC',
+            'indx': 'INDX',
+            'comm': 'COMM',
+            'hk': 'HK',
+            'sh': 'SH',
+            'sz': 'SZ'
+        }
+        
+        # Convert namespace to uppercase if it's in our mappings
+        normalized_namespace = namespace_mappings.get(namespace.lower(), namespace.upper())
+        
+        return f"{ticker}.{normalized_namespace}"
+    
+    def smart_parse_portfolio_input(self, text: str) -> Dict[str, Any]:
+        """
+        Умный парсинг ввода портфеля с прощением мелких ошибок
+        
+        Поддерживает различные форматы:
+        - Стандартный: "SBER.MOEX:0.3, GAZP.MOEX:0.7"
+        - Список символов: "SBER.MOEX, GAZP.MOEX, LKOH.MOEX" (равные доли)
+        - Смешанный: "SBER.MOEX:0.3, GAZP.MOEX, LKOH.MOEX:0.2" (остаток распределяется поровну)
+        
+        Args:
+            text: Входной текст для парсинга
+            
+        Returns:
+            Dict с ключами:
+            - 'success': bool - успешность парсинга
+            - 'portfolio_data': List[Tuple[str, float]] - список (символ, доля)
+            - 'message': str - сообщение пользователю
+            - 'suggestions': List[str] - предложения по исправлению
+        """
+        if not text or not text.strip():
+            return {
+                'success': False,
+                'portfolio_data': [],
+                'message': "❌ Пустой ввод. Укажите активы для портфеля.",
+                'suggestions': ["Пример: SBER.MOEX:0.3, GAZP.MOEX:0.7"]
+            }
+        
+        # Очищаем и нормализуем ввод
+        cleaned_text = text.strip()
+        
+        # Сначала заменяем запятые в числах на точки, чтобы они не мешали разбору
+        # Ищем паттерн "число,число" и заменяем на "число.число"
+        cleaned_text = re.sub(r'(\d+),(\d+)', r'\1.\2', cleaned_text)
+        
+        # Удаляем лишние пробелы вокруг запятых и двоеточий
+        cleaned_text = re.sub(r'\s*,\s*', ', ', cleaned_text)
+        cleaned_text = re.sub(r'\s*:\s*', ':', cleaned_text)
+        
+        # Разбиваем по запятым
+        parts = [part.strip() for part in cleaned_text.split(',') if part.strip()]
+        
+        if not parts:
+            return {
+                'success': False,
+                'portfolio_data': [],
+                'message': "❌ Не найдены активы в вводе.",
+                'suggestions': ["Пример: SBER.MOEX:0.3, GAZP.MOEX:0.7"]
+            }
+        
+        portfolio_data = []
+        symbols_without_weights = []
+        total_explicit_weight = 0.0
+        suggestions = []
+        
+        for part in parts:
+            if ':' in part:
+                # Формат "символ:доля"
+                try:
+                    symbol_part, weight_part = part.split(':', 1)
+                    # Очищаем символ без удаления двоеточия
+                    symbol = self._clean_symbol_for_parsing(symbol_part.strip()).upper()
+                    
+                    # Проверяем, что символ не пустой
+                    if not symbol:
+                        suggestions.append(f"Пустой символ в части: '{part}'")
+                        continue
+                    
+                    # Парсим долю (запятые уже заменены на точки выше)
+                    weight_str = weight_part.strip()
+                    
+                    try:
+                        weight = float(weight_str)
+                    except ValueError:
+                        suggestions.append(f"Некорректная доля '{weight_part.strip()}' для {symbol}. Используйте числа от 0 до 1.")
+                        continue
+                    
+                    if weight <= 0 or weight > 1:
+                        suggestions.append(f"Доля для {symbol} ({weight}) должна быть от 0 до 1.")
+                        continue
+                    
+                    portfolio_data.append((symbol, weight))
+                    total_explicit_weight += weight
+                    
+                except Exception as e:
+                    suggestions.append(f"Ошибка парсинга '{part}': {str(e)}")
+                    continue
+                    
+            else:
+                # Только символ без доли
+                symbol = self.clean_symbol(part.strip()).upper()
+                
+                if not symbol:
+                    suggestions.append(f"Пустой символ в части: '{part}'")
+                    continue
+                
+                symbols_without_weights.append(symbol)
+        
+        # Если есть символы без весов, распределяем оставшийся вес поровну
+        if symbols_without_weights:
+            remaining_weight = 1.0 - total_explicit_weight
+            
+            if remaining_weight <= 0:
+                suggestions.append("Сумма явно указанных долей уже равна или превышает 1.0")
+                remaining_weight = 0.1  # Минимальный вес для символов без весов
+            
+            weight_per_symbol = remaining_weight / len(symbols_without_weights)
+            
+            for symbol in symbols_without_weights:
+                portfolio_data.append((symbol, weight_per_symbol))
+        
+        # Проверяем результат
+        if not portfolio_data:
+            return {
+                'success': False,
+                'portfolio_data': [],
+                'message': "❌ Не удалось распознать ни одного актива.",
+                'suggestions': suggestions or ["Пример: SBER.MOEX:0.3, GAZP.MOEX:0.7"]
+            }
+        
+        # Проверяем сумму долей
+        total_weight = sum(weight for _, weight in portfolio_data)
+        
+        if abs(total_weight - 1.0) > 0.01:
+            if abs(total_weight - 1.0) <= 0.11:  # Увеличиваем порог для учета погрешности вычислений
+                # Нормализуем веса
+                normalized_data = []
+                for symbol, weight in portfolio_data:
+                    normalized_weight = weight / total_weight
+                    normalized_data.append((symbol, normalized_weight))
+                
+                portfolio_data = normalized_data
+                suggestions.append(f"Веса нормализованы (сумма была {total_weight:.3f})")
+            else:
+                suggestions.append(f"Сумма долей ({total_weight:.3f}) должна быть близка к 1.0")
+        
+        # Формируем сообщение
+        if suggestions:
+            message = f"✅ Портфель создан с автоматическими исправлениями:\n"
+            for symbol, weight in portfolio_data:
+                message += f"• {symbol}: {weight:.3f}\n"
+            message += f"\nИсправления:\n" + "\n".join(f"• {s}" for s in suggestions)
+        else:
+            message = f"✅ Портфель успешно создан:\n"
+            for symbol, weight in portfolio_data:
+                message += f"• {symbol}: {weight:.3f}\n"
+        
+        return {
+            'success': True,
+            'portfolio_data': portfolio_data,
+            'message': message,
+            'suggestions': suggestions
+        }
 
 
     # --- Asset Service Methods ---
@@ -4926,38 +5229,23 @@ class ShansAi:
                 # If it's neither currency nor period, it's a portfolio argument
                 portfolio_args.append(arg)
             
-            # Extract symbols and weights from portfolio arguments
-            portfolio_data = []
+            # Use smart parsing for portfolio arguments
+            portfolio_text = ' '.join(portfolio_args)
+            parse_result = self.smart_parse_portfolio_input(portfolio_text)
             
-            for arg in portfolio_args:
-                if ':' in arg:
-                    symbol_part, weight_part = arg.split(':', 1)
-                    original_symbol = self.clean_symbol(symbol_part.strip())
-                    # Преобразуем символ в верхний регистр
-                    symbol = original_symbol.upper()
-                    
-                    try:
-                        weight_str = weight_part.strip()
-                        self.logger.info(f"DEBUG: Converting weight '{weight_str}' to float for symbol '{symbol}'")
-                        weight = float(weight_str)
-                    except Exception as e:
-                        self.logger.error(f"Error converting weight '{weight_part.strip()}' to float: {e}")
-                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: '{weight_part.strip()}'. Доля должна быть числом от 0 до 1")
-                        return
-                    
-                    if weight <= 0 or weight > 1:
-                        await self._send_message_safe(update, f"❌ Некорректная доля для {symbol}: {weight}. Доля должна быть от 0 до 1")
-                        return
-                    
-                    portfolio_data.append((symbol, weight))
-                    
-                else:
-                    await self._send_message_safe(update, f"❌ Некорректный формат: {arg}. Используйте формат символ:доля")
-                    return
-            
-            if not portfolio_data:
-                await self._send_message_safe(update, "❌ Не указаны активы для портфеля")
+            if not parse_result['success']:
+                # Show error message with suggestions
+                error_msg = parse_result['message']
+                if parse_result['suggestions']:
+                    error_msg += "\n\n💡 Подсказки:\n" + "\n".join(f"• {s}" for s in parse_result['suggestions'])
+                await self._send_message_safe(update, error_msg)
                 return
+            
+            portfolio_data = parse_result['portfolio_data']
+            
+            # Show success message with any corrections made
+            if parse_result['suggestions']:
+                await self._send_message_safe(update, parse_result['message'])
             
             # Check if weights sum to approximately 1.0
             total_weight = sum(weight for _, weight in portfolio_data)
@@ -6931,6 +7219,19 @@ class ShansAi:
                 user_context = self._get_user_context(user_id)
                 describe_table = user_context.get('describe_table', '')
             
+            # Create summary metrics table for Gemini analysis
+            summary_metrics_table = ""
+            try:
+                summary_metrics_table = self._create_summary_metrics_table(
+                    symbols=symbols,
+                    currency=currency,
+                    expanded_symbols=expanded_symbols,
+                    portfolio_contexts=portfolio_contexts,
+                    specified_period=None
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to create summary metrics table: {e}")
+            
             data_info = {
                 'symbols': symbols,
                 'currency': currency,
@@ -6938,6 +7239,7 @@ class ShansAi:
                 'performance': {},
                 'correlations': [],
                 'additional_info': '',
+                'summary_metrics_table': summary_metrics_table,
                 'describe_table': describe_table,
                 'asset_count': len(symbols),
                 'analysis_type': 'asset_comparison',
@@ -6991,17 +7293,26 @@ class ShansAi:
                 
                 # Calculate metrics from price data
                 try:
-                    # Get price data for calculations
+                    # Get price data for calculations (синхронизировано с _create_summary_metrics_table)
                     if asset_data is not None:
-                        if hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
+                        if hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
+                            prices = asset_data.adj_close
+                            data_type = "adjusted"
+                        elif hasattr(asset_data, 'close_monthly') and asset_data.close_monthly is not None:
                             prices = asset_data.close_monthly
                             data_type = "monthly"
                         elif hasattr(asset_data, 'close_daily') and asset_data.close_daily is not None:
                             prices = asset_data.close_daily
                             data_type = "daily"
-                        elif hasattr(asset_data, 'adj_close') and asset_data.adj_close is not None:
-                            prices = asset_data.adj_close
-                            data_type = "adjusted"
+                        elif hasattr(asset_data, 'wealth_index') and asset_data.wealth_index is not None:
+                            # For Portfolio objects
+                            wealth_index = asset_data.wealth_index
+                            if hasattr(wealth_index, 'iloc') and len(wealth_index) > 1:
+                                if hasattr(wealth_index, 'columns'):
+                                    prices = wealth_index.iloc[:, 0]
+                                else:
+                                    prices = wealth_index
+                            data_type = "wealth_index"
                         else:
                             prices = None
                             data_type = "none"
@@ -7132,7 +7443,9 @@ class ShansAi:
                                     downside_deviation = negative_returns.std() * (12 ** 0.5)
                                 
                                 if downside_deviation > 0:
-                                    sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                    # Use proper risk-free rate based on currency
+                                    risk_free_rate = self.get_risk_free_rate(currency, years)
+                                    sortino_ratio = (annual_return - risk_free_rate) / downside_deviation
                                     performance_metrics['sortino_ratio'] = sortino_ratio
                                 else:
                                     performance_metrics['sortino_ratio'] = 0.0
@@ -7140,7 +7453,9 @@ class ShansAi:
                                 # No negative returns, use volatility as fallback
                                 volatility = performance_metrics.get('volatility', 0)
                                 if volatility > 0:
-                                    sortino_ratio = (annual_return - 0.02) / volatility
+                                    # Use proper risk-free rate based on currency
+                                    risk_free_rate = self.get_risk_free_rate(currency, years)
+                                    sortino_ratio = (annual_return - risk_free_rate) / volatility
                                     performance_metrics['sortino_ratio'] = sortino_ratio
                                 else:
                                     performance_metrics['sortino_ratio'] = 0.0
@@ -7612,7 +7927,9 @@ class ShansAi:
                                 if len(negative_returns) > 0:
                                     downside_deviation = negative_returns.std() * (12 ** 0.5)  # Annualized
                                     if downside_deviation > 0:
-                                        sortino_ratio = (annual_return - 0.02) / downside_deviation
+                                        # Use proper risk-free rate based on currency
+                                        risk_free_rate = self.get_risk_free_rate(currency, years)
+                                        sortino_ratio = (annual_return - risk_free_rate) / downside_deviation
                                         detailed_metrics['sortino_ratio'] = sortino_ratio
                                     else:
                                         detailed_metrics['sortino_ratio'] = 0.0
@@ -7620,7 +7937,9 @@ class ShansAi:
                                     # No negative returns, use volatility as fallback
                                     volatility = detailed_metrics.get('volatility', 0)
                                     if volatility > 0:
-                                        sortino_ratio = (annual_return - 0.02) / volatility
+                                        # Use proper risk-free rate based on currency
+                                        risk_free_rate = self.get_risk_free_rate(currency, years)
+                                        sortino_ratio = (annual_return - risk_free_rate) / volatility
                                         detailed_metrics['sortino_ratio'] = sortino_ratio
                                     else:
                                         detailed_metrics['sortino_ratio'] = 0.0
@@ -7853,6 +8172,7 @@ class ShansAi:
                                 if years > 0:
                                     total_return = (prices.iloc[-1] / prices.iloc[0]) - 1
                                     symbol_metrics['cagr'] = (1 + total_return) ** (1 / years) - 1
+                                    symbol_metrics['period_years'] = years
                                     
                         except Exception as e:
                             self.logger.warning(f"Could not calculate CAGR for {symbol}: {e}")
@@ -7967,6 +8287,19 @@ class ShansAi:
                     metrics_data[symbol] = {}
             
             # Create table rows
+            # Investment period row
+            period_row = ["Период инвестиций"]
+            for symbol in symbols:
+                period_years = metrics_data.get(symbol, {}).get('period_years')
+                if period_years is not None:
+                    if period_years < 1:
+                        period_row.append(f"{period_years*12:.1f} мес")
+                    else:
+                        period_row.append(f"{period_years:.1f} лет")
+                else:
+                    period_row.append("N/A")
+            table_data.append(period_row)
+            
             # CAGR row
             cagr_row = ["Среднегодовая доходность (CAGR)"]
             for symbol in symbols:
@@ -8060,11 +8393,71 @@ class ShansAi:
             # Create enhanced markdown table with better formatting
             table_markdown = self._create_enhanced_markdown_table(table_data, headers)
             
+            # Add second table with okama.AssetList.describe data
+            try:
+                describe_table = self._create_describe_table(symbols, currency)
+                if describe_table:
+                    table_markdown += "\n\n" + describe_table
+            except Exception as e:
+                self.logger.warning(f"Could not create describe table: {e}")
+            
             return table_markdown
             
         except Exception as e:
             self.logger.error(f"Error creating summary metrics table: {e}")
             return "❌ Ошибка при создании таблицы метрик"
+
+    def _create_describe_table(self, symbols: list, currency: str) -> str:
+        """Create table with okama.AssetList.describe data"""
+        try:
+            # Create AssetList for describe data
+            asset_list = ok.AssetList(symbols, ccy=currency)
+            describe_data = asset_list.describe()
+            
+            if describe_data is None or describe_data.empty:
+                return ""
+            
+            # Prepare table data
+            table_data = []
+            headers = ["Метрика"] + symbols
+            
+            # Convert describe data to table format
+            # describe_data has different structure - it's a DataFrame with symbols as columns
+            for metric_name in describe_data.index:
+                row = [str(metric_name)]  # Convert index to string
+                for symbol in symbols:
+                    if symbol in describe_data.columns:
+                        value = describe_data.loc[metric_name, symbol]
+                        if pd.isna(value):
+                            row.append("N/A")
+                        else:
+                            # Format based on metric type
+                            if isinstance(value, (int, float)):
+                                if 'return' in str(metric_name).lower() or 'cagr' in str(metric_name).lower():
+                                    row.append(f"{value*100:.2f}%")
+                                elif 'volatility' in str(metric_name).lower() or 'std' in str(metric_name).lower():
+                                    row.append(f"{value*100:.2f}%")
+                                elif 'ratio' in str(metric_name).lower():
+                                    row.append(f"{value:.3f}")
+                                elif 'drawdown' in str(metric_name).lower():
+                                    row.append(f"{value*100:.2f}%")
+                                else:
+                                    row.append(f"{value:.4f}")
+                            else:
+                                row.append(str(value))
+                    else:
+                        row.append("N/A")
+                table_data.append(row)
+            
+            # Create markdown table
+            describe_table_markdown = self._create_enhanced_markdown_table(table_data, headers)
+            
+            # Add header
+            return f"## 📊 Данные из okama.AssetList.describe\n\n{describe_table_markdown}"
+            
+        except Exception as e:
+            self.logger.warning(f"Error creating describe table: {e}")
+            return ""
 
     def _create_portfolio_metrics_table(self, portfolio_symbol: str, symbols: list, weights: list, currency: str, portfolio_object) -> str:
         """Create metrics table for a single portfolio (similar to _create_summary_metrics_table but for one portfolio)"""
