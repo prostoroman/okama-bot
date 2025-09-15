@@ -4378,8 +4378,8 @@ class ShansAi:
                 
                 # Chart analysis is only available via buttons
                 
-                # Create keyboard using unified function
-                reply_markup = self._create_compare_command_keyboard(symbols, currency, update, specified_period)
+                # Create keyboard with period selection only
+                reply_markup = self._create_period_selection_keyboard(symbols, "compare")
                 
                 # Delete loading message before sending results
                 if loading_message:
@@ -4397,6 +4397,9 @@ class ShansAi:
                     context=context,
                     parse_mode='HTML'  # Try HTML instead of Markdown for better compatibility
                 )
+                
+                # Show Reply Keyboard for compare management
+                await self._show_compare_reply_keyboard(update, context)
                 
                 # Table statistics now available via Metrics button
                 
@@ -6563,6 +6566,30 @@ class ShansAi:
             # Parse callback data
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
+            
+            # Handle period selection callbacks
+            if callback_data.startswith("compare_period_") or callback_data.startswith("portfolio_period_"):
+                # Extract period and symbols from callback data
+                parts = callback_data.split("_")
+                if len(parts) >= 4:
+                    command_type = parts[0]  # compare or portfolio
+                    period = parts[2]  # 1Y, 5Y, or MAX
+                    symbols_str = "_".join(parts[3:])  # symbols
+                    symbols = symbols_str.split(",")
+                    
+                    # Update user context with new period
+                    user_id = update.effective_user.id
+                    self._update_user_context(user_id, last_period=period)
+                    
+                    if command_type == "compare":
+                        # Execute compare command with new period
+                        context.args = symbols
+                        await self.compare_command(update, context)
+                    elif command_type == "portfolio":
+                        # Execute portfolio command with new period
+                        context.args = symbols
+                        await self.portfolio_command(update, context)
+                return
             
             # Handle start command callbacks
             if callback_data.startswith("start_"):
@@ -9578,11 +9605,13 @@ class ShansAi:
         """Show Reply Keyboard for portfolio management"""
         try:
             portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="📊 Портфель готов к анализу",
-                parse_mode='Markdown',
-                reply_markup=portfolio_reply_keyboard
+            # Send ephemeral message that auto-deletes
+            await self._send_ephemeral_message(
+                update, context, 
+                "📊 Портфель готов к анализу", 
+                parse_mode='Markdown', 
+                reply_markup=portfolio_reply_keyboard,
+                delete_after=5
             )
         except Exception as e:
             self.logger.error(f"Error showing portfolio reply keyboard: {e}")
@@ -9591,11 +9620,13 @@ class ShansAi:
         """Show Reply Keyboard for compare management"""
         try:
             compare_reply_keyboard = self._create_compare_reply_keyboard()
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="📊 Сравнение готово к анализу",
-                parse_mode='Markdown',
-                reply_markup=compare_reply_keyboard
+            # Send ephemeral message that auto-deletes
+            await self._send_ephemeral_message(
+                update, context, 
+                "📊 Сравнение готово к анализу", 
+                parse_mode='Markdown', 
+                reply_markup=compare_reply_keyboard,
+                delete_after=5
             )
         except Exception as e:
             self.logger.error(f"Error showing compare reply keyboard: {e}")
@@ -9744,10 +9775,12 @@ class ShansAi:
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists"""
         try:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="🔄 Переключаюсь...",
-                reply_markup=ReplyKeyboardRemove()
+            # Send ephemeral message that auto-deletes
+            await self._send_ephemeral_message(
+                update, context, 
+                "🔄 Переключаюсь...", 
+                reply_markup=ReplyKeyboardRemove(),
+                delete_after=3
             )
         except Exception as e:
             self.logger.warning(f"Could not remove portfolio reply keyboard: {e}")
@@ -9755,13 +9788,81 @@ class ShansAi:
     async def _remove_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove compare Reply Keyboard if it exists"""
         try:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="🔄 Переключаюсь...",
-                reply_markup=ReplyKeyboardRemove()
+            # Send ephemeral message that auto-deletes
+            await self._send_ephemeral_message(
+                update, context, 
+                "🔄 Переключаюсь...", 
+                reply_markup=ReplyKeyboardRemove(),
+                delete_after=3
             )
         except Exception as e:
             self.logger.warning(f"Could not remove compare reply keyboard: {e}")
+
+    async def _create_comparison_wealth_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Create and send comparison wealth chart"""
+        try:
+            # Get user context for currency and period
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            currency = user_context.get('last_currency', 'USD')
+            specified_period = user_context.get('last_period')
+            
+            # Create comparison
+            comparison = ok.AssetList(symbols, ccy=currency)
+            
+            # Create chart
+            fig, ax = chart_styles.create_comparison_chart(
+                comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
+            )
+            
+            # Save chart to bytes
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache
+            chart_styles.cleanup_figure(fig)
+            
+            # Create caption
+            caption = f"📊 Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
+            caption += f"💵 Валюта: {currency}\n"
+            if specified_period:
+                caption += f"📅 Период: {specified_period}\n"
+            
+            # Create keyboard with period selection
+            keyboard = self._create_period_selection_keyboard(symbols, "compare")
+            
+            # Send chart with period selection keyboard
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=self._truncate_caption(caption),
+                reply_markup=keyboard
+            )
+            
+            # Show Reply Keyboard for compare management
+            await self._show_compare_reply_keyboard(update, context)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating comparison wealth chart: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании графика сравнения: {str(e)}")
+
+    def _create_period_selection_keyboard(self, symbols: list, command_type: str) -> InlineKeyboardMarkup:
+        """Create keyboard with period selection buttons"""
+        try:
+            symbols_str = ','.join(symbols)
+            keyboard = [
+                [
+                    InlineKeyboardButton("1 год", callback_data=f"{command_type}_period_1Y_{symbols_str}"),
+                    InlineKeyboardButton("5 лет", callback_data=f"{command_type}_period_5Y_{symbols_str}"),
+                    InlineKeyboardButton("MAX", callback_data=f"{command_type}_period_MAX_{symbols_str}")
+                ]
+            ]
+            return InlineKeyboardMarkup(keyboard)
+        except Exception as e:
+            self.logger.error(f"Error creating period selection keyboard: {e}")
+            return InlineKeyboardMarkup([])
 
     async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                                    message_type: str, content: any, caption: str = None, 
@@ -14998,11 +15099,15 @@ class ShansAi:
             # Create Reply Keyboard for portfolio
             portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
             
-            # Send the chart with caption (no Inline Keyboard)
+            # Create keyboard with period selection
+            keyboard = self._create_period_selection_keyboard([portfolio_symbol], "portfolio")
+            
+            # Send the chart with caption and period selection keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(chart_caption)
+                caption=self._truncate_caption(chart_caption),
+                reply_markup=keyboard
             )
             
             # Send Reply Keyboard separately
