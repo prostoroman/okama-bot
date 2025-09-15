@@ -9621,23 +9621,31 @@ class ShansAi:
                 reply_markup=ReplyKeyboardRemove()
             )
             
-            # Simulate callback query
-            from telegram import CallbackQuery
-            fake_callback_query = CallbackQuery(
-                id="fake_callback_id",
-                from_user=update.effective_user,
-                chat_instance="fake_chat_instance",
-                data=callback_data
-            )
-            
-            # Create fake update with callback query
-            fake_update = Update(
-                update_id=update.update_id,
-                callback_query=fake_callback_query
-            )
-            
-            # Handle the callback
-            await self.button_callback(fake_update, context)
+            # Call the appropriate function directly based on callback_data
+            if callback_data.startswith("portfolio_wealth_chart_"):
+                await self._handle_portfolio_wealth_chart_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_returns_"):
+                await self._handle_portfolio_returns_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_rolling_cagr_"):
+                await self._handle_portfolio_rolling_cagr_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_dividends_"):
+                await self._handle_portfolio_dividends_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_risk_metrics_"):
+                await self._handle_portfolio_risk_metrics_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_monte_carlo_"):
+                await self._handle_portfolio_monte_carlo_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_forecast_"):
+                await self._handle_portfolio_forecast_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_drawdowns_"):
+                await self._handle_portfolio_drawdowns_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_ai_analysis_"):
+                await self._handle_portfolio_ai_analysis_button(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_compare_assets_"):
+                await self._handle_portfolio_compare_assets_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith("portfolio_compare_"):
+                await self._handle_portfolio_compare_button(update, context, portfolio_symbol)
+            else:
+                await self._send_message_safe(update, f"❌ Неизвестная функция: {callback_data}")
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio reply keyboard button: {e}")
