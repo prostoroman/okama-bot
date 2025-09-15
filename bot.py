@@ -3868,6 +3868,22 @@ class ShansAi:
                 self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
                 return
 
+            # Check for duplicate symbols
+            unique_symbols = list(dict.fromkeys(symbols))  # Preserve order while removing duplicates
+            duplicates_found = len(symbols) != len(unique_symbols)
+            
+            if duplicates_found:
+                if len(symbols) == 2:
+                    # Exactly 2 symbols and they are the same
+                    await self._send_message_safe(update, "❌ Можно сравнивать только разные активы. Указаны одинаковые символы.")
+                    return
+                else:
+                    # 3+ symbols with duplicates - remove duplicates and continue
+                    symbols = unique_symbols
+                    duplicate_count = len(symbols) - len(unique_symbols)
+                    await self._send_message_safe(update, f"⚠️ Обнаружены повторяющиеся активы. Исключены дубликаты из сравнения.")
+                    self.logger.info(f"Removed {duplicate_count} duplicate symbols from comparison")
+
             # Process portfolio symbols and expand them
             user_context = self._get_user_context(user_id)
             saved_portfolios = user_context.get('saved_portfolios', {})
