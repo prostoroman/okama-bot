@@ -2632,7 +2632,14 @@ class ShansAi:
         if not update.message or not update.message.text:
             return
         
-        text = self.clean_symbol(update.message.text.strip())
+        original_text = update.message.text.strip()
+        
+        # Check if this is a portfolio Reply Keyboard button BEFORE cleaning
+        if self._is_portfolio_reply_keyboard_button(original_text):
+            await self._handle_portfolio_reply_keyboard_button(update, context, original_text)
+            return
+        
+        text = self.clean_symbol(original_text)
         if not text:
             return
         
@@ -2643,11 +2650,7 @@ class ShansAi:
         self.logger.info(f"User {user_id} context: {user_context}")
         self.logger.info(f"Waiting for portfolio: {user_context.get('waiting_for_portfolio', False)}")
         self.logger.info(f"Input text: {text}")
-        
-        # Check if this is a portfolio Reply Keyboard button
-        if self._is_portfolio_reply_keyboard_button(text):
-            await self._handle_portfolio_reply_keyboard_button(update, context, text)
-            return
+        self.logger.info(f"Original text: {original_text}")
         
         # Check if user is waiting for portfolio input
         if user_context.get('waiting_for_portfolio', False):
