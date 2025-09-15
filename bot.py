@@ -8398,7 +8398,12 @@ class ShansAi:
                             asset_data = portfolio_object
                         else:
                             # This is a regular asset - create Asset object
-                            asset_symbol = portfolio_context.get('portfolio_symbols', [symbol])[0]
+                            portfolio_symbols = portfolio_context.get('portfolio_symbols', [symbol])
+                            if portfolio_symbols and len(portfolio_symbols) > 0:
+                                asset_symbol = portfolio_symbols[0]
+                            else:
+                                asset_symbol = symbol  # Fallback to the symbol from the loop
+                            
                             try:
                                 asset_data = ok.Asset(asset_symbol)
                             except Exception as e:
