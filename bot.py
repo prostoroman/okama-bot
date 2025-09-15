@@ -9630,18 +9630,18 @@ class ShansAi:
                 # Первый ряд
                 [
                     KeyboardButton("▫️ Доходность"),
-                    KeyboardButton("▫️ Дивиденды"),
-                    KeyboardButton("▫️ Просадки")
+                    KeyboardButton("▫️ Дивиденды сравн."),
+                    KeyboardButton("▫️ Просадки сравн.")
                 ],
                 # Второй ряд
                 [
-                    KeyboardButton("▫️ Метрики"),
+                    KeyboardButton("▫️ Метрики сравн."),
                     KeyboardButton("▫️ Корреляция"),
                     KeyboardButton("▫️ Эффективная граница")
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ AI-анализ"),
+                    KeyboardButton("▫️ AI-анализ сравн."),
                     KeyboardButton("▫️ В Портфель")
                 ]
             ]
@@ -9702,12 +9702,12 @@ class ShansAi:
         """Check if the text is a compare Reply Keyboard button"""
         compare_buttons = [
             "▫️ Доходность",
-            "▫️ Дивиденды",
-            "▫️ Просадки",
-            "▫️ Метрики",
+            "▫️ Дивиденды сравн.",
+            "▫️ Просадки сравн.",
+            "▫️ Метрики сравн.",
             "▫️ Корреляция",
             "▫️ Эффективная граница",
-            "▫️ AI-анализ",
+            "▫️ AI-анализ сравн.",
             "▫️ В Портфель"
         ]
         return text in compare_buttons
@@ -9801,17 +9801,17 @@ class ShansAi:
             if text == "▫️ Доходность":
                 # Show default comparison chart (wealth index)
                 await self._create_comparison_wealth_chart(update, context, last_symbols)
-            elif text == "▫️ Дивиденды":
+            elif text == "▫️ Дивиденды сравн.":
                 await self._handle_dividends_button(update, context, last_symbols)
-            elif text == "▫️ Просадки":
+            elif text == "▫️ Просадки сравн.":
                 await self._handle_drawdowns_button(update, context, last_symbols)
-            elif text == "▫️ Метрики":
+            elif text == "▫️ Метрики сравн.":
                 await self._handle_metrics_button(update, context, last_symbols)
             elif text == "▫️ Корреляция":
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
                 await self._handle_efficient_frontier_button(update, context, last_symbols)
-            elif text == "▫️ AI-анализ":
+            elif text == "▫️ AI-анализ сравн.":
                 await self._handle_ai_analysis_button(update, context, last_symbols)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
