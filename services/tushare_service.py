@@ -362,14 +362,25 @@ class TushareService:
             return pd.DataFrame()
     
     def get_daily_data_by_days(self, ts_code: str, days: int) -> pd.DataFrame:
-        """Get daily price data for a symbol for specified number of days"""
+        """Get daily price data for a symbol for specified number of trading days"""
         try:
-            # Calculate start date based on days
+            # Calculate start date based on trading days
+            # Convert trading days to calendar days with buffer
+            # Assuming ~252 trading days per year, ~21 trading days per month
+            # Add buffer to ensure we get enough data
+            calendar_days_buffer = int(days * 1.4)  # 40% buffer for weekends and holidays
+            
             end_date = datetime.now().strftime('%Y%m%d')
-            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
+            start_date = (datetime.now() - timedelta(days=calendar_days_buffer)).strftime('%Y%m%d')
             
             # Get data using the existing method
-            return self.get_daily_data(ts_code, start_date, end_date)
+            df = self.get_daily_data(ts_code, start_date, end_date)
+            
+            # Filter to get only the last 'days' trading days
+            if not df.empty and len(df) > days:
+                df = df.tail(days)
+            
+            return df
             
         except Exception as e:
             self.logger.error(f"Error getting daily data for {ts_code} for {days} days: {e}")
