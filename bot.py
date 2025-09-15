@@ -2637,14 +2637,9 @@ class ShansAi:
         
         original_text = update.message.text.strip()
         
-        # Check if this is a portfolio Reply Keyboard button BEFORE cleaning
-        if self._is_portfolio_reply_keyboard_button(original_text):
-            await self._handle_portfolio_reply_keyboard_button(update, context, original_text)
-            return
-        
-        # Check if this is a compare Reply Keyboard button BEFORE cleaning
-        if self._is_compare_reply_keyboard_button(original_text):
-            await self._handle_compare_reply_keyboard_button(update, context, original_text)
+        # Check if this is a Reply Keyboard button BEFORE cleaning
+        if self._is_reply_keyboard_button(original_text):
+            await self._handle_reply_keyboard_button(update, context, original_text)
             return
         
         text = self.clean_symbol(original_text)
@@ -9630,18 +9625,18 @@ class ShansAi:
                 # Первый ряд
                 [
                     KeyboardButton("▫️ Доходность"),
-                    KeyboardButton("▫️ Дивиденды сравн."),
-                    KeyboardButton("▫️ Просадки сравн.")
+                    KeyboardButton("▫️ Дивиденды"),
+                    KeyboardButton("▫️ Просадки")
                 ],
                 # Второй ряд
                 [
-                    KeyboardButton("▫️ Метрики сравн."),
+                    KeyboardButton("▫️ Метрики"),
                     KeyboardButton("▫️ Корреляция"),
                     KeyboardButton("▫️ Эффективная граница")
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ AI-анализ сравн."),
+                    KeyboardButton("▫️ AI-анализ"),
                     KeyboardButton("▫️ В Портфель")
                 ]
             ]
@@ -9702,15 +9697,48 @@ class ShansAi:
         """Check if the text is a compare Reply Keyboard button"""
         compare_buttons = [
             "▫️ Доходность",
-            "▫️ Дивиденды сравн.",
-            "▫️ Просадки сравн.",
-            "▫️ Метрики сравн.",
+            "▫️ Дивиденды",
+            "▫️ Просадки",
+            "▫️ Метрики",
             "▫️ Корреляция",
             "▫️ Эффективная граница",
-            "▫️ AI-анализ сравн.",
+            "▫️ AI-анализ",
             "▫️ В Портфель"
         ]
         return text in compare_buttons
+
+    def _is_reply_keyboard_button(self, text: str) -> bool:
+        """Check if the text is any Reply Keyboard button (portfolio or compare)"""
+        return self._is_portfolio_reply_keyboard_button(text) or self._is_compare_reply_keyboard_button(text)
+
+    async def _handle_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle Reply Keyboard button presses - determine context and call appropriate handler"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Determine context based on user's last activity
+            # Check if user has compare data (last_assets) and no recent portfolio activity
+            last_assets = user_context.get('last_assets', [])
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            # If user has compare data and the button exists in both contexts, prefer compare
+            if last_assets and self._is_compare_reply_keyboard_button(text):
+                await self._handle_compare_reply_keyboard_button(update, context, text)
+            # If user has portfolio data and the button exists in portfolio context, use portfolio
+            elif saved_portfolios and self._is_portfolio_reply_keyboard_button(text):
+                await self._handle_portfolio_reply_keyboard_button(update, context, text)
+            # If button only exists in one context, use that context
+            elif self._is_compare_reply_keyboard_button(text):
+                await self._handle_compare_reply_keyboard_button(update, context, text)
+            elif self._is_portfolio_reply_keyboard_button(text):
+                await self._handle_portfolio_reply_keyboard_button(update, context, text)
+            else:
+                await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling reply keyboard button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
 
     async def _handle_portfolio_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle portfolio Reply Keyboard button presses"""
@@ -9801,17 +9829,17 @@ class ShansAi:
             if text == "▫️ Доходность":
                 # Show default comparison chart (wealth index)
                 await self._create_comparison_wealth_chart(update, context, last_symbols)
-            elif text == "▫️ Дивиденды сравн.":
+            elif text == "▫️ Дивиденды":
                 await self._handle_dividends_button(update, context, last_symbols)
-            elif text == "▫️ Просадки сравн.":
+            elif text == "▫️ Просадки":
                 await self._handle_drawdowns_button(update, context, last_symbols)
-            elif text == "▫️ Метрики сравн.":
+            elif text == "▫️ Метрики":
                 await self._handle_metrics_button(update, context, last_symbols)
             elif text == "▫️ Корреляция":
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
                 await self._handle_efficient_frontier_button(update, context, last_symbols)
-            elif text == "▫️ AI-анализ сравн.":
+            elif text == "▫️ AI-анализ":
                 await self._handle_ai_analysis_button(update, context, last_symbols)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
