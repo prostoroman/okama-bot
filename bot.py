@@ -54,7 +54,7 @@ except ImportError:
     print("Warning: tabulate library not available. Using simple text formatting.")
 
 # Telegram imports
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 # Check Python version compatibility
@@ -2141,6 +2141,9 @@ class ShansAi:
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with welcome message and interactive buttons"""
+        # Remove portfolio Reply Keyboard if it exists
+        await self._remove_portfolio_reply_keyboard(update, context)
+        
         user = update.effective_user
         user_name = user.first_name or "User"
         # Remove any special characters that could break Markdown
@@ -2169,6 +2172,9 @@ class ShansAi:
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command with full help"""
+        # Remove portfolio Reply Keyboard if it exists
+        await self._remove_portfolio_reply_keyboard(update, context)
+        
         user = update.effective_user
         # Escape user input to prevent Markdown parsing issues
         user_name = user.first_name or "User"
@@ -2550,6 +2556,9 @@ class ShansAi:
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
+        # Remove portfolio Reply Keyboard if it exists
+        await self._remove_portfolio_reply_keyboard(update, context)
+        
         if not context.args:
             # Get random examples for user
             examples = self.get_random_examples(3)
@@ -2634,6 +2643,11 @@ class ShansAi:
         self.logger.info(f"User {user_id} context: {user_context}")
         self.logger.info(f"Waiting for portfolio: {user_context.get('waiting_for_portfolio', False)}")
         self.logger.info(f"Input text: {text}")
+        
+        # Check if this is a portfolio Reply Keyboard button
+        if self._is_portfolio_reply_keyboard_button(text):
+            await self._handle_portfolio_reply_keyboard_button(update, context, text)
+            return
         
         # Check if user is waiting for portfolio input
         if user_context.get('waiting_for_portfolio', False):
@@ -3483,6 +3497,9 @@ class ShansAi:
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /list command"""
+        # Remove portfolio Reply Keyboard if it exists
+        await self._remove_portfolio_reply_keyboard(update, context)
+        
         try:
             
             if not context.args:
@@ -3615,6 +3632,9 @@ class ShansAi:
 
     async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /search command for searching assets by name or ISIN"""
+        # Remove portfolio Reply Keyboard if it exists
+        await self._remove_portfolio_reply_keyboard(update, context)
+        
         try:
             if not context.args:
                 await self._send_message_safe(update, 
@@ -3733,6 +3753,9 @@ class ShansAi:
 
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
+        # Remove portfolio Reply Keyboard if it exists
+        await self._remove_portfolio_reply_keyboard(update, context)
+        
         try:
             if not context.args:
                 # Get user's saved portfolios for help message
@@ -4372,6 +4395,9 @@ class ShansAi:
 
     async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /my command for displaying saved portfolios"""
+        # Remove portfolio Reply Keyboard if it exists
+        await self._remove_portfolio_reply_keyboard(update, context)
+        
         try:
             user_id = update.effective_user.id
             self.logger.info(f"Processing /my command for user {user_id}")
@@ -9493,6 +9519,137 @@ class ShansAi:
             self.logger.error(f"Error creating portfolio command keyboard: {e}")
             # Return empty keyboard as fallback
             return InlineKeyboardMarkup([])
+
+    def _create_portfolio_reply_keyboard(self) -> ReplyKeyboardMarkup:
+        """Create Reply Keyboard for portfolio command with three rows of buttons"""
+        try:
+            keyboard = [
+                # Первый ряд
+                [
+                    KeyboardButton("▫️ Накоп. доходность"),
+                    KeyboardButton("▫️ Годовая доходность"),
+                    KeyboardButton("▫️ Скользящая CAGR"),
+                    KeyboardButton("▫️ Дивиденды")
+                ],
+                # Второй ряд
+                [
+                    KeyboardButton("▫️ Метрики"),
+                    KeyboardButton("▫️ Монте-Карло"),
+                    KeyboardButton("▫️ Процентили (10/50/90)"),
+                    KeyboardButton("▫️ Просадки")
+                ],
+                # Третий ряд
+                [
+                    KeyboardButton("▫️ AI-анализ"),
+                    KeyboardButton("▫️ Портфель vs Активы"),
+                    KeyboardButton("▫️ Сравнить")
+                ]
+            ]
+            
+            return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating portfolio reply keyboard: {e}")
+            # Return empty keyboard as fallback
+            return ReplyKeyboardMarkup([])
+
+    def _is_portfolio_reply_keyboard_button(self, text: str) -> bool:
+        """Check if the text is a portfolio Reply Keyboard button"""
+        portfolio_buttons = [
+            "▫️ Накоп. доходность",
+            "▫️ Годовая доходность", 
+            "▫️ Скользящая CAGR",
+            "▫️ Дивиденды",
+            "▫️ Метрики",
+            "▫️ Монте-Карло",
+            "▫️ Процентили (10/50/90)",
+            "▫️ Просадки",
+            "▫️ AI-анализ",
+            "▫️ Портфель vs Активы",
+            "▫️ Сравнить"
+        ]
+        return text in portfolio_buttons
+
+    async def _handle_portfolio_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle portfolio Reply Keyboard button presses"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Get the last portfolio symbol from user context
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            if not saved_portfolios:
+                await self._send_message_safe(update, "❌ Нет сохраненных портфелей. Создайте портфель командой `/portfolio`")
+                return
+            
+            # Get the most recent portfolio
+            portfolio_symbols = list(saved_portfolios.keys())
+            if not portfolio_symbols:
+                await self._send_message_safe(update, "❌ Нет сохраненных портфелей. Создайте портфель командой `/portfolio`")
+                return
+            
+            # Use the most recent portfolio (last in the list)
+            portfolio_symbol = portfolio_symbols[-1]
+            
+            # Map button text to callback data
+            button_mapping = {
+                "▫️ Накоп. доходность": f"portfolio_wealth_chart_{portfolio_symbol}",
+                "▫️ Годовая доходность": f"portfolio_returns_{portfolio_symbol}",
+                "▫️ Скользящая CAGR": f"portfolio_rolling_cagr_{portfolio_symbol}",
+                "▫️ Дивиденды": f"portfolio_dividends_{portfolio_symbol}",
+                "▫️ Метрики": f"portfolio_risk_metrics_{portfolio_symbol}",
+                "▫️ Монте-Карло": f"portfolio_monte_carlo_{portfolio_symbol}",
+                "▫️ Процентили (10/50/90)": f"portfolio_forecast_{portfolio_symbol}",
+                "▫️ Просадки": f"portfolio_drawdowns_{portfolio_symbol}",
+                "▫️ AI-анализ": f"portfolio_ai_analysis_{portfolio_symbol}",
+                "▫️ Портфель vs Активы": f"portfolio_compare_assets_{portfolio_symbol}",
+                "▫️ Сравнить": f"portfolio_compare_{portfolio_symbol}"
+            }
+            
+            callback_data = button_mapping.get(text)
+            if not callback_data:
+                await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
+                return
+            
+            # Remove Reply Keyboard
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔄 Обрабатываю запрос...",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            
+            # Simulate callback query
+            from telegram import CallbackQuery
+            fake_callback_query = CallbackQuery(
+                id="fake_callback_id",
+                from_user=update.effective_user,
+                chat_instance="fake_chat_instance",
+                data=callback_data
+            )
+            
+            # Create fake update with callback query
+            fake_update = Update(
+                update_id=update.update_id,
+                callback_query=fake_callback_query
+            )
+            
+            # Handle the callback
+            await self.button_callback(fake_update, context)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling portfolio reply keyboard button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Remove portfolio Reply Keyboard if it exists"""
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔄 Переключаюсь...",
+                reply_markup=ReplyKeyboardRemove()
+            )
+        except Exception as e:
+            self.logger.warning(f"Could not remove portfolio reply keyboard: {e}")
 
     async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                                    message_type: str, content: any, caption: str = None, 
@@ -14760,12 +14917,23 @@ class ShansAi:
                 chart_caption += f"• Макс. просадка: Недоступно\n"
 
 
+            # Create Reply Keyboard for portfolio
+            portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
+            
             # Send the chart with caption and buttons
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(img_bytes),
                 caption=self._truncate_caption(chart_caption),
                 reply_markup=reply_markup
+            )
+            
+            # Send Reply Keyboard separately
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🎛️ *Панель управления портфелем*\n\nВыберите нужную функцию:",
+                parse_mode='Markdown',
+                reply_markup=portfolio_reply_keyboard
             )
             
         except Exception as e:
