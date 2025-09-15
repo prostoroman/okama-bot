@@ -9717,21 +9717,30 @@ class ShansAi:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             
-            # Determine context based on user's last activity
-            # Check if user has compare data (last_assets) and no recent portfolio activity
+            # Determine context based on user's last activity and available data
             last_assets = user_context.get('last_assets', [])
             saved_portfolios = user_context.get('saved_portfolios', {})
             
-            # If user has compare data and the button exists in both contexts, prefer compare
-            if last_assets and self._is_compare_reply_keyboard_button(text):
+            # Check if button exists in both contexts (conflicting buttons)
+            is_compare_button = self._is_compare_reply_keyboard_button(text)
+            is_portfolio_button = self._is_portfolio_reply_keyboard_button(text)
+            
+            if is_compare_button and is_portfolio_button:
+                # Button exists in both contexts - determine by data availability
+                if last_assets and len(last_assets) > 0:
+                    # User has compare data - use compare context
+                    await self._handle_compare_reply_keyboard_button(update, context, text)
+                elif saved_portfolios and len(saved_portfolios) > 0:
+                    # User has portfolio data - use portfolio context
+                    await self._handle_portfolio_reply_keyboard_button(update, context, text)
+                else:
+                    # No data available - show appropriate error message
+                    await self._send_message_safe(update, f"❌ Нет данных для анализа. Создайте сравнение командой `/compare` или портфель командой `/portfolio`")
+            elif is_compare_button:
+                # Button only exists in compare context
                 await self._handle_compare_reply_keyboard_button(update, context, text)
-            # If user has portfolio data and the button exists in portfolio context, use portfolio
-            elif saved_portfolios and self._is_portfolio_reply_keyboard_button(text):
-                await self._handle_portfolio_reply_keyboard_button(update, context, text)
-            # If button only exists in one context, use that context
-            elif self._is_compare_reply_keyboard_button(text):
-                await self._handle_compare_reply_keyboard_button(update, context, text)
-            elif self._is_portfolio_reply_keyboard_button(text):
+            elif is_portfolio_button:
+                # Button only exists in portfolio context
                 await self._handle_portfolio_reply_keyboard_button(update, context, text)
             else:
                 await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
