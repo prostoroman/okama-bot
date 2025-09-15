@@ -6299,6 +6299,28 @@ class ShansAi:
             # Fallback: send message without keyboard removal
             await self._send_callback_message(update, context, text, parse_mode=parse_mode)
 
+    async def _send_portfolio_message_with_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
+        """Отправить сообщение портфеля с reply keyboard"""
+        try:
+            # Get chat_id from update
+            chat_id = update.effective_chat.id
+            
+            # Create reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
+            
+            # Send message with reply keyboard
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode,
+                reply_markup=reply_keyboard
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error in _send_portfolio_message_with_reply_keyboard: {e}")
+            # Fallback: send message without keyboard
+            await self._send_message_safe(update, text, parse_mode=parse_mode)
+
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
@@ -9464,48 +9486,16 @@ class ShansAi:
             # Return empty keyboard as fallback
             return InlineKeyboardMarkup([])
 
-    def _create_portfolio_command_keyboard(self, portfolio_symbol: str) -> InlineKeyboardMarkup:
-        """Create keyboard for portfolio command button responses"""
+    def _create_portfolio_command_keyboard(self, portfolio_symbol: str) -> ReplyKeyboardMarkup:
+        """Create Reply Keyboard for portfolio command button responses"""
         try:
-            keyboard = []
-            
-            # Add portfolio analysis buttons
-            keyboard.append([
-                InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
-                InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")
-            ])
-            keyboard.append([
-                InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
-                InlineKeyboardButton("📊 Метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")
-            ])
-            keyboard.append([
-                InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
-                InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")
-            ])
-            keyboard.append([
-                InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
-                InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")
-            ])
-            keyboard.append([
-                InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")
-            ])
-            
-            # Add AI analysis button if Gemini service is available
-            if self.gemini_service and self.gemini_service.is_available():
-                keyboard.append([
-                    InlineKeyboardButton("🤖 AI-анализ", callback_data=f"portfolio_ai_analysis_{portfolio_symbol}")
-                ])
-            
-            keyboard.append([
-                InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")
-            ])
-            
-            return InlineKeyboardMarkup(keyboard)
+            # Use the existing reply keyboard function
+            return self._create_portfolio_reply_keyboard()
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio command keyboard: {e}")
             # Return empty keyboard as fallback
-            return InlineKeyboardMarkup([])
+            return ReplyKeyboardMarkup([])
 
     def _create_portfolio_reply_keyboard(self) -> ReplyKeyboardMarkup:
         """Create Reply Keyboard for portfolio command with three rows of buttons"""
@@ -9546,7 +9536,7 @@ class ShansAi:
             portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="🎛️ *Панель управления портфелем*\n\nВыберите нужную функцию:",
+                text="📊 Портфель готов к анализу",
                 parse_mode='Markdown',
                 reply_markup=portfolio_reply_keyboard
             )
@@ -9611,11 +9601,7 @@ class ShansAi:
                 await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
                 return
             
-            # Send processing message without removing keyboard
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="🔄 Обрабатываю запрос..."
-            )
+            # No processing message needed - direct execution
             
             # Call the appropriate function directly based on callback_data
             if callback_data.startswith("portfolio_wealth_chart_"):
@@ -12210,23 +12196,16 @@ class ShansAi:
                 )
                 
                 if summary_table and not summary_table.startswith("❌"):
-                    # Create keyboard for portfolio command
-                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                    
-                    # Send table as message with keyboard
+                    # Send table as message with reply keyboard
                     header_text = f"📊 **Сводная таблица ключевых метрик**"
                     table_message = f"{header_text}\n\n```\n{summary_table}\n```"
-                    await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown', reply_markup=keyboard)
+                    await self._send_portfolio_message_with_reply_keyboard(update, context, table_message, parse_mode='Markdown')
                 else:
-                    # Create keyboard for portfolio command
-                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                    await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось создать таблицу метрик", reply_markup=keyboard)
+                    await self._send_portfolio_message_with_reply_keyboard(update, context, "❌ Не удалось создать таблицу метрик")
                     
             except Exception as metrics_error:
                 self.logger.error(f"Error creating summary metrics table: {metrics_error}")
-                # Create keyboard for portfolio command
-                keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_portfolio_message_with_reply_keyboard(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio risk metrics by symbol: {e}")
@@ -12620,14 +12599,8 @@ class ShansAi:
                 excel_buffer = self._create_portfolio_metrics_excel(metrics_data, symbols, currency)
                 
                 if excel_buffer:
-                    # Create keyboard for portfolio command
-                    portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                    
-                    # Remove keyboard from previous message before sending new message
-                    await self._remove_keyboard_before_new_message(update, context)
-                    
-                    # Send Excel file with keyboard
+                    # Send Excel file with reply keyboard
+                    reply_keyboard = self._create_portfolio_reply_keyboard()
                     await context.bot.send_document(
                         chat_id=update.effective_chat.id,
                         document=io.BytesIO(excel_buffer.getvalue()),
@@ -12641,7 +12614,7 @@ class ShansAi:
                                f"• Коэффициенты Шарпа и Сортино\n"
                                f"• Анализ рисков и доходности\n"
                                f"• Детальная статистика портфеля",
-                        reply_markup=keyboard
+                        reply_markup=reply_keyboard
                     )
                 else:
                     await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла")
@@ -13802,21 +13775,15 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(current_fig)
             
-            # Create keyboard for portfolio command
-            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send the chart with keyboard
+            # Send the chart with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(
                     f"💡 Показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
                 ),
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -13868,14 +13835,8 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(current_fig)
             
-            # Create keyboard for portfolio command
-            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send the chart with keyboard
+            # Send the chart with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
@@ -13890,7 +13851,7 @@ class ShansAi:
                     f"• 50% процентиль: средний сценарий\n"
                     f"• 90% процентиль: оптимистичный сценарий"
                 ),
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -14254,23 +14215,14 @@ class ShansAi:
             
             caption = f"Дивидендная доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
             
-            # Create keyboard for portfolio command
-            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send the chart with keyboard
+            # Send the chart with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
-            
-            # Show Reply Keyboard for portfolio management
-            await self._show_portfolio_reply_keyboard(update, context)
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio dividends chart: {e}")
@@ -14639,23 +14591,14 @@ class ShansAi:
                 
                 caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
             
-            # Create keyboard for portfolio command
-            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send the chart with keyboard
+            # Send the chart with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
-            
-            # Show Reply Keyboard for portfolio management
-            await self._show_portfolio_reply_keyboard(update, context)
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio returns chart: {e}")
@@ -14946,7 +14889,7 @@ class ShansAi:
             # Send Reply Keyboard separately
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="🎛️ *Панель управления портфелем*\n\nВыберите нужную функцию:",
+                text="📊 Портфель готов к анализу",
                 parse_mode='Markdown',
                 reply_markup=portfolio_reply_keyboard
             )
@@ -15024,19 +14967,13 @@ class ShansAi:
             
             caption = f"При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}"
 
-            # Create keyboard for portfolio command
-            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send the chart with keyboard
+            # Send the chart with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(img_bytes),
                 caption=self._truncate_caption(caption),
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -15350,19 +15287,13 @@ class ShansAi:
                 caption = f"💡 График показывает динамику изменения доходноси во времени\n"
 
             
-            # Create keyboard for portfolio command
-            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send the chart with keyboard
+            # Send the chart with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -15664,19 +15595,13 @@ class ShansAi:
                 caption += f"• Эффект диверсификации\n"
                 caption += f"• Сравнение рисков и доходности"
             
-            # Create keyboard for portfolio command
-            portfolio_symbol = ','.join(symbols)  # Use symbols as portfolio identifier
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send the chart with keyboard
+            # Send the chart with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -15789,25 +15714,17 @@ class ShansAi:
                     analysis_text = portfolio_analysis.get('analysis', '')
                     
                     if analysis_text:
-                        # Create keyboard for portfolio command
-                        keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                        await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_portfolio_message_with_reply_keyboard(update, context, analysis_text, parse_mode='Markdown')
                     else:
-                        # Create keyboard for portfolio command
-                        keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                        await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ портфеля выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_portfolio_message_with_reply_keyboard(update, context, "🤖 Анализ портфеля выполнен, но результат пуст", parse_mode='Markdown')
                         
                 else:
                     error_msg = portfolio_analysis.get('error', 'Неизвестная ошибка') if portfolio_analysis else 'Анализ не выполнен'
-                    # Create keyboard for portfolio command
-                    keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                    await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа портфеля: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
+                    await self._send_portfolio_message_with_reply_keyboard(update, context, f"❌ Ошибка анализа портфеля: {error_msg}", parse_mode='Markdown')
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for portfolio analysis: {data_error}")
-                # Create keyboard for portfolio command
-                keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_portfolio_message_with_reply_keyboard(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio AI analysis: {e}")
@@ -15908,17 +15825,13 @@ class ShansAi:
             
             portfolio_text += f"\n🏷️ Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
             
-            # Create keyboard using unified function
-            keyboard = self._create_portfolio_command_keyboard(portfolio_symbol)
-            
-            # Remove keyboard from previous message and send new message with keyboard
-            await self._remove_keyboard_before_new_message(update, context)
-            
+            # Send message with reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=portfolio_text,
                 parse_mode='Markdown',
-                reply_markup=keyboard
+                reply_markup=reply_keyboard
             )
             
         except Exception as e:
