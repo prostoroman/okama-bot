@@ -6624,12 +6624,12 @@ class ShansAi:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
-            # Handle period selection callbacks
-            if callback_data.startswith("compare_period_") or callback_data.startswith("portfolio_period_"):
+            # Handle period selection callbacks (only for compare)
+            if callback_data.startswith("compare_period_"):
                 # Extract period and symbols from callback data
                 parts = callback_data.split("_")
                 if len(parts) >= 4:
-                    command_type = parts[0]  # compare or portfolio
+                    command_type = parts[0]  # compare
                     period = parts[2]  # 1Y, 5Y, or MAX
                     symbols_str = "_".join(parts[3:])  # symbols
                     symbols = symbols_str.split(",")
@@ -6638,13 +6638,8 @@ class ShansAi:
                     user_id = update.effective_user.id
                     self._update_user_context(user_id, last_period=period)
                     
-                    if command_type == "compare":
-                        # Handle compare period button - update chart with new period
-                        await self._handle_compare_period_button(update, context, symbols, period)
-                    elif command_type == "portfolio":
-                        # Execute portfolio command with new period
-                        context.args = symbols
-                        await self.portfolio_command(update, context)
+                    # Handle compare period button - update chart with new period
+                    await self._handle_compare_period_button(update, context, symbols, period)
                 return
             
             # Handle start command callbacks
@@ -15213,15 +15208,11 @@ class ShansAi:
             # Create Reply Keyboard for portfolio
             portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
             
-            # Create keyboard with period selection
-            keyboard = self._create_period_selection_keyboard([portfolio_symbol], "portfolio")
-            
-            # Send the chart with caption and period selection keyboard
+            # Send the chart with caption (no period selection buttons)
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(chart_caption),
-                reply_markup=keyboard
+                caption=self._truncate_caption(chart_caption)
             )
             
             # Send Reply Keyboard separately
