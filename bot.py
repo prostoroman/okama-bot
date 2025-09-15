@@ -2141,8 +2141,9 @@ class ShansAi:
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with welcome message and interactive buttons"""
-        # Remove portfolio Reply Keyboard if it exists
+        # Remove Reply Keyboards if they exist
         await self._remove_portfolio_reply_keyboard(update, context)
+        await self._remove_compare_reply_keyboard(update, context)
         
         user = update.effective_user
         user_name = user.first_name or "User"
@@ -2172,8 +2173,9 @@ class ShansAi:
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command with full help"""
-        # Remove portfolio Reply Keyboard if it exists
+        # Remove Reply Keyboards if they exist
         await self._remove_portfolio_reply_keyboard(update, context)
+        await self._remove_compare_reply_keyboard(update, context)
         
         user = update.effective_user
         # Escape user input to prevent Markdown parsing issues
@@ -2556,8 +2558,9 @@ class ShansAi:
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
-        # Remove portfolio Reply Keyboard if it exists
+        # Remove Reply Keyboards if they exist
         await self._remove_portfolio_reply_keyboard(update, context)
+        await self._remove_compare_reply_keyboard(update, context)
         
         if not context.args:
             # Get random examples for user
@@ -2637,6 +2640,11 @@ class ShansAi:
         # Check if this is a portfolio Reply Keyboard button BEFORE cleaning
         if self._is_portfolio_reply_keyboard_button(original_text):
             await self._handle_portfolio_reply_keyboard_button(update, context, original_text)
+            return
+        
+        # Check if this is a compare Reply Keyboard button BEFORE cleaning
+        if self._is_compare_reply_keyboard_button(original_text):
+            await self._handle_compare_reply_keyboard_button(update, context, original_text)
             return
         
         text = self.clean_symbol(original_text)
@@ -3500,8 +3508,9 @@ class ShansAi:
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /list command"""
-        # Remove portfolio Reply Keyboard if it exists
+        # Remove Reply Keyboards if they exist
         await self._remove_portfolio_reply_keyboard(update, context)
+        await self._remove_compare_reply_keyboard(update, context)
         
         try:
             
@@ -3635,8 +3644,9 @@ class ShansAi:
 
     async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /search command for searching assets by name or ISIN"""
-        # Remove portfolio Reply Keyboard if it exists
+        # Remove Reply Keyboards if they exist
         await self._remove_portfolio_reply_keyboard(update, context)
+        await self._remove_compare_reply_keyboard(update, context)
         
         try:
             if not context.args:
@@ -4414,8 +4424,9 @@ class ShansAi:
 
     async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /my command for displaying saved portfolios"""
-        # Remove portfolio Reply Keyboard if it exists
+        # Remove Reply Keyboards if they exist
         await self._remove_portfolio_reply_keyboard(update, context)
+        await self._remove_compare_reply_keyboard(update, context)
         
         try:
             user_id = update.effective_user.id
@@ -4518,6 +4529,9 @@ class ShansAi:
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command for creating portfolio with weights"""
+        # Remove compare Reply Keyboard if it exists
+        await self._remove_compare_reply_keyboard(update, context)
+        
         try:
             if not context.args:
 
@@ -9530,6 +9544,36 @@ class ShansAi:
             # Return empty keyboard as fallback
             return ReplyKeyboardMarkup([])
 
+    def _create_compare_reply_keyboard(self) -> ReplyKeyboardMarkup:
+        """Create Reply Keyboard for compare command with three rows of buttons"""
+        try:
+            keyboard = [
+                # Первый ряд
+                [
+                    KeyboardButton("▫️ Доходность"),
+                    KeyboardButton("▫️ Дивиденды"),
+                    KeyboardButton("▫️ Просадки")
+                ],
+                # Второй ряд
+                [
+                    KeyboardButton("▫️ Метрики"),
+                    KeyboardButton("▫️ Корреляция"),
+                    KeyboardButton("▫️ Эффективная граница")
+                ],
+                # Третий ряд
+                [
+                    KeyboardButton("▫️ AI-анализ"),
+                    KeyboardButton("▫️ В Портфель")
+                ]
+            ]
+            
+            return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating compare reply keyboard: {e}")
+            # Return empty keyboard as fallback
+            return ReplyKeyboardMarkup([])
+
     async def _show_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show Reply Keyboard for portfolio management"""
         try:
@@ -9542,6 +9586,19 @@ class ShansAi:
             )
         except Exception as e:
             self.logger.error(f"Error showing portfolio reply keyboard: {e}")
+
+    async def _show_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Reply Keyboard for compare management"""
+        try:
+            compare_reply_keyboard = self._create_compare_reply_keyboard()
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="📊 Сравнение готово к анализу",
+                parse_mode='Markdown',
+                reply_markup=compare_reply_keyboard
+            )
+        except Exception as e:
+            self.logger.error(f"Error showing compare reply keyboard: {e}")
 
     def _is_portfolio_reply_keyboard_button(self, text: str) -> bool:
         """Check if the text is a portfolio Reply Keyboard button"""
@@ -9559,6 +9616,20 @@ class ShansAi:
             "▫️ Сравнить"
         ]
         return text in portfolio_buttons
+
+    def _is_compare_reply_keyboard_button(self, text: str) -> bool:
+        """Check if the text is a compare Reply Keyboard button"""
+        compare_buttons = [
+            "▫️ Доходность",
+            "▫️ Дивиденды",
+            "▫️ Просадки",
+            "▫️ Метрики",
+            "▫️ Корреляция",
+            "▫️ Эффективная граница",
+            "▫️ AI-анализ",
+            "▫️ В Портфель"
+        ]
+        return text in compare_buttons
 
     async def _handle_portfolio_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle portfolio Reply Keyboard button presses"""
@@ -9633,6 +9704,43 @@ class ShansAi:
             self.logger.error(f"Error handling portfolio reply keyboard button: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
 
+    async def _handle_compare_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle compare Reply Keyboard button presses"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Get the last compare symbols from user context
+            last_symbols = user_context.get('last_assets', [])
+            if not last_symbols:
+                await self._send_message_safe(update, "❌ Нет данных для сравнения. Создайте сравнение командой `/compare`")
+                return
+            
+            # Map button text to function calls
+            if text == "▫️ Доходность":
+                # Show default comparison chart (wealth index)
+                await self._create_comparison_wealth_chart(update, context, last_symbols)
+            elif text == "▫️ Дивиденды":
+                await self._handle_dividends_button(update, context, last_symbols)
+            elif text == "▫️ Просадки":
+                await self._handle_drawdowns_button(update, context, last_symbols)
+            elif text == "▫️ Метрики":
+                await self._handle_metrics_button(update, context, last_symbols)
+            elif text == "▫️ Корреляция":
+                await self._handle_correlation_button(update, context, last_symbols)
+            elif text == "▫️ Эффективная граница":
+                await self._handle_efficient_frontier_button(update, context, last_symbols)
+            elif text == "▫️ AI-анализ":
+                await self._handle_ai_analysis_button(update, context, last_symbols)
+            elif text == "▫️ В Портфель":
+                await self._handle_compare_portfolio_button(update, context, last_symbols)
+            else:
+                await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling compare reply keyboard button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists"""
         try:
@@ -9643,6 +9751,17 @@ class ShansAi:
             )
         except Exception as e:
             self.logger.warning(f"Could not remove portfolio reply keyboard: {e}")
+
+    async def _remove_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Remove compare Reply Keyboard if it exists"""
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔄 Переключаюсь...",
+                reply_markup=ReplyKeyboardRemove()
+            )
+        except Exception as e:
+            self.logger.warning(f"Could not remove compare reply keyboard: {e}")
 
     async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                                    message_type: str, content: any, caption: str = None, 
