@@ -9657,13 +9657,12 @@ class ShansAi:
         """Show Reply Keyboard for portfolio management"""
         try:
             portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
-            # Send ephemeral message that auto-deletes
-            await self._send_ephemeral_message(
-                update, context, 
+            # Send persistent message with keyboard
+            await self._send_message_safe(
+                update, 
                 "📊 Портфель готов к анализу", 
                 parse_mode='Markdown', 
-                reply_markup=portfolio_reply_keyboard,
-                delete_after=5
+                reply_markup=portfolio_reply_keyboard
             )
         except Exception as e:
             self.logger.error(f"Error showing portfolio reply keyboard: {e}")
@@ -9672,13 +9671,12 @@ class ShansAi:
         """Show Reply Keyboard for compare management"""
         try:
             compare_reply_keyboard = self._create_compare_reply_keyboard()
-            # Send ephemeral message that auto-deletes
-            await self._send_ephemeral_message(
-                update, context, 
+            # Send persistent message with keyboard
+            await self._send_message_safe(
+                update, 
                 "📊 Сравнение готово к анализу", 
                 parse_mode='Markdown', 
-                reply_markup=compare_reply_keyboard,
-                delete_after=5
+                reply_markup=compare_reply_keyboard
             )
         except Exception as e:
             self.logger.error(f"Error showing compare reply keyboard: {e}")
