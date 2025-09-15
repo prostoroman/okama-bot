@@ -6338,6 +6338,63 @@ class ShansAi:
             # Fallback: send message without keyboard
             await self._send_message_safe(update, text, parse_mode=parse_mode)
 
+    async def _send_portfolio_ai_analysis_with_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
+        """Отправить длинный AI анализ портфеля с reply keyboard, поддерживая разбиение на части"""
+        try:
+            # Get chat_id from update
+            chat_id = update.effective_chat.id
+            
+            # Create reply keyboard
+            reply_keyboard = self._create_portfolio_reply_keyboard()
+            
+            # Check if text is longer than Telegram limit
+            if len(text) <= 4000:
+                # Short message - send normally
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_keyboard
+                )
+            else:
+                # Long message - split into parts
+                parts = self._split_text_smart(text)
+                
+                for i, part in enumerate(parts):
+                    # Add part indicator for multi-part messages
+                    if len(parts) > 1:
+                        part_text = f"📄 **Часть {i+1} из {len(parts)}:**\n\n{part}"
+                    else:
+                        part_text = part
+                    
+                    # Clean Markdown for each part
+                    if parse_mode == 'Markdown':
+                        part_text = self._safe_markdown(part_text)
+                    
+                    # Send first part with keyboard, others without
+                    if i == 0:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=part_text,
+                            parse_mode=parse_mode,
+                            reply_markup=reply_keyboard
+                        )
+                    else:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=part_text,
+                            parse_mode=parse_mode
+                        )
+                    
+                    # Small delay between parts to avoid rate limiting
+                    if i < len(parts) - 1:
+                        await asyncio.sleep(0.5)
+            
+        except Exception as e:
+            self.logger.error(f"Error in _send_portfolio_ai_analysis_with_keyboard: {e}")
+            # Fallback: send message without keyboard using safe method
+            await self._send_message_safe(update, text, parse_mode=parse_mode)
+
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
@@ -15938,7 +15995,7 @@ class ShansAi:
                     analysis_text = portfolio_analysis.get('analysis', '')
                     
                     if analysis_text:
-                        await self._send_portfolio_message_with_reply_keyboard(update, context, analysis_text, parse_mode='Markdown')
+                        await self._send_portfolio_ai_analysis_with_keyboard(update, context, analysis_text, parse_mode='Markdown')
                     else:
                         await self._send_portfolio_message_with_reply_keyboard(update, context, "🤖 Анализ портфеля выполнен, но результат пуст", parse_mode='Markdown')
                         
