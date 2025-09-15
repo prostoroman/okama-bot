@@ -6639,9 +6639,8 @@ class ShansAi:
                     self._update_user_context(user_id, last_period=period)
                     
                     if command_type == "compare":
-                        # Execute compare command with new period
-                        context.args = symbols
-                        await self.compare_command(update, context)
+                        # Handle compare period button - update chart with new period
+                        await self._handle_compare_period_button(update, context, symbols, period)
                     elif command_type == "portfolio":
                         # Execute portfolio command with new period
                         context.args = symbols
@@ -9904,6 +9903,64 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating comparison wealth chart: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при создании графика сравнения: {str(e)}")
+
+    async def _handle_compare_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, period: str):
+        """Handle compare period button - update chart with new period"""
+        try:
+            await self._send_ephemeral_message(update, context, f"📊 Обновляю график за {period}...", delete_after=2)
+            
+            # Remove buttons from the old message
+            try:
+                await update.callback_query.edit_message_reply_markup(reply_markup=None)
+            except Exception as e:
+                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            
+            # Get user context for currency
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            currency = user_context.get('last_currency', 'USD')
+            
+            # Create comparison with new period
+            comparison = ok.AssetList(symbols, ccy=currency)
+            
+            # Create chart
+            fig, ax = chart_styles.create_comparison_chart(
+                comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
+            )
+            
+            # Save chart to bytes
+            img_buffer = io.BytesIO()
+            chart_styles.save_figure(fig, img_buffer)
+            img_buffer.seek(0)
+            img_bytes = img_buffer.getvalue()
+            
+            # Clear matplotlib cache
+            chart_styles.cleanup_figure(fig)
+            
+            # Create caption with new period
+            caption = f"📊 Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
+            caption += f"💵 Валюта: {currency}\n"
+            caption += f"📅 Период: {period}\n"
+            
+            # Create keyboard with period selection
+            keyboard = self._create_period_selection_keyboard(symbols, "compare")
+            
+            # Send new chart with updated period
+            await self._send_photo_safe(
+                update=update,
+                photo_bytes=img_bytes,
+                caption=self._truncate_caption(caption),
+                reply_markup=keyboard,
+                context=context,
+                parse_mode='HTML'
+            )
+            
+            # Show Reply Keyboard for compare management
+            await self._show_compare_reply_keyboard(update, context)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling compare period button: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при обновлении графика: {str(e)}")
 
     def _create_period_selection_keyboard(self, symbols: list, command_type: str) -> InlineKeyboardMarkup:
         """Create keyboard with period selection buttons"""
