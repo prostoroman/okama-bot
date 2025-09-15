@@ -6395,7 +6395,7 @@ class ShansAi:
             # Fallback: send message without keyboard using safe method
             await self._send_message_safe(update, text, parse_mode=parse_mode)
 
-    async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5):
+    async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
             # Проверяем, что update и context не None
@@ -6420,7 +6420,8 @@ class ShansAi:
             message = await context.bot.send_message(
                 chat_id=chat_id,
                 text=text,
-                parse_mode=parse_mode
+                parse_mode=parse_mode,
+                reply_markup=reply_markup
             )
             
             # Планируем удаление сообщения через указанное время
