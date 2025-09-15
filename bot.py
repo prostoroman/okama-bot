@@ -4330,6 +4330,9 @@ class ShansAi:
                 user_context['last_analysis_type'] = 'comparison'
                 user_context['portfolio_contexts'] = portfolio_contexts  # Store portfolio contexts
                 user_context['expanded_symbols'] = expanded_symbols  # Store expanded symbols
+                user_context['last_assets'] = clean_symbols  # Store symbols for Reply Keyboard buttons
+                user_context['last_currency'] = currency  # Store currency for Reply Keyboard buttons
+                user_context['last_period'] = specified_period  # Store period for Reply Keyboard buttons
                 
                 # Store describe table for AI analysis
                 try:
