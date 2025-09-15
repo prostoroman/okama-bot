@@ -4768,21 +4768,8 @@ class ShansAi:
                 # Add portfolio symbol display
                 portfolio_text += f"\n\n🏷️ Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
                 
-                # Add buttons in 2 columns
-                keyboard = [
-                    [InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
-                     InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
-                     InlineKeyboardButton("📊 Метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
-                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
-                     InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
-                     InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")],
-                    [InlineKeyboardButton("🤖 AI-анализ", callback_data=f"portfolio_ai_analysis_{portfolio_symbol}")] if self.gemini_service and self.gemini_service.is_available() else [],
-                    [InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                # No Inline Keyboard needed - only Reply Keyboard will be used
+                reply_markup = None
                 
                 # Send ephemeral message about creating chart
                 await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
@@ -5432,27 +5419,8 @@ class ShansAi:
                 # Add portfolio symbol display
                 portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
                 
-                # Add buttons in 2 columns
-                keyboard = [
-                    [InlineKeyboardButton("📈 Доходность (накоп.)", callback_data=f"portfolio_wealth_chart_{portfolio_symbol}"),
-                     InlineKeyboardButton("💰 Доходность (ГГ)", callback_data=f"portfolio_returns_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📉 Просадки", callback_data=f"portfolio_drawdowns_{portfolio_symbol}"),
-                     InlineKeyboardButton("📊 Метрики", callback_data=f"portfolio_risk_metrics_{portfolio_symbol}")],
-                    [InlineKeyboardButton("🎲 Монте Карло", callback_data=f"portfolio_monte_carlo_{portfolio_symbol}"),
-                     InlineKeyboardButton("📈 Процентили 10, 50, 90", callback_data=f"portfolio_forecast_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📊 Портфель vs Активы", callback_data=f"portfolio_compare_assets_{portfolio_symbol}"),
-                     InlineKeyboardButton("📈 Скользящая CAGR", callback_data=f"portfolio_rolling_cagr_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💵 Дивиденды", callback_data=f"portfolio_dividends_{portfolio_symbol}")],
-                    [InlineKeyboardButton("🤖 AI-анализ", callback_data=f"portfolio_ai_analysis_{portfolio_symbol}")] if self.gemini_service and self.gemini_service.is_available() else [],
-                    [InlineKeyboardButton("⚖️ Сравнить", callback_data=f"portfolio_compare_{portfolio_symbol}")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                # Log button creation for debugging
-                self.logger.info(f"Created keyboard with {len(keyboard)} buttons for portfolio {portfolio_symbol}")
-                for i, button_row in enumerate(keyboard):
-                    for j, button in enumerate(button_row):
-                        self.logger.info(f"Button [{i}][{j}]: '{button.text}' -> '{button.callback_data}'")
+                # No Inline Keyboard needed - only Reply Keyboard will be used
+                reply_markup = None
                 
                 # Send ephemeral message about creating chart
                 await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
@@ -14968,12 +14936,11 @@ class ShansAi:
             # Create Reply Keyboard for portfolio
             portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
             
-            # Send the chart with caption and buttons
+            # Send the chart with caption (no Inline Keyboard)
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(chart_caption),
-                reply_markup=reply_markup
+                caption=self._truncate_caption(chart_caption)
             )
             
             # Send Reply Keyboard separately
