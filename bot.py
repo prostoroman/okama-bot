@@ -9556,6 +9556,19 @@ class ShansAi:
             # Return empty keyboard as fallback
             return ReplyKeyboardMarkup([])
 
+    async def _show_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show Reply Keyboard for portfolio management"""
+        try:
+            portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🎛️ *Панель управления портфелем*\n\nВыберите нужную функцию:",
+                parse_mode='Markdown',
+                reply_markup=portfolio_reply_keyboard
+            )
+        except Exception as e:
+            self.logger.error(f"Error showing portfolio reply keyboard: {e}")
+
     def _is_portfolio_reply_keyboard_button(self, text: str) -> bool:
         """Check if the text is a portfolio Reply Keyboard button"""
         portfolio_buttons = [
@@ -9614,11 +9627,10 @@ class ShansAi:
                 await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
                 return
             
-            # Remove Reply Keyboard
+            # Send processing message without removing keyboard
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="🔄 Обрабатываю запрос...",
-                reply_markup=ReplyKeyboardRemove()
+                text="🔄 Обрабатываю запрос..."
             )
             
             # Call the appropriate function directly based on callback_data
@@ -14178,6 +14190,9 @@ class ShansAi:
                 caption=self._truncate_caption(caption)
             )
             
+            # Show Reply Keyboard for portfolio management
+            await self._show_portfolio_reply_keyboard(update, context)
+            
         except Exception as e:
             self.logger.error(f"Error creating portfolio drawdowns chart: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика просадок: {str(e)}")
@@ -14269,6 +14284,9 @@ class ShansAi:
                 caption=self._truncate_caption(caption),
                 reply_markup=keyboard
             )
+            
+            # Show Reply Keyboard for portfolio management
+            await self._show_portfolio_reply_keyboard(update, context)
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio dividends chart: {e}")
@@ -14651,6 +14669,9 @@ class ShansAi:
                 caption=self._truncate_caption(caption),
                 reply_markup=keyboard
             )
+            
+            # Show Reply Keyboard for portfolio management
+            await self._show_portfolio_reply_keyboard(update, context)
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio returns chart: {e}")
