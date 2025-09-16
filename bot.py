@@ -4292,10 +4292,9 @@ class ShansAi:
                                     self.logger.warning(f"Could not delete loading message: {e}")
                             # Mixed comparison - show message
                             await self._send_message_safe(update, 
-                                f"⚠️ Обнаружены китайские символы: {', '.join(chinese_symbols)}\n\n"
-                                f"Смешанное сравнение (китайские + обычные символы) пока не поддерживается.\n"
-                                f"Для сравнения только китайских символов используйте: /compare {' '.join(chinese_symbols)}\n\n"
-                                f"Поддерживаемые символы для сравнения: {', '.join(okama_symbols) if okama_symbols else 'нет'}")
+                                f"⚠️ Смешанное сравнение (китайских и прочих символов) будет реализовано в новых версиях.\n"
+                                f"Китайские символы можно сравнить с китайскими, для этого используйте: /compare {' '.join(chinese_symbols)}\n\n"
+
                             return
                     
                     # No Chinese symbols - use standard okama approach
@@ -7834,9 +7833,12 @@ class ShansAi:
             try:
                 if len(symbols) > 1:
                     asset_list = ok.AssetList(symbols, ccy=currency)
-                    corr_matrix = asset_list.corr_matrix
-                    if corr_matrix is not None:
+                    corr_matrix = asset_list.assets_ror.corr()
+                    if corr_matrix is not None and not corr_matrix.empty:
                         correlations = corr_matrix.values.tolist()
+                        self.logger.info(f"Portfolio correlation matrix calculated successfully, shape: {corr_matrix.shape}")
+                    else:
+                        self.logger.warning("Portfolio correlation matrix is empty")
             except Exception as e:
                 self.logger.warning(f"Failed to calculate correlations: {e}")
             
