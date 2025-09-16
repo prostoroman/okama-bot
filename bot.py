@@ -2681,8 +2681,8 @@ class ShansAi:
                 # This is from portfolio command with tickers only
                 await self._handle_portfolio_tickers_weights_input(update, context, text)
             else:
-                # This is from compare command
-                await self._handle_portfolio_weights_input(update, context, text)
+                # This is from compare command - handle as compare input instead of portfolio weights
+                await self._handle_compare_input(update, context, text)
             return
         
         # Check if user is waiting for info input
