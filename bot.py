@@ -4292,9 +4292,9 @@ class ShansAi:
                                     self.logger.warning(f"Could not delete loading message: {e}")
                             # Mixed comparison - show message
                             await self._send_message_safe(update, 
-                                f"⚠️ Смешанное сравнение (китайских и прочих символов) будет реализовано в новых версиях.\n"
+                                f"⚠️ Смешанное сравнение (китайских с прочими символами) будет реализовано в новых версиях.\n"
                                 f"Китайские символы можно сравнить с китайскими, для этого используйте: /compare {' '.join(chinese_symbols)}\n\n"
-
+                            )
                             return
                     
                     # No Chinese symbols - use standard okama approach
