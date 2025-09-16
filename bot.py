@@ -9007,6 +9007,7 @@ class ShansAi:
                     cagr_value = None
                     max_drawdown_value = None
                     
+                    # Try to find 5-year period first, then fallback to available periods
                     for idx in describe_data.index:
                         property_name = describe_data.loc[idx, 'property']
                         period = describe_data.loc[idx, 'period']
@@ -9014,10 +9015,36 @@ class ShansAi:
                         if symbol in describe_data.columns:
                             value = describe_data.loc[idx, symbol]
                             if not pd.isna(value):
-                                if property_name == 'CAGR' and period == '5 years, 1 months':
+                                # Look for 5-year CAGR first
+                                if property_name == 'CAGR' and ('5 years' in str(period) or period == '5 years'):
                                     cagr_value = value
-                                elif property_name == 'Max drawdowns' and period == '5 years, 1 months':
+                                # Look for Max drawdowns - try 5-year first, then any available
+                                elif property_name == 'Max drawdowns' and ('5 years' in str(period) or period == '5 years'):
                                     max_drawdown_value = value
+                    
+                    # If we didn't find 5-year Max drawdowns, try to find any Max drawdowns period
+                    if max_drawdown_value is None:
+                        for idx in describe_data.index:
+                            property_name = describe_data.loc[idx, 'property']
+                            period = describe_data.loc[idx, 'period']
+                            
+                            if symbol in describe_data.columns:
+                                value = describe_data.loc[idx, symbol]
+                                if not pd.isna(value) and property_name == 'Max drawdowns':
+                                    max_drawdown_value = value
+                                    break
+                    
+                    # If we didn't find 5-year CAGR, try to find any CAGR period
+                    if cagr_value is None:
+                        for idx in describe_data.index:
+                            property_name = describe_data.loc[idx, 'property']
+                            period = describe_data.loc[idx, 'period']
+                            
+                            if symbol in describe_data.columns:
+                                value = describe_data.loc[idx, symbol]
+                                if not pd.isna(value) and property_name == 'CAGR':
+                                    cagr_value = value
+                                    break
                     
                     if cagr_value is not None and max_drawdown_value is not None and max_drawdown_value < 0:
                         calmar = cagr_value / abs(max_drawdown_value)
@@ -12376,7 +12403,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating risk metrics for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_ephemeral_message(update, context, "📊 Анализирую риски портфеля...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📊 Расчет метрик портфеля...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
