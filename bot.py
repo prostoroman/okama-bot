@@ -9538,25 +9538,11 @@ class ShansAi:
         try:
             keyboard = []
             
-            # Add basic analysis buttons (same as first message)
-            keyboard.append([
-                InlineKeyboardButton("💰 Дивиденды", callback_data="dividends_compare"),
-                InlineKeyboardButton("📉 Просадки", callback_data="drawdowns_compare")
-            ])
-            keyboard.append([
-                InlineKeyboardButton("📊 Метрики", callback_data="metrics_compare"),
-                InlineKeyboardButton("🔗 Корреляция", callback_data="correlation_compare")
-            ])
-            
-            # Add Efficient Frontier and AI analysis buttons in the same row
+            # Remove inline keyboards for comparison analysis buttons as requested
+            # Only keep AI analysis button if available
             if self.gemini_service and self.gemini_service.is_available():
                 keyboard.append([
-                    InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare"),
                     InlineKeyboardButton("🧠 AI-анализ", callback_data="data_analysis_compare")
-                ])
-            else:
-                keyboard.append([
-                    InlineKeyboardButton("📈 Эффективная граница", callback_data="efficient_frontier_compare")
                 ])
             
             # Add Portfolio button - store symbols in context to avoid callback_data size limit
@@ -9846,13 +9832,13 @@ class ShansAi:
             elif text == "▫️ Просадки":
                 await self._handle_drawdowns_button(update, context, last_symbols)
             elif text == "▫️ Метрики":
-                await self._handle_metrics_button(update, context, last_symbols)
+                await self._handle_metrics_compare_button(update, context)
             elif text == "▫️ Корреляция":
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
-                await self._handle_efficient_frontier_button(update, context, last_symbols)
+                await self._handle_efficient_frontier_compare_button(update, context)
             elif text == "▫️ AI-анализ":
-                await self._handle_ai_analysis_button(update, context, last_symbols)
+                await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
             else:
