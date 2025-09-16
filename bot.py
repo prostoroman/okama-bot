@@ -2593,7 +2593,7 @@ class ShansAi:
             waiting_for_compare=False
         )
         
-        await self._send_ephemeral_message(update, context, f"📊 Ищу актив '{symbol}'...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"📊 Поиск {symbol}...", delete_after=3)
         
         try:
             # Search for assets with selection possibility
@@ -4391,8 +4391,8 @@ class ShansAi:
                 
                 # Chart analysis is only available via buttons
                 
-                # Create keyboard with period selection only
-                reply_markup = self._create_period_selection_keyboard(symbols, "compare")
+                # No period selection keyboard needed
+                reply_markup = None
                 
                 # Delete loading message before sending results
                 if loading_message:
@@ -6638,23 +6638,6 @@ class ShansAi:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
-            # Handle period selection callbacks (only for compare)
-            if callback_data.startswith("compare_period_"):
-                # Extract period and symbols from callback data
-                parts = callback_data.split("_")
-                if len(parts) >= 4:
-                    command_type = parts[0]  # compare
-                    period = parts[2]  # 1Y, 5Y, or MAX
-                    symbols_str = "_".join(parts[3:])  # symbols
-                    symbols = symbols_str.split(",")
-                    
-                    # Update user context with new period
-                    user_id = update.effective_user.id
-                    self._update_user_context(user_id, last_period=period)
-                    
-                    # Handle compare period button - update chart with new period
-                    await self._handle_compare_period_button(update, context, symbols, period)
-                return
             
             # Handle start command callbacks
             if callback_data.startswith("start_"):
@@ -9915,15 +9898,11 @@ class ShansAi:
             if specified_period:
                 caption += f"📅 Период: {specified_period}\n"
             
-            # Create keyboard with period selection
-            keyboard = self._create_period_selection_keyboard(symbols, "compare")
-            
-            # Send chart with period selection keyboard
+            # Send chart without period selection keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(caption),
-                reply_markup=keyboard
+                caption=self._truncate_caption(caption)
             )
             
             # Show Reply Keyboard for compare management
@@ -9933,79 +9912,7 @@ class ShansAi:
             self.logger.error(f"Error creating comparison wealth chart: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при создании графика сравнения: {str(e)}")
 
-    async def _handle_compare_period_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, period: str):
-        """Handle compare period button - update chart with new period"""
-        try:
-            await self._send_ephemeral_message(update, context, f"📊 Обновляю график за {period}...", delete_after=2)
-            
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
-            
-            # Get user context for currency
-            user_id = update.effective_user.id
-            user_context = self._get_user_context(user_id)
-            currency = user_context.get('last_currency', 'USD')
-            
-            # Create comparison with new period
-            comparison = ok.AssetList(symbols, ccy=currency)
-            
-            # Create chart
-            fig, ax = chart_styles.create_comparison_chart(
-                comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
-            )
-            
-            # Save chart to bytes
-            img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
-            img_buffer.seek(0)
-            img_bytes = img_buffer.getvalue()
-            
-            # Clear matplotlib cache
-            chart_styles.cleanup_figure(fig)
-            
-            # Create caption with new period
-            caption = f"📊 Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
-            caption += f"💵 Валюта: {currency}\n"
-            caption += f"📅 Период: {period}\n"
-            
-            # Create keyboard with period selection
-            keyboard = self._create_period_selection_keyboard(symbols, "compare")
-            
-            # Send new chart with updated period
-            await self._send_photo_safe(
-                update=update,
-                photo_bytes=img_bytes,
-                caption=self._truncate_caption(caption),
-                reply_markup=keyboard,
-                context=context,
-                parse_mode='HTML'
-            )
-            
-            # Show Reply Keyboard for compare management
-            await self._show_compare_reply_keyboard(update, context)
-            
-        except Exception as e:
-            self.logger.error(f"Error handling compare period button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при обновлении графика: {str(e)}")
 
-    def _create_period_selection_keyboard(self, symbols: list, command_type: str) -> InlineKeyboardMarkup:
-        """Create keyboard with period selection buttons"""
-        try:
-            symbols_str = ','.join(symbols)
-            keyboard = [
-                [
-                    InlineKeyboardButton("1 год", callback_data=f"{command_type}_period_1Y_{symbols_str}"),
-                    InlineKeyboardButton("5 лет", callback_data=f"{command_type}_period_5Y_{symbols_str}"),
-                    InlineKeyboardButton("MAX", callback_data=f"{command_type}_period_MAX_{symbols_str}")
-                ]
-            ]
-            return InlineKeyboardMarkup(keyboard)
-        except Exception as e:
-            self.logger.error(f"Error creating period selection keyboard: {e}")
-            return InlineKeyboardMarkup([])
 
     async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                                    message_type: str, content: any, caption: str = None, 
@@ -11359,7 +11266,7 @@ class ShansAi:
             for suggestion in suggestions:
                 compare_text += f"• `{suggestion}`\n"
             
-            compare_text += f"\nИли отправьте любой другой тикер для сравнения с {symbol}"
+            compare_text += f"\nИли напишите любой другой тикер для сравнения с {symbol}"
             
             await self._send_callback_message(update, context, compare_text, parse_mode='Markdown')
             
@@ -11384,12 +11291,12 @@ class ShansAi:
             )
             
             portfolio_text = f"💼 **Добавить {symbol} в портфель**\n\n"
-            portfolio_text += f"Отправьте состав портфеля, включая {symbol}.\n\n"
+            portfolio_text += f"Введите состав портфеля, включая {symbol}.\n\n"
             portfolio_text += "**Примеры:**\n"
             portfolio_text += f"• `{symbol}:0.6 QQQ.US:0.4`\n"
             portfolio_text += f"• `{symbol}:0.5 BND.US:0.3 GC.COMM:0.2`\n"
             portfolio_text += f"• `{symbol}:0.7 VTI.US:0.3`\n\n"
-            portfolio_text += f"Или отправьте любой другой состав портфеля с {symbol}"
+            portfolio_text += f"Или введите любой другой состав портфеля с {symbol}"
             
             await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
             
