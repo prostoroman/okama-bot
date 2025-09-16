@@ -2567,9 +2567,14 @@ class ShansAi:
             examples = self.get_random_examples(3)
             examples_text = ", ".join(examples)
             
-            # Set flag that user is waiting for info input
+            # Set flag that user is waiting for info input and clear portfolio flags
             user_id = update.effective_user.id
-            self._update_user_context(user_id, waiting_for_info=True)
+            self._update_user_context(user_id, 
+                waiting_for_info=True,
+                waiting_for_portfolio=False,
+                waiting_for_portfolio_weights=False,
+                waiting_for_compare=False
+            )
             
             await self._send_message_safe(update, 
                 f"📊 *Анализ*\n\n"
@@ -2579,9 +2584,14 @@ class ShansAi:
         
         symbol = context.args[0]
         
-        # Update user context
+        # Update user context - clear all waiting flags
         user_id = update.effective_user.id
-        self._update_user_context(user_id, waiting_for_info=False)
+        self._update_user_context(user_id, 
+            waiting_for_info=False,
+            waiting_for_portfolio=False,
+            waiting_for_portfolio_weights=False,
+            waiting_for_compare=False
+        )
         
         await self._send_ephemeral_message(update, context, f"📊 Ищу актив '{symbol}'...", delete_after=3)
         
@@ -2678,8 +2688,13 @@ class ShansAi:
         # Check if user is waiting for info input
         if user_context.get('waiting_for_info', False):
             self.logger.info(f"Processing as info input: {text}")
-            # Clear the waiting flag
-            self._update_user_context(user_id, waiting_for_info=False)
+            # Clear all waiting flags
+            self._update_user_context(user_id, 
+                waiting_for_info=False,
+                waiting_for_portfolio=False,
+                waiting_for_portfolio_weights=False,
+                waiting_for_compare=False
+            )
             # Process as info command with the symbol
             context.args = [text]
             await self.info_command(update, context)
@@ -9851,9 +9866,8 @@ class ShansAi:
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists"""
         try:
-            # Remove reply keyboard without sending message
+            # Remove reply keyboard without sending any message
             await update.message.reply_text(
-                "Клавиатура удалена",
                 reply_markup=ReplyKeyboardRemove()
             )
         except Exception as e:
@@ -9862,9 +9876,8 @@ class ShansAi:
     async def _remove_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove compare Reply Keyboard if it exists"""
         try:
-            # Remove reply keyboard without sending message
+            # Remove reply keyboard without sending any message
             await update.message.reply_text(
-                "Клавиатура удалена",
                 reply_markup=ReplyKeyboardRemove()
             )
         except Exception as e:
@@ -11348,7 +11361,7 @@ class ShansAi:
             
             compare_text += f"\nИли отправьте любой другой тикер для сравнения с {symbol}"
             
-            await self._send_callback_message(update, context, compare_text)
+            await self._send_callback_message(update, context, compare_text, parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error handling info compare button: {e}")
@@ -16181,7 +16194,7 @@ class ShansAi:
             
             compare_text += f"\nИли отправьте любой другой тикер для сравнения с {portfolio_symbol}"
             
-            await self._send_callback_message(update, context, compare_text)
+            await self._send_callback_message(update, context, compare_text, parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio compare button: {e}")
