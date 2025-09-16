@@ -9851,12 +9851,10 @@ class ShansAi:
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists"""
         try:
-            # Send ephemeral message that auto-deletes
-            await self._send_ephemeral_message(
-                update, context, 
-                "🔄 Переключаюсь...", 
-                reply_markup=ReplyKeyboardRemove(),
-                delete_after=3
+            # Remove reply keyboard without sending message
+            await update.message.reply_text(
+                "Клавиатура удалена",
+                reply_markup=ReplyKeyboardRemove()
             )
         except Exception as e:
             self.logger.warning(f"Could not remove portfolio reply keyboard: {e}")
@@ -9864,12 +9862,10 @@ class ShansAi:
     async def _remove_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove compare Reply Keyboard if it exists"""
         try:
-            # Send ephemeral message that auto-deletes
-            await self._send_ephemeral_message(
-                update, context, 
-                "🔄 Переключаюсь...", 
-                reply_markup=ReplyKeyboardRemove(),
-                delete_after=3
+            # Remove reply keyboard without sending message
+            await update.message.reply_text(
+                "Клавиатура удалена",
+                reply_markup=ReplyKeyboardRemove()
             )
         except Exception as e:
             self.logger.warning(f"Could not remove compare reply keyboard: {e}")
@@ -14174,7 +14170,7 @@ class ShansAi:
                 
                 # Apply Monte Carlo chart styling using chart_styles
                 chart_styles.create_monte_carlo_chart(
-                    current_fig, ax, symbols, currency, weights
+                    current_fig, ax, symbols, currency, weights, forecast_data=forecast_data
                 )
             
             # Save the figure using chart_styles

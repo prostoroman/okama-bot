@@ -1088,7 +1088,7 @@ class ChartStyles:
             ax.axis('off')
             return fig, ax
 
-    def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
+    def create_monte_carlo_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, data_source='okama', forecast_data=None, **kwargs):
         """Применить стили к графику монте-карло"""
         try:
             # Set figure size to standard chart size
@@ -1133,7 +1133,21 @@ class ChartStyles:
             
             # Hide x-axis label completely
             ax.set_xlabel('')
-            ax.tick_params(axis='x', labelbottom=False)
+            
+            # Format x-axis dates for Monte Carlo chart
+            if forecast_data is not None and hasattr(forecast_data, 'index'):
+                self._optimize_x_axis_ticks(ax, forecast_data.index)
+            else:
+                # Fallback: try to get dates from axis limits
+                xlim = ax.get_xlim()
+                if len(xlim) == 2:
+                    # Create a simple date range for Monte Carlo (10 years)
+                    import pandas as pd
+                    from datetime import datetime, timedelta
+                    start_date = datetime.now()
+                    end_date = start_date + timedelta(days=365*10)
+                    date_range = pd.date_range(start=start_date, end=end_date, freq='M')
+                    self._optimize_x_axis_ticks(ax, date_range)
             
             # Ensure Y-axis is on the right
             ax.yaxis.tick_right()
