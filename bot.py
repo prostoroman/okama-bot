@@ -11443,16 +11443,73 @@ class ShansAi:
             await self._send_message_safe(update, text, reply_markup=reply_markup)
 
     async def _get_chart_for_period(self, symbol: str, period: str) -> Optional[bytes]:
-        """Get chart for specific period"""
+        """Get chart for specific period using daily data with proper filtering"""
         try:
-            if period == '1Y':
-                return await self._get_daily_chart(symbol)
-            elif period == '5Y':
-                return await self._get_monthly_chart(symbol)
-            elif period == 'MAX':
-                return await self._get_all_chart(symbol)
-            else:
-                return await self._get_daily_chart(symbol)
+            import io
+            
+            def create_period_chart():
+                # Устанавливаем backend для headless режима
+                import matplotlib
+                matplotlib.use('Agg')
+                
+                asset = ok.Asset(symbol)
+                
+                # Получаем дневные данные
+                daily_data = asset.close_daily
+                
+                # Определяем количество торговых дней для периода
+                if period == '1Y':
+                    trading_days = 252  # ~1 год торговых дней
+                elif period == '5Y':
+                    trading_days = 1260  # ~5 лет торговых дней
+                elif period == 'MAX':
+                    trading_days = len(daily_data)  # Все доступные данные
+                else:
+                    trading_days = 252  # По умолчанию 1 год
+                
+                # Фильтруем данные по периоду
+                if trading_days < len(daily_data):
+                    filtered_data = daily_data.tail(trading_days)
+                else:
+                    filtered_data = daily_data
+                
+                # Получаем информацию об активе для заголовка
+                asset_name = getattr(asset, 'name', symbol)
+                currency = getattr(asset, 'currency', '')
+                
+                # Используем ChartStyles для создания графика
+                fig, ax = chart_styles.create_price_chart(
+                    data=filtered_data,
+                    symbol=symbol,
+                    currency=currency,
+                    period=period,
+                    data_source='okama'
+                )
+                
+                # Создаем заголовок
+                title = f"{symbol} | {asset_name} | {currency} | {period}"
+                ax.set_title(title)
+                
+                # Убираем подписи осей
+                ax.set_xlabel('')
+                ax.set_ylabel('')
+                
+                # Конвертируем в bytes
+                buffer = io.BytesIO()
+                fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+                buffer.seek(0)
+                chart_bytes = buffer.getvalue()
+                buffer.close()
+                
+                return chart_bytes
+            
+            # Выполняем создание графика в отдельном потоке
+            import asyncio
+            loop = asyncio.get_event_loop()
+            chart_bytes = await loop.run_in_executor(None, create_period_chart)
+            
+            return chart_bytes
+            
         except Exception as e:
             self.logger.error(f"Error getting chart for period {period}: {e}")
             self.logger.error(f"Error type: {type(e)}")
