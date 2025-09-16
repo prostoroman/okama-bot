@@ -7411,7 +7411,7 @@ class ShansAi:
             await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle YandexGPT analysis button click for comparison charts"""
+        """Handle Gemini analysis button click for comparison charts"""
         # Initialize variables at the beginning to ensure they're available in except block
         symbols = []
         currency = 'USD'
@@ -7431,23 +7431,23 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.", parse_mode='Markdown')
                 return
 
-            # Check if YandexGPT service is available
-            if not self.yandexgpt_service or not self.yandexgpt_service.is_available():
-                await self._send_callback_message(update, context, "❌ Сервис YandexGPT недоступен. Проверьте настройки API.", parse_mode='Markdown')
+            # Check if Gemini service is available
+            if not self.gemini_service or not self.gemini_service.is_available():
+                await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные с помощью YandexGPT...", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные с помощью Gemini...", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
                 data_info = await self._prepare_data_for_analysis(symbols, currency, expanded_symbols, portfolio_contexts, user_id)
                 
                 if data_info:
-                    # Perform YandexGPT analysis
-                    yandexgpt_analysis = self.yandexgpt_service.analyze_data(data_info)
+                    # Perform Gemini analysis
+                    gemini_analysis = self.gemini_service.analyze_data(data_info)
                     
-                    if yandexgpt_analysis and yandexgpt_analysis.get('success'):
-                        analysis_text = yandexgpt_analysis.get('analysis', '')
+                    if gemini_analysis and gemini_analysis.get('success'):
+                        analysis_text = gemini_analysis.get('analysis', '')
                         
                         if analysis_text:
                             # Get asset names from data_info for display
@@ -7471,22 +7471,22 @@ class ShansAi:
                             keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                             await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
                     else:
-                        error_msg = yandexgpt_analysis.get('error', 'Неизвестная ошибка') if yandexgpt_analysis else 'Анализ не выполнен'
+                        error_msg = gemini_analysis.get('error', 'Неизвестная ошибка') if gemini_analysis else 'Анализ не выполнен'
                         # Create keyboard for compare command
                         keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                        await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных YandexGPT: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
                     
             except Exception as data_error:
-                self.logger.error(f"Error preparing data for YandexGPT analysis: {data_error}")
+                self.logger.error(f"Error preparing data for Gemini analysis: {data_error}")
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа YandexGPT: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
 
         except Exception as e:
-            self.logger.error(f"Error handling YandexGPT analysis button: {e}")
+            self.logger.error(f"Error handling Gemini analysis button: {e}")
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных YandexGPT: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
 
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle metrics button click for comparison charts - show summary metrics table"""
@@ -9715,13 +9715,13 @@ class ShansAi:
             is_portfolio_button = self._is_portfolio_reply_keyboard_button(text)
             
             if is_compare_button and is_portfolio_button:
-                # Button exists in both contexts - determine by data availability
-                if last_assets and len(last_assets) > 0:
-                    # User has compare data - use compare context
-                    await self._handle_compare_reply_keyboard_button(update, context, text)
-                elif saved_portfolios and len(saved_portfolios) > 0:
-                    # User has portfolio data - use portfolio context
+                # Button exists in both contexts - prioritize portfolio context over compare context
+                if saved_portfolios and len(saved_portfolios) > 0:
+                    # User has portfolio data - use portfolio context (Gemini analysis)
                     await self._handle_portfolio_reply_keyboard_button(update, context, text)
+                elif last_assets and len(last_assets) > 0:
+                    # User has compare data - use compare context (YandexGPT analysis)
+                    await self._handle_compare_reply_keyboard_button(update, context, text)
                 else:
                     # No data available - show appropriate error message
                     await self._send_message_safe(update, f"❌ Нет данных для анализа. Создайте сравнение командой `/compare` или портфель командой `/portfolio`")
