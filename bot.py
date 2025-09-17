@@ -2140,19 +2140,12 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send correlation matrix with keyboard
+            # Send correlation matrix without keyboard
             self.logger.info("Sending correlation matrix image...")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"),
-                reply_markup=keyboard
+                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция")
             )
             self.logger.info("Correlation matrix image sent successfully")
             
