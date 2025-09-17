@@ -8953,6 +8953,7 @@ class ShansAi:
                     cagr_value = None
                     risk_value = None
                     
+                    # First, try to find CAGR for 5 years period
                     for idx in describe_data.index:
                         property_name = describe_data.loc[idx, 'property']
                         period = describe_data.loc[idx, 'period']
@@ -8960,10 +8961,29 @@ class ShansAi:
                         if symbol in describe_data.columns:
                             value = describe_data.loc[idx, symbol]
                             if not pd.isna(value):
-                                if property_name == 'CAGR' and period == '5 years, 1 months':
+                                if property_name == 'CAGR' and period == '5 years':
                                     cagr_value = value
-                                elif property_name == 'Risk' and period == '5 years, 1 months':
+                                elif property_name == 'Risk' and period == '5 years':
                                     risk_value = value
+                    
+                    # Fallback: if no 5-year data, try to find any available CAGR and Risk
+                    if cagr_value is None:
+                        for idx in describe_data.index:
+                            property_name = describe_data.loc[idx, 'property']
+                            if symbol in describe_data.columns:
+                                value = describe_data.loc[idx, symbol]
+                                if not pd.isna(value) and property_name == 'CAGR':
+                                    cagr_value = value
+                                    break
+                    
+                    if risk_value is None:
+                        for idx in describe_data.index:
+                            property_name = describe_data.loc[idx, 'property']
+                            if symbol in describe_data.columns:
+                                value = describe_data.loc[idx, symbol]
+                                if not pd.isna(value) and property_name == 'Risk':
+                                    risk_value = value
+                                    break
                     
                     if cagr_value is not None and risk_value is not None and risk_value > 0:
                         sharpe = (cagr_value - risk_free_rate) / risk_value
