@@ -9936,9 +9936,12 @@ class ShansAi:
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists"""
         try:
-            # Remove reply keyboard without sending any message
-            await update.message.reply_text(
-                reply_markup=ReplyKeyboardRemove()
+            # Remove reply keyboard silently using ephemeral message that auto-deletes
+            await self._send_ephemeral_message(
+                update, context, 
+                "", 
+                reply_markup=ReplyKeyboardRemove(),
+                delete_after=1
             )
         except Exception as e:
             self.logger.warning(f"Could not remove portfolio reply keyboard: {e}")
@@ -9946,9 +9949,12 @@ class ShansAi:
     async def _remove_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove compare Reply Keyboard if it exists"""
         try:
-            # Remove reply keyboard without sending any message
-            await update.message.reply_text(
-                reply_markup=ReplyKeyboardRemove()
+            # Remove reply keyboard silently using ephemeral message that auto-deletes
+            await self._send_ephemeral_message(
+                update, context, 
+                "", 
+                reply_markup=ReplyKeyboardRemove(),
+                delete_after=1
             )
         except Exception as e:
             self.logger.warning(f"Could not remove compare reply keyboard: {e}")
