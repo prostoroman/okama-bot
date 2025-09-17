@@ -2037,18 +2037,11 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send drawdowns chart with keyboard
+            # Send drawdowns chart without keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"📉 График Drawdowns для {len(symbols)} активов\n\nПоказывает периоды падения активов и их восстановление"),
-                reply_markup=keyboard
+                caption=self._truncate_caption(f"📉 Периоды падения и восстановления")
             )
             
         except Exception as e:
@@ -2077,18 +2070,11 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send dividend yield chart with keyboard
+            # Send dividend yield chart without keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность"),
-                reply_markup=keyboard
+                caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
             )
             
         except Exception as e:
@@ -9713,7 +9699,7 @@ class ShansAi:
             # Send persistent message with keyboard
             await self._send_message_safe(
                 update, 
-                "📊 Портфель готов к анализу", 
+                "", 
                 parse_mode='Markdown', 
                 reply_markup=portfolio_reply_keyboard
             )
@@ -9727,7 +9713,7 @@ class ShansAi:
             # Send persistent message with keyboard
             await self._send_message_safe(
                 update, 
-                "📊 Сравнение готово к анализу", 
+                "", 
                 parse_mode='Markdown', 
                 reply_markup=compare_reply_keyboard
             )
@@ -9738,8 +9724,8 @@ class ShansAi:
         """Check if the text is a portfolio Reply Keyboard button"""
         portfolio_buttons = [
             "▫️ Накоп. доходность",
-            "▫️ Годовая доходность", 
-            "▫️ Скользящая CAGR",
+            "▫️ Год. доходность", 
+            "▫️ Скольз. доходность",
             "▫️ Дивиденды",
             "▫️ Метрики",
             "▫️ Монте-Карло",
@@ -9754,7 +9740,7 @@ class ShansAi:
     def _is_compare_reply_keyboard_button(self, text: str) -> bool:
         """Check if the text is a compare Reply Keyboard button"""
         compare_buttons = [
-            "▫️ Доходность",
+            "▫️ Накоп. доходность",
             "▫️ Дивиденды",
             "▫️ Просадки",
             "▫️ Метрики",
