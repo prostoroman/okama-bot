@@ -71,3 +71,4 @@ await self._send_callback_message(update, context, compare_text, parse_mode='Mar
 ## Статус
 
 ✅ **Завершено** - Поддержка Markdown добавлена для всех сообщений сравнения активов.
+

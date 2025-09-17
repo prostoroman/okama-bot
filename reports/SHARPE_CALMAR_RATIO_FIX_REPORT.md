@@ -127,3 +127,4 @@ VTI.US Calmar Ratio: N/A (cagr=None, max_dd=None)
 **Дата**: 2025-01-27  
 **Автор**: AI Assistant  
 **Статус**: Завершено
+

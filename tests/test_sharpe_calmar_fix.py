@@ -200,3 +200,4 @@ def test_sharpe_calmar_fix():
 
 if __name__ == "__main__":
     test_sharpe_calmar_fix()
+
