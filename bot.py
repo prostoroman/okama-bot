@@ -12590,7 +12590,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "📊 Анализирую риски портфеля...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📊 Анализирую метрики портфеля...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
