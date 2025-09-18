@@ -6441,6 +6441,39 @@ class ShansAi:
             # Fallback: send message without keyboard using safe method
             await self._send_message_safe(update, text, parse_mode=parse_mode)
 
+    async def _remove_reply_keyboard_silently(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Тихо скрыть reply keyboard без отправки сообщения пользователю"""
+        try:
+            # Проверяем, что update и context не None
+            if update is None or context is None:
+                self.logger.error("Cannot remove reply keyboard: update or context is None")
+                return
+            
+            chat_id = None
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                chat_id = update.callback_query.message.chat_id
+            elif hasattr(update, 'message') and update.message is not None:
+                chat_id = update.message.chat_id
+            else:
+                self.logger.error("Cannot remove reply keyboard: no chat_id available")
+                return
+            
+            # Отправляем пустое сообщение с ReplyKeyboardRemove и сразу удаляем его
+            message = await context.bot.send_message(
+                chat_id=chat_id,
+                text="",  # Пустой текст
+                reply_markup=ReplyKeyboardRemove()
+            )
+            
+            # Сразу удаляем сообщение
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message.message_id)
+            except Exception as delete_error:
+                self.logger.warning(f"Could not delete keyboard removal message: {delete_error}")
+            
+        except Exception as e:
+            self.logger.error(f"Error removing reply keyboard silently: {e}")
+
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
@@ -9932,26 +9965,16 @@ class ShansAi:
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists"""
         try:
-            # Remove reply keyboard silently using ephemeral message that auto-deletes
-            await self._send_ephemeral_message(
-                update, context, 
-                "", 
-                reply_markup=ReplyKeyboardRemove(),
-                delete_after=1
-            )
+            # Remove reply keyboard silently without sending any message to user
+            await self._remove_reply_keyboard_silently(update, context)
         except Exception as e:
             self.logger.warning(f"Could not remove portfolio reply keyboard: {e}")
 
     async def _remove_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove compare Reply Keyboard if it exists"""
         try:
-            # Remove reply keyboard silently using ephemeral message that auto-deletes
-            await self._send_ephemeral_message(
-                update, context, 
-                "", 
-                reply_markup=ReplyKeyboardRemove(),
-                delete_after=1
-            )
+            # Remove reply keyboard silently without sending any message to user
+            await self._remove_reply_keyboard_silently(update, context)
         except Exception as e:
             self.logger.warning(f"Could not remove compare reply keyboard: {e}")
 
@@ -16644,7 +16667,10 @@ class ShansAi:
             )
             
             # Show progress message
-            progress_msg = await self._send_message_safe(update, "🔄 Собираю данные с бирж...")
+            progress_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔄 Собираю данные с бирж..."
+            )
             
             all_tickers = []
             total_count = 0
