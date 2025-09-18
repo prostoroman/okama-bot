@@ -892,10 +892,8 @@ class ShansAi:
         """Создать клавиатуру для выбора актива из множественных результатов"""
         keyboard = []
         
-        # Ограничиваем количество результатов для удобства
-        max_results = min(len(results), 10)
-        
-        for i in range(max_results):
+        # Показываем все найденные результаты
+        for i in range(len(results)):
             result = results[i]
             symbol = result['symbol']
             name = result['name']

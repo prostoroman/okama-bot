@@ -55,6 +55,8 @@ class InMemoryUserContextStore:
                     "waiting_for_compare": False,
                     # History of analyzed tickers for quick access
                     "analyzed_tickers": [],
+                    # Reply keyboard management
+                    "active_reply_keyboard": None,  # None, "portfolio", "compare"
                 }
                 self._data[key] = ctx
             return ctx
