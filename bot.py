@@ -2146,9 +2146,8 @@ class ShansAi:
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with welcome message and interactive buttons"""
-        # Remove Reply Keyboards if they exist
-        await self._remove_portfolio_reply_keyboard(update, context)
-        await self._remove_compare_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
         
         user = update.effective_user
         user_name = user.first_name or "User"
@@ -2178,9 +2177,8 @@ class ShansAi:
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command with full help"""
-        # Remove Reply Keyboards if they exist
-        await self._remove_portfolio_reply_keyboard(update, context)
-        await self._remove_compare_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
         
         welcome_message = f"""📘 *Справка по командам*
 
@@ -2569,9 +2567,8 @@ class ShansAi:
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
-        # Remove Reply Keyboards if they exist
-        await self._remove_portfolio_reply_keyboard(update, context)
-        await self._remove_compare_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
         
         if not context.args:
             # Get random examples for user
@@ -3529,9 +3526,8 @@ class ShansAi:
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /list command"""
-        # Remove Reply Keyboards if they exist
-        await self._remove_portfolio_reply_keyboard(update, context)
-        await self._remove_compare_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
         
         try:
             
@@ -3665,9 +3661,8 @@ class ShansAi:
 
     async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /search command for searching assets by name or ISIN"""
-        # Remove Reply Keyboards if they exist
-        await self._remove_portfolio_reply_keyboard(update, context)
-        await self._remove_compare_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
         
         try:
             if not context.args:
@@ -3787,8 +3782,8 @@ class ShansAi:
 
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
-        # Remove portfolio Reply Keyboard if it exists
-        await self._remove_portfolio_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown initially
+        await self._ensure_no_reply_keyboard(update, context)
         
         try:
             if not context.args:
@@ -4422,7 +4417,7 @@ class ShansAi:
                 )
                 
                 # Show Reply Keyboard for compare management
-                await self._show_compare_reply_keyboard(update, context)
+                await self._manage_reply_keyboard(update, context, "compare")
                 
                 # Table statistics now available via Metrics button
                 
@@ -4450,9 +4445,8 @@ class ShansAi:
 
     async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /my command for displaying saved portfolios"""
-        # Remove Reply Keyboards if they exist
-        await self._remove_portfolio_reply_keyboard(update, context)
-        await self._remove_compare_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
         
         try:
             user_id = update.effective_user.id
@@ -4555,8 +4549,8 @@ class ShansAi:
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command for creating portfolio with weights"""
-        # Remove compare Reply Keyboard if it exists
-        await self._remove_compare_reply_keyboard(update, context)
+        # Ensure no reply keyboard is shown initially
+        await self._ensure_no_reply_keyboard(update, context)
         
         try:
             if not context.args:
@@ -6364,19 +6358,11 @@ class ShansAi:
     async def _send_portfolio_message_with_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить сообщение портфеля с reply keyboard"""
         try:
-            # Get chat_id from update
-            chat_id = update.effective_chat.id
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             
-            # Create reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
-            
-            # Send message with reply keyboard
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode=parse_mode,
-                reply_markup=reply_keyboard
-            )
+            # Send message
+            await self._send_message_safe(update, text, parse_mode=parse_mode)
             
         except Exception as e:
             self.logger.error(f"Error in _send_portfolio_message_with_reply_keyboard: {e}")
@@ -6386,21 +6372,13 @@ class ShansAi:
     async def _send_portfolio_ai_analysis_with_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить длинный AI анализ портфеля с reply keyboard, поддерживая разбиение на части"""
         try:
-            # Get chat_id from update
-            chat_id = update.effective_chat.id
-            
-            # Create reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             
             # Check if text is longer than Telegram limit
             if len(text) <= 4000:
                 # Short message - send normally
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode=parse_mode,
-                    reply_markup=reply_keyboard
-                )
+                await self._send_message_safe(update, text, parse_mode=parse_mode)
             else:
                 # Long message - split into parts
                 parts = self._split_text_smart(text)
@@ -6416,20 +6394,8 @@ class ShansAi:
                     if parse_mode == 'Markdown':
                         part_text = self._safe_markdown(part_text)
                     
-                    # Send first part with keyboard, others without
-                    if i == 0:
-                        await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=part_text,
-                            parse_mode=parse_mode,
-                            reply_markup=reply_keyboard
-                        )
-                    else:
-                        await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=part_text,
-                            parse_mode=parse_mode
-                        )
+                    # Send all parts using safe method
+                    await self._send_message_safe(update, part_text, parse_mode=parse_mode)
                     
                     # Small delay between parts to avoid rate limiting
                     if i < len(parts) - 1:
@@ -6472,6 +6438,57 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error removing reply keyboard silently: {e}")
+
+    async def _manage_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, keyboard_type: str = None):
+        """
+        Универсальное управление reply keyboard на основе контекста
+        
+        Args:
+            update: Telegram update object
+            context: Telegram context object
+            keyboard_type: Тип клавиатуры для показа ("portfolio", "compare") или None для скрытия
+        """
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            current_keyboard = user_context.get('active_reply_keyboard')
+            
+            # Если нужно скрыть клавиатуру
+            if keyboard_type is None:
+                if current_keyboard is not None:
+                    self.logger.info(f"Removing active reply keyboard: {current_keyboard}")
+                    await self._remove_reply_keyboard_silently(update, context)
+                    self._update_user_context(user_id, active_reply_keyboard=None)
+                return
+            
+            # Если нужно показать клавиатуру
+            if current_keyboard != keyboard_type:
+                # Скрываем текущую клавиатуру если она есть
+                if current_keyboard is not None:
+                    self.logger.info(f"Switching from {current_keyboard} to {keyboard_type} keyboard")
+                    await self._remove_reply_keyboard_silently(update, context)
+                
+                # Показываем новую клавиатуру
+                if keyboard_type == "portfolio":
+                    await self._show_portfolio_reply_keyboard(update, context)
+                elif keyboard_type == "compare":
+                    await self._show_compare_reply_keyboard(update, context)
+                else:
+                    self.logger.warning(f"Unknown keyboard type: {keyboard_type}")
+                    return
+                
+                # Обновляем контекст
+                self._update_user_context(user_id, active_reply_keyboard=keyboard_type)
+                self.logger.info(f"Active reply keyboard set to: {keyboard_type}")
+            else:
+                self.logger.info(f"Reply keyboard {keyboard_type} is already active")
+                
+        except Exception as e:
+            self.logger.error(f"Error managing reply keyboard: {e}")
+
+    async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
+        await self._manage_reply_keyboard(update, context, keyboard_type=None)
 
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
@@ -9962,18 +9979,16 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
 
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Remove portfolio Reply Keyboard if it exists"""
+        """Remove portfolio Reply Keyboard if it exists - DEPRECATED: Use _manage_reply_keyboard instead"""
         try:
-            # Remove reply keyboard silently without sending any message to user
-            await self._remove_reply_keyboard_silently(update, context)
+            await self._manage_reply_keyboard(update, context, keyboard_type=None)
         except Exception as e:
             self.logger.warning(f"Could not remove portfolio reply keyboard: {e}")
 
     async def _remove_compare_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Remove compare Reply Keyboard if it exists"""
+        """Remove compare Reply Keyboard if it exists - DEPRECATED: Use _manage_reply_keyboard instead"""
         try:
-            # Remove reply keyboard silently without sending any message to user
-            await self._remove_reply_keyboard_silently(update, context)
+            await self._manage_reply_keyboard(update, context, keyboard_type=None)
         except Exception as e:
             self.logger.warning(f"Could not remove compare reply keyboard: {e}")
 
@@ -10017,7 +10032,7 @@ class ShansAi:
             )
             
             # Show Reply Keyboard for compare management
-            await self._show_compare_reply_keyboard(update, context)
+            await self._manage_reply_keyboard(update, context, "compare")
             
         except Exception as e:
             self.logger.error(f"Error creating comparison wealth chart: {e}")
@@ -13037,8 +13052,8 @@ class ShansAi:
                 excel_buffer = self._create_portfolio_metrics_excel(metrics_data, symbols, currency)
                 
                 if excel_buffer:
-                    # Send Excel file with reply keyboard
-                    reply_keyboard = self._create_portfolio_reply_keyboard()
+                    # Ensure portfolio keyboard is shown
+                    await self._manage_reply_keyboard(update, context, "portfolio")
                     await context.bot.send_document(
                         chat_id=update.effective_chat.id,
                         document=io.BytesIO(excel_buffer.getvalue()),
@@ -13052,7 +13067,6 @@ class ShansAi:
                                f"• Коэффициенты Шарпа и Сортино\n"
                                f"• Анализ рисков и доходности\n"
                                f"• Детальная статистика портфеля",
-                        reply_markup=reply_keyboard
                     )
                 else:
                     await self._send_callback_message(update, context, "❌ Ошибка при создании Excel файла")
@@ -14213,15 +14227,14 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(current_fig)
             
-            # Send the chart with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(
                     f"💡 Показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
                 ),
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -14273,8 +14286,8 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(current_fig)
             
-            # Send the chart with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
@@ -14289,7 +14302,6 @@ class ShansAi:
                     f"• 50% процентиль: средний сценарий\n"
                     f"• 90% процентиль: оптимистичный сценарий"
                 ),
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -14574,7 +14586,7 @@ class ShansAi:
             )
             
             # Show Reply Keyboard for portfolio management
-            await self._show_portfolio_reply_keyboard(update, context)
+            await self._manage_reply_keyboard(update, context, "portfolio")
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio drawdowns chart: {e}")
@@ -14653,13 +14665,12 @@ class ShansAi:
             
             caption = f"Дивидендная доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
             
-            # Send the chart with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -15029,13 +15040,12 @@ class ShansAi:
                 
                 caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
             
-            # Send the chart with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -15314,9 +15324,6 @@ class ShansAi:
                 chart_caption += f"• Макс. просадка: Недоступно\n"
 
 
-            # Create Reply Keyboard for portfolio
-            portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
-            
             # Send the chart with caption (no period selection buttons)
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
@@ -15324,12 +15331,12 @@ class ShansAi:
                 caption=self._truncate_caption(chart_caption)
             )
             
-            # Send Reply Keyboard separately
+            # Ensure portfolio keyboard is shown and send confirmation message
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="📊 Портфель готов к анализу",
-                parse_mode='Markdown',
-                reply_markup=portfolio_reply_keyboard
+                parse_mode='Markdown'
             )
             
         except Exception as e:
@@ -15405,13 +15412,12 @@ class ShansAi:
             
             caption = f"При условии инвестирования 1000 {currency} за {period_length} лет накопленная доходность составила: {final_value:.2f} {currency}"
 
-            # Send the chart with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(img_bytes),
                 caption=self._truncate_caption(caption),
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -15725,13 +15731,12 @@ class ShansAi:
                 caption = f"💡 График показывает динамику изменения доходноси во времени\n"
 
             
-            # Send the chart with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -16033,13 +16038,12 @@ class ShansAi:
                 caption += f"• Эффект диверсификации\n"
                 caption += f"• Сравнение рисков и доходности"
             
-            # Send the chart with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(caption),
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
@@ -16263,13 +16267,12 @@ class ShansAi:
             
             portfolio_text += f"\n🏷️ Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
             
-            # Send message with reply keyboard
-            reply_keyboard = self._create_portfolio_reply_keyboard()
+            # Ensure portfolio keyboard is shown and send message
+            await self._manage_reply_keyboard(update, context, "portfolio")
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=portfolio_text,
                 parse_mode='Markdown',
-                reply_markup=reply_keyboard
             )
             
         except Exception as e:
