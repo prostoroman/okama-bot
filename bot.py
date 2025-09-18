@@ -7524,7 +7524,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные с помощью Gemini...", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные...", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
@@ -9851,12 +9851,20 @@ class ShansAi:
             is_portfolio_button = self._is_portfolio_reply_keyboard_button(text)
             
             if is_compare_button and is_portfolio_button:
-                # Button exists in both contexts - prioritize portfolio context over compare context
-                if saved_portfolios and len(saved_portfolios) > 0:
-                    # User has portfolio data - use portfolio context (Gemini analysis)
+                # Button exists in both contexts - determine by last analysis type and data availability
+                last_analysis_type = user_context.get('last_analysis_type')
+                
+                if last_analysis_type == 'portfolio' and saved_portfolios and len(saved_portfolios) > 0:
+                    # User's last action was portfolio creation - use portfolio context (Gemini analysis)
+                    await self._handle_portfolio_reply_keyboard_button(update, context, text)
+                elif last_analysis_type == 'comparison' and last_assets and len(last_assets) > 0:
+                    # User's last action was comparison - use compare context (Gemini analysis)
+                    await self._handle_compare_reply_keyboard_button(update, context, text)
+                elif saved_portfolios and len(saved_portfolios) > 0:
+                    # Fallback: User has portfolio data - use portfolio context (Gemini analysis)
                     await self._handle_portfolio_reply_keyboard_button(update, context, text)
                 elif last_assets and len(last_assets) > 0:
-                    # User has compare data - use compare context (YandexGPT analysis)
+                    # Fallback: User has compare data - use compare context (Gemini analysis)
                     await self._handle_compare_reply_keyboard_button(update, context, text)
                 else:
                     # No data available - show appropriate error message
