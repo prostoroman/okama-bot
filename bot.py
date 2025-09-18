@@ -1896,9 +1896,8 @@ class ShansAi:
             if caption:
                 await self._send_message_safe(update, caption, reply_markup=reply_markup)
 
-    async def _send_message_safe(self, update: Update, text: str, reply_markup=None):
+    async def _send_message_safe(self, update: Update, text: str, reply_markup=None, parse_mode='Markdown'):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
-        parse_mode = 'Markdown'  # Устанавливаем parse_mode по умолчанию
         try:
             # Проверяем, что update и message не None
             if update is None:
@@ -9775,7 +9774,6 @@ class ShansAi:
             await self._send_message_safe(
                 update, 
                 "", 
-                parse_mode='Markdown', 
                 reply_markup=portfolio_reply_keyboard
             )
         except Exception as e:
@@ -9789,7 +9787,6 @@ class ShansAi:
             await self._send_message_safe(
                 update, 
                 "", 
-                parse_mode='Markdown', 
                 reply_markup=compare_reply_keyboard
             )
         except Exception as e:
