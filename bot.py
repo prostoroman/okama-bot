@@ -1896,10 +1896,11 @@ class ShansAi:
             self.logger.error(f"Error sending photo: {e}")
             # Fallback: отправляем только текст с тем же parse_mode
             if caption:
-                await self._send_message_safe(update, caption, parse_mode=parse_mode, reply_markup=reply_markup)
+                await self._send_message_safe(update, caption, reply_markup=reply_markup)
 
-    async def _send_message_safe(self, update: Update, text: str, parse_mode: str = 'Markdown', reply_markup=None):
+    async def _send_message_safe(self, update: Update, text: str, reply_markup=None):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
+        parse_mode = 'Markdown'  # Устанавливаем parse_mode по умолчанию
         try:
             # Проверяем, что update и message не None
             if update is None:
@@ -3849,7 +3850,7 @@ class ShansAi:
                 help_text += "💡 Первый актив в списке определяет базовую валюту\n\n"
                 help_text += "💬 Введите тикеры для сравнения через пробел:"
                 
-                await self._send_message_safe(update, help_text, parse_mode='Markdown')
+                await self._send_message_safe(update, help_text)
                 
                 # Set waiting flag for compare input
                 self._update_user_context(user_id, waiting_for_compare=True)
@@ -4547,7 +4548,7 @@ class ShansAi:
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 # Send the portfolio list with clear button
-                await self._send_message_safe(update, portfolio_list, parse_mode='Markdown', reply_markup=reply_markup)
+                await self._send_message_safe(update, portfolio_list, reply_markup=reply_markup)
             
         except Exception as e:
             self.logger.error(f"Error in my portfolios command: {e}")
@@ -4589,7 +4590,7 @@ class ShansAi:
 
                 help_text += "💬 Введите тикеры для создания портфеля:"
                 
-                await self._send_message_safe(update, help_text, parse_mode='Markdown')
+                await self._send_message_safe(update, help_text)
                 
                 # Set flag to wait for portfolio input
                 self.logger.info(f"Setting waiting_for_portfolio=True for user {user_id}")
@@ -5149,7 +5150,7 @@ class ShansAi:
             result_message = self._format_test_results(result, test_type)
             
             # Отправляем результат
-            await self._send_message_safe(update, result_message, parse_mode='Markdown')
+            await self._send_message_safe(update, result_message)
             
         except Exception as e:
             self.logger.error(f"Error in test_command: {e}")
@@ -5278,7 +5279,7 @@ class ShansAi:
             message += "• Проценты: `50%`\n\n"
             message += "⚠️ Сумма долей должна быть равна 1.0 (100%)"
             
-            await self._send_message_safe(update, message, parse_mode='Markdown')
+            await self._send_message_safe(update, message)
             
         except Exception as e:
             self.logger.error(f"Error requesting portfolio weights: {e}")
@@ -5758,7 +5759,7 @@ class ShansAi:
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 # Send portfolio information with buttons
-                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup, parse_mode='Markdown')
+                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
                 
                 # Update user context with portfolio information
                 self._update_user_context(
@@ -6051,7 +6052,7 @@ class ShansAi:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                await self._send_message_safe(update, portfolio_text, parse_mode='Markdown', reply_markup=reply_markup)
+                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
                 
                 # Save portfolio to user context
                 portfolio_attributes = {
@@ -6382,7 +6383,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in _send_portfolio_message_with_reply_keyboard: {e}")
             # Fallback: send message without keyboard
-            await self._send_message_safe(update, text, parse_mode=parse_mode)
+            await self._send_message_safe(update, text)
 
     async def _send_portfolio_ai_analysis_with_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить длинный AI анализ портфеля с reply keyboard, поддерживая разбиение на части"""
@@ -6439,7 +6440,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in _send_portfolio_ai_analysis_with_keyboard: {e}")
             # Fallback: send message without keyboard using safe method
-            await self._send_message_safe(update, text, parse_mode=parse_mode)
+            await self._send_message_safe(update, text)
 
     async def _remove_reply_keyboard_silently(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Тихо скрыть reply keyboard без отправки сообщения пользователю"""
@@ -6566,7 +6567,7 @@ class ShansAi:
             elif hasattr(update, 'message') and update.message is not None:
                 # Для обычных сообщений используем _send_message_safe
                 self.logger.info("_send_callback_message: Using message path")
-                await self._send_message_safe(update, text, parse_mode)
+                await self._send_message_safe(update, text)
             else:
                 # Если ни то, ни другое - логируем ошибку
                 self.logger.error("_send_callback_message: Cannot send message - neither callback_query nor message available")
@@ -6616,9 +6617,9 @@ class ShansAi:
                     except Exception as part_error:
                         self.logger.error(f"Error sending message part {i+1}: {part_error}")
                         # Fallback для этой части
-                        await self._send_message_safe(update, part_text, parse_mode)
+                        await self._send_message_safe(update, part_text)
                 elif hasattr(update, 'message') and update.message is not None:
-                    await self._send_message_safe(update, part_text, parse_mode)
+                    await self._send_message_safe(update, part_text)
                 
                 # Небольшая пауза между частями для избежания rate limiting
                 if i < len(parts) - 1:  # Не делаем паузу после последней части
@@ -9265,7 +9266,7 @@ class ShansAi:
                     if not pd.isna(value):
                         if property_name == 'CAGR' and period == '5 years':
                             cagr_value = value
-                        elif property_name == 'Risk' and period == '19 years, 0 months':
+                        elif property_name == 'Risk':
                             risk_value = value
             
             if cagr_value is not None and risk_value is not None and risk_value > 0:
@@ -9362,7 +9363,7 @@ class ShansAi:
                     if not pd.isna(value):
                         if property_name == 'CAGR' and period == '5 years':
                             cagr_value = value
-                        elif property_name == 'Max drawdown' and period == '19 years, 0 months':
+                        elif property_name == 'Max drawdown':
                             max_drawdown_value = value
             
             if cagr_value is not None and max_drawdown_value is not None and max_drawdown_value < 0:
@@ -9783,8 +9784,8 @@ class ShansAi:
         """Check if the text is a portfolio Reply Keyboard button"""
         portfolio_buttons = [
             "▫️ Накоп. доходность",
-            "▫️ Год. доходность", 
-            "▫️ Скольз. доходность",
+            "▫️ Годовая доходность",
+            "▫️ Скользящая CAGR",
             "▫️ Дивиденды",
             "▫️ Метрики",
             "▫️ Монте-Карло",
@@ -9799,7 +9800,7 @@ class ShansAi:
     def _is_compare_reply_keyboard_button(self, text: str) -> bool:
         """Check if the text is a compare Reply Keyboard button"""
         compare_buttons = [
-            "▫️ Накоп. доходность",
+            "▫️ Доходность",
             "▫️ Дивиденды",
             "▫️ Просадки",
             "▫️ Метрики",
