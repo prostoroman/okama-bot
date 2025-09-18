@@ -2183,55 +2183,50 @@ class ShansAi:
         await self._remove_portfolio_reply_keyboard(update, context)
         await self._remove_compare_reply_keyboard(update, context)
         
-        user = update.effective_user
-        # Escape user input to prevent Markdown parsing issues
-        user_name = user.first_name or "User"
-        # Remove any special characters that could break Markdown
-        user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
-        
-        welcome_message = f"""📘 Справка по командам
+        welcome_message = f"""📘 *Справка по командам*
 
-🔹 Основные команды
+🔹 *Основные команды*
 
 `/info <тикер>` — информация об активе (графики цен, ключевые метрики)
-Пример: /info GAZP.MOEX
+Пример: `/info GAZP.MOEX`
 
 `/compare <тикер1> <тикер2>` ... — сравнение нескольких активов (график накопленной доходности, инфляция)
 Пример: `/compare SPY.US SBER.MOEX`
 
-/portfolio` <тикер1:вес> <тикер2:вес> ... — создание и анализ портфеля (состав, риски, доходность, прогнозы)
+`/portfolio <тикер1:вес> <тикер2:вес>` ... — создание и анализ портфеля (состав, риски, доходность, прогнозы)
 Пример: `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3`
+
 `/my` — просмотр сохранённых портфелей
 `/list` — список доступных данных и символов
-`/search <название или ISIN>`    — поиск актива по базе okama и tushare
+`/search <название или ISIN>` — поиск актива по базе okama и tushare
 Пример: `/search Apple` 
 
-🔹 Поддерживаемые форматы тикеров
+🔹 *Поддерживаемые форматы тикеров*
 
-• Акции США: AAPL.US, VOO.US, SPY.US, QQQ.US
-• MOEX (Россия): SBER.MOEX, GAZP.MOEX, LKOH.MOEX
-• Индексы: SPX.INDX, IXIC.INDX, RGBITR.INDX
-• Товары (commodities): GC.COMM (золото), CL.COMM (нефть), SI.COMM (серебро)
-• Валюты (Forex): EURUSD.FX, GBPUSD.FX, USDJPY.FX
-• LSE (Лондон): VOD.LSE, HSBA.LSE, BP.LSE
-• SSE (Шанхай): 600000.SSE, 601318.SSE, 601398.SSE
-• SZSE (Шэньчжэнь): 000001.SZSE, 000002.SZSE, 000003.SZSE
-• PEK (Пекин): 430047.PEK, 830799.PEK, 870976.PEK
-• HKEX (Гонконг): 00001.HKEX, 00002.HKEX, 00003.HKEX
+• *Акции США*: `AAPL.US`, `VOO.US`, `SPY.US`, `QQQ.US`
+• *MOEX (Россия)*: `SBER.MOEX`, `GAZP.MOEX`, `LKOH.MOEX`
+• *Индексы*: `SPX.INDX`, `IXIC.INDX`, `RGBITR.INDX`
+• *Товары (commodities)*: `GC.COMM` (золото), `CL.COMM` (нефть), `SI.COMM` (серебро)
+• *Валюты (Forex)*: `EURUSD.FX`, `GBPUSD.FX`, `USDJPY.FX`
+• *LSE (Лондон)*: `VOD.LSE`, `HSBA.LSE`, `BP.LSE`
+• *SSE (Шанхай)*: `600000.SSE`, `601318.SSE`, `601398.SSE`
+• *SZSE (Шэньчжэнь)*: `000001.SZSE`, `000002.SZSE`, `000003.SZSE`
+• *PEK (Пекин)*: `430047.PEK`, `830799.PEK`, `870976.PEK`
+• *HKEX (Гонконг)*: `00001.HKEX`, `00002.HKEX`, `00003.HKEX`
 
-🔹 Примеры использования
+🔹 *Примеры использования*
 
-Сравнение активов
+*Сравнение активов*
 `/compare SBER.MOEX,GAZP.MOEX` — сравнить Сбербанк и Газпром
 `/compare SPY.US, QQQ.US, VOO.US` — сравнить ETF на США
 `/compare GC.COMM CL.COMM` — сравнить золото и нефть
 `/compare VOO.US,BND.US,GC.COMM` — акции, облигации и золото
 
-Создание портфеля
+*Создание портфеля*
 `/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` — портфель США (50% S&P 500, 30% NASDAQ, 20% облигации)
-`/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3`  — портфель из российских акций
+`/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` — портфель из российских акций
 
-⚠️ Важно: Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
+⚠️ *Важно*: Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
 
         await self._send_message_safe(update, welcome_message)
     
@@ -16633,6 +16628,214 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error in clear all portfolios button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при очистке портфелей: {str(e)}")
+
+    async def export_all_tickers_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /export_all command - export all available tickers from all exchanges to Excel"""
+        # Remove Reply Keyboards if they exist
+        await self._remove_portfolio_reply_keyboard(update, context)
+        await self._remove_compare_reply_keyboard(update, context)
+        
+        try:
+            await self._send_message_safe(update, 
+                "📊 **Выгрузка всех тикеров**\n\n"
+                "Создаю полный список всех доступных тикеров из okama и tushare со всех бирж...\n"
+                "Это может занять несколько минут ⏳"
+            )
+            
+            # Show progress message
+            progress_msg = await self._send_message_safe(update, "🔄 Собираю данные с бирж...")
+            
+            all_tickers = []
+            total_count = 0
+            
+            # Get all okama namespaces
+            import okama as ok
+            namespaces = ok.namespaces
+            
+            # Define exchange categories
+            exchange_namespaces = {
+                'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE'],
+                'Индексы': ['INDX'],
+                'Валюты': ['FX', 'CBR'],
+                'Товары': ['COMM'],
+                'Криптовалюты': ['CC'],
+                'Инфляция': ['INFL'],
+                'Недвижимость': ['RE'],
+                'Портфели': ['PF', 'PIF'],
+                'Депозиты': ['RATE'],
+                'Коэффициенты': ['RATIO']
+            }
+            
+            # Collect all namespace codes
+            all_namespaces = []
+            for category, ns_list in exchange_namespaces.items():
+                all_namespaces.extend(ns_list)
+            
+            # Add Chinese exchanges
+            chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
+            all_namespaces.extend(chinese_exchanges)
+            
+            # Process each namespace
+            processed_count = 0
+            for namespace in all_namespaces:
+                try:
+                    if namespace in chinese_exchanges:
+                        # Handle Chinese exchanges via Tushare
+                        if self.tushare_service:
+                            symbols_data = self.tushare_service.get_exchange_symbols_full(namespace)
+                            for symbol_data in symbols_data:
+                                all_tickers.append({
+                                    'Symbol': symbol_data['symbol'],
+                                    'Name': symbol_data['name'],
+                                    'Currency': symbol_data.get('currency', 'N/A'),
+                                    'List_Date': symbol_data.get('list_date', 'N/A'),
+                                    'Exchange': namespace,
+                                    'Exchange_Name': {
+                                        'SSE': 'Shanghai Stock Exchange',
+                                        'SZSE': 'Shenzhen Stock Exchange',
+                                        'BSE': 'Beijing Stock Exchange',
+                                        'HKEX': 'Hong Kong Stock Exchange'
+                                    }.get(namespace, namespace),
+                                    'Source': 'Tushare'
+                                })
+                    else:
+                        # Handle okama namespaces
+                        if namespace in namespaces:
+                            symbols_df = ok.symbols_in_namespace(namespace)
+                            if not symbols_df.empty:
+                                for _, row in symbols_df.iterrows():
+                                    symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                                    name = row['name'] if pd.notna(row['name']) else 'N/A'
+                                    
+                                    all_tickers.append({
+                                        'Symbol': symbol,
+                                        'Name': name,
+                                        'Currency': 'N/A',
+                                        'List_Date': 'N/A',
+                                        'Exchange': namespace,
+                                        'Exchange_Name': namespaces[namespace],
+                                        'Source': 'Okama'
+                                    })
+                    
+                    processed_count += 1
+                    # Update progress every 5 namespaces
+                    if processed_count % 5 == 0:
+                        await context.bot.edit_message_text(
+                            chat_id=update.effective_chat.id,
+                            message_id=progress_msg.message_id,
+                            text=f"🔄 Обработано {processed_count}/{len(all_namespaces)} пространств имен... ({len(all_tickers)} тикеров)"
+                        )
+                        
+                except Exception as e:
+                    self.logger.warning(f"Error processing namespace {namespace}: {e}")
+                    continue
+            
+            total_count = len(all_tickers)
+            
+            if total_count == 0:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=progress_msg.message_id,
+                    text="❌ Не удалось получить данные о тикерах"
+                )
+                return
+            
+            # Update progress message
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=progress_msg.message_id,
+                text=f"📊 Создаю Excel файл с {total_count:,} тикерами..."
+            )
+            
+            # Create DataFrame
+            df = pd.DataFrame(all_tickers)
+            
+            # Create Excel file in memory
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                # Main sheet with all tickers
+                df.to_excel(writer, index=False, sheet_name='All_Tickers')
+                
+                # Summary sheet
+                summary_data = []
+                for exchange in df['Exchange'].unique():
+                    count = len(df[df['Exchange'] == exchange])
+                    summary_data.append({
+                        'Exchange': exchange,
+                        'Exchange_Name': df[df['Exchange'] == exchange]['Exchange_Name'].iloc[0],
+                        'Ticker_Count': count,
+                        'Source': df[df['Exchange'] == exchange]['Source'].iloc[0]
+                    })
+                
+                summary_df = pd.DataFrame(summary_data)
+                summary_df = summary_df.sort_values('Ticker_Count', ascending=False)
+                summary_df.to_excel(writer, index=False, sheet_name='Summary')
+                
+                # Get the workbook and worksheets
+                workbook = writer.book
+                
+                # Auto-adjust column widths for main sheet
+                worksheet = writer.sheets['All_Tickers']
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+                
+                # Auto-adjust column widths for summary sheet
+                worksheet = writer.sheets['Summary']
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            excel_buffer.seek(0)
+            
+            # Delete progress message
+            await context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=progress_msg.message_id
+            )
+            
+            # Send Excel file
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=excel_buffer,
+                filename=f"all_tickers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                caption=self._truncate_caption(
+                    f"📊 **Полный список всех тикеров**\n\n"
+                    f"✅ Всего тикеров: {total_count:,}\n"
+                    f"📈 Бирж: {len(df['Exchange'].unique())}\n"
+                    f"📅 Дата создания: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
+                    f"**Содержит:**\n"
+                    f"• Лист 'All_Tickers' - полный список всех тикеров\n"
+                    f"• Лист 'Summary' - сводка по биржам\n\n"
+                    f"**Источники данных:**\n"
+                    f"• Okama - основные биржи и активы\n"
+                    f"• Tushare - китайские биржи (SSE, SZSE, BSE, HKEX)"
+                )
+            )
+            
+            excel_buffer.close()
+            
+        except ImportError:
+            await self._send_message_safe(update, "❌ Библиотека okama не установлена")
+        except Exception as e:
+            self.logger.error(f"Error in export all tickers command: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании файла: {str(e)}")
 
     def run(self):
         """Run the bot"""
