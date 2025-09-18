@@ -5549,6 +5549,8 @@ class ShansAi:
                 
             except Exception as e:
                 self.logger.error(f"Error creating portfolio: {e}")
+                # Restore waiting flag so user can try again
+                self._update_user_context(user_id, waiting_for_portfolio=True)
                 await self._send_message_safe(update, 
                     f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
                     "💡 Возможные причины:\n"
@@ -5557,12 +5559,15 @@ class ShansAi:
                     "• Неверный формат символа\n\n"
                     "Проверьте:\n"
                     "• Правильность написания символов\n"
-                    "• Доступность данных для указанных активов"
+                    "• Доступность данных для указанных активов\n\n"
+                    "🔄 Попробуйте ввести портфель снова:"
                 )
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio input handler: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}")
+            # Restore waiting flag so user can try again
+            self._update_user_context(user_id, waiting_for_portfolio=True)
+            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}\n\n🔄 Попробуйте ввести портфель снова:")
 
     async def _handle_portfolio_weights_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle portfolio weights input from compare command"""
@@ -5823,7 +5828,9 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio weights input handler: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}")
+            # Restore waiting flag so user can try again
+            self._update_user_context(user_id, waiting_for_portfolio_weights=True)
+            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}\n\n🔄 Попробуйте ввести веса снова:")
 
     async def _handle_portfolio_tickers_weights_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle portfolio weights input when user provided only tickers"""
@@ -6082,7 +6089,9 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio tickers weights input handler: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода весов портфеля: {str(e)}")
+            # Restore waiting flag so user can try again
+            self._update_user_context(user_id, waiting_for_portfolio_weights=True)
+            await self._send_message_safe(update, f"❌ Ошибка при обработке ввода весов портфеля: {str(e)}\n\n🔄 Попробуйте ввести веса снова:")
 
     async def _handle_compare_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle compare input from user message"""
