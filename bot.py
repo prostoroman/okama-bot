@@ -2199,7 +2199,8 @@ class ShansAi:
 `/my` — просмотр сохранённых портфелей
 `/list` — список доступных данных и символов
 `/search <название или ISIN>` — поиск актива по базе okama и tushare
-Пример: `/search Apple` 
+Пример: `/search Apple`
+`/export_all` — выгрузка полного списка всех тикеров со всех бирж в Excel 
 
 🔹 *Поддерживаемые форматы тикеров*
 
@@ -16851,6 +16852,7 @@ class ShansAi:
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("my", self.my_portfolios_command))
+        application.add_handler(CommandHandler("export_all", self.export_all_tickers_command))
         application.add_handler(CommandHandler("test", self.test_command))
         
         # Add callback query handler for buttons
