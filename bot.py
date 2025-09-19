@@ -7217,6 +7217,18 @@ class ShansAi:
                 if callback_data == "start_help":
                     # Execute help command
                     await self.help_command(update, context)
+                elif callback_data == "start_info":
+                    # Execute info command without parameters
+                    context.args = []
+                    await self.info_command(update, context)
+                elif callback_data == "start_compare":
+                    # Execute compare command without parameters
+                    context.args = []
+                    await self.compare_command(update, context)
+                elif callback_data == "start_portfolio":
+                    # Execute portfolio command without parameters
+                    context.args = []
+                    await self.portfolio_command(update, context)
                 elif callback_data.startswith("start_info_"):
                     # Extract symbol and execute info command
                     symbol = callback_data.replace("start_info_", "")
