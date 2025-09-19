@@ -1292,13 +1292,25 @@ class ShansAi:
         """Get random examples for /info command with ticker and company name"""
         import random
         
-        # Collect all tickers from all exchanges
-        all_tickers = []
-        for exchange, tickers in self.top_tickers.items():
-            all_tickers.extend(tickers)
+        # Always start with MOEX ticker
+        moex_tickers = self.top_tickers.get('MOEX', [])
+        if moex_tickers:
+            moex_ticker = random.choice(moex_tickers)
+            selected_tickers = [moex_ticker]
+        else:
+            selected_tickers = []
         
-        # Select random tickers
-        selected_tickers = random.sample(all_tickers, min(count, len(all_tickers)))
+        # Collect remaining tickers from all exchanges
+        remaining_tickers = []
+        for exchange, tickers in self.top_tickers.items():
+            if exchange != 'MOEX':  # Skip MOEX as we already selected one
+                remaining_tickers.extend(tickers)
+        
+        # Select remaining random tickers
+        remaining_count = min(count - len(selected_tickers), len(remaining_tickers))
+        if remaining_count > 0:
+            additional_tickers = random.sample(remaining_tickers, remaining_count)
+            selected_tickers.extend(additional_tickers)
         
         # Format as "ticker - Company Name, Exchange"
         examples = []
@@ -1312,23 +1324,39 @@ class ShansAi:
         """Get random examples for /compare command with ready commands from same exchange"""
         import random
         
-        # Get random exchanges
-        exchanges = list(self.top_tickers.keys())
-        selected_exchanges = random.sample(exchanges, min(count, len(exchanges)))
-        
         examples = []
-        for exchange in selected_exchanges:
-            # Get 2 random tickers from the same exchange
-            exchange_tickers = self.top_tickers[exchange]
-            if len(exchange_tickers) >= 2:
-                selected_tickers = random.sample(exchange_tickers, 2)
-                ticker1, company1 = selected_tickers[0]
-                ticker2, company2 = selected_tickers[1]
-                
-                # Create command example
-                command = f"`/compare {ticker1} {ticker2}`"
-                description = f"сравнить {company1} и {company2}"
-                examples.append(f"{command} - {description}")
+        
+        # Always start with MOEX example
+        moex_tickers = self.top_tickers.get('MOEX', [])
+        if len(moex_tickers) >= 2:
+            selected_tickers = random.sample(moex_tickers, 2)
+            ticker1, company1 = selected_tickers[0]
+            ticker2, company2 = selected_tickers[1]
+            
+            # Create MOEX command example
+            command = f"`{ticker1} {ticker2}`"
+            description = f"сравнить {company1} и {company2}"
+            examples.append(f"{command} - {description}")
+        
+        # Get remaining random exchanges (excluding MOEX)
+        remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex != 'MOEX']
+        remaining_count = min(count - len(examples), len(remaining_exchanges))
+        
+        if remaining_count > 0:
+            selected_exchanges = random.sample(remaining_exchanges, remaining_count)
+            
+            for exchange in selected_exchanges:
+                # Get 2 random tickers from the same exchange
+                exchange_tickers = self.top_tickers[exchange]
+                if len(exchange_tickers) >= 2:
+                    selected_tickers = random.sample(exchange_tickers, 2)
+                    ticker1, company1 = selected_tickers[0]
+                    ticker2, company2 = selected_tickers[1]
+                    
+                    # Create command example
+                    command = f"`/compare {ticker1} {ticker2}`"
+                    description = f"сравнить {company1} и {company2}"
+                    examples.append(f"{command} - {description}")
         
         return examples
 
@@ -1336,30 +1364,53 @@ class ShansAi:
         """Get random examples for /portfolio command with weights that sum to 1.0"""
         import random
         
-        # Get random exchanges
-        exchanges = list(self.top_tickers.keys())
-        selected_exchanges = random.sample(exchanges, min(count, len(exchanges)))
-        
         examples = []
-        for exchange in selected_exchanges:
-            # Get 3 random tickers from the same exchange
-            exchange_tickers = self.top_tickers[exchange]
-            if len(exchange_tickers) >= 3:
-                selected_tickers = random.sample(exchange_tickers, 3)
-                
-                # Generate weights that sum to 1.0
-                weights = self._generate_portfolio_weights(3)
-                
-                # Create command example
-                command_parts = []
-                companies = []
-                for i, (ticker, company) in enumerate(selected_tickers):
-                    command_parts.append(f"{ticker}:{weights[i]:.1f}")
-                    companies.append(company)
-                
-                command = f"`/portfolio {' '.join(command_parts)}`"
-                description = f"создать портфель {', '.join(companies)}"
-                examples.append(f"{command} - {description}")
+        
+        # Always start with MOEX example
+        moex_tickers = self.top_tickers.get('MOEX', [])
+        if len(moex_tickers) >= 3:
+            selected_tickers = random.sample(moex_tickers, 3)
+            
+            # Generate weights that sum to 1.0
+            weights = self._generate_portfolio_weights(3)
+            
+            # Create MOEX command example
+            command_parts = []
+            companies = []
+            for i, (ticker, company) in enumerate(selected_tickers):
+                command_parts.append(f"{ticker}:{weights[i]:.1f}")
+                companies.append(company)
+            
+            command = f"`{' '.join(command_parts)}`"
+            description = f"создать портфель {', '.join(companies)}"
+            examples.append(f"{command} - {description}")
+        
+        # Get remaining random exchanges (excluding MOEX)
+        remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex != 'MOEX']
+        remaining_count = min(count - len(examples), len(remaining_exchanges))
+        
+        if remaining_count > 0:
+            selected_exchanges = random.sample(remaining_exchanges, remaining_count)
+            
+            for exchange in selected_exchanges:
+                # Get 3 random tickers from the same exchange
+                exchange_tickers = self.top_tickers[exchange]
+                if len(exchange_tickers) >= 3:
+                    selected_tickers = random.sample(exchange_tickers, 3)
+                    
+                    # Generate weights that sum to 1.0
+                    weights = self._generate_portfolio_weights(3)
+                    
+                    # Create command example
+                    command_parts = []
+                    companies = []
+                    for i, (ticker, company) in enumerate(selected_tickers):
+                        command_parts.append(f"{ticker}:{weights[i]:.1f}")
+                        companies.append(company)
+                    
+                    command = f"`/portfolio {' '.join(command_parts)}`"
+                    description = f"создать портфель {', '.join(companies)}"
+                    examples.append(f"{command} - {description}")
         
         return examples
 
@@ -4171,16 +4222,14 @@ class ShansAi:
                 analyzed_tickers = user_context.get('analyzed_tickers', [])
                 if analyzed_tickers:
                     recent_tickers = analyzed_tickers[:5]  # Show last 5 tickers
-                    help_text += "\n🕒 *Последние анализируемые активы:*\n"
+                    help_text += "\n🕒 *История:*\n"
                     for ticker in recent_tickers:
                         escaped_ticker = ticker.replace('_', '\\_')
                         help_text += f"• `{escaped_ticker}`\n"
                     help_text += "\n"
                 
-                help_text += "\nПримеры:\n"
-                help_text += "• `SPY.US QQQ.US` - сравнение символов с символами\n"
-                help_text += "• `SBER.MOEX LKOH.MOEX` - сравить Сбербанк и Лукойл\n\n"              
-                help_text += "💡 Можно сравнивать портфели и обычные активы\n"
+      
+                help_text = "💡 Можно сравнивать портфели и обычные активы\n"
                 help_text += "💡 Первый актив в списке определяет базовую валюту\n\n"
                 help_text += "💬 Введите тикеры для сравнения через пробел:"
                 
@@ -11782,11 +11831,11 @@ class ShansAi:
             else:
                 analysis_text = f"🧠 **AI-анализ графика {symbol}**\n\n❌ AI-сервис недоступен"
             
-            await self._send_callback_message(update, context, analysis_text)
+            await self._send_callback_message(update, context, analysis_text, parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error handling info AI analysis button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при AI-анализе: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при AI-анализе: {str(e)}", parse_mode='Markdown')
 
     async def _handle_info_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle compare button for info command"""
@@ -16484,7 +16533,7 @@ class ShansAi:
             found_portfolio_key = self._find_portfolio_by_symbol(portfolio_symbol, saved_portfolios, user_id)
             
             if not found_portfolio_key:
-                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.")
+                await self._send_callback_message(update, context, f"❌ Портфель '{portfolio_symbol}' не найден. Создайте портфель заново.", parse_mode='Markdown')
                 return
             
             # Use the found portfolio key
@@ -16557,7 +16606,7 @@ class ShansAi:
                 portfolio = ok.Portfolio(valid_symbols, weights=valid_weights, ccy=currency)
             except Exception as e:
                 self.logger.error(f"Failed to create portfolio object: {e}")
-                await self._send_callback_message(update, context, f"❌ Ошибка создания портфеля: {str(e)}")
+                await self._send_callback_message(update, context, f"❌ Ошибка создания портфеля: {str(e)}", parse_mode='Markdown')
                 return
             
             # Prepare portfolio data for analysis using the new specialized function
