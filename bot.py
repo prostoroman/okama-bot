@@ -2548,19 +2548,22 @@ class ShansAi:
         
         welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары со всего мира.
 
-Попробуйте одну из  функций прямо сейчас:
+Попробуйте одну из ключевых функций прямо сейчас:
 
-🧠 Анализ активов: полная сводка по любой бумаге, валюте или товару.
-⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик.
-💼 Портфели: создание, анализ и прогнозирование доходности ваших портфелей.
+🔍 Анализ: полная сводка по любой бумаге, валюте или товару `/info`
+⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик `/compare`
+💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей `/portfolio`
+
+📚 Просмотр всех доступных данных и символов `/list`
+
 
 ⚠️ Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
 
         # Create inline keyboard with interactive buttons
         keyboard = [
-            [InlineKeyboardButton("📊 Проанализировать Apple", callback_data="start_info_AAPL.US")],
-            [InlineKeyboardButton("⚖️ Сравнить SPY и QQQ", callback_data="start_compare_SPY.US_QQQ.US")],
-            [InlineKeyboardButton("💼 Создать портфель 60/40", callback_data="start_portfolio_SPY.US-0.6_BND.US-0.4")],
+            [InlineKeyboardButton("🔍 Анализ", callback_data="start_info")],
+            [InlineKeyboardButton("⚖️ Сравнение", callback_data="start_compare")],
+            [InlineKeyboardButton("💼 Портфель", callback_data="start_portfolio")],
             [InlineKeyboardButton("📚 Полная справка", callback_data="start_help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2742,11 +2745,63 @@ class ShansAi:
             
             response += f"\n💡 Скопируйте тикер и вставьте в команды `/info`, `/compare`, `/portfolio`"
             
-            # Create reply keyboard instead of inline keyboard
-            reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_count)
-            
-            # Save current namespace context for reply keyboard handling
-            if not is_callback:
+            # Create appropriate keyboard based on context
+            if is_callback:
+                # For callback messages, use inline keyboard (original behavior)
+                keyboard = []
+                
+                # Navigation buttons (only if more than one page)
+                if total_pages > 1:
+                    nav_buttons = []
+                    
+                    # Previous button
+                    if current_page > 0:
+                        nav_buttons.append(InlineKeyboardButton(
+                            "⬅️ Назад", 
+                            callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
+                        ))
+                    
+                    # Page indicator
+                    nav_buttons.append(InlineKeyboardButton(
+                        f"{current_page + 1}/{total_pages}", 
+                        callback_data="noop"
+                    ))
+                    
+                    # Next button
+                    if current_page < total_pages - 1:
+                        nav_buttons.append(InlineKeyboardButton(
+                            "➡️ Вперед", 
+                            callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
+                        ))
+                    
+                    keyboard.append(nav_buttons)
+                
+                # Excel export button
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📊 Полный список в Excel ({total_count:,})", 
+                        callback_data=f"excel_namespace_{namespace}"
+                    )
+                ])
+                
+                # Home button after Excel
+                keyboard.append([
+                    InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+                ])
+                
+                # Analysis, Compare, Portfolio buttons
+                keyboard.append([
+                    InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
+                    InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
+                    InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
+                ])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+            else:
+                # For direct command calls, use reply keyboard
+                reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_count)
+                
+                # Save current namespace context for reply keyboard handling
                 user_id = update.effective_user.id
                 self._update_user_context(user_id, 
                     current_namespace=namespace,
@@ -2838,11 +2893,63 @@ class ShansAi:
             if symbol_list:
                 response += "\n".join(symbol_list) + "\n"
             
-            # Create reply keyboard instead of inline keyboard
-            reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
-            
-            # Save current namespace context for reply keyboard handling
-            if not is_callback:
+            # Create appropriate keyboard based on context
+            if is_callback:
+                # For callback messages, use inline keyboard (original behavior)
+                keyboard = []
+                
+                # Navigation buttons (only if more than one page)
+                if total_pages > 1:
+                    nav_buttons = []
+                    
+                    # Previous button
+                    if current_page > 0:
+                        nav_buttons.append(InlineKeyboardButton(
+                            "⬅️ Назад", 
+                            callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
+                        ))
+                    
+                    # Page indicator
+                    nav_buttons.append(InlineKeyboardButton(
+                        f"{current_page + 1}/{total_pages}", 
+                        callback_data="noop"
+                    ))
+                    
+                    # Next button
+                    if current_page < total_pages - 1:
+                        nav_buttons.append(InlineKeyboardButton(
+                            "➡️ Вперед", 
+                            callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
+                        ))
+                    
+                    keyboard.append(nav_buttons)
+                
+                # Excel export button
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📊 Полный список в Excel ({total_symbols:,})", 
+                        callback_data=f"excel_namespace_{namespace}"
+                    )
+                ])
+                
+                # Home button after Excel
+                keyboard.append([
+                    InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+                ])
+                
+                # Analysis, Compare, Portfolio buttons
+                keyboard.append([
+                    InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
+                    InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
+                    InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
+                ])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+            else:
+                # For direct command calls, use reply keyboard
+                reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
+                
+                # Save current namespace context for reply keyboard handling
                 user_id = update.effective_user.id
                 self._update_user_context(user_id, 
                     current_namespace=namespace,
