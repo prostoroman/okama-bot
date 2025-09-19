@@ -2799,6 +2799,9 @@ class ShansAi:
                 reply_markup = InlineKeyboardMarkup(keyboard)
             else:
                 # For direct command calls, use reply keyboard
+                # First, manage keyboard switching
+                await self._manage_reply_keyboard(update, context, "list")
+                
                 reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_count)
                 
                 # Save current namespace context for reply keyboard handling
@@ -2947,6 +2950,9 @@ class ShansAi:
                 reply_markup = InlineKeyboardMarkup(keyboard)
             else:
                 # For direct command calls, use reply keyboard
+                # First, manage keyboard switching
+                await self._manage_reply_keyboard(update, context, "list")
+                
                 reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
                 
                 # Save current namespace context for reply keyboard handling
@@ -6964,6 +6970,10 @@ class ShansAi:
                     await self._show_portfolio_reply_keyboard(update, context)
                 elif keyboard_type == "compare":
                     await self._show_compare_reply_keyboard(update, context)
+                elif keyboard_type == "list":
+                    # Для list клавиатуры не нужно показывать отдельное сообщение
+                    # Клавиатура уже показывается в _show_namespace_symbols
+                    pass
                 else:
                     self.logger.warning(f"Unknown keyboard type: {keyboard_type}")
                     return
@@ -10569,23 +10579,41 @@ class ShansAi:
                 if current_page > 0:
                     new_page = current_page - 1
                     self._update_user_context(user_id, current_namespace_page=new_page)
-                    await self._show_namespace_symbols(update, context, current_namespace, is_callback=False, page=new_page)
+                    # Check if it's a Chinese exchange
+                    chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
+                    if current_namespace in chinese_exchanges:
+                        await self._show_tushare_namespace_symbols(update, context, current_namespace, is_callback=False, page=new_page)
+                    else:
+                        await self._show_namespace_symbols(update, context, current_namespace, is_callback=False, page=new_page)
                 else:
                     await self._send_message_safe(update, "❌ Вы уже на первой странице")
                     
             elif text == "➡️ Вперед":
                 # We need to get total pages to check if we can go forward
                 try:
-                    import okama as ok
-                    symbols_df = ok.symbols_in_namespace(current_namespace)
-                    total_symbols = len(symbols_df)
+                    chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
+                    if current_namespace in chinese_exchanges:
+                        # For Chinese exchanges, get count from tushare
+                        if self.tushare_service:
+                            total_count = self.tushare_service.get_exchange_symbols_count(current_namespace)
+                        else:
+                            total_count = 0
+                    else:
+                        # For regular exchanges, get count from okama
+                        import okama as ok
+                        symbols_df = ok.symbols_in_namespace(current_namespace)
+                        total_count = len(symbols_df)
+                    
                     symbols_per_page = 20
-                    total_pages = (total_symbols + symbols_per_page - 1) // symbols_per_page
+                    total_pages = (total_count + symbols_per_page - 1) // symbols_per_page
                     
                     if current_page < total_pages - 1:
                         new_page = current_page + 1
                         self._update_user_context(user_id, current_namespace_page=new_page)
-                        await self._show_namespace_symbols(update, context, current_namespace, is_callback=False, page=new_page)
+                        if current_namespace in chinese_exchanges:
+                            await self._show_tushare_namespace_symbols(update, context, current_namespace, is_callback=False, page=new_page)
+                        else:
+                            await self._show_namespace_symbols(update, context, current_namespace, is_callback=False, page=new_page)
                     else:
                         await self._send_message_safe(update, "❌ Вы уже на последней странице")
                 except Exception as e:
