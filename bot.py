@@ -6773,21 +6773,78 @@ class ShansAi:
                 self.logger.error("Cannot remove reply keyboard: no chat_id available")
                 return
             
-            # Отправляем пустое сообщение с ReplyKeyboardRemove и сразу удаляем его
-            message = await context.bot.send_message(
-                chat_id=chat_id,
-                text="",  # Пустой текст
-                reply_markup=ReplyKeyboardRemove()
-            )
+            # Попробуем несколько способов удаления клавиатуры
             
-            # Сразу удаляем сообщение
+            # Способ 1: Отправка сообщения с ReplyKeyboardRemove и удаление
             try:
+                message = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="",  # Пустой текст
+                    reply_markup=ReplyKeyboardRemove()
+                )
+                
+                # Удаляем сообщение через небольшую задержку
+                await asyncio.sleep(0.1)
                 await context.bot.delete_message(chat_id=chat_id, message_id=message.message_id)
-            except Exception as delete_error:
-                self.logger.warning(f"Could not delete keyboard removal message: {delete_error}")
+                self.logger.info("Reply keyboard removed using method 1 (send + delete)")
+                return
+                
+            except Exception as method1_error:
+                self.logger.warning(f"Method 1 failed: {method1_error}")
+            
+            # Способ 2: Отправка сообщения с ReplyKeyboardRemove без удаления
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="",  # Пустой текст
+                    reply_markup=ReplyKeyboardRemove()
+                )
+                self.logger.info("Reply keyboard removed using method 2 (send only)")
+                return
+                
+            except Exception as method2_error:
+                self.logger.warning(f"Method 2 failed: {method2_error}")
+            
+            # Способ 3: Использование edit_message_reply_markup для callback queries
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                try:
+                    await context.bot.edit_message_reply_markup(
+                        chat_id=chat_id,
+                        message_id=update.callback_query.message.message_id,
+                        reply_markup=ReplyKeyboardRemove()
+                    )
+                    self.logger.info("Reply keyboard removed using method 3 (edit_message_reply_markup)")
+                    return
+                except Exception as method3_error:
+                    self.logger.warning(f"Method 3 failed: {method3_error}")
+            
+            # Если все способы не сработали
+            self.logger.error("All methods to remove reply keyboard failed")
             
         except Exception as e:
             self.logger.error(f"Error removing reply keyboard silently: {e}")
+
+    async def _remove_reply_keyboard_alternative(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Альтернативный способ удаления reply keyboard - отправка сообщения с невидимым символом"""
+        try:
+            chat_id = None
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                chat_id = update.callback_query.message.chat_id
+            elif hasattr(update, 'message') and update.message is not None:
+                chat_id = update.message.chat_id
+            else:
+                return
+            
+            # Отправляем сообщение с невидимым символом и ReplyKeyboardRemove
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="\u200B",  # Невидимый символ (Zero Width Space)
+                reply_markup=ReplyKeyboardRemove()
+            )
+            self.logger.info("Reply keyboard removed using alternative method (invisible character)")
+            
+        except Exception as e:
+            self.logger.error(f"Error in alternative keyboard removal: {e}")
 
     async def _manage_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, keyboard_type: str = None):
         """
@@ -6807,7 +6864,11 @@ class ShansAi:
             if keyboard_type is None:
                 if current_keyboard is not None:
                     self.logger.info(f"Removing active reply keyboard: {current_keyboard}")
-                    await self._remove_reply_keyboard_silently(update, context)
+                    try:
+                        await self._remove_reply_keyboard_silently(update, context)
+                    except Exception as e:
+                        self.logger.warning(f"Primary keyboard removal failed: {e}, trying alternative method")
+                        await self._remove_reply_keyboard_alternative(update, context)
                     self._update_user_context(user_id, active_reply_keyboard=None)
                 return
             
@@ -6816,7 +6877,11 @@ class ShansAi:
                 # Скрываем текущую клавиатуру если она есть
                 if current_keyboard is not None:
                     self.logger.info(f"Switching from {current_keyboard} to {keyboard_type} keyboard")
-                    await self._remove_reply_keyboard_silently(update, context)
+                    try:
+                        await self._remove_reply_keyboard_silently(update, context)
+                    except Exception as e:
+                        self.logger.warning(f"Primary keyboard removal failed during switch: {e}, trying alternative method")
+                        await self._remove_reply_keyboard_alternative(update, context)
                 
                 # Показываем новую клавиатуру
                 if keyboard_type == "portfolio":

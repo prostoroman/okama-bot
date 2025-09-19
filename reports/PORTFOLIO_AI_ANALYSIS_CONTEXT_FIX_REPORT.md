@@ -135,3 +135,4 @@ if is_compare_button and is_portfolio_button:
 ## Дата исправления
 
 19 января 2025 г.
+
