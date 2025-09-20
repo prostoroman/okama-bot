@@ -3983,7 +3983,7 @@ class ShansAi:
                 
                 # Add usage tips
                 help_text += "💡 Можно сравнивать портфели и обычные активы\n"
-                help_text += "💡 Первый актив в списке определяет базовую валюту\n\n"
+                help_text += "💡 Первый актив в списке определяет базовую валюту для инфляции\n\n"
                 help_text += "💬 Введите тикеры для сравнения через пробел:"
                 
                 await self._send_message_safe(update, help_text)
@@ -4177,7 +4177,7 @@ class ShansAi:
             for i, exp_sym in enumerate(expanded_symbols):
                 self.logger.info(f"DEBUG: expanded_symbols[{i}]: '{exp_sym}' (type: {type(exp_sym)})")
             
-            loading_message = await self._send_message_safe(update, f"🔄 Сравниваю активы: {', '.join(symbols)}...")
+            loading_message = await self._send_message_safe(update, f"⚖️ Сравниваю {', '.join(symbols)}...")
 
             # Create comparison using okama
             
@@ -4918,7 +4918,7 @@ class ShansAi:
                 if existing_portfolio_symbol:
                     # Use existing portfolio symbol and update the message
                     portfolio_symbol = existing_portfolio_symbol
-                    portfolio_text += f"\n\n💼 Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
+                    portfolio_text += f"\n\n💼 Имя портфеля: `{portfolio_symbol}`\n"
                     portfolio_text += f"✅ Портфель с такими же активами и пропорциями уже существует\n"
                     portfolio_text += f"💼 Используется ранее сохраненный портфель"
                     
@@ -10151,8 +10151,12 @@ class ShansAi:
             is_portfolio_button = self._is_portfolio_reply_keyboard_button(text)
             is_list_button = self._is_list_reply_keyboard_button(text)
             is_namespace_button = self._is_namespace_reply_keyboard_button(text)
+            is_info_button = self._is_info_reply_keyboard_button(text)
             
-            if is_namespace_button:
+            if is_info_button:
+                # Handle info buttons (from /info command)
+                await self._handle_info_reply_keyboard_button(update, context, text)
+            elif is_namespace_button:
                 # Handle namespace buttons (from /list command)
                 await self._handle_namespace_reply_keyboard_button(update, context, text)
             elif is_list_button:
