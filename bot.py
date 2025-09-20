@@ -1914,6 +1914,13 @@ class ShansAi:
                 self.logger.error("Cannot send message: text is empty")
                 return
             
+            # Дополнительная проверка для callback query
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                # Проверяем еще раз для callback query
+                if not text or text.strip() == "":
+                    self.logger.error("Cannot send callback message: text is empty")
+                    return
+            
             # Если это callback query, используем специальную функцию
             if hasattr(update, 'callback_query') and update.callback_query is not None:
                 self.logger.info("_send_message_safe: Redirecting to _send_callback_message for callback query")
@@ -6760,8 +6767,8 @@ class ShansAi:
             
             # Handle cancel selection callbacks
             if callback_data.startswith("cancel_selection_"):
-                query = callback_data.replace("cancel_selection_", "")
-                await query.edit_message_text(f"❌ Выбор актива отменен для запроса '{query}'")
+                query_text = callback_data.replace("cancel_selection_", "")
+                await query.edit_message_text(f"❌ Выбор актива отменен для запроса '{query_text}'")
                 return
             
             if callback_data == "drawdowns" or callback_data == "drawdowns_compare" or callback_data == "compare_drawdowns":
