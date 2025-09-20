@@ -1257,6 +1257,16 @@ class ShansAi:
         
         return portfolio
 
+    def _clear_all_waiting_flags(self, user_id: int):
+        """Clear all waiting flags in user context"""
+        self._update_user_context(user_id, 
+            waiting_for=None,
+            portfolio_tickers=None,
+            portfolio_base_symbols=None,
+            compare_first_symbol=None,
+            compare_base_symbol=None
+        )
+
     def _get_user_context(self, user_id: int) -> Dict[str, Any]:
         """Получить контекст пользователя (с поддержкой персистентности)."""
         # Load from persistent store, and mirror into memory for hot path
@@ -1269,6 +1279,7 @@ class ShansAi:
         # Update persistent store; keep in-memory mirror in sync
         updated = self.context_store.update_user_context(user_id, **kwargs)
         self.user_sessions[user_id] = updated
+        return updated
 
     def _add_to_analyzed_tickers(self, user_id: int, symbol: str):
         """Добавить тикер в историю анализируемых активов пользователя"""
@@ -2791,13 +2802,10 @@ class ShansAi:
             examples = self.examples_service.get_info_examples(5)
             examples_text = "\n".join([f"• {example}" for example in examples])
             
-            # Set flag that user is waiting for info input and clear portfolio flags
+            # Set flag that user is waiting for info input and clear other flags
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
-                waiting_for_info=True,
-                waiting_for_portfolio=False,
-                waiting_for_portfolio_weights=False,
-                waiting_for_compare=False
+                waiting_for='info'
             )
             
             await self._send_message_safe(update, 
@@ -2808,13 +2816,10 @@ class ShansAi:
         
         symbol = context.args[0]
         
-        # Update user context - clear all waiting flags
+        # Update user context - clear waiting flag
         user_id = update.effective_user.id
         self._update_user_context(user_id, 
-            waiting_for_info=False,
-            waiting_for_portfolio=False,
-            waiting_for_portfolio_weights=False,
-            waiting_for_compare=False
+            waiting_for=None
         )
         
         await self._send_ephemeral_message(update, context, f"📊 Поиск {symbol}...", delete_after=3)
@@ -2885,19 +2890,20 @@ class ShansAi:
         
         # Debug: Log user context state
         self.logger.info(f"User {user_id} context: {user_context}")
-        self.logger.info(f"Waiting for portfolio: {user_context.get('waiting_for_portfolio', False)}")
+        self.logger.info(f"Waiting for: {user_context.get('waiting_for', 'None')}")
         self.logger.info(f"Input text: {text}")
         self.logger.info(f"Original text: {original_text}")
         
-        # Check if user is waiting for portfolio input
-        if user_context.get('waiting_for_portfolio', False):
+        # Check what the user is waiting for
+        waiting_for = user_context.get('waiting_for')
+        
+        if waiting_for == 'portfolio':
             self.logger.info(f"Processing as portfolio input: {text}")
             # Process as portfolio input
             await self._handle_portfolio_input(update, context, text)
             return
         
-        # Check if user is waiting for portfolio weights input (from compare command)
-        if user_context.get('waiting_for_portfolio_weights', False):
+        elif waiting_for == 'portfolio_weights':
             self.logger.info(f"Processing as portfolio weights input: {text}")
             
             # Check if this is from portfolio command (tickers only) or compare command
@@ -2914,23 +2920,16 @@ class ShansAi:
                 await self._handle_compare_input(update, context, text)
             return
         
-        # Check if user is waiting for info input
-        if user_context.get('waiting_for_info', False):
+        elif waiting_for == 'info':
             self.logger.info(f"Processing as info input: {text}")
-            # Clear all waiting flags
-            self._update_user_context(user_id, 
-                waiting_for_info=False,
-                waiting_for_portfolio=False,
-                waiting_for_portfolio_weights=False,
-                waiting_for_compare=False
-            )
+            # Clear waiting flag
+            self._update_user_context(user_id, waiting_for=None)
             # Process as info command with the symbol
             context.args = [text]
             await self.info_command(update, context)
             return
         
-        # Check if user is waiting for compare input or has stored compare symbol
-        if user_context.get('waiting_for_compare', False) or user_context.get('compare_first_symbol') or user_context.get('compare_base_symbol'):
+        elif waiting_for == 'compare' or user_context.get('compare_first_symbol') or user_context.get('compare_base_symbol'):
             self.logger.info(f"Processing as compare input: {text}")
             # Process as compare input
             await self._handle_compare_input(update, context, text)
@@ -3947,7 +3946,7 @@ class ShansAi:
                 saved_portfolios = user_context.get('saved_portfolios', {})
                 
                 # Clear any existing compare context when starting fresh
-                self._update_user_context(user_id, compare_first_symbol=None, waiting_for_compare=False)
+                self._update_user_context(user_id, compare_first_symbol=None, waiting_for=None)
                 
                 # Get analyzed tickers from context for examples
                 analyzed_tickers = user_context.get('analyzed_tickers', [])
@@ -3992,7 +3991,7 @@ class ShansAi:
                 await self._send_message_safe(update, help_text)
                 
                 # Set waiting flag for compare input
-                self._update_user_context(user_id, waiting_for_compare=True)
+                self._update_user_context(user_id, waiting_for='compare')
                 return
 
             # Parse currency and period parameters from command arguments
@@ -4037,7 +4036,7 @@ class ShansAi:
             if len(symbols) > 5:
                 await self._send_message_safe(update, "❌ Максимум 5 активов для сравнения. Пожалуйста, введите список для сравнения заново (не более 5 активов)")
                 # Clear any stored symbols and reset waiting state
-                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
+                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for=None)
                 return
 
             # Check for duplicate symbols
@@ -4640,6 +4639,13 @@ class ShansAi:
                     
                     # Проверяем на китайские и гонконгские символы
                     if self._is_chinese_or_hongkong_symbol(single_ticker):
+                        # Keep waiting_for='portfolio' for retry input
+                        user_id = update.effective_user.id
+                        self._update_user_context(user_id, 
+                            waiting_for='portfolio',
+                            portfolio_tickers=None,
+                            portfolio_base_symbols=None
+                        )
                         await self._send_message_safe(update, 
                             "🚧 **Поддержка китайских и гонконгских символов в разработке**\n\n"
                             "К сожалению, создание портфелей с китайскими и гонконгскими активами "
@@ -4647,7 +4653,8 @@ class ShansAi:
                             "💡 Попробуйте использовать активы с других бирж:\n"
                             "• `SPY.US` - американские ETF\n"
                             "• `SBER.MOEX` - российские акции\n"
-                            "• `VTI.US` - глобальные ETF"
+                            "• `VTI.US` - глобальные ETF\n\n"
+                            "🔄 Попробуйте ввести портфель снова:"
                         )
                         return
                     
@@ -4658,6 +4665,13 @@ class ShansAi:
                     # Несколько тикеров без весов - проверяем на китайские символы
                     chinese_hk_symbols = [symbol for symbol in tickers_only if self._is_chinese_or_hongkong_symbol(symbol)]
                     if chinese_hk_symbols:
+                        # Keep waiting_for='portfolio' for retry input
+                        user_id = update.effective_user.id
+                        self._update_user_context(user_id, 
+                            waiting_for='portfolio',
+                            portfolio_tickers=None,
+                            portfolio_base_symbols=None
+                        )
                         await self._send_message_safe(update, 
                             "🚧 **Портфельный анализ для китайских и гонконгских активов находится в разработке**\n\n"
                             f"Обнаружены неподдерживаемые активы: {', '.join(chinese_hk_symbols)}\n\n"
@@ -4667,7 +4681,7 @@ class ShansAi:
                             "• `SPY.US` - американские ETF\n"
                             "• `SBER.MOEX` - российские акции\n"
                             "• `VTI.US` - глобальные ETF\n\n"
-                            "🔄 Для создания нового портфеля используйте команду `/portfolio`"
+                            "🔄 Попробуйте ввести портфель снова:"
                         )
                         return
                     
@@ -4725,6 +4739,13 @@ class ShansAi:
             # Проверяем на китайские и гонконгские символы
             chinese_hk_symbols = [symbol for symbol in symbols if self._is_chinese_or_hongkong_symbol(symbol)]
             if chinese_hk_symbols:
+                # Keep waiting_for='portfolio' for retry input
+                user_id = update.effective_user.id
+                self._update_user_context(user_id, 
+                    waiting_for='portfolio',
+                    portfolio_tickers=None,
+                    portfolio_base_symbols=None
+                )
                 await self._send_message_safe(update, 
                     "🚧 **Портфельный анализ для китайских и гонконгских активов находится в разработке**\n\n"
                     f"Обнаружены неподдерживаемые активы: {', '.join(chinese_hk_symbols)}\n\n"
@@ -4734,7 +4755,7 @@ class ShansAi:
                     "• `SPY.US` - американские ETF\n"
                     "• `SBER.MOEX` - российские акции\n"
                     "• `VTI.US` - глобальные ETF\n\n"
-                    "🔄 Для создания нового портфеля используйте команду `/portfolio`"
+                    "🔄 Попробуйте ввести портфель снова:"
                 )
                 return
             
@@ -5125,9 +5146,7 @@ class ShansAi:
             # Clear user context to prevent fallback to compare command
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
-                waiting_for_portfolio=False,
-                waiting_for_portfolio_weights=False,
-                waiting_for_compare=False,
+                waiting_for=None,
                 portfolio_tickers=None,
                 portfolio_base_symbols=None
             )
@@ -5141,7 +5160,7 @@ class ShansAi:
             
             # Set context to wait for portfolio weights
             self._update_user_context(user_id, 
-                waiting_for_portfolio_weights=True,
+                waiting_for='portfolio_weights',
                 portfolio_tickers=tickers,
                 portfolio_currency=currency,
                 portfolio_period=period
@@ -5178,7 +5197,7 @@ class ShansAi:
             user_id = update.effective_user.id
             
             # Clear waiting flag
-            self._update_user_context(user_id, waiting_for_portfolio=False)
+            self._update_user_context(user_id, waiting_for=None)
             
             # Parse currency and period parameters from input text
             text_args = text.split()
@@ -5258,6 +5277,13 @@ class ShansAi:
                     
                     # Проверяем на китайские и гонконгские символы
                     if self._is_chinese_or_hongkong_symbol(single_ticker):
+                        # Keep waiting_for='portfolio' for retry input
+                        user_id = update.effective_user.id
+                        self._update_user_context(user_id, 
+                            waiting_for='portfolio',
+                            portfolio_tickers=None,
+                            portfolio_base_symbols=None
+                        )
                         await self._send_message_safe(update, 
                             "🚧 **Поддержка китайских и гонконгских символов в разработке**\n\n"
                             "К сожалению, создание портфелей с китайскими и гонконгскими активами "
@@ -5265,7 +5291,8 @@ class ShansAi:
                             "💡 Попробуйте использовать активы с других бирж:\n"
                             "• `SPY.US` - американские ETF\n"
                             "• `SBER.MOEX` - российские акции\n"
-                            "• `VTI.US` - глобальные ETF"
+                            "• `VTI.US` - глобальные ETF\n\n"
+                            "🔄 Попробуйте ввести портфель снова:"
                         )
                         return
                     
@@ -5276,6 +5303,13 @@ class ShansAi:
                     # Несколько тикеров без весов - проверяем на китайские символы
                     chinese_hk_symbols = [symbol for symbol in tickers_only if self._is_chinese_or_hongkong_symbol(symbol)]
                     if chinese_hk_symbols:
+                        # Keep waiting_for='portfolio' for retry input
+                        user_id = update.effective_user.id
+                        self._update_user_context(user_id, 
+                            waiting_for='portfolio',
+                            portfolio_tickers=None,
+                            portfolio_base_symbols=None
+                        )
                         await self._send_message_safe(update, 
                             "🚧 **Портфельный анализ для китайских и гонконгских активов находится в разработке**\n\n"
                             f"Обнаружены неподдерживаемые активы: {', '.join(chinese_hk_symbols)}\n\n"
@@ -5285,7 +5319,7 @@ class ShansAi:
                             "• `SPY.US` - американские ETF\n"
                             "• `SBER.MOEX` - российские акции\n"
                             "• `VTI.US` - глобальные ETF\n\n"
-                            "🔄 Для создания нового портфеля используйте команду `/portfolio`"
+                            "🔄 Попробуйте ввести портфель снова:"
                         )
                         return
                     
@@ -5483,7 +5517,7 @@ class ShansAi:
             except Exception as e:
                 self.logger.error(f"Error creating portfolio: {e}")
                 # Restore waiting flag so user can try again
-                self._update_user_context(user_id, waiting_for_portfolio=True)
+                self._update_user_context(user_id, waiting_for='portfolio')
                 await self._send_message_safe(update, 
                     f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
                     "💡 Возможные причины:\n"
@@ -5500,9 +5534,7 @@ class ShansAi:
             self.logger.error(f"Error in portfolio input handler: {e}")
             # Clear user context to prevent fallback to compare command
             self._update_user_context(user_id, 
-                waiting_for_portfolio=False,
-                waiting_for_portfolio_weights=False,
-                waiting_for_compare=False,
+                waiting_for=None,
                 portfolio_tickers=None,
                 portfolio_base_symbols=None
             )
@@ -5522,7 +5554,7 @@ class ShansAi:
             
             # Clear waiting flag
             self._update_user_context(user_id, 
-                waiting_for_portfolio_weights=False,
+                waiting_for=None,
                 portfolio_base_symbols=None
             )
             
@@ -5768,9 +5800,7 @@ class ShansAi:
             self.logger.error(f"Error in portfolio weights input handler: {e}")
             # Clear user context to prevent fallback to compare command
             self._update_user_context(user_id, 
-                waiting_for_portfolio=False,
-                waiting_for_portfolio_weights=False,
-                waiting_for_compare=False,
+                waiting_for=None,
                 portfolio_tickers=None,
                 portfolio_base_symbols=None
             )
@@ -5790,7 +5820,7 @@ class ShansAi:
             
             # Clear waiting flag and context
             self._update_user_context(user_id, 
-                waiting_for_portfolio_weights=False,
+                waiting_for=None,
                 portfolio_tickers=None,
                 portfolio_currency=None,
                 portfolio_period=None
@@ -6034,9 +6064,7 @@ class ShansAi:
             self.logger.error(f"Error in portfolio tickers weights input handler: {e}")
             # Clear user context to prevent fallback to compare command
             self._update_user_context(user_id, 
-                waiting_for_portfolio=False,
-                waiting_for_portfolio_weights=False,
-                waiting_for_compare=False,
+                waiting_for=None,
                 portfolio_tickers=None,
                 portfolio_base_symbols=None
             )
@@ -6068,7 +6096,7 @@ class ShansAi:
             if len(symbols) == 1:
                 if stored_first_symbol is None and compare_base_symbol is None:
                     # First symbol - store it and ask for more
-                    self._update_user_context(user_id, compare_first_symbol=symbols[0], waiting_for_compare=True)
+                    self._update_user_context(user_id, compare_first_symbol=symbols[0], waiting_for='compare')
                     # Generate random examples for the message
                     random_examples = self.get_random_examples(3)
                     examples_text = ", ".join([f"`{example}`" for example in random_examples])
@@ -6083,11 +6111,11 @@ class ShansAi:
                     if len(combined_symbols) > 5:
                         await self._send_message_safe(update, "❌ Максимум 5 активов для сравнения. Пожалуйста, введите список для сравнения заново (не более 5 активов)")
                         # Clear both stored symbols and waiting flag
-                        self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
+                        self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for=None)
                         return
                     
                     # Clear both stored symbols and waiting flag
-                    self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
+                    self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for=None)
                     
                     # Process the comparison with combined symbols
                     context.args = combined_symbols
@@ -6099,18 +6127,18 @@ class ShansAi:
             
             elif len(symbols) == 0:
                 # Empty input - clear stored symbols and show help
-                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
+                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for=None)
                 await self._send_message_safe(update, "❌ Необходимо указать минимум 2 символа для сравнения")
                 return
             
             elif len(symbols) > 5:
                 await self._send_message_safe(update, "❌ Максимум 5 активов для сравнения. Пожалуйста, введите список для сравнения заново (не более 5 активов)")
                 # Clear any stored symbols and reset waiting state
-                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
+                self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for=None)
                 return
             
             # We have 2 or more symbols - clear any stored symbols and process normally
-            self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for_compare=False)
+            self._update_user_context(user_id, compare_first_symbol=None, compare_base_symbol=None, waiting_for=None)
             
             # Process the comparison using the same logic as compare_command
             # We'll reuse the existing comparison logic by calling compare_command with args
@@ -7527,8 +7555,8 @@ class ShansAi:
                 await self._send_message_safe(update, portfolio_text)
             
             # Set flag to wait for portfolio input
-            self.logger.info(f"Setting waiting_for_portfolio=True for user {user_id}")
-            self._update_user_context(user_id, waiting_for_portfolio=True)
+            self.logger.info(f"Setting waiting_for='portfolio' for user {user_id}")
+            self._update_user_context(user_id, waiting_for='portfolio')
             
         except Exception as e:
             self.logger.error(f"Error in unified portfolio creation: {e}")
@@ -12186,7 +12214,7 @@ class ShansAi:
             # Set user context to wait for comparison input
             user_id = update.effective_user.id
             self._update_user_context(user_id, 
-                waiting_for_compare=True,
+                waiting_for='compare',
                 compare_base_symbol=symbol
             )
             
@@ -17299,7 +17327,7 @@ class ShansAi:
             saved_portfolios = user_context.get('saved_portfolios', {})
             
             # Clear any existing compare context when starting fresh
-            self._update_user_context(user_id, compare_first_symbol=None, waiting_for_compare=False)
+            self._update_user_context(user_id, compare_first_symbol=None, waiting_for='compare')
             
             # Get random examples for user
             examples = self.get_random_examples(3)
@@ -17333,13 +17361,37 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
     async def _handle_namespace_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle namespace portfolio button click - call portfolio command directly"""
+        """Handle namespace portfolio button click - set waiting_for='portfolio' and show portfolio help"""
         try:
             self.logger.info("Handling namespace portfolio button")
             
-            # Call portfolio command without arguments directly
-            context.args = []
-            await self.portfolio_command(update, context)
+            # Set waiting_for='portfolio' and show portfolio help message
+            user_id = update.effective_user.id
+            
+            # Get analyzed tickers from context for examples
+            user_context = self._get_user_context(user_id)
+            analyzed_tickers = user_context.get('analyzed_tickers', [])
+            
+            # Create portfolio text with context-specific information
+            portfolio_text = f"💼 **Создание портфеля**\n\n"
+            
+            # Get random examples for user using context tickers if available
+            examples = self.examples_service.get_portfolio_examples(3, analyzed_tickers)
+            examples_text = "\n".join([f"• {example}" for example in examples])
+            
+            portfolio_text += "*Примеры команд:*\n"
+            portfolio_text += f"{examples_text}\n\n"
+            
+            portfolio_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
+            portfolio_text += "💡 Можно добавить дополнительные активы к предложенным\n\n"
+            portfolio_text += "💬 Введите тикеры для создания портфеля:"
+            
+            # Send message
+            await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
+            
+            # Set flag to wait for portfolio input
+            self.logger.info(f"Setting waiting_for='portfolio' for user {user_id}")
+            self._update_user_context(user_id, waiting_for='portfolio')
                 
         except Exception as e:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")
