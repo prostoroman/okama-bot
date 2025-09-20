@@ -6429,7 +6429,24 @@ class ShansAi:
 
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
-        await self._manage_reply_keyboard(update, context, keyboard_type=None)
+        try:
+            # Отправляем невидимое сообщение с ReplyKeyboardRemove для немедленного скрытия
+            await self._send_message_safe(
+                update, 
+                "‌",  # Невидимый символ
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode=None
+            )
+            
+            # Обновляем контекст пользователя
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, active_reply_keyboard=None)
+            self.logger.info("Reply keyboard removed using ReplyKeyboardRemove")
+            
+        except Exception as e:
+            self.logger.error(f"Error removing reply keyboard: {e}")
+            # Fallback к старому методу
+            await self._manage_reply_keyboard(update, context, keyboard_type=None)
 
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
@@ -7394,7 +7411,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "Анализирую данные", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
