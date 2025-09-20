@@ -7393,18 +7393,11 @@ class ShansAi:
                 await self._send_callback_message(update, context, f"❌ Не удалось построить график эффективной границы: {str(plot_error)}")
                 return
 
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send image with keyboard
+            # Send image without keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}"),
-                reply_markup=keyboard
+                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}")
             )
 
         except Exception as e:
@@ -7453,7 +7446,6 @@ class ShansAi:
             if portfolio_symbols and regular_assets:
                 symbols_to_use = regular_assets
                 portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
-                portfolio_text += f"⚠️ В контексте есть портфели и обычные активы. Предлагаем только обычные активы (портфель в портфеле создать нельзя).\n\n"
                 portfolio_text += f"Активы для добавления: `{' '.join(symbols_to_use)}`\n\n"
             else:
                 # Use all symbols if no mixed context
