@@ -423,11 +423,12 @@ class ShansAi:
         # Проверяем сам тикер на китайские символы
         # Китайские символы в диапазоне Unicode
         for char in symbol:
+            char_code = ord(char)
             if '\u4e00' <= char <= '\u9fff':  # Основной диапазон китайских иероглифов
                 return True
             if '\u3400' <= char <= '\u4dbf':  # Расширенный диапазон A
                 return True
-            if '\u20000' <= ord(char) <= '\u2a6df':  # Расширенный диапазон B
+            if 0x20000 <= char_code <= 0x2a6df:  # Расширенный диапазон B
                 return True
         
         return False
@@ -1361,6 +1362,15 @@ class ShansAi:
                     if symbol in ['RGBITR.INDX', 'MCFTR.INDX']:
                         return "RUB", f"автоматически определена для российского индекса ({symbol})"
                     return "USD", f"автоматически определена по бирже INDX ({symbol})"
+                # Европейские биржи
+                elif namespace == 'XSTU':
+                    return "EUR", f"автоматически определена по бирже Stuttgart ({symbol})"
+                elif namespace == 'XETR':
+                    return "EUR", f"автоматически определена по бирже XETRA ({symbol})"
+                elif namespace == 'XFRA':
+                    return "EUR", f"автоматически определена по бирже Frankfurt ({symbol})"
+                elif namespace == 'XAMS':
+                    return "EUR", f"автоматически определена по бирже Amsterdam ({symbol})"
                 else:
                     return "USD", f"автоматически определена по умолчанию ({symbol})"
             else:
@@ -4301,24 +4311,8 @@ class ShansAi:
                         if hasattr(first_asset, 'currency'):
                             currency, currency_info = self._get_currency_with_russian_indices(str(first_asset), first_asset.currency)
                         else:
-                            # Try to determine from symbol
-                            if '.' in str(first_asset):
-                                namespace = str(first_asset).split('.')[1]
-                                if namespace == 'MOEX':
-                                    currency = "RUB"
-                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
-                                elif namespace == 'US':
-                                    currency = "USD"
-                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
-                                elif namespace == 'LSE':
-                                    currency = "GBP"
-                                    currency_info = f"автоматически определена по первому активу ({first_asset})"
-                                else:
-                                    currency = "USD"
-                                    currency_info = "по умолчанию (USD)"
-                            else:
-                                currency = "USD"
-                                currency_info = "по умолчанию (USD)"
+                            # Try to determine from symbol using unified function
+                            currency, currency_info = self._get_currency_by_symbol(str(first_asset))
                     
                     # Check if we have Chinese symbols that need special handling
                     chinese_symbols = []
@@ -4661,7 +4655,23 @@ class ShansAi:
                     await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
                     return
                 else:
-                    # Несколько тикеров без весов - запрашиваем веса
+                    # Несколько тикеров без весов - проверяем на китайские символы
+                    chinese_hk_symbols = [symbol for symbol in tickers_only if self._is_chinese_or_hongkong_symbol(symbol)]
+                    if chinese_hk_symbols:
+                        await self._send_message_safe(update, 
+                            "🚧 **Портфельный анализ для китайских и гонконгских активов находится в разработке**\n\n"
+                            f"Обнаружены неподдерживаемые активы: {', '.join(chinese_hk_symbols)}\n\n"
+                            "К сожалению, создание портфелей с китайскими и гонконгскими активами "
+                            "пока не поддерживается. Эта функциональность находится в разработке.\n\n"
+                            "💡 Попробуйте использовать активы с других бирж:\n"
+                            "• `SPY.US` - американские ETF\n"
+                            "• `SBER.MOEX` - российские акции\n"
+                            "• `VTI.US` - глобальные ETF\n\n"
+                            "🔄 Для создания нового портфеля используйте команду `/portfolio`"
+                        )
+                        return
+                    
+                    # Запрашиваем веса для нескольких активов
                     await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
                     return
             
@@ -4742,43 +4752,11 @@ class ShansAi:
                 currency_info = f"указана пользователем ({specified_currency})"
                 self.logger.info(f"Using user-specified currency for portfolio: {currency}")
             else:
-                # Auto-detect currency from the first asset
+                # Auto-detect currency from the first asset using unified function
                 first_symbol = symbols[0]
                 try:
-                    if '.' in first_symbol:
-                        namespace = first_symbol.split('.')[1]
-                        if namespace == 'MOEX':
-                            currency = "RUB"
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'US':
-                            currency = "USD"
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'LSE':
-                            currency = "GBP"
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'FX':
-                            currency = "USD"
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'COMM':
-                            currency = "USD"
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        elif namespace == 'INDX':
-                            # Специальная логика для российских индексов
-                            if first_symbol in ['RGBITR.INDX', 'MCFTR.INDX']:
-                                currency = "RUB"
-                                currency_info = f"автоматически определена для российского индекса ({first_symbol})"
-                            else:
-                                currency = "USD"
-                                currency_info = f"автоматически определена по первому активу ({first_symbol})"
-                        else:
-                            currency = "USD"
-                            currency_info = "по умолчанию (USD)"
-                    else:
-                        currency = "USD"
-                        currency_info = "по умолчанию (USD)"
-                    
+                    currency, currency_info = self._get_currency_by_symbol(first_symbol)
                     self.logger.info(f"Auto-detected currency for portfolio {first_symbol}: {currency}")
-                    
                 except Exception as e:
                     self.logger.warning(f"Could not auto-detect currency, using USD: {e}")
                     currency = "USD"
@@ -5295,7 +5273,23 @@ class ShansAi:
                     await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
                     return
                 else:
-                    # Несколько тикеров без весов - запрашиваем веса
+                    # Несколько тикеров без весов - проверяем на китайские символы
+                    chinese_hk_symbols = [symbol for symbol in tickers_only if self._is_chinese_or_hongkong_symbol(symbol)]
+                    if chinese_hk_symbols:
+                        await self._send_message_safe(update, 
+                            "🚧 **Портфельный анализ для китайских и гонконгских активов находится в разработке**\n\n"
+                            f"Обнаружены неподдерживаемые активы: {', '.join(chinese_hk_symbols)}\n\n"
+                            "К сожалению, создание портфелей с китайскими и гонконгскими активами "
+                            "пока не поддерживается. Эта функциональность находится в разработке.\n\n"
+                            "💡 Попробуйте использовать активы с других бирж:\n"
+                            "• `SPY.US` - американские ETF\n"
+                            "• `SBER.MOEX` - российские акции\n"
+                            "• `VTI.US` - глобальные ETF\n\n"
+                            "🔄 Для создания нового портфеля используйте команду `/portfolio`"
+                        )
+                        return
+                    
+                    # Запрашиваем веса для нескольких активов
                     await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
                     return
             
