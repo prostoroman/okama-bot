@@ -2199,15 +2199,8 @@ class ShansAi:
 © Okama, tushare, YandexGPT, Google Gemini.
 """
 
-        # Create inline keyboard with interactive buttons
-        keyboard = [
-            [InlineKeyboardButton("🔍 Анализ", callback_data="start_info")],
-            [InlineKeyboardButton("⚖️ Сравнение", callback_data="start_compare")],
-            [InlineKeyboardButton("💼 Портфель", callback_data="start_portfolio")],
-            [InlineKeyboardButton("📚 База данных", callback_data="start_list")],
-            [InlineKeyboardButton("❓ Справка", callback_data="start_help")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        # Create reply keyboard with interactive buttons
+        reply_markup = self._create_start_reply_keyboard()
         
         await self._send_message_safe(update, welcome_message, reply_markup=reply_markup)
 
@@ -10031,6 +10024,31 @@ class ShansAi:
             # Return empty keyboard as fallback
             return ReplyKeyboardMarkup([])
 
+    def _create_start_reply_keyboard(self) -> ReplyKeyboardMarkup:
+        """Create Reply Keyboard for /start command with main action buttons"""
+        try:
+            keyboard = []
+            
+            # Row 1: Main actions
+            keyboard.append([
+                KeyboardButton("Анализ"),
+                KeyboardButton("Сравнение"),
+                KeyboardButton("Портфель")
+            ])
+            
+            # Row 2: Secondary actions
+            keyboard.append([
+                KeyboardButton("База данных"),
+                KeyboardButton("Справка")
+            ])
+            
+            return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating start reply keyboard: {e}")
+            # Return empty keyboard as fallback
+            return ReplyKeyboardMarkup([])
+
     async def _show_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show Reply Keyboard for portfolio management"""
         try:
@@ -10128,13 +10146,25 @@ class ShansAi:
         ]
         return text in info_buttons
 
+    def _is_start_reply_keyboard_button(self, text: str) -> bool:
+        """Check if the text is a start Reply Keyboard button"""
+        start_buttons = [
+            "Анализ",
+            "Сравнение",
+            "Портфель",
+            "База данных",
+            "Справка"
+        ]
+        return text in start_buttons
+
     def _is_reply_keyboard_button(self, text: str) -> bool:
-        """Check if the text is any Reply Keyboard button (portfolio, compare, list, namespace, or info)"""
+        """Check if the text is any Reply Keyboard button (portfolio, compare, list, namespace, info, or start)"""
         return (self._is_portfolio_reply_keyboard_button(text) or 
                 self._is_compare_reply_keyboard_button(text) or 
                 self._is_list_reply_keyboard_button(text) or
                 self._is_namespace_reply_keyboard_button(text) or
-                self._is_info_reply_keyboard_button(text))
+                self._is_info_reply_keyboard_button(text) or
+                self._is_start_reply_keyboard_button(text))
 
     async def _handle_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle Reply Keyboard button presses - determine context and call appropriate handler"""
@@ -10152,8 +10182,12 @@ class ShansAi:
             is_list_button = self._is_list_reply_keyboard_button(text)
             is_namespace_button = self._is_namespace_reply_keyboard_button(text)
             is_info_button = self._is_info_reply_keyboard_button(text)
+            is_start_button = self._is_start_reply_keyboard_button(text)
             
-            if is_info_button:
+            if is_start_button:
+                # Handle start buttons (from /start command)
+                await self._handle_start_reply_keyboard_button(update, context, text)
+            elif is_info_button:
                 # Handle info buttons (from /info command)
                 await self._handle_info_reply_keyboard_button(update, context, text)
             elif is_namespace_button:
@@ -10474,6 +10508,38 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error handling info reply keyboard button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_start_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle start Reply Keyboard button presses (from /start command)"""
+        try:
+            self.logger.info(f"Handling start reply keyboard button: {text}")
+            
+            # Handle start buttons
+            if text == "Анализ":
+                # Execute info command without parameters
+                context.args = []
+                await self.info_command(update, context)
+            elif text == "Сравнение":
+                # Execute compare command without parameters
+                context.args = []
+                await self.compare_command(update, context)
+            elif text == "Портфель":
+                # Execute portfolio command without parameters
+                context.args = []
+                await self.portfolio_command(update, context)
+            elif text == "База данных":
+                # Execute list command without parameters
+                context.args = []
+                await self.namespace_command(update, context)
+            elif text == "Справка":
+                # Execute help command
+                await self.help_command(update, context)
+            else:
+                await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling start reply keyboard button: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
 
     async def _handle_info_period_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
