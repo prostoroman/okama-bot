@@ -16754,6 +16754,12 @@ class ShansAi:
                             returns = price_data.pct_change().dropna()
                             wealth_index = (1 + returns).cumprod()
                             asset_final = wealth_index.iloc[-1]
+                            # Ensure asset_final is a scalar value
+                            if hasattr(asset_final, 'item'):
+                                asset_final = asset_final.item()
+                            elif isinstance(asset_final, (list, tuple)) and len(asset_final) > 0:
+                                asset_final = asset_final[0]
+                            asset_final = float(asset_final)
                             caption += f"• {symbol}: {asset_final:.2f}\n"
                         else:
                             caption += f"• {symbol}: недоступно\n"
