@@ -1618,8 +1618,8 @@ class ShansAi:
             title_parts.append(f"Currency: {currency}")
             title = ", ".join(title_parts)
             
-            # Используем стандартный метод создания графика сравнения
-            fig, ax = self.chart_styles.create_comparison_chart(
+            # Используем единый метод создания графика сравнения
+            fig, ax = self.chart_styles.create_unified_wealth_chart(
                 data=comparison_df,
                 symbols=list(comparison_data.keys()),
                 currency=currency,
@@ -4475,7 +4475,7 @@ class ShansAi:
                 if specified_period:
                     chart_title += f" | {specified_period}"
                 
-                fig, ax = chart_styles.create_comparison_chart(
+                fig, ax = chart_styles.create_unified_wealth_chart(
                     comparison.wealth_indexes, symbols, currency, title=chart_title
                 )
                 
@@ -10692,8 +10692,8 @@ class ShansAi:
                 # Regular comparison, create AssetList
                 comparison = ok.AssetList(symbols, ccy=currency)
                 
-                # Create chart
-                fig, ax = chart_styles.create_comparison_chart(
+                # Create chart using unified method
+                fig, ax = chart_styles.create_unified_wealth_chart(
                     comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
                 )
                 
@@ -10825,7 +10825,7 @@ class ShansAi:
                 # Combine all wealth indexes into a DataFrame
                 wealth_df = pd.DataFrame(wealth_data)
                 
-                fig, ax = chart_styles.create_comparison_chart(
+                fig, ax = chart_styles.create_unified_wealth_chart(
                     wealth_df, list(wealth_data.keys()), currency, title="Сравнение накопленной доходности"
                 )
                 
@@ -15886,8 +15886,8 @@ class ShansAi:
             # Generate wealth chart using chart_styles
             wealth_index = portfolio.wealth_index
             
-            # Create portfolio chart with chart_styles using optimized method
-            fig, ax = chart_styles.create_portfolio_wealth_chart(
+            # Create portfolio chart with chart_styles using unified method
+            fig, ax = chart_styles.create_unified_wealth_chart(
                 data=wealth_index, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_symbol
             )
             
@@ -16069,8 +16069,8 @@ class ShansAi:
             # Generate wealth chart using chart_styles
             wealth_index = portfolio.wealth_index
             
-            # Create portfolio chart with chart_styles using optimized method
-            fig, ax = chart_styles.create_portfolio_wealth_chart(
+            # Create portfolio chart with chart_styles using unified method
+            fig, ax = chart_styles.create_unified_wealth_chart(
                 data=wealth_index, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_name
             )
             
