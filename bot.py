@@ -2033,6 +2033,29 @@ class ShansAi:
             safe_text = "" if text is None else str(text)
             return safe_text[:1024]
     
+    def _format_correlation_values(self, correlation_matrix: pd.DataFrame) -> str:
+        """Форматировать численные значения корреляции для отображения под матрицей"""
+        try:
+            if correlation_matrix is None or correlation_matrix.empty:
+                return ""
+            
+            values_text = "📊 **Численные значения корреляции:**\n"
+            
+            # Get upper triangle values only (avoid duplicates)
+            symbols = correlation_matrix.columns.tolist()
+            
+            for i, symbol1 in enumerate(symbols):
+                for j, symbol2 in enumerate(symbols):
+                    if i < j:  # Only upper triangle
+                        corr_value = correlation_matrix.iloc[i, j]
+                        values_text += f"• {symbol1} ↔ {symbol2}: {corr_value:.3f}\n"
+            
+            return values_text
+            
+        except Exception as e:
+            self.logger.error(f"Error formatting correlation values: {e}")
+            return ""
+    
     async def _send_additional_charts(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
         """Отправить дополнительные графики анализа (drawdowns, dividend yield)"""
         try:
@@ -2110,7 +2133,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"Сравнение дивидендной доходности {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
+                caption=self._truncate_caption(f"Сравнение дивидендной доходности {len(symbols)} активов\n\nИстория дивидендных выплат и доходность")
             )
             
         except Exception as e:
@@ -2162,12 +2185,15 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
+            # Prepare correlation values text for caption
+            correlation_values_text = self._format_correlation_values(correlation_matrix)
+            
             # Send correlation matrix without keyboard
             self.logger.info("Sending correlation matrix image...")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция")
+                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}")
             )
             self.logger.info("Correlation matrix image sent successfully")
             
@@ -3892,7 +3918,7 @@ class ShansAi:
 
                 # Add saved portfolios information
                 if saved_portfolios:
-                    help_text += "💼 Ваши сохраненные портфели:\n"
+                    help_text += "💼 Ваши портфели:\n"
                     for portfolio_symbol, portfolio_info in saved_portfolios.items():
                         symbols = portfolio_info.get('symbols', [])
                         weights = portfolio_info.get('weights', [])
@@ -3912,11 +3938,11 @@ class ShansAi:
                         
                         # Escape underscores in portfolio symbol for markdown
                         escaped_symbol = portfolio_symbol.replace('_', '\\_')
-                        help_text += f"• `{escaped_symbol}` ({portfolio_str})\n"
+                        help_text += f"• `{escaped_symbol}` ({portfolio_str})\n\n"
                     
                 
                 # Add usage tips
-                help_text += "💡 Можно сравнивать портфели и обычные активы\n"
+                help_text += "💡 Можно сравнивать портфели и обычные активы (для этого нужно сначала создать портфель)\n"
                 help_text += "💡 Первый актив в списке определяет базовую валюту для инфляции\n\n"
                 help_text += "💬 Введите тикеры для сравнения через пробел:"
                 
@@ -7358,18 +7384,11 @@ class ShansAi:
                 await self._send_callback_message(update, context, f"❌ Не удалось построить график эффективной границы: {str(plot_error)}")
                 return
 
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            
-            # Remove keyboard from previous message before sending new message
-            await self._remove_keyboard_before_new_message(update, context)
-            
-            # Send image with keyboard
+            # Send image without keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}"),
-                reply_markup=keyboard
+                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}")
             )
 
         except Exception as e:
@@ -7385,22 +7404,69 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not remove buttons from old message: {e}")
             
-            # Set user context to wait for portfolio weights input
+            # Get user context to check for portfolio contexts
             user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Filter symbols to only include regular assets (not portfolios)
+            # If there are both portfolios and regular assets in context, only offer regular assets
+            regular_assets = []
+            portfolio_symbols = []
+            
+            for i, symbol in enumerate(symbols):
+                # Check if this symbol corresponds to a portfolio in the context
+                is_portfolio = False
+                if i < len(expanded_symbols) and isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
+                    # This is a portfolio
+                    is_portfolio = True
+                    portfolio_symbols.append(symbol)
+                elif i < len(portfolio_contexts):
+                    # Check if this symbol has portfolio context
+                    portfolio_context = portfolio_contexts[i]
+                    if len(portfolio_context.get('portfolio_symbols', [])) > 1:
+                        # This is a portfolio (has multiple symbols)
+                        is_portfolio = True
+                        portfolio_symbols.append(symbol)
+                
+                if not is_portfolio:
+                    regular_assets.append(symbol)
+            
+            # If we have both portfolios and regular assets, only offer regular assets
+            if portfolio_symbols and regular_assets:
+                symbols_to_use = regular_assets
+                portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
+                portfolio_text += f"Активы для добавления: `{' '.join(symbols_to_use)}`\n\n"
+            else:
+                # Use all symbols if no mixed context
+                symbols_to_use = symbols
+                portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
+                portfolio_text += f"Активы для добавления: `{' '.join(symbols_to_use)}`\n\n"
+            
+            # Set user context to wait for portfolio weights input
             self._update_user_context(user_id, 
                 waiting_for_portfolio_weights=True,
-                portfolio_base_symbols=symbols
+                portfolio_base_symbols=symbols_to_use
             )
             
             # Create message with symbols and request for weights
-            symbols_text = ' '.join(symbols)
-            portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
-            portfolio_text += f"Активы для добавления: `{symbols_text}`\n\n"
             portfolio_text += "**Укажите доли для каждого актива:**\n"
-            portfolio_text += f"• `{symbols[0]}:0.4 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.3 {symbols[2] if len(symbols) > 2 else 'BND.US'}:0.3`\n\n"
+            if len(symbols_to_use) >= 1:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.4"
+                if len(symbols_to_use) >= 2:
+                    portfolio_text += f" {symbols_to_use[1]}:0.3"
+                if len(symbols_to_use) >= 3:
+                    portfolio_text += f" {symbols_to_use[2]}:0.3"
+                portfolio_text += "`\n\n"
+            
             portfolio_text += "**Примеры:**\n"
-            portfolio_text += f"• `{symbols[0]}:0.6 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.4`\n"
-            portfolio_text += f"• `{symbols[0]}:0.5 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.3 {symbols[2] if len(symbols) > 2 else 'BND.US'}:0.2`\n\n"
+            if len(symbols_to_use) >= 2:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.6 {symbols_to_use[1]}:0.4`\n"
+            if len(symbols_to_use) >= 3:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.5 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2`\n"
+            portfolio_text += "\n"
+            
             portfolio_text += "💡 Сумма долей должна равняться 1.0 (100%)\n"
             portfolio_text += "💡 Можно добавить дополнительные активы к сравниваемым\n\n"
             portfolio_text += "💬 Введите тикеры для включения в состав портфеля:"
@@ -11166,17 +11232,13 @@ class ShansAi:
                 else:
                     portfolio_names.append(f'Portfolio_{i+1}')
             
-            caption = f"📉 Просадки смешанного сравнения\n\n"
+            caption = f"📉 Просадки\n\n"
             caption += f"📊 Состав:\n"
             if portfolio_count > 0:
                 caption += f"• Портфели: {', '.join(portfolio_names)}\n"
             if asset_count > 0:
                 caption += f"• Индивидуальные активы: {', '.join(asset_symbols)}\n"
-            caption += f"• Валюта: {currency}\n\n"
-            caption += f"💡 График показывает:\n"
-            caption += f"• Просадки портфелей и активов\n"
-            caption += f"• Сравнение рисков\n"
-            caption += f"• Периоды восстановления"
+            caption += f"• Валюта: {currency}\n"
             
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency, update)
@@ -11218,7 +11280,7 @@ class ShansAi:
             period = user_context.get('current_period', None)
             
             self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}, period: {period}")
-            await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график дивидендной доходности...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -11227,7 +11289,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "Создаю график дивидендной доходности...", delete_after=3)
                 await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList with period support
@@ -11463,107 +11525,42 @@ class ShansAi:
             self.logger.info(f"Expanded symbols: {len(expanded_symbols)}")
             self.logger.info(f"Expanded symbols types: {[type(s).__name__ for s in expanded_symbols]}")
             
-            # Separate portfolios and individual assets using expanded_symbols
-            portfolio_data = []
-            asset_symbols = []
+            # Collect all individual assets from portfolios and simple assets
+            all_assets = set()
             
-            for i, expanded_symbol in enumerate(expanded_symbols):
-                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
-                    # This is a portfolio wealth index
-                    portfolio_data.append(expanded_symbol)
-                else:
+            # Add assets from portfolios
+            for portfolio_context in portfolio_contexts:
+                portfolio_assets = portfolio_context.get('portfolio_symbols', [])
+                all_assets.update(portfolio_assets)
+                self.logger.info(f"Added {len(portfolio_assets)} assets from portfolio: {portfolio_assets}")
+            
+            # Add simple assets (not portfolios)
+            for expanded_symbol in expanded_symbols:
+                if not isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is an individual asset symbol
-                    asset_symbols.append(expanded_symbol)
+                    all_assets.add(expanded_symbol)
             
-            # Calculate correlation data for all items
-            correlation_data = {}
+            all_assets = list(all_assets)
+            self.logger.info(f"Total unique assets for correlation: {len(all_assets)} - {all_assets}")
             
-            # Process portfolios separately to avoid AssetList creation issues
-            for i, portfolio_context in enumerate(portfolio_contexts):
-                if i < len(portfolio_data):
-                    try:
-                        self.logger.info(f"Processing portfolio {i} for correlation")
-                        
-                        # Get portfolio details from context
-                        assets = portfolio_context.get('portfolio_symbols', [])
-                        weights = portfolio_context.get('portfolio_weights', [])
-                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
-                        
-                        if assets and weights and len(assets) == len(weights):
-                            self.logger.info(f"Portfolio {i} assets: {assets}, weights: {weights}")
-                            
-                            # Create portfolio using ok.Portfolio
-                            import okama as ok
-                            portfolio = ok.Portfolio(
-                                assets=assets,
-                                weights=weights,
-                                rebalancing_strategy=ok.Rebalance(period="year"),
-                                symbol=symbol
-                            )
-                            
-                            # Calculate returns for portfolio
-                            wealth_series = portfolio.wealth_index
-                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
-                            
-                            returns = wealth_series.pct_change().dropna()
-                            if len(returns) > 0:
-                                correlation_data[symbol] = returns
-                                self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
-                            else:
-                                self.logger.warning(f"Portfolio {symbol}: No returns data after pct_change")
-                        else:
-                            self.logger.warning(f"Portfolio {i} missing valid assets/weights data for correlation")
-                    except Exception as portfolio_error:
-                        self.logger.warning(f"Could not process portfolio {i} for correlation: {portfolio_error}")
-                        continue
-            
-            # Process individual assets separately
-            if asset_symbols:
-                try:
-                    asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
-                    
-                    for symbol in asset_symbols:
-                        if symbol in asset_asset_list.wealth_indexes.columns:
-                            # Calculate returns for individual asset
-                            wealth_series = asset_asset_list.wealth_indexes[symbol]
-                            self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
-                            
-                            returns = wealth_series.pct_change().dropna()
-                            if len(returns) > 0:
-                                correlation_data[symbol] = returns
-                                self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
-                            else:
-                                self.logger.warning(f"Asset {symbol}: No returns data after pct_change")
-                        else:
-                            self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
-                except Exception as asset_error:
-                    self.logger.warning(f"Could not process individual assets: {asset_error}")
-            
-            if len(correlation_data) < 2:
-                self.logger.warning(f"Not enough correlation data: {len(correlation_data)}")
-                self.logger.warning(f"Available correlation data keys: {list(correlation_data.keys())}")
-                self.logger.warning(f"Portfolio contexts count: {len(portfolio_contexts)}")
-                self.logger.warning(f"Asset symbols count: {len(asset_symbols)}")
-                self.logger.warning(f"Expanded symbols count: {len(expanded_symbols)}")
-                
-                # Provide more specific error message
-                if len(correlation_data) == 0:
-                    error_msg = "❌ Не удалось получить данные о доходности для создания корреляционной матрицы"
-                elif len(correlation_data) == 1:
-                    error_msg = f"❌ Недостаточно данных для корреляционной матрицы (только {list(correlation_data.keys())[0]}). Нужно минимум 2 актива."
-                else:
-                    error_msg = "❌ Недостаточно данных для создания корреляционной матрицы"
-                
+            if len(all_assets) < 2:
+                error_msg = f"❌ Недостаточно данных для корреляционной матрицы (только {len(all_assets)} актив). Нужно минимум 2 актива."
                 await self._send_callback_message(update, context, error_msg)
                 return
             
-            # Create correlation matrix
+            # Create AssetList with all assets for correlation matrix
             try:
-                # Combine all returns into a DataFrame
-                returns_df = pd.DataFrame(correlation_data)
+                import okama as ok
+                asset_list = ok.AssetList(all_assets, ccy=currency)
                 
-                # Calculate correlation matrix
-                correlation_matrix = returns_df.corr()
+                # Check if assets_ror data is available
+                if not hasattr(asset_list, 'assets_ror') or asset_list.assets_ror is None or asset_list.assets_ror.empty:
+                    self.logger.warning("assets_ror data not available for mixed comparison")
+                    await self._send_callback_message(update, context, "ℹ️ Данные о доходности активов недоступны для создания корреляционной матрицы")
+                    return
+                
+                # Get correlation matrix
+                correlation_matrix = asset_list.assets_ror.corr()
                 
                 self.logger.info(f"Correlation matrix created successfully, shape: {correlation_matrix.shape}")
                 
@@ -11574,7 +11571,7 @@ class ShansAi:
                 
                 # Create correlation matrix visualization using chart_styles
                 fig, ax = chart_styles.create_correlation_matrix_chart(
-                    correlation_matrix
+                    correlation_matrix, data_source='okama'
                 )
                 
                 # Save chart to bytes with memory optimization
@@ -11585,6 +11582,9 @@ class ShansAi:
                 
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
+                
+                # Prepare correlation values text for caption
+                correlation_values_text = self._format_correlation_values(correlation_matrix)
                 
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency, update)
@@ -11597,7 +11597,7 @@ class ShansAi:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(f"🔗 Корреляционная матрица для смешанного сравнения\n\nПоказывает корреляцию между доходностями портфелей и активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"),
+                    caption=self._truncate_caption(f"🔗 Корреляционная матрица для смешанного сравнения\n\nПоказывает корреляцию между доходностями всех активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}"),
                     reply_markup=keyboard
                 )
                 self.logger.info("Correlation matrix image sent successfully")
@@ -14794,7 +14794,7 @@ class ShansAi:
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(
-                    f"💡 Показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
+                    f"💡 Возможные траектории роста портфеля на основе исторической волатильности и доходности."
                 ),
             )
             
@@ -14818,24 +14818,17 @@ class ShansAi:
             # Get the current figure from matplotlib (created by okama)
             current_fig = plt.gcf()
             
-            # Apply chart styles to the current figure
+            # Apply chart styles to the current figure using the new unified method
             if current_fig.axes:
                 ax = current_fig.axes[0]  # Get the first (and usually only) axes
                 
-                
-                # Force legend update to match the new colors
-                if ax.get_legend():
-                    ax.get_legend().remove()
-                ax.legend(**chart_styles.legend)
-                
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_styling(
+                # Apply unified percentile forecast chart styling
+                chart_styles.create_percentile_forecast_chart(
+                    current_fig,
                     ax,
-                    title=f'Прогноз с процентилями\n{", ".join(symbols)}',
-                    ylabel='Накопленная доходность',
-                    grid=True,
-                    legend=True,
-                    copyright=True
+                    symbols=symbols,
+                    currency=currency,
+                    data_source='okama'
                 )
             
             # Save the figure using chart_styles
@@ -14854,11 +14847,8 @@ class ShansAi:
                 photo=img_buffer,
                 caption=self._truncate_caption(
                     f"📈 Прогноз с процентилями для портфеля: {', '.join(symbols)}\n\n"
-                    f"📊 Параметры:\n"
                     f"• Период: 10 лет\n"
                     f"• Начальная стоимость: 1000 {currency}\n"
-                    f"• процентили: 10%, 50%, 90%\n\n"
-                    f"💡 График показывает:\n"
                     f"• 10% процентиль: пессимистичный сценарий\n"
                     f"• 50% процентиль: средний сценарий\n"
                     f"• 90% процентиль: оптимистичный сценарий"
@@ -15121,11 +15111,7 @@ class ShansAi:
                 for i, (date, recovery_years) in enumerate(longest_recoveries.items(), 1):
                     date_str = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)
                     caption += f"{i}. {date_str}: {recovery_years:.1f} лет\n"
-                
-                caption += f"\n💡 График показывает:\n"
-                caption += f"• Максимальную просадку портфеля\n"
-                caption += f"• Периоды восстановления\n"
-                caption += f"• Волатильность доходности"
+
                 
             except Exception as e:
                 self.logger.warning(f"Could not get drawdowns statistics: {e}")
@@ -15134,10 +15120,6 @@ class ShansAi:
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
-                caption += f"💡 График показывает:\n"
-                caption += f"• Максимальную просадку портфеля\n"
-                caption += f"• Периоды восстановления\n"
-                caption += f"• Волатильность доходности"
             
             # Send the chart
             await context.bot.send_photo(
@@ -15372,7 +15354,7 @@ class ShansAi:
             
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
-            await self._send_ephemeral_message(update, context, "💵 Создаю график дивидендной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график дивидендной доходности...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -15599,7 +15581,7 @@ class ShansAi:
                     weight = weights[i] if i < len(weights) else 0.0
                     symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
                 
-                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
+                caption = f"Динамика доходности портфеля\n\n"
             
             # Ensure portfolio keyboard is shown
             await self._manage_reply_keyboard(update, context, "portfolio")
@@ -16266,7 +16248,7 @@ class ShansAi:
                 caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols_with_weights)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Окно: MAX период (весь доступный период)\n\n"
+                caption += f"• Окно: макс. период (весь доступный период)\n\n"
                 
                 # Add rolling CAGR statistics
                 caption += f"📈 Статистика Rolling CAGR:\n"
@@ -16277,11 +16259,6 @@ class ShansAi:
                 caption += f"• Минимальный: {min_rolling_cagr:.2%}\n"
                 caption += f"• Максимальный: {max_rolling_cagr:.2%}\n\n"
                 
-                caption += f"💡 График показывает:\n"
-                caption += f"• Rolling CAGR за весь доступный период\n"
-                caption += f"• Динамику изменения CAGR во времени\n"
-                caption += f"• Стабильность доходности портфеля"
-                
             except Exception as e:
                 self.logger.warning(f"Could not get rolling CAGR statistics: {e}")
                 # Fallback to basic caption
@@ -16289,9 +16266,7 @@ class ShansAi:
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
-                caption += f"• Окно: MAX период (весь доступный период)\n\n"
-                caption = f"💡 График показывает динамику изменения доходности во времени\n"
-
+                caption += f"• Окно: макс. период (весь доступный период)\n\n"
             
             # Ensure portfolio keyboard is shown
             await self._manage_reply_keyboard(update, context, "portfolio")
@@ -16595,11 +16570,6 @@ class ShansAi:
                         self.logger.warning(f"Could not get final value for {symbol}: {e}")
                         caption += f"• {symbol}: недоступно\n"
                 
-                caption += f"\n💡 График показывает:\n"
-                caption += f"• Накопленную доходность портфеля vs отдельных активов\n"
-                caption += f"• Эффект диверсификации\n"
-                caption += f"• Сравнение рисков и доходности"
-                
             except Exception as e:
                 self.logger.warning(f"Could not get comparison statistics: {e}")
                 # Fallback to basic caption
@@ -16607,10 +16577,6 @@ class ShansAi:
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
-                caption += f"💡 График показывает:\n"
-                caption += f"• Накопленную доходность портфеля vs отдельных активов\n"
-                caption += f"• Эффект диверсификации\n"
-                caption += f"• Сравнение рисков и доходности"
             
             # Ensure portfolio keyboard is shown
             await self._manage_reply_keyboard(update, context, "portfolio")
