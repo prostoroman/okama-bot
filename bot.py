@@ -67,6 +67,7 @@ from config import Config
 from services.yandexgpt_service import YandexGPTService
 from services.tushare_service import TushareService
 from services.gemini_service import GeminiService
+from services.examples_service import ExamplesService
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -99,6 +100,7 @@ class ShansAi:
         # Initialize services
         self.yandexgpt_service = YandexGPTService()
         self.chart_styles = chart_styles
+        self.examples_service = ExamplesService()
         
         # Initialize Tushare service if API key is available
         try:
@@ -135,252 +137,6 @@ class ShansAi:
             'SZSE': ['000001.SZ', '399005.SZ'],
             'BSE': ['900001.BJ', '800001.BJ'],
             'HKEX': ['00001.HK', '00700.HK']
-        }
-        
-        # Top tickers data for random examples
-        self.top_tickers = {
-            'US': [
-                ('MSFT.US', 'Microsoft'),
-                ('AAPL.US', 'Apple'),
-                ('NVDA.US', 'NVIDIA'),
-                ('AMZN.US', 'Amazon'),
-                ('GOOG.US', 'Alphabet (Class C)'),
-                ('META.US', 'Meta Platforms'),
-                ('LLY.US', 'Eli Lilly'),
-                ('BRK.B.US', 'Berkshire Hathaway (B)'),
-                ('AVGO.US', 'Broadcom'),
-                ('TSM.US', 'Taiwan Semiconductor (ADR)'),
-                ('JPM.US', 'JPMorgan Chase'),
-                ('TSLA.US', 'Tesla'),
-                ('WMT.US', 'Walmart'),
-                ('XOM.US', 'Exxon Mobil'),
-                ('UNH.US', 'UnitedHealth Group'),
-                ('NVO.US', 'Novo Nordisk (ADR)'),
-                ('V.US', 'Visa (Class A)'),
-                ('MA.US', 'Mastercard (Class A)'),
-                ('PG.US', 'Procter & Gamble'),
-                ('ORCL.US', 'Oracle')
-            ],
-            'LSE': [
-                ('SHEL.LSE', 'Shell plc'),
-                ('AZN.LSE', 'AstraZeneca'),
-                ('HSBA.LSE', 'HSBC Holdings'),
-                ('ULVR.LSE', 'Unilever'),
-                ('BP.LSE', 'BP'),
-                ('RIO.LSE', 'Rio Tinto'),
-                ('GSK.LSE', 'GSK'),
-                ('DGE.LSE', 'Diageo'),
-                ('BATS.LSE', 'British American Tobacco'),
-                ('REL.LSE', 'RELX'),
-                ('NG.LSE', 'National Grid'),
-                ('VOD.LSE', 'Vodafone Group'),
-                ('LSEG.LSE', 'London Stock Exchange Group'),
-                ('BARC.LSE', 'Barclays'),
-                ('LLOY.LSE', 'Lloyds Banking Group'),
-                ('TSCO.LSE', 'Tesco'),
-                ('PRU.LSE', 'Prudential'),
-                ('GLEN.LSE', 'Glencore'),
-                ('AV.LSE', 'Aviva'),
-                ('BA.LSE', 'BAE Systems')
-            ],
-            'HKEX': [
-                ('00700.HKEX', 'Tencent Holdings'),
-                ('00941.HKEX', 'China Mobile'),
-                ('00005.HKEX', 'HSBC Holdings'),
-                ('00939.HKEX', 'China Construction Bank (H)'),
-                ('01299.HKEX', 'AIA Group'),
-                ('01398.HKEX', 'ICBC (H)'),
-                ('02318.HKEX', 'Ping An Insurance (H)'),
-                ('00388.HKEX', 'Hong Kong Exchanges & Clearing'),
-                ('00988.HKEX', 'China Telecom (H)'),
-                ('00883.HKEX', 'CNOOC'),
-                ('02388.HKEX', 'BOC Hong Kong'),
-                ('03690.HKEX', 'Meituan‑W'),
-                ('09988.HKEX', 'Alibaba Group‑SW'),
-                ('09618.HKEX', 'JD.com‑SW'),
-                ('01810.HKEX', 'Xiaomi‑W'),
-                ('01211.HKEX', 'BYD Company'),
-                ('01088.HKEX', 'China Shenhua (H)'),
-                ('00386.HKEX', 'Sinopec (H)'),
-                ('00857.HKEX', 'PetroChina (H)'),
-                ('03988.HKEX', 'Bank of China (H)')
-            ],
-            'MOEX': [
-                ('GAZP.MOEX', 'Gazprom'),
-                ('SBER.MOEX', 'Sberbank'),
-                ('LKOH.MOEX', 'Lukoil'),
-                ('ROSN.MOEX', 'Rosneft'),
-                ('NVTK.MOEX', 'Novatek'),
-                ('GMKN.MOEX', 'Norilsk Nickel'),
-                ('PLZL.MOEX', 'Polyus'),
-                ('SIBN.MOEX', 'Gazprom Neft'),
-                ('PHOR.MOEX', 'PhosAgro'),
-                ('SNGS.MOEX', 'Surgutneftegas'),
-                ('TATN.MOEX', 'Tatneft'),
-                ('NLMK.MOEX', 'NLMK'),
-                ('MTSS.MOEX', 'MTS'),
-                ('MGNT.MOEX', 'Magnit'),
-                ('ALRS.MOEX', 'ALROSA'),
-                ('CHMF.MOEX', 'Severstal'),
-                ('POLY.MOEX', 'Polymetal'),
-                ('MOEX.MOEX', 'Moscow Exchange'),
-                ('AFKS.MOEX', 'Sistema'),
-                ('IRAO.MOEX', 'Inter RAO')
-            ],
-            'SSE': [
-                ('600519.SSE', 'Kweichow Moutai'),
-                ('601318.SSE', 'Ping An Insurance (A)'),
-                ('601939.SSE', 'China Construction Bank (A)'),
-                ('601398.SSE', 'ICBC (A)'),
-                ('601988.SSE', 'Bank of China (A)'),
-                ('601857.SSE', 'PetroChina (A)'),
-                ('600036.SSE', 'China Merchants Bank (A)'),
-                ('600028.SSE', 'Sinopec (A)'),
-                ('601628.SSE', 'China Life Insurance (A)'),
-                ('600030.SSE', 'CITIC Securities'),
-                ('600900.SSE', 'China Yangtze Power'),
-                ('601601.SSE', 'China Pacific Insurance'),
-                ('601668.SSE', 'China State Construction'),
-                ('601088.SSE', 'China Shenhua (A)'),
-                ('600104.SSE', 'SAIC Motor'),
-                ('600276.SSE', 'Hengrui Medicine'),
-                ('601166.SSE', 'Industrial Bank'),
-                ('600000.SSE', 'Shanghai Pudong Development Bank'),
-                ('600837.SSE', 'Haitong Securities'),
-                ('600050.SSE', 'China Unicom (A)')
-            ],
-            'SZSE': [
-                ('300750.SZSE', 'CATL'),
-                ('000858.SZSE', 'Wuliangye Yibin'),
-                ('002594.SZSE', 'BYD'),
-                ('000333.SZSE', 'Midea Group'),
-                ('000651.SZSE', 'Gree Electric'),
-                ('300760.SZSE', 'Shenzhen Mindray Bio‑Medical'),
-                ('002415.SZSE', 'Hikvision'),
-                ('000063.SZSE', 'ZTE'),
-                ('000002.SZSE', 'China Vanke'),
-                ('000001.SZSE', 'Ping An Bank'),
-                ('002241.SZSE', 'GoerTek'),
-                ('300015.SZSE', 'Aier Eye Hospital'),
-                ('300124.SZSE', 'Inovance Technology'),
-                ('300059.SZSE', 'East Money Information'),
-                ('002475.SZSE', 'Luxshare Precision'),
-                ('002027.SZSE', 'Focus Media Information'),
-                ('300122.SZSE', 'Zhongke Sanhuan'),
-                ('000538.SZSE', 'Yunnan Baiyao'),
-                ('000895.SZSE', 'Shuanghui Development'),
-                ('002352.SZSE', 'SF Holding')
-            ],
-            'XETR': [
-                ('SAP.XETR', 'SAP'),
-                ('SIE.XETR', 'Siemens'),
-                ('ALV.XETR', 'Allianz'),
-                ('DTE.XETR', 'Deutsche Telekom'),
-                ('MBG.XETR', 'Mercedes‑Benz Group'),
-                ('BMW.XETR', 'BMW'),
-                ('BAS.XETR', 'BASF'),
-                ('RWE.XETR', 'RWE'),
-                ('MUV2.XETR', 'Munich Re'),
-                ('ADS.XETR', 'Adidas'),
-                ('HEN3.XETR', 'Henkel'),
-                ('P911.XETR', 'Porsche AG'),
-                ('VOW3.XETR', 'Volkswagen (Pref)'),
-                ('IFX.XETR', 'Infineon Technologies'),
-                ('LIN.XETR', 'Linde'),
-                ('SHL.XETR', 'Siemens Healthineers'),
-                ('CON.XETR', 'Continental'),
-                ('HEI.XETR', 'HELLA GmbH'),
-                ('FME.XETR', 'Fresenius Medical Care'),
-                ('FRE.XETR', 'Fresenius SE')
-            ],
-            'XFRA': [
-                ('SAP.XFRA', 'SAP'),
-                ('ALV.XFRA', 'Allianz'),
-                ('DTE.XFRA', 'Deutsche Telekom'),
-                ('SIE.XFRA', 'Siemens'),
-                ('BAS.XFRA', 'BASF'),
-                ('BMW.XFRA', 'BMW'),
-                ('MBG.XFRA', 'Mercedes‑Benz Group'),
-                ('BAYN.XFRA', 'Bayer'),
-                ('ADS.XFRA', 'Adidas'),
-                ('RWE.XFRA', 'RWE'),
-                ('HNR1.XFRA', 'Hannover Rück'),
-                ('MUV2.XFRA', 'Munich Re'),
-                ('P911.XFRA', 'Porsche AG'),
-                ('IFX.XFRA', 'Infineon Technologies'),
-                ('VOW3.XFRA', 'Volkswagen (Pref)'),
-                ('HEI.XFRA', 'HELLA GmbH'),
-                ('FME.XFRA', 'Fresenius Medical Care'),
-                ('FRE.XFRA', 'Fresenius SE'),
-                ('SY1.XFRA', 'Symrise'),
-                ('ZAL.XFRA', 'Zalando')
-            ],
-            'XSTU': [
-                ('SAP.XSTU', 'SAP'),
-                ('SIE.XSTU', 'Siemens'),
-                ('ALV.XSTU', 'Allianz'),
-                ('DTE.XSTU', 'Deutsche Telekom'),
-                ('MBG.XSTU', 'Mercedes‑Benz Group'),
-                ('BMW.XSTU', 'BMW'),
-                ('BAS.XSTU', 'BASF'),
-                ('RWE.XSTU', 'RWE'),
-                ('MUV2.XSTU', 'Munich Re'),
-                ('ADS.XSTU', 'Adidas'),
-                ('HEN3.XSTU', 'Henkel'),
-                ('P911.XSTU', 'Porsche AG'),
-                ('VOW3.XSTU', 'Volkswagen (Pref)'),
-                ('IFX.XSTU', 'Infineon Technologies'),
-                ('SHL.XSTU', 'Siemens Healthineers'),
-                ('LIN.XSTU', 'Linde'),
-                ('CON.XSTU', 'Continental'),
-                ('HEI.XSTU', 'HELLA GmbH'),
-                ('FME.XSTU', 'Fresenius Medical Care'),
-                ('FRE.XSTU', 'Fresenius SE')
-            ],
-            'XAMS': [
-                ('ASML.XAMS', 'ASML Holding'),
-                ('SHELL.XAMS', 'Shell plc'),
-                ('PRX.XAMS', 'Prosus'),
-                ('REL.XAMS', 'RELX (Amsterdam line)'),
-                ('INGA.XAMS', 'ING Groep'),
-                ('ADYEN.XAMS', 'Adyen'),
-                ('UMG.XAMS', 'Universal Music Group'),
-                ('DSM.XAMS', 'DSM‑Firmenich'),
-                ('ASM.XAMS', 'ASM International'),
-                ('AKZA.XAMS', 'Akzo Nobel'),
-                ('NN.XAMS', 'NN Group'),
-                ('RAND.XAMS', 'Randstad'),
-                ('HEIA.XAMS', 'Heineken'),
-                ('URW.XAMS', 'Unibail‑Rodamco‑Westfield'),
-                ('TKWY.XAMS', 'Just Eat Takeaway.com'),
-                ('WKL.XAMS', 'Wolters Kluwer'),
-                ('PHIA.XAMS', 'Philips'),
-                ('MT.AMS', 'ArcelorMittal (AMS line)'),
-                ('IMCD.XAMS', 'IMCD'),
-                ('BESI.XAMS', 'BE Semiconductor')
-            ],
-            'XTAE': [
-                ('LUMI.XTAE', 'Bank Leumi'),
-                ('POLI.XTAE', 'Bank Hapoalim'),
-                ('ELBT.XTAE', 'Elbit Systems'),
-                ('PHOE.XTAE', 'Phoenix Holdings'),
-                ('NVMI.XTAE', 'Nova'),
-                ('ICL.XTAE', 'ICL Group'),
-                ('TEVA.XTAE', 'Teva'),
-                ('TASE.XTAE', 'Tel‑Aviv Stock Exchange'),
-                ('ENRG.XTAE', 'Energix'),
-                ('DMRI.XTAE', 'Y.H. Dimri'),
-                ('OPCO.XTAE', 'OPC Energy'),
-                ('BZRI.XTAE', 'Bezeq'),
-                ('DELT.XTAE', 'Delek Group'),
-                ('STRA.XTAE', 'Strauss Group'),
-                ('NICE.XTAE', 'NICE Ltd.'),
-                ('MTRX.XTAE', 'Matrix IT'),
-                ('FIBI.XTAE', 'First International Bank of Israel'),
-                ('ISCD.XTAE', 'Israel Corp.'),
-                ('SHLD.XTAE', 'Shikun & Binui'),
-                ('TSEM.XTAE', 'Tower Semiconductor')
-            ]
         }
         
         # Risk-free rate mapping for different currencies and regions
@@ -1288,152 +1044,8 @@ class ShansAi:
         selected_assets = random.sample(all_assets, min(count, len(all_assets)))
         return [f"`{asset}`" for asset in selected_assets]
 
-    def get_info_examples(self, count: int = 3) -> list:
-        """Get random examples for /info command with ticker and company name"""
-        import random
-        
-        # Always start with MOEX ticker
-        moex_tickers = self.top_tickers.get('MOEX', [])
-        if moex_tickers:
-            moex_ticker = random.choice(moex_tickers)
-            selected_tickers = [moex_ticker]
-        else:
-            selected_tickers = []
-        
-        # Collect remaining tickers from all exchanges
-        remaining_tickers = []
-        for exchange, tickers in self.top_tickers.items():
-            if exchange != 'MOEX':  # Skip MOEX as we already selected one
-                remaining_tickers.extend(tickers)
-        
-        # Select remaining random tickers
-        remaining_count = min(count - len(selected_tickers), len(remaining_tickers))
-        if remaining_count > 0:
-            additional_tickers = random.sample(remaining_tickers, remaining_count)
-            selected_tickers.extend(additional_tickers)
-        
-        # Format as "ticker - Company Name, Exchange"
-        examples = []
-        for ticker, company_name in selected_tickers:
-            exchange = ticker.split('.')[-1]
-            examples.append(f"`{ticker}` - {company_name}, {exchange}")
-        
-        return examples
 
-    def get_compare_examples(self, count: int = 3) -> list:
-        """Get random examples for /compare command with ready commands from same exchange"""
-        import random
-        
-        examples = []
-        
-        # Always start with MOEX example
-        moex_tickers = self.top_tickers.get('MOEX', [])
-        if len(moex_tickers) >= 2:
-            selected_tickers = random.sample(moex_tickers, 2)
-            ticker1, company1 = selected_tickers[0]
-            ticker2, company2 = selected_tickers[1]
-            
-            # Create MOEX command example
-            command = f"`{ticker1} {ticker2}`"
-            description = f"сравнить {company1} и {company2}"
-            examples.append(f"{command} - {description}")
-        
-        # Get remaining random exchanges (excluding MOEX)
-        remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex != 'MOEX']
-        remaining_count = min(count - len(examples), len(remaining_exchanges))
-        
-        if remaining_count > 0:
-            selected_exchanges = random.sample(remaining_exchanges, remaining_count)
-            
-            for exchange in selected_exchanges:
-                # Get 2 random tickers from the same exchange
-                exchange_tickers = self.top_tickers[exchange]
-                if len(exchange_tickers) >= 2:
-                    selected_tickers = random.sample(exchange_tickers, 2)
-                    ticker1, company1 = selected_tickers[0]
-                    ticker2, company2 = selected_tickers[1]
-                    
-                    # Create command example
-                    command = f"`/compare {ticker1} {ticker2}`"
-                    description = f"сравнить {company1} и {company2}"
-                    examples.append(f"{command} - {description}")
-        
-        return examples
 
-    def get_portfolio_examples(self, count: int = 3) -> list:
-        """Get random examples for /portfolio command with weights that sum to 1.0"""
-        import random
-        
-        examples = []
-        
-        # Always start with MOEX example
-        moex_tickers = self.top_tickers.get('MOEX', [])
-        if len(moex_tickers) >= 3:
-            selected_tickers = random.sample(moex_tickers, 3)
-            
-            # Generate weights that sum to 1.0
-            weights = self._generate_portfolio_weights(3)
-            
-            # Create MOEX command example
-            command_parts = []
-            companies = []
-            for i, (ticker, company) in enumerate(selected_tickers):
-                command_parts.append(f"{ticker}:{weights[i]:.1f}")
-                companies.append(company)
-            
-            command = f"`{' '.join(command_parts)}`"
-            description = f"создать портфель {', '.join(companies)}"
-            examples.append(f"{command} - {description}")
-        
-        # Get remaining random exchanges (excluding MOEX)
-        remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex != 'MOEX']
-        remaining_count = min(count - len(examples), len(remaining_exchanges))
-        
-        if remaining_count > 0:
-            selected_exchanges = random.sample(remaining_exchanges, remaining_count)
-            
-            for exchange in selected_exchanges:
-                # Get 3 random tickers from the same exchange
-                exchange_tickers = self.top_tickers[exchange]
-                if len(exchange_tickers) >= 3:
-                    selected_tickers = random.sample(exchange_tickers, 3)
-                    
-                    # Generate weights that sum to 1.0
-                    weights = self._generate_portfolio_weights(3)
-                    
-                    # Create command example
-                    command_parts = []
-                    companies = []
-                    for i, (ticker, company) in enumerate(selected_tickers):
-                        command_parts.append(f"{ticker}:{weights[i]:.1f}")
-                        companies.append(company)
-                    
-                    command = f"`/portfolio {' '.join(command_parts)}`"
-                    description = f"создать портфель {', '.join(companies)}"
-                    examples.append(f"{command} - {description}")
-        
-        return examples
-
-    def _generate_portfolio_weights(self, num_assets: int) -> list:
-        """Generate random weights that sum to 1.0"""
-        import random
-        
-        # Generate random numbers
-        weights = [random.random() for _ in range(num_assets)]
-        
-        # Normalize to sum to 1.0
-        total = sum(weights)
-        normalized_weights = [w / total for w in weights]
-        
-        # Round to 1 decimal place and ensure sum is exactly 1.0
-        rounded_weights = [round(w, 1) for w in normalized_weights]
-        
-        # Adjust the last weight to ensure sum is exactly 1.0
-        current_sum = sum(rounded_weights)
-        if current_sum != 1.0:
-            rounded_weights[-1] = round(1.0 - sum(rounded_weights[:-1]), 1)
-        
-        return rounded_weights
 
     async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation") -> None:
         """Общая функция для обработки ошибок"""
@@ -2980,9 +2592,162 @@ class ShansAi:
             else:
                 await self._send_message_safe(update, error_msg)
     
+    async def _show_namespace_symbols_with_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, page: int = 0):
+        """Show namespace symbols with reply keyboard - for namespace button clicks"""
+        try:
+            symbols_df = ok.symbols_in_namespace(namespace)
+            
+            if symbols_df.empty:
+                error_msg = f"❌ Пространство имен '{namespace}' не найдено или пусто"
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=error_msg
+                )
+                return
+            
+            # Show statistics first
+            total_symbols = len(symbols_df)
+            symbols_per_page = 20  # Показываем по 20 символов на страницу
+            
+            # Calculate pagination
+            total_pages = (total_symbols + symbols_per_page - 1) // symbols_per_page
+            current_page = min(page, total_pages - 1) if total_pages > 0 else 0
+            
+            # Calculate start and end indices
+            start_idx = current_page * symbols_per_page
+            end_idx = min(start_idx + symbols_per_page, total_symbols)
+            
+            # Navigation info instead of first symbols
+            response = f"📊 **{namespace}** - Всего символов: {total_symbols:,}\n\n"
+            response += f"📋 **Навигация:** Показаны символы {start_idx + 1}-{end_idx} из {total_symbols}\n"
+            response += f"📄 Страница {current_page + 1} из {total_pages}\n\n"
+            
+            # Get symbols for current page
+            page_symbols = symbols_df.iloc[start_idx:end_idx]
+            
+            # Create bullet list format
+            symbol_list = []
+            
+            for _, row in page_symbols.iterrows():
+                symbol = row['symbol'] if pd.notna(row['symbol']) else 'N/A'
+                name = row['name'] if pd.notna(row['name']) else 'N/A'
+                
+                # Escape special characters for Markdown
+                escaped_name = name.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+                
+                # Create bullet list item with bold ticker
+                symbol_list.append(f"• **`{symbol}`** - {escaped_name}")
+            
+            # Add symbol list to response
+            if symbol_list:
+                response += "\n".join(symbol_list) + "\n"
+            
+            # Create reply keyboard
+            reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
+            
+            # Save current namespace context for reply keyboard handling
+            user_id = update.callback_query.from_user.id
+            self._update_user_context(user_id, 
+                current_namespace=namespace,
+                current_namespace_page=current_page
+            )
+            
+            # Send new message with reply keyboard
+            await context.bot.send_message(
+                chat_id=update.callback_query.message.chat_id,
+                text=response,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
+            await context.bot.send_message(
+                chat_id=update.callback_query.message.chat_id,
+                text=error_msg
+            )
 
-
-
+    async def _show_tushare_namespace_symbols_with_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str, page: int = 0):
+        """Show Tushare namespace symbols with reply keyboard - for namespace button clicks"""
+        try:
+            if not self.tushare_service:
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text="❌ Сервис Tushare не настроен"
+                )
+                return
+            
+            # Get symbols from Tushare
+            symbols_data = self.tushare_service.get_exchange_symbols(namespace)
+            
+            if not symbols_data:
+                await context.bot.send_message(
+                    chat_id=update.callback_query.message.chat_id,
+                    text=f"❌ Пространство имен '{namespace}' не найдено или пусто"
+                )
+                return
+            
+            # Show statistics first
+            total_count = len(symbols_data)
+            symbols_per_page = 20  # Показываем по 20 символов на страницу
+            
+            # Calculate pagination
+            total_pages = (total_count + symbols_per_page - 1) // symbols_per_page
+            current_page = min(page, total_pages - 1) if total_pages > 0 else 0
+            
+            # Calculate start and end indices
+            start_idx = current_page * symbols_per_page
+            end_idx = min(start_idx + symbols_per_page, total_count)
+            
+            # Navigation info instead of first symbols
+            response = f"📊 **{namespace}** - Всего символов: {total_count:,}\n\n"
+            response += f"📋 **Навигация:** Показаны символы {start_idx + 1}-{end_idx} из {total_count}\n"
+            response += f"📄 Страница {current_page + 1} из {total_pages}\n\n"
+            
+            # Get symbols for current page
+            page_symbols = symbols_data[start_idx:end_idx]
+            
+            # Create bullet list format
+            symbol_list = []
+            
+            for symbol_data in page_symbols:
+                symbol = symbol_data.get('symbol', 'N/A')
+                name = symbol_data.get('name', 'N/A')
+                
+                # Escape special characters for Markdown
+                escaped_name = name.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+                
+                # Create bullet list item with bold ticker
+                symbol_list.append(f"• **`{symbol}`** - {escaped_name}")
+            
+            # Add symbol list to response
+            if symbol_list:
+                response += "\n".join(symbol_list) + "\n"
+            
+            # Create reply keyboard
+            reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_count)
+            
+            # Save current namespace context for reply keyboard handling
+            user_id = update.callback_query.from_user.id
+            self._update_user_context(user_id, 
+                current_namespace=namespace,
+                current_namespace_page=current_page
+            )
+            
+            # Send new message with reply keyboard
+            await context.bot.send_message(
+                chat_id=update.callback_query.message.chat_id,
+                text=response,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            error_msg = f"❌ Ошибка при получении данных для '{namespace}': {str(e)}"
+            await context.bot.send_message(
+                chat_id=update.callback_query.message.chat_id,
+                text=error_msg
+            )
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
@@ -2991,7 +2756,7 @@ class ShansAi:
         
         if not context.args:
             # Get random examples for user
-            examples = self.get_info_examples(5)
+            examples = self.examples_service.get_info_examples(5)
             examples_text = "\n".join([f"• {example}" for example in examples])
             
             # Set flag that user is waiting for info input and clear portfolio flags
@@ -4215,7 +3980,7 @@ class ShansAi:
                 self._update_user_context(user_id, compare_first_symbol=None, waiting_for_compare=False)
                 
                 # Get random examples for user
-                examples = self.get_compare_examples(3)
+                examples = self.examples_service.get_compare_examples(3)
                 examples_text = "\n".join([f"• {example}" for example in examples])
                 
                 help_text = "📊 Сравнение\n\n"
@@ -4990,7 +4755,7 @@ class ShansAi:
                     help_text += "\n"
 
                 # Get random examples for user
-                examples = self.get_portfolio_examples(3)
+                examples = self.examples_service.get_portfolio_examples(3)
                 examples_text = "\n".join([f"• {example}" for example in examples])
                 
                 help_text += "*Примеры команд:*\n"
@@ -16950,12 +16715,16 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при отображении портфеля: {str(e)}")
 
     async def _handle_namespace_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, namespace: str):
-        """Handle namespace button click - show symbols in specific namespace"""
+        """Handle namespace button click - show symbols in specific namespace with reply keyboard"""
         try:
             self.logger.info(f"Handling namespace button for: {namespace}")
             
-            # Use the unified method that handles both okama and tushare
-            await self._show_namespace_symbols(update, context, namespace, is_callback=True, page=0)
+            # Check if it's a Chinese exchange
+            chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
+            if namespace in chinese_exchanges:
+                await self._show_tushare_namespace_symbols_with_reply_keyboard(update, context, namespace, page=0)
+            else:
+                await self._show_namespace_symbols_with_reply_keyboard(update, context, namespace, page=0)
                 
         except ImportError:
             await self._send_callback_message(update, context, "❌ Библиотека okama не установлена")
