@@ -5981,8 +5981,14 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio tickers weights input handler: {e}")
-            # Restore waiting flag so user can try again
-            self._update_user_context(user_id, waiting_for_portfolio_weights=True)
+            # Clear user context to prevent fallback to compare command
+            self._update_user_context(user_id, 
+                waiting_for_portfolio=False,
+                waiting_for_portfolio_weights=False,
+                waiting_for_compare=False,
+                portfolio_tickers=None,
+                portfolio_base_symbols=None
+            )
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода весов портфеля: {str(e)}\n\n🔄 Попробуйте ввести веса снова:")
 
     async def _handle_compare_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
