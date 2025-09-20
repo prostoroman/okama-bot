@@ -5260,10 +5260,31 @@ class ShansAi:
                     symbol = original_symbol.upper()
                     tickers_only.append(symbol)
             
-            # Если есть только тикеры без весов, запрашиваем веса
+            # Если есть только тикеры без весов
             if tickers_only and not portfolio_data:
-                await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
-                return
+                # Если только один тикер, создаем портфель с весом 100%
+                if len(tickers_only) == 1:
+                    single_ticker = tickers_only[0]
+                    
+                    # Проверяем на китайские и гонконгские символы
+                    if self._is_chinese_or_hongkong_symbol(single_ticker):
+                        await self._send_message_safe(update, 
+                            "🚧 **Поддержка китайских и гонконгских символов в разработке**\n\n"
+                            "К сожалению, создание портфелей с китайскими и гонконгскими активами "
+                            "пока не поддерживается. Эта функциональность находится в разработке.\n\n"
+                            "💡 Попробуйте использовать активы с других бирж:\n"
+                            "• `SPY.US` - американские ETF\n"
+                            "• `SBER.MOEX` - российские акции\n"
+                            "• `VTI.US` - глобальные ETF"
+                        )
+                        return
+                    
+                    # Создаем портфель с одним активом и весом 100%
+                    portfolio_data = [(single_ticker, 1.0)]
+                else:
+                    # Несколько тикеров без весов - запрашиваем веса
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
             
             # Если есть смешанный ввод (тикеры с весами и без), это ошибка
             if tickers_only and portfolio_data:
@@ -7457,21 +7478,17 @@ class ShansAi:
                 portfolio_base_symbols=symbols_to_use
             )
             
-            # Create message with symbols and request for weights
-            portfolio_text += "**Укажите доли для каждого актива:**\n"
-            if len(symbols_to_use) >= 1:
-                portfolio_text += f"• `{symbols_to_use[0]}:0.4"
-                if len(symbols_to_use) >= 2:
-                    portfolio_text += f" {symbols_to_use[1]}:0.3"
-                if len(symbols_to_use) >= 3:
-                    portfolio_text += f" {symbols_to_use[2]}:0.3"
-                portfolio_text += "`\n\n"
-            
             portfolio_text += "**Примеры:**\n"
             if len(symbols_to_use) >= 2:
                 portfolio_text += f"• `{symbols_to_use[0]}:0.6 {symbols_to_use[1]}:0.4`\n"
             if len(symbols_to_use) >= 3:
                 portfolio_text += f"• `{symbols_to_use[0]}:0.5 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2`\n"
+            if len(symbols_to_use) >= 4:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.4 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2 {symbols_to_use[3]}:0.1`\n"
+            if len(symbols_to_use) >= 5:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.3 {symbols_to_use[1]}:0.25 {symbols_to_use[2]}:0.2 {symbols_to_use[3]}:0.15 {symbols_to_use[4]}:0.1`\n"
+            if len(symbols_to_use) >= 6:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.25 {symbols_to_use[1]}:0.2 {symbols_to_use[2]}:0.15 {symbols_to_use[3]}:0.15 {symbols_to_use[4]}:0.15 {symbols_to_use[5]}:0.1`\n"
             portfolio_text += "\n"
             
             portfolio_text += "💡 Сумма долей должна равняться 1.0 (100%)\n"
