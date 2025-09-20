@@ -1618,8 +1618,8 @@ class ShansAi:
             title_parts.append(f"Currency: {currency}")
             title = ", ".join(title_parts)
             
-            # Используем стандартный метод создания графика сравнения
-            fig, ax = self.chart_styles.create_comparison_chart(
+            # Используем единый метод создания графика сравнения
+            fig, ax = self.chart_styles.create_unified_wealth_chart(
                 data=comparison_df,
                 symbols=list(comparison_data.keys()),
                 currency=currency,
@@ -2039,7 +2039,7 @@ class ShansAi:
             if correlation_matrix is None or correlation_matrix.empty:
                 return ""
             
-            values_text = "📊 **Численные значения корреляции:**\n"
+            values_text = ""
             
             # Get upper triangle values only (avoid duplicates)
             symbols = correlation_matrix.columns.tolist()
@@ -2193,7 +2193,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}")
+                caption=self._truncate_caption(f"🔗 Корреляция {len(symbols)} активов\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}")
             )
             self.logger.info("Correlation matrix image sent successfully")
             
@@ -2863,9 +2863,14 @@ class ShansAi:
             self.logger.info(f"Processing as portfolio weights input: {text}")
             
             # Check if this is from portfolio command (tickers only) or compare command
-            if user_context.get('portfolio_tickers'):
-                # This is from portfolio command with tickers only
-                await self._handle_portfolio_tickers_weights_input(update, context, text)
+            if user_context.get('portfolio_tickers') or user_context.get('portfolio_base_symbols'):
+                # This is from portfolio command with tickers only OR from compare portfolio button
+                if user_context.get('portfolio_tickers'):
+                    # This is from portfolio command with tickers only
+                    await self._handle_portfolio_tickers_weights_input(update, context, text)
+                else:
+                    # This is from compare portfolio button - handle as portfolio weights input
+                    await self._handle_portfolio_weights_input(update, context, text)
             else:
                 # This is from compare command - handle as compare input instead of portfolio weights
                 await self._handle_compare_input(update, context, text)
@@ -4470,7 +4475,7 @@ class ShansAi:
                 if specified_period:
                     chart_title += f" | {specified_period}"
                 
-                fig, ax = chart_styles.create_comparison_chart(
+                fig, ax = chart_styles.create_unified_wealth_chart(
                     comparison.wealth_indexes, symbols, currency, title=chart_title
                 )
                 
@@ -4634,7 +4639,7 @@ class ShansAi:
             
             # Если есть только тикеры без весов
             if tickers_only and not portfolio_data:
-                # Если только один тикер, создаем портфель с весом 100%
+                # Если только один тикер, запрашиваем веса (вместо автоматического создания с весом 100%)
                 if len(tickers_only) == 1:
                     single_ticker = tickers_only[0]
                     
@@ -4651,8 +4656,9 @@ class ShansAi:
                         )
                         return
                     
-                    # Создаем портфель с одним активом и весом 100%
-                    portfolio_data = [(single_ticker, 1.0)]
+                    # Запрашиваем веса для одного актива
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
                 else:
                     # Несколько тикеров без весов - запрашиваем веса
                     await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
@@ -5260,10 +5266,32 @@ class ShansAi:
                     symbol = original_symbol.upper()
                     tickers_only.append(symbol)
             
-            # Если есть только тикеры без весов, запрашиваем веса
+            # Если есть только тикеры без весов
             if tickers_only and not portfolio_data:
-                await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
-                return
+                # Если только один тикер, запрашиваем веса (вместо автоматического создания с весом 100%)
+                if len(tickers_only) == 1:
+                    single_ticker = tickers_only[0]
+                    
+                    # Проверяем на китайские и гонконгские символы
+                    if self._is_chinese_or_hongkong_symbol(single_ticker):
+                        await self._send_message_safe(update, 
+                            "🚧 **Поддержка китайских и гонконгских символов в разработке**\n\n"
+                            "К сожалению, создание портфелей с китайскими и гонконгскими активами "
+                            "пока не поддерживается. Эта функциональность находится в разработке.\n\n"
+                            "💡 Попробуйте использовать активы с других бирж:\n"
+                            "• `SPY.US` - американские ETF\n"
+                            "• `SBER.MOEX` - российские акции\n"
+                            "• `VTI.US` - глобальные ETF"
+                        )
+                        return
+                    
+                    # Запрашиваем веса для одного актива
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
+                else:
+                    # Несколько тикеров без весов - запрашиваем веса
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
             
             # Если есть смешанный ввод (тикеры с весами и без), это ошибка
             if tickers_only and portfolio_data:
@@ -6742,6 +6770,9 @@ class ShansAi:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
+            # Ensure reply keyboard is removed when transitioning between methods
+            # This prevents keyboard from staying visible when switching contexts
+            await self._ensure_no_reply_keyboard(update, context)
             
             # Handle start command callbacks
             if callback_data.startswith("start_"):
@@ -7368,12 +7399,19 @@ class ShansAi:
                 # Create Efficient Frontier
                 ef = ok.EfficientFrontier(asset_list, ccy=currency)
                 
+                # Log debug information
+                self.logger.info(f"Created EfficientFrontier with {len(asset_names)} assets: {asset_names}")
+                
                 # Create chart with proper styling using chart_styles
                 current_fig, ax = chart_styles.create_efficient_frontier_chart(
                     ef, 
                     asset_names, 
                     data_source='okama'
                 )
+                
+                # Check if chart creation was successful
+                if current_fig is None:
+                    raise Exception("Failed to create efficient frontier chart - chart creation returned None")
                 
                 img_buffer = io.BytesIO()
                 chart_styles.save_figure(current_fig, img_buffer)
@@ -7450,21 +7488,17 @@ class ShansAi:
                 portfolio_base_symbols=symbols_to_use
             )
             
-            # Create message with symbols and request for weights
-            portfolio_text += "**Укажите доли для каждого актива:**\n"
-            if len(symbols_to_use) >= 1:
-                portfolio_text += f"• `{symbols_to_use[0]}:0.4"
-                if len(symbols_to_use) >= 2:
-                    portfolio_text += f" {symbols_to_use[1]}:0.3"
-                if len(symbols_to_use) >= 3:
-                    portfolio_text += f" {symbols_to_use[2]}:0.3"
-                portfolio_text += "`\n\n"
-            
             portfolio_text += "**Примеры:**\n"
             if len(symbols_to_use) >= 2:
                 portfolio_text += f"• `{symbols_to_use[0]}:0.6 {symbols_to_use[1]}:0.4`\n"
             if len(symbols_to_use) >= 3:
                 portfolio_text += f"• `{symbols_to_use[0]}:0.5 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2`\n"
+            if len(symbols_to_use) >= 4:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.4 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2 {symbols_to_use[3]}:0.1`\n"
+            if len(symbols_to_use) >= 5:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.3 {symbols_to_use[1]}:0.25 {symbols_to_use[2]}:0.2 {symbols_to_use[3]}:0.15 {symbols_to_use[4]}:0.1`\n"
+            if len(symbols_to_use) >= 6:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.25 {symbols_to_use[1]}:0.2 {symbols_to_use[2]}:0.15 {symbols_to_use[3]}:0.15 {symbols_to_use[4]}:0.15 {symbols_to_use[5]}:0.1`\n"
             portfolio_text += "\n"
             
             portfolio_text += "💡 Сумма долей должна равняться 1.0 (100%)\n"
@@ -10106,6 +10140,10 @@ class ShansAi:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             
+            # Ensure reply keyboard is removed when transitioning between different contexts
+            # This prevents keyboard from staying visible when switching between different analysis types
+            await self._ensure_no_reply_keyboard(update, context)
+            
             # Determine context based on user's last activity and available data
             last_assets = user_context.get('last_assets', [])
             saved_portfolios = user_context.get('saved_portfolios', {})
@@ -10642,51 +10680,187 @@ class ShansAi:
             currency = user_context.get('last_currency', 'USD')
             specified_period = user_context.get('last_period')
             
-            # Create comparison
-            comparison = ok.AssetList(symbols, ccy=currency)
+            # Check if this is a mixed comparison (portfolios + assets)
+            last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            # Create chart
-            fig, ax = chart_styles.create_comparison_chart(
-                comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
-            )
-            
-            # Save chart to bytes
-            img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
-            img_buffer.seek(0)
-            img_bytes = img_buffer.getvalue()
-            
-            # Clear matplotlib cache
-            chart_styles.cleanup_figure(fig)
-            
-            # Create caption
-            caption = f"⚖️ Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
-            caption += f"💵 Валюта: {currency}\n"
-            if specified_period:
-                caption += f"📅 Период: {specified_period}\n"
-            
-            # Create compare reply keyboard
-            compare_reply_keyboard = self._create_compare_reply_keyboard()
-            
-            # Send chart with reply keyboard
-            await context.bot.send_photo(
-                chat_id=update.effective_chat.id,
-                photo=img_buffer,
-                caption=self._truncate_caption(caption),
-                reply_markup=compare_reply_keyboard
-            )
-            
-            # Update user context to track active keyboard
-            self._update_user_context(user_id, active_reply_keyboard="compare")
-            self.logger.info("Compare reply keyboard set with comparison chart")
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
+                # This is a mixed comparison, handle differently
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности для смешанного сравнения...", delete_after=3)
+                await self._create_mixed_comparison_wealth_chart(update, context, symbols, currency)
+            else:
+                # Regular comparison, create AssetList
+                comparison = ok.AssetList(symbols, ccy=currency)
+                
+                # Create chart using unified method
+                fig, ax = chart_styles.create_unified_wealth_chart(
+                    comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
+                )
+                
+                # Save chart to bytes
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(fig, img_buffer)
+                img_buffer.seek(0)
+                img_bytes = img_buffer.getvalue()
+                
+                # Clear matplotlib cache
+                chart_styles.cleanup_figure(fig)
+                
+                # Create caption
+                caption = f"⚖️ Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
+                caption += f"💵 Валюта: {currency}\n"
+                if specified_period:
+                    caption += f"📅 Период: {specified_period}\n"
+                
+                # Create compare reply keyboard
+                compare_reply_keyboard = self._create_compare_reply_keyboard()
+                
+                # Send chart with reply keyboard
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=img_buffer,
+                    caption=self._truncate_caption(caption),
+                    reply_markup=compare_reply_keyboard
+                )
+                
+                # Update user context to track active keyboard
+                self._update_user_context(user_id, active_reply_keyboard="compare")
+                self.logger.info("Compare reply keyboard set with comparison chart")
             
         except Exception as e:
             self.logger.error(f"Error creating comparison wealth chart: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при создании графика сравнения: {str(e)}")
 
+    async def _create_mixed_comparison_wealth_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, currency: str):
+        """Create wealth chart for mixed comparison (portfolios + assets)"""
+        try:
+            self.logger.info(f"Creating mixed comparison wealth chart for symbols: {symbols}")
+            
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
+            portfolio_data = []
+            asset_symbols = []
+            
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
+                    # This is a portfolio wealth index
+                    portfolio_data.append(expanded_symbol)
+                else:
+                    # This is an individual asset symbol
+                    asset_symbols.append(expanded_symbol)
+            
+            # Calculate wealth indexes for all items
+            wealth_data = {}
+            
+            # Process portfolios separately to avoid AssetList creation issues
+            for i, portfolio_context in enumerate(portfolio_contexts):
+                if i < len(portfolio_data):
+                    try:
+                        self.logger.info(f"Processing portfolio {i} for wealth chart")
+                        
+                        # Get portfolio details from context
+                        assets = portfolio_context.get('portfolio_symbols', [])
+                        weights = portfolio_context.get('portfolio_weights', [])
+                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        
+                        if assets and weights and len(assets) == len(weights):
+                            self.logger.info(f"Portfolio {i} assets: {assets}, weights: {weights}")
+                            
+                            # Create portfolio using ok.Portfolio
+                            import okama as ok
+                            portfolio = ok.Portfolio(
+                                assets=assets,
+                                weights=weights,
+                                rebalancing_strategy=ok.Rebalance(period="year"),
+                                symbol=symbol
+                            )
+                            
+                            # Get wealth index for portfolio
+                            wealth_series = portfolio.wealth_index
+                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
+                            if len(wealth_series) > 0:
+                                wealth_data[symbol] = wealth_series
+                                self.logger.info(f"Successfully created wealth index for {symbol}: {len(wealth_series)} points")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol}: No wealth data")
+                        else:
+                            self.logger.warning(f"Portfolio {i} missing valid assets/weights data")
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
+                        continue
+            
+            # Process individual assets separately
+            if asset_symbols:
+                try:
+                    asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
+                    
+                    for symbol in asset_symbols:
+                        if symbol in asset_asset_list.wealth_indexes.columns:
+                            # Get wealth index for individual asset
+                            wealth_series = asset_asset_list.wealth_indexes[symbol]
+                            self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
+                            if len(wealth_series) > 0:
+                                wealth_data[symbol] = wealth_series
+                                self.logger.info(f"Successfully created wealth index for {symbol}: {len(wealth_series)} points")
+                            else:
+                                self.logger.warning(f"Asset {symbol}: No wealth data")
+                        else:
+                            self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
+                except Exception as asset_error:
+                    self.logger.warning(f"Could not process individual assets: {asset_error}")
+            
+            if not wealth_data:
+                await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика накопленной доходности")
+                return
+            
+            # Create chart using chart_styles
+            try:
+                # Combine all wealth indexes into a DataFrame
+                wealth_df = pd.DataFrame(wealth_data)
+                
+                fig, ax = chart_styles.create_unified_wealth_chart(
+                    wealth_df, list(wealth_data.keys()), currency, title="Сравнение накопленной доходности"
+                )
+                
+                # Save chart to bytes with memory optimization
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(fig, img_buffer)
+                img_buffer.seek(0)
+                img_bytes = img_buffer.getvalue()
+                
+                # Clear matplotlib cache to free memory
+                chart_styles.cleanup_figure(fig)
+                
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
+                
+                # Remove keyboard from previous message before sending new message
+                await self._remove_keyboard_before_new_message(update, context)
+                
+                # Send wealth chart with keyboard
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id, 
+                    photo=io.BytesIO(img_bytes),
+                    caption=self._truncate_caption(f"📈 График накопленной доходности для смешанного сравнения\n\nПоказывает накопленную доходность портфелей и активов"),
+                    reply_markup=keyboard
+                )
+                
+            except Exception as chart_error:
+                self.logger.error(f"Error creating mixed comparison wealth chart: {chart_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(chart_error)}")
+            
+        except Exception as e:
+            self.logger.error(f"Error in mixed comparison wealth chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
 
-
-    async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+    async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                                    message_type: str, content: any, caption: str = None, 
                                                    keyboard: InlineKeyboardMarkup = None, parse_mode: str = None):
         """
@@ -15712,8 +15886,8 @@ class ShansAi:
             # Generate wealth chart using chart_styles
             wealth_index = portfolio.wealth_index
             
-            # Create portfolio chart with chart_styles using optimized method
-            fig, ax = chart_styles.create_portfolio_wealth_chart(
+            # Create portfolio chart with chart_styles using unified method
+            fig, ax = chart_styles.create_unified_wealth_chart(
                 data=wealth_index, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_symbol
             )
             
@@ -15895,8 +16069,8 @@ class ShansAi:
             # Generate wealth chart using chart_styles
             wealth_index = portfolio.wealth_index
             
-            # Create portfolio chart with chart_styles using optimized method
-            fig, ax = chart_styles.create_portfolio_wealth_chart(
+            # Create portfolio chart with chart_styles using unified method
+            fig, ax = chart_styles.create_unified_wealth_chart(
                 data=wealth_index, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_name
             )
             
