@@ -10517,10 +10517,9 @@ class ShansAi:
         try:
             self.logger.info(f"Redirecting to compare command with symbol: {symbol}")
             
-            # Set the symbol as argument for compare command
-            context.args = [symbol]
-            
-            # Execute compare command
+            # Don't set context.args - symbol is already saved in context
+            # Execute compare command without arguments
+            context.args = []
             await self.compare_command(update, context)
                 
         except Exception as e:
@@ -10532,10 +10531,9 @@ class ShansAi:
         try:
             self.logger.info(f"Redirecting to portfolio command with symbol: {symbol}")
             
-            # Set the symbol as argument for portfolio command
-            context.args = [symbol]
-            
-            # Execute portfolio command
+            # Don't set context.args - symbol is already saved in context
+            # Execute portfolio command without arguments
+            context.args = []
             await self.portfolio_command(update, context)
                 
         except Exception as e:
@@ -12273,11 +12271,12 @@ class ShansAi:
     async def _handle_single_dividends_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle dividends button click for single asset"""
         try:
-            # Remove buttons from the old message
-            try:
-                await update.callback_query.edit_message_reply_markup(reply_markup=None)
-            except Exception as e:
-                self.logger.warning(f"Could not remove buttons from old message: {e}")
+            # Remove buttons from the old message (only for callback queries)
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                try:
+                    await update.callback_query.edit_message_reply_markup(reply_markup=None)
+                except Exception as e:
+                    self.logger.warning(f"Could not remove buttons from old message: {e}")
             
             await self._send_callback_message(update, context, "💵 Получаю информацию о дивидендах...")
             
@@ -12312,11 +12311,15 @@ class ShansAi:
                         keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
                         reply_markup = InlineKeyboardMarkup(keyboard)
                         
-                        await update.callback_query.message.reply_photo(
-                            photo=dividend_chart,
-                            caption=f"💵 Дивиденды {symbol}",
-                            reply_markup=reply_markup
-                        )
+                        # Send photo - handle both callback query and regular message
+                        if hasattr(update, 'callback_query') and update.callback_query is not None:
+                            await update.callback_query.message.reply_photo(
+                                photo=dividend_chart,
+                                caption=f"💵 Дивиденды {symbol}",
+                                reply_markup=reply_markup
+                            )
+                        else:
+                            await self._send_photo_safe(update, dividend_chart, f"💵 Дивиденды {symbol}", reply_markup=reply_markup, context=context)
                     else:
                         # Создаем клавиатуру для возврата к информации об активе
                         keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
