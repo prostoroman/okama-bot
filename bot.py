@@ -9946,7 +9946,7 @@ class ShansAi:
                 KeyboardButton("🇺🇸 US"),
                 KeyboardButton("🇷🇺 MOEX"),
                 KeyboardButton("🇷🇺 PIF"),
-                
+                KeyboardButton("🇷🇺 RE")
             ])
             
             # Европейские биржи
@@ -9961,11 +9961,12 @@ class ShansAi:
             keyboard.append([
                 KeyboardButton("🇨🇳 SSE"),
                 KeyboardButton("🇨🇳 SZSE"),
-                KeyboardButton("🇨🇳 BSE")
+                KeyboardButton("🇨🇳 BSE"),
+                KeyboardButton("🇭🇰 HKEX")
             ])
             
             keyboard.append([
-                KeyboardButton("🇭🇰 HKEX")
+                
             ])
             
             # Индексы и валюты
