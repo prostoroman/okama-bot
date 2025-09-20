@@ -10724,9 +10724,136 @@ class ShansAi:
             self.logger.error(f"Error creating comparison wealth chart: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при создании графика сравнения: {str(e)}")
 
+    async def _create_mixed_comparison_wealth_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list, currency: str):
+        """Create wealth chart for mixed comparison (portfolios + assets)"""
+        try:
+            self.logger.info(f"Creating mixed comparison wealth chart for symbols: {symbols}")
+            
+            # Get user context to restore portfolio information
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Separate portfolios and individual assets using expanded_symbols
+            portfolio_data = []
+            asset_symbols = []
+            
+            for i, expanded_symbol in enumerate(expanded_symbols):
+                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
+                    # This is a portfolio wealth index
+                    portfolio_data.append(expanded_symbol)
+                else:
+                    # This is an individual asset symbol
+                    asset_symbols.append(expanded_symbol)
+            
+            # Calculate wealth indexes for all items
+            wealth_data = {}
+            
+            # Process portfolios separately to avoid AssetList creation issues
+            for i, portfolio_context in enumerate(portfolio_contexts):
+                if i < len(portfolio_data):
+                    try:
+                        self.logger.info(f"Processing portfolio {i} for wealth chart")
+                        
+                        # Get portfolio details from context
+                        assets = portfolio_context.get('portfolio_symbols', [])
+                        weights = portfolio_context.get('portfolio_weights', [])
+                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
+                        
+                        if assets and weights and len(assets) == len(weights):
+                            self.logger.info(f"Portfolio {i} assets: {assets}, weights: {weights}")
+                            
+                            # Create portfolio using ok.Portfolio
+                            import okama as ok
+                            portfolio = ok.Portfolio(
+                                assets=assets,
+                                weights=weights,
+                                rebalancing_strategy=ok.Rebalance(period="year"),
+                                symbol=symbol
+                            )
+                            
+                            # Get wealth index for portfolio
+                            wealth_series = portfolio.wealth_index
+                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
+                            if len(wealth_series) > 0:
+                                wealth_data[symbol] = wealth_series
+                                self.logger.info(f"Successfully created wealth index for {symbol}: {len(wealth_series)} points")
+                            else:
+                                self.logger.warning(f"Portfolio {symbol}: No wealth data")
+                        else:
+                            self.logger.warning(f"Portfolio {i} missing valid assets/weights data")
+                    except Exception as portfolio_error:
+                        self.logger.warning(f"Could not process portfolio {i}: {portfolio_error}")
+                        continue
+            
+            # Process individual assets separately
+            if asset_symbols:
+                try:
+                    asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
+                    
+                    for symbol in asset_symbols:
+                        if symbol in asset_asset_list.wealth_indexes.columns:
+                            # Get wealth index for individual asset
+                            wealth_series = asset_asset_list.wealth_indexes[symbol]
+                            self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
+                            
+                            if len(wealth_series) > 0:
+                                wealth_data[symbol] = wealth_series
+                                self.logger.info(f"Successfully created wealth index for {symbol}: {len(wealth_series)} points")
+                            else:
+                                self.logger.warning(f"Asset {symbol}: No wealth data")
+                        else:
+                            self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
+                except Exception as asset_error:
+                    self.logger.warning(f"Could not process individual assets: {asset_error}")
+            
+            if not wealth_data:
+                await self._send_callback_message(update, context, "❌ Не удалось создать данные для графика накопленной доходности")
+                return
+            
+            # Create chart using chart_styles
+            try:
+                # Combine all wealth indexes into a DataFrame
+                wealth_df = pd.DataFrame(wealth_data)
+                
+                fig, ax = chart_styles.create_comparison_chart(
+                    wealth_df, list(wealth_data.keys()), currency, title="Сравнение накопленной доходности"
+                )
+                
+                # Save chart to bytes with memory optimization
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(fig, img_buffer)
+                img_buffer.seek(0)
+                img_bytes = img_buffer.getvalue()
+                
+                # Clear matplotlib cache to free memory
+                chart_styles.cleanup_figure(fig)
+                
+                # Create keyboard for compare command
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
+                
+                # Remove keyboard from previous message before sending new message
+                await self._remove_keyboard_before_new_message(update, context)
+                
+                # Send wealth chart with keyboard
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id, 
+                    photo=io.BytesIO(img_bytes),
+                    caption=self._truncate_caption(f"📈 График накопленной доходности для смешанного сравнения\n\nПоказывает накопленную доходность портфелей и активов"),
+                    reply_markup=keyboard
+                )
+                
+            except Exception as chart_error:
+                self.logger.error(f"Error creating mixed comparison wealth chart: {chart_error}")
+                await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(chart_error)}")
+            
+        except Exception as e:
+            self.logger.error(f"Error in mixed comparison wealth chart: {e}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при создании графика накопленной доходности: {str(e)}")
 
-
-    async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+    async def _send_message_with_keyboard_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                                    message_type: str, content: any, caption: str = None, 
                                                    keyboard: InlineKeyboardMarkup = None, parse_mode: str = None):
         """
