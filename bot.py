@@ -3794,58 +3794,10 @@ class ShansAi:
                         response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
                     response += "\n"
                 
-                response += "💡 Используйте `/list <код>` для просмотра символов в конкретном пространстве"
+                response += "💡 Используйте кнопки ниже для просмотра символов в конкретном пространстве"
                 
-                # Создаем кнопки для основных пространств имен
-                keyboard = []
-                
-                # Основные биржи
-                keyboard.append([
-                    InlineKeyboardButton("🇺🇸 US", callback_data="namespace_US"),
-                    InlineKeyboardButton("🇷🇺 MOEX", callback_data="namespace_MOEX"),
-                    InlineKeyboardButton("🇬🇧 LSE", callback_data="namespace_LSE")
-                ])
-                
-                # Европейские биржи
-                keyboard.append([
-                    InlineKeyboardButton("🇩🇪 XETR", callback_data="namespace_XETR"),
-                    InlineKeyboardButton("🇫🇷 XFRA", callback_data="namespace_XFRA"),
-                    InlineKeyboardButton("🇳🇱 XAMS", callback_data="namespace_XAMS")
-                ])
-                
-                # Китайские биржи
-                keyboard.append([
-                    InlineKeyboardButton("🇨🇳 SSE", callback_data="namespace_SSE"),
-                    InlineKeyboardButton("🇨🇳 SZSE", callback_data="namespace_SZSE"),
-                    InlineKeyboardButton("🇨🇳 BSE", callback_data="namespace_BSE")
-                ])
-                
-                keyboard.append([
-                    InlineKeyboardButton("🇭🇰 HKEX", callback_data="namespace_HKEX")
-                ])
-                
-                # Индексы и валюты
-                keyboard.append([
-                    InlineKeyboardButton("📊 INDX", callback_data="namespace_INDX"),
-                    InlineKeyboardButton("💱 FX", callback_data="namespace_FX"),
-                    InlineKeyboardButton("🏦 CBR", callback_data="namespace_CBR")
-                ])
-                
-                # Товары и криптовалюты
-                keyboard.append([
-                    InlineKeyboardButton("🛢️ COMM", callback_data="namespace_COMM"),
-                    InlineKeyboardButton("₿ CC", callback_data="namespace_CC"),
-                    InlineKeyboardButton("🏠 RE", callback_data="namespace_RE")
-                ])
-                
-                # Инфляция и депозиты
-                keyboard.append([
-                    InlineKeyboardButton("📈 INFL", callback_data="namespace_INFL"),
-                    InlineKeyboardButton("💰 PIF", callback_data="namespace_PIF"),
-                    InlineKeyboardButton("🏦 RATE", callback_data="namespace_RATE")
-                ])
-                
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                # Создаем reply keyboard для пространств имен
+                reply_markup = self._create_namespace_reply_keyboard()
                 
                 await self._send_message_safe(update, response, reply_markup=reply_markup)
                 
@@ -10102,6 +10054,64 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error creating list namespace reply keyboard: {e}")
+            # Return empty keyboard as fallback
+            return ReplyKeyboardMarkup([])
+
+    def _create_namespace_reply_keyboard(self) -> ReplyKeyboardMarkup:
+        """Create Reply Keyboard for /list command with namespace buttons"""
+        try:
+            keyboard = []
+            
+            # Основные биржи
+            keyboard.append([
+                KeyboardButton("🇺🇸 US"),
+                KeyboardButton("🇷🇺 MOEX"),
+                KeyboardButton("🇬🇧 LSE")
+            ])
+            
+            # Европейские биржи
+            keyboard.append([
+                KeyboardButton("🇩🇪 XETR"),
+                KeyboardButton("🇫🇷 XFRA"),
+                KeyboardButton("🇳🇱 XAMS")
+            ])
+            
+            # Китайские биржи
+            keyboard.append([
+                KeyboardButton("🇨🇳 SSE"),
+                KeyboardButton("🇨🇳 SZSE"),
+                KeyboardButton("🇨🇳 BSE")
+            ])
+            
+            keyboard.append([
+                KeyboardButton("🇭🇰 HKEX")
+            ])
+            
+            # Индексы и валюты
+            keyboard.append([
+                KeyboardButton("📊 INDX"),
+                KeyboardButton("💱 FX"),
+                KeyboardButton("🏦 CBR")
+            ])
+            
+            # Товары и криптовалюты
+            keyboard.append([
+                KeyboardButton("🛢️ COMM"),
+                KeyboardButton("₿ CC"),
+                KeyboardButton("🏠 RE")
+            ])
+            
+            # Инфляция и депозиты
+            keyboard.append([
+                KeyboardButton("📈 INFL"),
+                KeyboardButton("💰 PIF"),
+                KeyboardButton("🏦 RATE")
+            ])
+            
+            return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating namespace reply keyboard: {e}")
             # Return empty keyboard as fallback
             return ReplyKeyboardMarkup([])
 
