@@ -1700,7 +1700,7 @@ class ShansAi:
             describe_data = asset_list.describe()
             
             if describe_data is None or describe_data.empty:
-                return "📊 Данные для сравнения недоступны"
+                return "⚖️ Данные для сравнения недоступны"
             
             # Count columns (assets) to choose best format
             num_assets = len(describe_data.columns)
@@ -1713,7 +1713,7 @@ class ShansAi:
                     tablefmt='pipe',
                     floatfmt='.2f'
                 )
-                return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
+                return f"🔍 **Статистика активов:**\n```\n{markdown_table}\n```"
             
             elif num_assets <= 4:
                 # For 3-4 assets, use simple format (compact but readable)
@@ -1723,7 +1723,7 @@ class ShansAi:
                     tablefmt='simple',
                     floatfmt='.2f'
                 )
-                return f"📊 **Статистика активов:**\n```\n{markdown_table}\n```"
+                return f"🔍 **Статистика активов:**\n```\n{markdown_table}\n```"
             
             else:
                 # For 5+ assets, use vertical format (most mobile-friendly)
@@ -1739,7 +1739,7 @@ class ShansAi:
             describe_data = asset_list.describe()
             
             if describe_data is None or describe_data.empty:
-                return "📊 Данные для сравнения недоступны"
+                return "⚖️ Данные для сравнения недоступны"
             
             # Count columns (assets) to choose best format
             num_assets = len(describe_data.columns)
@@ -1761,7 +1761,7 @@ class ShansAi:
     def _format_simple_table(self, describe_data) -> str:
         """Format as simple markdown table"""
         try:
-            result = ["📊 **Статистика активов:**\n"]
+            result = ["🔍 **Статистика активов:**\n"]
             
             # Get column names (asset symbols)
             columns = describe_data.columns.tolist()
@@ -1800,7 +1800,7 @@ class ShansAi:
     def _format_compact_table(self, describe_data) -> str:
         """Format as compact table"""
         try:
-            result = ["📊 **Статистика активов:**\n"]
+            result = ["🔍 **Статистика активов:**\n"]
             
             # Get column names (asset symbols)
             columns = describe_data.columns.tolist()
@@ -1839,7 +1839,7 @@ class ShansAi:
     def _format_describe_table_vertical(self, describe_data) -> str:
         """Format describe data in vertical format for mobile-friendly display"""
         try:
-            result = ["📊 **Статистика активов:**\n"]
+            result = ["🔍 **Статистика активов:**\n"]
             
             # Get column names (asset symbols)
             columns = describe_data.columns.tolist()
@@ -2184,9 +2184,12 @@ class ShansAi:
 Попробуйте одну из ключевых функций прямо сейчас:
 
 🔍 Анализ: полная сводка по любой бумаге, валюте или товару /info
+
 ⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик /compare
+
 💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей /portfolio
-📚 Просмотр всех доступных данных и символов `/list`
+
+📚 Просмотр всех доступных данных и символов /list
 
 © Использованы библиотеки okama, tushare и нейронные сети YandexGPT и Google Gemini.
 ⚠️ Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
@@ -2256,7 +2259,7 @@ class ShansAi:
     
     async def show_info_help(self, update: Update):
         """Показать справку по команде /info"""
-        help_text = """📊 Команда /info - Информация об активе
+        help_text = """🔍 Команда /info - Информация об активе
 
 Используйте команду `/info [тикер] [период]` для получения полной информации об активе.
 
@@ -2788,7 +2791,7 @@ class ShansAi:
             )
             
             await self._send_message_safe(update, 
-                f"📊 *Анализ*\n\n"
+                f"🔍 *Анализ*\n\n"
                 f"*Примеры:*\n{examples_text}\n\n"
                 f"💬 Просто напишите название, тикер или ISIN инструмента")
             return
@@ -2950,7 +2953,7 @@ class ShansAi:
         # Treat text as single asset symbol and process with /info logic
         symbol = text
         
-        await self._send_ephemeral_message(update, context, f"📊 Ищу актив '{symbol}'...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"🔍 Ищу актив '{symbol}'...", delete_after=3)
         
         try:
             # Search for assets with selection possibility
@@ -3296,7 +3299,7 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error formatting Tushare info response for {symbol}: {e}")
-            return f"📊 {symbol}\n\n❌ Ошибка при форматировании информации"
+            return f"🔍 {symbol}\n\n❌ Ошибка при форматировании информации"
 
     async def _get_tushare_chart(self, symbol: str) -> Optional[bytes]:
         """Get chart for Tushare asset"""
@@ -3608,7 +3611,7 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error formatting asset info response for {symbol}: {e}")
-            return f"📊 {symbol}\n\n❌ Ошибка при форматировании информации"
+            return f"🔍 {symbol}\n\n❌ Ошибка при форматировании информации"
 
     def _create_info_interactive_keyboard(self, symbol: str) -> List[List[InlineKeyboardButton]]:
         """Create interactive keyboard for info command"""
@@ -3927,7 +3930,7 @@ class ShansAi:
             if len(all_results) > 50:
                 response += f"*Показаны первые 50 из {len(all_results)} результатов*\n\n"
             
-            response += "💡 Используйте найденный тикер в командах `/info`, `/compare` или `/portfolio`"
+            response += "💡 Используйте нужный тикер в командах `/info`, `/compare` или `/portfolio`"
             
             await self._send_message_safe(update, response)
             
@@ -3952,14 +3955,14 @@ class ShansAi:
                 
                 # Get random examples for user
                 examples = self.examples_service.get_compare_examples(3)
-                examples_text = "\n".join([f"• {example}" for example in examples])
+                examples_text = "\n".join([f"{example}" for example in examples])
                 
-                help_text = "📊 Сравнение\n\n💬 Введите тикеры для сравнения через пробел."
+                help_text = "⚖️ Сравнение\n\n"
                 help_text += f"*Примеры:*\n{examples_text}\n\n"
 
                 # Add saved portfolios information
                 if saved_portfolios:
-                    help_text += "💾 Ваши сохраненные портфели:\n"
+                    help_text += "💼 Ваши сохраненные портфели:\n"
                     for portfolio_symbol, portfolio_info in saved_portfolios.items():
                         symbols = portfolio_info.get('symbols', [])
                         weights = portfolio_info.get('weights', [])
@@ -4688,7 +4691,7 @@ class ShansAi:
                 
                 # Create keyboard with clear portfolios button
                 keyboard = [
-                    [InlineKeyboardButton("🗑️ Очистить все портфели", callback_data="clear_all_portfolios")]
+                    [InlineKeyboardButton("💼 Очистить все портфели", callback_data="clear_all_portfolios")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -4713,7 +4716,7 @@ class ShansAi:
                 user_id = update.effective_user.id
                 user_context = self._get_user_context(user_id)
                 
-                help_text = "📊 *Создание портфеля*\n\n"
+                help_text = "💼 *Создание портфеля*\n\n"
                 
                 # Add recently analyzed tickers
                 analyzed_tickers = user_context.get('analyzed_tickers', [])
@@ -4975,7 +4978,7 @@ class ShansAi:
                 portfolio_data_str = ','.join(symbols)
                 
                 # Add portfolio symbol display
-                portfolio_text += f"\n\n🏷️ Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
+                portfolio_text += f"\n\n💼 Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
                 
                 # No Inline Keyboard needed - only Reply Keyboard will be used
                 reply_markup = None
@@ -5024,17 +5027,17 @@ class ShansAi:
                 if existing_portfolio_symbol:
                     # Use existing portfolio symbol and update the message
                     portfolio_symbol = existing_portfolio_symbol
-                    portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
+                    portfolio_text += f"\n\n💼 Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
                     portfolio_text += f"✅ Портфель с такими же активами и пропорциями уже существует\n"
-                    portfolio_text += f"💾 Используется ранее сохраненный портфель"
+                    portfolio_text += f"💼 Используется ранее сохраненный портфель"
                     
                     # Update portfolio count without incrementing
                     portfolio_count = user_context.get('portfolio_count', 0)
                 else:
                     # Increment portfolio count for new portfolio
                     portfolio_count = user_context.get('portfolio_count', 0) + 1
-                    portfolio_text += f"\n\n🏷️ Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
-                    portfolio_text += f"💾 Портфель сохранен в контексте для использования в /compare"
+                    portfolio_text += f"\n\n💼 Символ портфеля: `{portfolio_symbol}` (namespace PF)\n"
+                    portfolio_text += f"💼 Портфель сохранен в контексте для использования в ]/compare"
                 
                 # Get additional portfolio attributes for comprehensive storage
                 portfolio_attributes = {}
@@ -6197,10 +6200,10 @@ class ShansAi:
                 
                 # Add buttons
                 keyboard = [
-                    [InlineKeyboardButton("📊 Анализ портфеля", callback_data=f"portfolio_analysis_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💼 Анализ портфеля", callback_data=f"portfolio_analysis_{portfolio_symbol}")],
                     [InlineKeyboardButton("📈 График доходности", callback_data=f"portfolio_chart_{portfolio_symbol}"),
                      InlineKeyboardButton("📋 Метрики риска", callback_data=f"portfolio_risk_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💾 Сохранить портфель", callback_data=f"portfolio_save_{portfolio_symbol}")]
+                    [InlineKeyboardButton("💼 Сохранить портфель", callback_data=f"portfolio_save_{portfolio_symbol}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -7514,7 +7517,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(f"📊 Risk / Return (CAGR) для сравнения: {', '.join(asset_names)}"),
+                caption=self._truncate_caption(f"⚖️ Risk / Return (CAGR) для сравнения: {', '.join(asset_names)}"),
                 reply_markup=keyboard
             )
 
@@ -10550,7 +10553,7 @@ class ShansAi:
             chart_styles.cleanup_figure(fig)
             
             # Create caption
-            caption = f"📊 Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
+            caption = f"⚖️ Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
             caption += f"💵 Валюта: {currency}\n"
             if specified_period:
                 caption += f"📅 Период: {specified_period}\n"
@@ -11798,7 +11801,7 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not remove buttons from old message: {e}")
             
-            await self._send_ephemeral_message(update, context, "📊 Получаю все метрики...", delete_after=2)
+            await self._send_ephemeral_message(update, context, "🔍 Получаю все метрики...", delete_after=2)
             
             asset = ok.Asset(symbol)
             
@@ -13033,7 +13036,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating risk metrics for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_ephemeral_message(update, context, "📊 Расчет метрик портфеля...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "💼 Расчет метрик портфеля...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -13115,7 +13118,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "📊 Анализирую метрики портфеля...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "💼 Анализирую метрики портфеля...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -13589,7 +13592,7 @@ class ShansAi:
                         chat_id=update.effective_chat.id,
                         document=io.BytesIO(excel_buffer.getvalue()),
                         filename=f"portfolio_risk_metrics_{'_'.join(symbols[:3])}_{currency}.xlsx",
-                        caption=f"📊 **Детальная статистика портфеля**\n\n"
+                        caption=f"💼 **Детальная статистика портфеля**\n\n"
                                f"🔍 **Анализируемые активы:** {', '.join(symbols)}\n"
                                f"💰 **Валюта:** {currency}\n"
                                f"📅 **Дата создания:** {self._get_current_timestamp()}\n\n"
@@ -16322,7 +16325,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating compare assets chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_ephemeral_message(update, context, "📊 Создаю график сравнения с активами...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "⚖️ Создаю график сравнения с активами...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -16404,7 +16407,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "📊 Создаю график сравнения с активами...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "⚖️ Создаю график сравнения с активами...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -16729,7 +16732,7 @@ class ShansAi:
             
             # Add suggestions from saved portfolios (excluding current one)
             if saved_portfolios:
-                compare_text += "💾 Ваши другие портфели:\n"
+                compare_text += "💼 Ваши другие портфели:\n"
                 for other_symbol, portfolio_info in saved_portfolios.items():
                     if other_symbol != portfolio_symbol:
                         symbols = portfolio_info.get('symbols', [])
@@ -16781,7 +16784,7 @@ class ShansAi:
             portfolio_text = f"💼 **Портфель {portfolio_symbol}**\n\n"
             
             # Add portfolio composition
-            portfolio_text += "📊 **Состав портфеля:**\n"
+            portfolio_text += "💼 **Состав портфеля:**\n"
             for i, (symbol, weight) in enumerate(zip(symbols, weights)):
                 portfolio_text += f"• {symbol}: {weight:.1%}\n"
             
@@ -16796,7 +16799,7 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not add metrics to portfolio text: {e}")
             
-            portfolio_text += f"\n🏷️ Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
+            portfolio_text += f"\n💼 Сравнить портфель с другими активами: `/compare {portfolio_symbol}`\n"
             
             # Ensure portfolio keyboard is shown and send message
             await self._manage_reply_keyboard(update, context, "portfolio")
@@ -17110,12 +17113,12 @@ class ShansAi:
             examples = self.get_random_examples(3)
             examples_text = ", ".join(examples)
             
-            help_text = "📊 Сравнение\n\n"
+            help_text = "⚖️ Сравнение\n\n"
             help_text += f"Примеры активов: {examples_text}\n\n"
 
             # Add saved portfolios information
             if saved_portfolios:
-                help_text += "💾 *Сохраненные портфели:*\n"
+                help_text += "💼 *Сохраненные портфели:*\n"
                 for name, portfolio_data in saved_portfolios.items():
                     symbols = portfolio_data.get('symbols', [])
                     weights = portfolio_data.get('weights', [])

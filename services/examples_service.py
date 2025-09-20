@@ -299,7 +299,7 @@ class ExamplesService:
             ticker2, company2 = selected_tickers[1]
             
             # Create MOEX command example
-            command = f"`/compare {ticker1} {ticker2}`"
+            command = f"`{ticker1} {ticker2}`"
             description = f"сравнить {company1} и {company2}"
             examples.append(f"{command} - {description}")
         
@@ -319,7 +319,7 @@ class ExamplesService:
                     ticker2, company2 = selected_tickers[1]
                     
                     # Create command example
-                    command = f"`/compare {ticker1} {ticker2}`"
+                    command = f"`{ticker1} {ticker2}`"
                     description = f"сравнить {company1} и {company2}"
                     examples.append(f"{command} - {description}")
         
@@ -344,7 +344,7 @@ class ExamplesService:
                 command_parts.append(f"{ticker}:{weights[i]:.1f}")
                 companies.append(company)
             
-            command = f"`/portfolio {' '.join(command_parts)}`"
+            command = f"`{' '.join(command_parts)}`"
             description = f"создать портфель {', '.join(companies)}"
             examples.append(f"{command} - {description}")
         
@@ -371,7 +371,7 @@ class ExamplesService:
                         command_parts.append(f"{ticker}:{weights[i]:.1f}")
                         companies.append(company)
                     
-                    command = f"`/portfolio {' '.join(command_parts)}`"
+                    command = f"`{' '.join(command_parts)}`"
                     description = f"создать портфель {', '.join(companies)}"
                     examples.append(f"{command} - {description}")
         

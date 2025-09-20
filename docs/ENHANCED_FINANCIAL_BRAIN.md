@@ -185,7 +185,7 @@ print(response)
 Запрос: "Проанализируй Apple за последние 3 года"
 
 Результат:
-📊 Анализ актива: Apple Inc. (AAPL.US)
+🔍 Анализ актива: Apple Inc. (AAPL.US)
 Валюта: USD
 Период: 3Y
 
