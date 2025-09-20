@@ -115,11 +115,6 @@ correlation_image = service.generate_correlation_matrix(['RGBITR.INDX', 'MCFTR.I
 
 ## Тестирование и отладка
 
-### Тест интеграции Okama
-```
-/test RGBITR.INDX MCFTR.INDX
-```
-
 ### Тест AI сервиса
 ```
 /testai

@@ -38,7 +38,6 @@ class Config:
         '/price': 'Show current price for an asset',
         '/dividends': 'Show dividend history for an asset',
         '/chat': 'Chat with YandexGPT about finance',
-        '/test': 'Test Okama integration',
         '/testai': 'Test YandexGPT integration'
     }
     

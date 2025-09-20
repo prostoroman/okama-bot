@@ -5101,125 +5101,6 @@ class ShansAi:
             self.logger.error(f"Error in portfolio command: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при выполнении команды портфеля: {str(e)}")
 
-    async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /test command - запускает тесты и выводит результат"""
-        # Ensure no reply keyboard is shown
-        await self._ensure_no_reply_keyboard(update, context)
-        
-        try:
-            # Отправляем сообщение о начале тестирования
-            await self._send_message_safe(update, "🧪 Запуск тестов... Пожалуйста, подождите...")
-            
-            # Получаем тип тестов из аргументов команды
-            test_type = "simple"  # По умолчанию простые тесты
-            if context.args:
-                arg = context.args[0].lower()
-                if arg in ["all", "regression", "quick", "comprehensive", "simple"]:
-                    test_type = arg
-            
-            # Запускаем тесты
-            result = await self._run_tests(test_type)
-            
-            # Форматируем результат в markdown
-            result_message = self._format_test_results(result, test_type)
-            
-            # Отправляем результат
-            await self._send_message_safe(update, result_message)
-            
-        except Exception as e:
-            self.logger.error(f"Error in test_command: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при запуске тестов: {str(e)}")
-    
-    async def _run_tests(self, test_type: str = "quick") -> dict:
-        """Запускает тесты и возвращает результат"""
-        import subprocess
-        import time
-        
-        start_time = time.time()
-        
-        try:
-            # Определяем команду для запуска тестов
-            cmd = [sys.executable, "tests/test_runner.py", f"--{test_type}"]
-            
-            # Запускаем тесты
-            result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
-                cwd=os.getcwd(),
-                timeout=300  # 5 минут таймаут
-            )
-            
-            duration = time.time() - start_time
-            
-            return {
-                'success': result.returncode == 0,
-                'stdout': result.stdout,
-                'stderr': result.stderr,
-                'duration': duration,
-                'test_type': test_type
-            }
-            
-        except subprocess.TimeoutExpired:
-            return {
-                'success': False,
-                'stdout': '',
-                'stderr': 'Тесты превысили время ожидания (5 минут)',
-                'duration': time.time() - start_time,
-                'test_type': test_type
-            }
-        except Exception as e:
-            return {
-                'success': False,
-                'stdout': '',
-                'stderr': str(e),
-                'duration': time.time() - start_time,
-                'test_type': test_type
-            }
-    
-    def _format_test_results(self, result: dict, test_type: str) -> str:
-        """Форматирует результаты тестов в markdown"""
-        status_emoji = "✅" if result['success'] else "❌"
-        status_text = "Пройдены" if result['success'] else "Провалены"
-        
-        # Базовое сообщение
-        message = f"""
-{status_emoji} **Результаты тестирования**
-
-**Тип тестов:** `{test_type}`
-**Статус:** {status_text}
-**Время выполнения:** {result['duration']:.1f} сек
-"""
-        
-        # Добавляем вывод тестов (ограничиваем длину)
-        if result['stdout']:
-            stdout_lines = result['stdout'].split('\n')
-            # Берем последние 20 строк для краткости
-            relevant_lines = stdout_lines[-20:] if len(stdout_lines) > 20 else stdout_lines
-            
-            message += f"\n**Вывод тестов:**\n```\n"
-            message += '\n'.join(relevant_lines)
-            message += "\n```"
-        
-        # Добавляем ошибки если есть
-        if result['stderr']:
-            stderr_lines = result['stderr'].split('\n')
-            # Берем последние 10 строк ошибок
-            error_lines = stderr_lines[-10:] if len(stderr_lines) > 10 else stderr_lines
-            
-            message += f"\n**Ошибки:**\n```\n"
-            message += '\n'.join(error_lines)
-            message += "\n```"
-        
-        # Добавляем инструкции
-        if not result['success']:
-            message += f"\n**💡 Для подробной информации запустите:**\n`python tests/test_runner.py --{test_type} --verbose`"
-        
-        # Ограничиваем длину сообщения
-        if len(message) > 3500:
-            message = message[:3500] + "\n\n... (сообщение обрезано)"
-        
-        return message
 
     async def _request_portfolio_weights(self, update: Update, tickers: list, currency: str = None, period: str = None):
         """Request portfolio weights from user when only tickers are provided"""
@@ -17251,7 +17132,6 @@ class ShansAi:
         application.add_handler(CommandHandler("search", self.search_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
-        application.add_handler(CommandHandler("test", self.test_command))
         
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
