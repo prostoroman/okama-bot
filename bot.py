@@ -2103,7 +2103,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"Сравнение дивидендной доходности {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
+                caption=self._truncate_caption(f"Сравнение дивидендной доходности {len(symbols)} активов\n\nИстория дивидендных выплат и доходность")
             )
             
         except Exception as e:
@@ -11141,17 +11141,13 @@ class ShansAi:
                 else:
                     portfolio_names.append(f'Portfolio_{i+1}')
             
-            caption = f"📉 Просадки смешанного сравнения\n\n"
+            caption = f"📉 Просадки\n\n"
             caption += f"📊 Состав:\n"
             if portfolio_count > 0:
                 caption += f"• Портфели: {', '.join(portfolio_names)}\n"
             if asset_count > 0:
                 caption += f"• Индивидуальные активы: {', '.join(asset_symbols)}\n"
-            caption += f"• Валюта: {currency}\n\n"
-            caption += f"💡 График показывает:\n"
-            caption += f"• Просадки портфелей и активов\n"
-            caption += f"• Сравнение рисков\n"
-            caption += f"• Периоды восстановления"
+            caption += f"• Валюта: {currency}\n"
             
             # Create keyboard for compare command
             keyboard = self._create_compare_command_keyboard(symbols, currency, update)
@@ -11193,7 +11189,7 @@ class ShansAi:
             period = user_context.get('current_period', None)
             
             self.logger.info(f"Creating dividends chart for symbols: {symbols}, currency: {currency}, period: {period}")
-            await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график дивидендной доходности...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -11202,7 +11198,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_ephemeral_message(update, context, "💰 Создаю график дивидендной доходности для смешанного сравнения...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "Создаю график дивидендной доходности...", delete_after=3)
                 await self._create_mixed_comparison_dividends_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList with period support
@@ -14769,7 +14765,7 @@ class ShansAi:
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
                 caption=self._truncate_caption(
-                    f"💡 Показывает возможные траектории роста портфеля на основе исторической волатильности и доходности."
+                    f"💡 Возможные траектории роста портфеля на основе исторической волатильности и доходности."
                 ),
             )
             
@@ -14793,24 +14789,17 @@ class ShansAi:
             # Get the current figure from matplotlib (created by okama)
             current_fig = plt.gcf()
             
-            # Apply chart styles to the current figure
+            # Apply chart styles to the current figure using the new unified method
             if current_fig.axes:
                 ax = current_fig.axes[0]  # Get the first (and usually only) axes
                 
-                
-                # Force legend update to match the new colors
-                if ax.get_legend():
-                    ax.get_legend().remove()
-                ax.legend(**chart_styles.legend)
-                
-                # Apply standard chart styling with centralized style
-                chart_styles.apply_styling(
+                # Apply unified percentile forecast chart styling
+                chart_styles.create_percentile_forecast_chart(
+                    current_fig,
                     ax,
-                    title=f'Прогноз с процентилями\n{", ".join(symbols)}',
-                    ylabel='Накопленная доходность',
-                    grid=True,
-                    legend=True,
-                    copyright=True
+                    symbols=symbols,
+                    currency=currency,
+                    data_source='okama'
                 )
             
             # Save the figure using chart_styles
@@ -14829,11 +14818,8 @@ class ShansAi:
                 photo=img_buffer,
                 caption=self._truncate_caption(
                     f"📈 Прогноз с процентилями для портфеля: {', '.join(symbols)}\n\n"
-                    f"📊 Параметры:\n"
                     f"• Период: 10 лет\n"
                     f"• Начальная стоимость: 1000 {currency}\n"
-                    f"• процентили: 10%, 50%, 90%\n\n"
-                    f"💡 График показывает:\n"
                     f"• 10% процентиль: пессимистичный сценарий\n"
                     f"• 50% процентиль: средний сценарий\n"
                     f"• 90% процентиль: оптимистичный сценарий"
@@ -15096,11 +15082,7 @@ class ShansAi:
                 for i, (date, recovery_years) in enumerate(longest_recoveries.items(), 1):
                     date_str = date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)
                     caption += f"{i}. {date_str}: {recovery_years:.1f} лет\n"
-                
-                caption += f"\n💡 График показывает:\n"
-                caption += f"• Максимальную просадку портфеля\n"
-                caption += f"• Периоды восстановления\n"
-                caption += f"• Волатильность доходности"
+
                 
             except Exception as e:
                 self.logger.warning(f"Could not get drawdowns statistics: {e}")
@@ -15109,10 +15091,6 @@ class ShansAi:
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
-                caption += f"💡 График показывает:\n"
-                caption += f"• Максимальную просадку портфеля\n"
-                caption += f"• Периоды восстановления\n"
-                caption += f"• Волатильность доходности"
             
             # Send the chart
             await context.bot.send_photo(
@@ -15347,7 +15325,7 @@ class ShansAi:
             
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
-            await self._send_ephemeral_message(update, context, "💵 Создаю график дивидендной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график дивидендной доходности...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -15574,7 +15552,7 @@ class ShansAi:
                     weight = weights[i] if i < len(weights) else 0.0
                     symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
                 
-                caption = f"💰 Годовая доходность портфеля: {', '.join(symbols_with_weights)}\n\n"
+                caption = f"Динамика доходности портфеля\n\n"
             
             # Ensure portfolio keyboard is shown
             await self._manage_reply_keyboard(update, context, "portfolio")
@@ -16241,7 +16219,7 @@ class ShansAi:
                 caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols_with_weights)}\n\n"
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Окно: MAX период (весь доступный период)\n\n"
+                caption += f"• Окно: макс. период (весь доступный период)\n\n"
                 
                 # Add rolling CAGR statistics
                 caption += f"📈 Статистика Rolling CAGR:\n"
@@ -16252,11 +16230,6 @@ class ShansAi:
                 caption += f"• Минимальный: {min_rolling_cagr:.2%}\n"
                 caption += f"• Максимальный: {max_rolling_cagr:.2%}\n\n"
                 
-                caption += f"💡 График показывает:\n"
-                caption += f"• Rolling CAGR за весь доступный период\n"
-                caption += f"• Динамику изменения CAGR во времени\n"
-                caption += f"• Стабильность доходности портфеля"
-                
             except Exception as e:
                 self.logger.warning(f"Could not get rolling CAGR statistics: {e}")
                 # Fallback to basic caption
@@ -16264,9 +16237,7 @@ class ShansAi:
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
-                caption += f"• Окно: MAX период (весь доступный период)\n\n"
-                caption = f"💡 График показывает динамику изменения доходноси во времени\n"
-
+                caption += f"• Окно: макс. период (весь доступный период)\n\n"
             
             # Ensure portfolio keyboard is shown
             await self._manage_reply_keyboard(update, context, "portfolio")
@@ -16570,11 +16541,6 @@ class ShansAi:
                         self.logger.warning(f"Could not get final value for {symbol}: {e}")
                         caption += f"• {symbol}: недоступно\n"
                 
-                caption += f"\n💡 График показывает:\n"
-                caption += f"• Накопленную доходность портфеля vs отдельных активов\n"
-                caption += f"• Эффект диверсификации\n"
-                caption += f"• Сравнение рисков и доходности"
-                
             except Exception as e:
                 self.logger.warning(f"Could not get comparison statistics: {e}")
                 # Fallback to basic caption
@@ -16582,10 +16548,6 @@ class ShansAi:
                 caption += f"📊 Параметры:\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n\n"
-                caption += f"💡 График показывает:\n"
-                caption += f"• Накопленную доходность портфеля vs отдельных активов\n"
-                caption += f"• Эффект диверсификации\n"
-                caption += f"• Сравнение рисков и доходности"
             
             # Ensure portfolio keyboard is shown
             await self._manage_reply_keyboard(update, context, "portfolio")

@@ -553,6 +553,7 @@ class ChartStyles:
                        color=color, alpha=self.lines['alpha'], label=column)
         
         title = f'Просадки {", ".join(symbols)}'
+        ylabel = f'Просадка ({currency}) (%)' if currency else 'Просадка (%)'
         
         # Apply drawdown-specific styling with standard grid colors and date labels above
         self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True, data_source=data_source)
@@ -1162,6 +1163,90 @@ class ChartStyles:
             
         except Exception as e:
             logger.error(f"Error applying Monte Carlo chart styles: {e}")
+
+    def create_percentile_forecast_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
+        """Применить стили к графику прогноза с процентилями в едином стиле"""
+        try:
+            # Set figure size to standard chart size
+            fig.set_size_inches(self.style['figsize'])
+            fig.set_dpi(self.style['dpi'])
+            
+            # Force layout update
+            fig.tight_layout()
+            
+            # Apply base styling
+            self._apply_base_style(fig, ax)
+            
+            # Create title with portfolio name if provided, otherwise use asset percentages
+            if portfolio_name:
+                title = f'Прогноз с процентилями\n{portfolio_name}'
+            elif weights:
+                asset_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                title = f'Прогноз с процентилями\n{", ".join(asset_with_weights)}'
+            else:
+                title = f'Прогноз с процентилями\n{", ".join(symbols)}'
+            
+            # Apply standard chart styling
+            self.apply_styling(
+                ax,
+                title=title,
+                ylabel='',  # No y-axis label
+                xlabel='',  # No x-axis label
+                grid=True,
+                legend=True,
+                copyright=True,
+                data_source=data_source
+            )
+            
+            # Hide x-axis label completely
+            ax.set_xlabel('')
+            
+            # Ensure Y-axis is on the right
+            ax.yaxis.tick_right()
+            
+            # Format x-axis dates for forecast chart
+            self._optimize_x_axis_ticks(ax, ax.get_xlim())
+            
+            # Customize line styles for percentiles
+            lines = ax.get_lines()
+            if len(lines) >= 3:
+                # 10th percentile - red dashed line
+                lines[0].set_color('#FF6B6B')
+                lines[0].set_linestyle('--')
+                lines[0].set_linewidth(2.0)
+                lines[0].set_alpha(0.8)
+                
+                # 50th percentile - blue solid line (median)
+                lines[1].set_color('#4A90E2')
+                lines[1].set_linestyle('-')
+                lines[1].set_linewidth(3.0)
+                lines[1].set_alpha(1.0)
+                
+                # 90th percentile - green dashed line
+                lines[2].set_color('#51CF66')
+                lines[2].set_linestyle('--')
+                lines[2].set_linewidth(2.0)
+                lines[2].set_alpha(0.8)
+            
+            # Update legend with custom labels
+            if ax.get_legend():
+                ax.get_legend().remove()
+            
+            # Create custom legend
+            from matplotlib.patches import Patch
+            legend_elements = [
+                Patch(facecolor='#FF6B6B', alpha=0.8, label='10% процентиль (пессимистичный)'),
+                Patch(facecolor='#4A90E2', alpha=1.0, label='50% процентиль (средний)'),
+                Patch(facecolor='#51CF66', alpha=0.8, label='90% процентиль (оптимистичный)')
+            ]
+            ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
+            
+        except Exception as e:
+            logger.error(f"Error applying percentile forecast chart styles: {e}")
 
     def _optimize_x_axis_ticks(self, ax, date_index):
         """Оптимизировать отображение дат на оси X в зависимости от количества данных"""

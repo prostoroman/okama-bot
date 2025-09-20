@@ -85,3 +85,4 @@ if analysis_type in ['data_comparison', 'portfolio']:
 **Дата:** 2024-12-19  
 **Автор:** AI Assistant  
 **Файлы изменены:** `services/gemini_service.py`
+
