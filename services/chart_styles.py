@@ -562,62 +562,7 @@ class ChartStyles:
     
     def create_portfolio_wealth_chart(self, data, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Создать график накопленной доходности портфеля"""
-        # Create title with portfolio name if provided, otherwise use asset percentages and currency
-        if portfolio_name:
-            title = f'Накопленная доходность\n{portfolio_name} | {currency}'
-        elif weights:
-            asset_with_weights = []
-            for i, symbol in enumerate(symbols):
-                # Extract symbol name without namespace
-                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
-                weight = weights[i] if i < len(weights) else 0.0
-                asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
-            title = f'Накопленная доходность\n{", ".join(asset_with_weights)} | {currency}'
-        else:
-            asset_percentages = []
-            for i, symbol in enumerate(symbols):
-                # Extract symbol name without namespace
-                symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
-                asset_percentages.append(symbol_name)
-            title = f'Накопленная доходность\n{", ".join(asset_percentages)} | {currency}'
-        
-        # Convert Series to DataFrame with proper column name for legend
-        if isinstance(data, pd.Series):
-            # Create column name for legend
-            if portfolio_name:
-                column_name = portfolio_name
-            elif weights:
-                asset_with_weights = []
-                for i, symbol in enumerate(symbols):
-                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
-                    weight = weights[i] if i < len(weights) else 0.0
-                    asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
-                column_name = ", ".join(asset_with_weights)
-            else:
-                column_name = ", ".join(symbols)
-            data = pd.DataFrame({column_name: data})
-        elif isinstance(data, pd.DataFrame):
-            # If it's already a DataFrame, rename the first column to our portfolio name
-            if len(data.columns) > 0:
-                if portfolio_name:
-                    column_name = portfolio_name
-                elif weights:
-                    asset_with_weights = []
-                    for i, symbol in enumerate(symbols):
-                        symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
-                        weight = weights[i] if i < len(weights) else 0.0
-                        asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
-                    column_name = ", ".join(asset_with_weights)
-                else:
-                    column_name = ", ".join(symbols)
-                
-                # Rename the first column (portfolio column) to our desired name
-                data = data.copy()
-                data.columns = [column_name] + list(data.columns[1:])
-        
-        ylabel = ''  # No y-axis label
-        xlabel = ''  # No x-axis label
-        return self.create_line_chart(data, title, ylabel, xlabel=xlabel, **kwargs)
+        return self.create_unified_wealth_chart(data, symbols, currency, weights=weights, portfolio_name=portfolio_name, data_source=data_source, **kwargs)
     
     def create_portfolio_returns_chart(self, data, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Создать график годовой доходности портфеля"""
@@ -768,6 +713,77 @@ class ChartStyles:
     
     def create_comparison_chart(self, data, symbols, currency, data_source='okama', **kwargs):
         """Создать график сравнения активов"""
+        return self.create_unified_wealth_chart(data, symbols, currency, data_source=data_source, **kwargs)
+    
+    def _enhanced_x_axis_formatting(self, ax, date_index):
+        """Улучшенное форматирование дат на оси X с разбивкой на годы и месяцы"""
+        try:
+            import matplotlib.dates as mdates
+            import pandas as pd
+            
+            if len(date_index) == 0:
+                return
+            
+            # Конвертируем индекс в datetime если необходимо
+            if not isinstance(date_index, pd.DatetimeIndex):
+                if hasattr(date_index, 'to_timestamp'):
+                    date_index = date_index.to_timestamp()
+                else:
+                    try:
+                        date_index = pd.to_datetime(date_index)
+                    except Exception as e:
+                        logger.warning(f"Could not convert date_index to datetime: {e}")
+                        for label in ax.get_xticklabels():
+                            label.set_rotation(45)
+                        return
+            
+            # Определяем количество точек данных и временной диапазон
+            num_points = len(date_index)
+            if num_points > 1:
+                date_range = (date_index.max() - date_index.min()).days
+                years_span = date_range / 365.25
+            else:
+                years_span = 1
+            
+            # Настройка форматирования в зависимости от временного диапазона
+            if years_span <= 1:
+                # Короткий период (до 1 года) - показываем месяцы
+                ax.xaxis.set_major_locator(mdates.MonthLocator())
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+                ax.xaxis.set_minor_locator(mdates.MonthLocator())
+            elif years_span <= 3:
+                # Средний период (1-3 года) - показываем кварталы
+                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+                ax.xaxis.set_minor_locator(mdates.MonthLocator())
+            elif years_span <= 10:
+                # Длинный период (3-10 лет) - показываем годы с месяцами
+                ax.xaxis.set_major_locator(mdates.YearLocator())
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+                ax.xaxis.set_minor_locator(mdates.MonthLocator(interval=6))
+            else:
+                # Очень длинный период (более 10 лет) - показываем годы
+                ax.xaxis.set_major_locator(mdates.YearLocator(2))
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+                ax.xaxis.set_minor_locator(mdates.YearLocator())
+            
+            # Поворачиваем подписи дат для лучшей читаемости
+            for label in ax.get_xticklabels():
+                label.set_rotation(45)
+                label.set_ha('right')
+            
+            # Настройка минорных тиков
+            ax.tick_params(axis='x', which='minor', length=3)
+            ax.tick_params(axis='x', which='major', length=6)
+            
+        except Exception as e:
+            logger.warning(f"Error in enhanced x-axis formatting: {e}")
+            # Fallback к стандартному поведению
+            for label in ax.get_xticklabels():
+                label.set_rotation(45)
+
+    def create_unified_wealth_chart(self, data, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
+        """Единый метод для создания графиков накопленной доходности (портфель и сравнение)"""
         fig, ax = self.create_chart(**kwargs)
         
         # Обработка PeriodIndex и object индексов
@@ -783,26 +799,88 @@ class ChartStyles:
         except Exception as e:
             logger.warning(f"Error processing data index: {e}")
         
-        # Рисуем данные
-        for i, column in enumerate(data.columns):
-            color = self.get_color(i)
-            ax.plot(data.index, data[column].values, 
-                   color=color, alpha=self.lines['alpha'], label=column)
+        # Определяем тип графика и создаем заголовок
+        is_comparison = kwargs.get('title', '').startswith('Сравнение') or 'compare' in kwargs.get('title', '').lower()
         
-        # Извлекаем параметры из kwargs
-        title = kwargs.get('title', f'Сравнение {", ".join(symbols)}')
-        xlabel = kwargs.get('xlabel', '')
-        ylabel = kwargs.get('ylabel', '')  # Скрываем подпись оси Y
+        if is_comparison:
+            # График сравнения
+            title = kwargs.get('title', f'Сравнение накопленной доходности\n{", ".join(symbols)} | {currency}')
+            
+            # Рисуем данные для сравнения
+            for i, column in enumerate(data.columns):
+                color = self.get_color(i)
+                ax.plot(data.index, data[column].values, 
+                       color=color, alpha=self.lines['alpha'], label=column)
+        else:
+            # График портфеля
+            if portfolio_name:
+                title = f'Накопленная доходность\n{portfolio_name} | {currency}'
+            elif weights:
+                asset_with_weights = []
+                for i, symbol in enumerate(symbols):
+                    # Extract symbol name without namespace
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    weight = weights[i] if i < len(weights) else 0.0
+                    asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                title = f'Накопленная доходность\n{", ".join(asset_with_weights)} | {currency}'
+            else:
+                asset_percentages = []
+                for i, symbol in enumerate(symbols):
+                    # Extract symbol name without namespace
+                    symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                    asset_percentages.append(symbol_name)
+                title = f'Накопленная доходность\n{", ".join(asset_percentages)} | {currency}'
+            
+            # Convert Series to DataFrame with proper column name for legend
+            if isinstance(data, pd.Series):
+                # Create column name for legend
+                if portfolio_name:
+                    column_name = portfolio_name
+                elif weights:
+                    asset_with_weights = []
+                    for i, symbol in enumerate(symbols):
+                        symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                        weight = weights[i] if i < len(weights) else 0.0
+                        asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                    column_name = ", ".join(asset_with_weights)
+                else:
+                    column_name = ", ".join(symbols)
+                data = pd.DataFrame({column_name: data})
+            elif isinstance(data, pd.DataFrame):
+                # If it's already a DataFrame, rename the first column to our portfolio name
+                if len(data.columns) > 0:
+                    if portfolio_name:
+                        column_name = portfolio_name
+                    elif weights:
+                        asset_with_weights = []
+                        for i, symbol in enumerate(symbols):
+                            symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
+                            weight = weights[i] if i < len(weights) else 0.0
+                            asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
+                        column_name = ", ".join(asset_with_weights)
+                    else:
+                        column_name = ", ".join(symbols)
+                    
+                    # Rename the first column (portfolio column) to our desired name
+                    data = data.copy()
+                    data.columns = [column_name] + list(data.columns[1:])
+            
+            # Рисуем данные для портфеля
+            if hasattr(data, 'plot'):
+                data.plot(ax=ax, alpha=self.lines['alpha'])
+            else:
+                ax.plot(data.index, data.values, alpha=self.lines['alpha'])
         
         # Применяем стили
-        self.apply_styling(ax, title=title, xlabel=xlabel, ylabel=ylabel, data_source=data_source)
-        ax.tick_params(axis='x', rotation=45)
+        ylabel = ''  # No y-axis label
+        xlabel = ''  # No x-axis label
+        self.apply_styling(ax, title=title, ylabel=ylabel, xlabel=xlabel, data_source=data_source)
         
-        # Автоматически настраиваем интервал между датами на оси X
-        self._optimize_x_axis_ticks(ax, data.index)
+        # Применяем улучшенное форматирование дат
+        self._enhanced_x_axis_formatting(ax, data.index)
         
         return fig, ax
-    
+
     def create_correlation_matrix_chart(self, correlation_matrix, data_source='okama', **kwargs):
         """Создать график корреляционной матрицы"""
         fig, ax = self.create_chart(**kwargs)
@@ -1175,12 +1253,63 @@ class ChartStyles:
                 return None, None
             
             # Создаем эффективную границу с помощью okama
-            ef.plot_transition_map(x_axe='risk', ax=ax)
-            
-            # Проверяем, что фигура все еще валидна после построения
-            if fig is None:
-                logger.error("Figure became None after plotting efficient frontier")
-                return None, None
+            # Попробуем сначала с ax параметром
+            try:
+                ef.plot_transition_map(x_axe='risk', ax=ax)
+                
+                # Проверяем, что фигура все еще валидна после построения
+                if fig is None:
+                    logger.error("Figure became None after plotting efficient frontier")
+                    return None, None
+                    
+            except Exception as plot_error:
+                logger.warning(f"Failed to plot with ax parameter: {plot_error}")
+                # Fallback: попробуем без ax параметра и затем скопируем на наш ax
+                try:
+                    # Очищаем текущую фигуру
+                    ax.clear()
+                    
+                    # Создаем новую фигуру для okama
+                    ef.plot_transition_map(x_axe='risk')
+                    temp_fig = plt.gcf()
+                    
+                    if temp_fig.axes:
+                        temp_ax = temp_fig.axes[0]
+                        
+                        # Копируем содержимое с временной оси на нашу ось
+                        for line in temp_ax.get_lines():
+                            ax.plot(line.get_xdata(), line.get_ydata(), 
+                                   color=line.get_color(), 
+                                   linestyle=line.get_linestyle(),
+                                   linewidth=line.get_linewidth(),
+                                   alpha=line.get_alpha(),
+                                   label=line.get_label())
+                        
+                        # Копируем scatter points если есть
+                        for collection in temp_ax.collections:
+                            if hasattr(collection, 'get_offsets'):
+                                offsets = collection.get_offsets()
+                                if len(offsets) > 0:
+                                    ax.scatter(offsets[:, 0], offsets[:, 1], 
+                                             c=collection.get_facecolors(),
+                                             s=collection.get_sizes(),
+                                             alpha=collection.get_alpha(),
+                                             label=collection.get_label())
+                        
+                        # Копируем легенду если есть
+                        if temp_ax.get_legend():
+                            ax.legend()
+                        
+                        # Закрываем временную фигуру
+                        plt.close(temp_fig)
+                        
+                except Exception as fallback_error:
+                    logger.error(f"Fallback plotting also failed: {fallback_error}")
+                    # Последний fallback - создаем простой график
+                    ax.text(0.5, 0.5, f"Ошибка построения эффективной границы\n{str(fallback_error)}", 
+                           transform=ax.transAxes, ha='center', va='center')
+                    ax.set_xlim(0, 1)
+                    ax.set_ylim(0, 1)
             
             # Применяем базовый стиль к оси
             self._apply_base_style(fig, ax)
@@ -1246,9 +1375,9 @@ class ChartStyles:
             return fig, ax
             
         except Exception as e:
-            logger.error(f"Error creating efficient frontier chart: {e}")
-            # Fallback к стандартному методу
-            return self._create_efficient_frontier_fallback(ef, asset_names, data_source, **kwargs)
+            logger.error(f"Error creating percentile forecast chart: {e}")
+            # Return the original fig, ax even if styling failed
+            return fig, ax
     
     def _create_efficient_frontier_fallback(self, ef, asset_names, data_source='okama', **kwargs):
         """Fallback метод для создания эффективной границы"""
@@ -1257,158 +1386,60 @@ class ChartStyles:
             ef.plot_transition_map(x_axe='risk')
             current_fig = plt.gcf()
             
-            # Применяем стилизацию к существующей фигуре
-            if current_fig.axes:
-                ax = current_fig.axes[0]
-                
-                # Устанавливаем правильные размеры
-                current_fig.set_size_inches(self.style['figsize'])
-                current_fig.set_dpi(self.style['dpi'])
-                
-                # Применяем базовый стиль
-                self._apply_base_style(current_fig, ax)
-                
-                # Применяем стилизацию
-                title = f"Эффективная граница\n{', '.join(asset_names)}"
-                self.apply_styling(
-                    ax,
-                    title=title,
-                    xlabel='Риск (волатильность)',
-                    ylabel='Вес (%)',
-                    grid=True,
-                    legend=True,
-                    copyright=True,
-                    data_source=data_source
-                )
+            # Проверяем, что фигура была создана
+            if current_fig is None or not current_fig.axes:
+                logger.error("Failed to create figure in fallback method")
+                # Создаем пустую фигуру с сообщением об ошибке
+                fig, ax = self.create_chart(**kwargs)
+                ax.text(0.5, 0.5, "Ошибка создания эффективной границы\nНе удалось построить график", 
+                       transform=ax.transAxes, ha='center', va='center')
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                return fig, ax
             
-            return current_fig, current_fig.axes[0] if current_fig.axes else None
+            # Применяем стилизацию к существующей фигуре
+            ax = current_fig.axes[0]
+            
+            # Устанавливаем правильные размеры
+            current_fig.set_size_inches(self.style['figsize'])
+            current_fig.set_dpi(self.style['dpi'])
+            
+            # Применяем базовый стиль
+            self._apply_base_style(current_fig, ax)
+            
+            # Применяем стилизацию
+            title = f"Эффективная граница\n{', '.join(asset_names)}"
+            self.apply_styling(
+                ax,
+                title=title,
+                xlabel='Риск (волатильность)',
+                ylabel='Вес (%)',
+                grid=True,
+                legend=True,
+                copyright=True,
+                data_source=data_source
+            )
+            
+            return current_fig, ax
             
         except Exception as e:
             logger.error(f"Error in efficient frontier fallback: {e}")
             # Последний fallback - создаем пустую фигуру
-            fig, ax = self.create_chart(**kwargs)
-            ax.text(0.5, 0.5, f"Ошибка создания эффективной границы: {str(e)}", 
-                   transform=ax.transAxes, ha='center', va='center')
-            return fig, ax
-            # Hide x-axis label completely
-            ax.set_xlabel('')
-            
-            # Ensure Y-axis is on the right
-            ax.yaxis.tick_right()
-            
-            # Format x-axis dates for forecast chart
-            self._optimize_x_axis_ticks(ax, ax.get_xlim())
-            
-            # Customize line styles for percentiles
-            lines = ax.get_lines()
-            if len(lines) >= 3:
-                # 10th percentile - red dashed line
-                lines[0].set_color('#FF6B6B')
-                lines[0].set_linestyle('--')
-                lines[0].set_linewidth(2.0)
-                lines[0].set_alpha(0.8)
-                
-                # 50th percentile - blue solid line (median)
-                lines[1].set_color('#4A90E2')
-                lines[1].set_linestyle('-')
-                lines[1].set_linewidth(3.0)
-                lines[1].set_alpha(1.0)
-                
-                # 90th percentile - green dashed line
-                lines[2].set_color('#51CF66')
-                lines[2].set_linestyle('--')
-                lines[2].set_linewidth(2.0)
-                lines[2].set_alpha(0.8)
-            
-            # Update legend with custom labels
-            if ax.get_legend():
-                ax.get_legend().remove()
-            
-            # Create custom legend
-            from matplotlib.patches import Patch
-            legend_elements = [
-                Patch(facecolor='#FF6B6B', alpha=0.8, label='10% процентиль (пессимистичный)'),
-                Patch(facecolor='#4A90E2', alpha=1.0, label='50% процентиль (средний)'),
-                Patch(facecolor='#51CF66', alpha=0.8, label='90% процентиль (оптимистичный)')
-            ]
-            ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
-            
-        except Exception as e:
-            logger.error(f"Error applying percentile forecast chart styles: {e}")
+            try:
+                fig, ax = self.create_chart(**kwargs)
+                ax.text(0.5, 0.5, f"Ошибка создания эффективной границы: {str(e)}", 
+                       transform=ax.transAxes, ha='center', va='center')
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                return fig, ax
+            except Exception as final_error:
+                logger.error(f"Final fallback also failed: {final_error}")
+                return None, None
 
     def _optimize_x_axis_ticks(self, ax, date_index):
         """Оптимизировать отображение дат на оси X в зависимости от количества данных"""
-        try:
-            import matplotlib.dates as mdates
-            import pandas as pd
-            
-            if len(date_index) == 0:
-                return
-            
-            # Конвертируем индекс в datetime если необходимо
-            if not isinstance(date_index, pd.DatetimeIndex):
-                if hasattr(date_index, 'to_timestamp'):
-                    date_index = date_index.to_timestamp()
-                else:
-                    # Попробуем конвертировать в datetime
-                    try:
-                        date_index = pd.to_datetime(date_index)
-                    except Exception as e:
-                        logger.warning(f"Could not convert date_index to datetime: {e}")
-                        # Fallback к стандартному поведению
-                        for label in ax.get_xticklabels():
-                            label.set_rotation(45)
-                        return
-            
-            # Определяем количество точек данных
-            num_points = len(date_index)
-            
-            # Вычисляем временной диапазон для более точной настройки
-            if num_points > 1:
-                date_range = (date_index.max() - date_index.min()).days
-                years_span = date_range / 365.25
-            else:
-                years_span = 1
-            
-            # Выбираем интервал в зависимости от количества данных и временного диапазона
-            if num_points <= 10:
-                # Мало данных - показываем все месяцы
-                ax.xaxis.set_major_locator(mdates.MonthLocator())
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            elif num_points <= 30:
-                # Среднее количество - показываем каждый месяц
-                ax.xaxis.set_major_locator(mdates.MonthLocator())
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            elif num_points <= 60:
-                # Месячные данные - показываем каждый месяц с интервалом
-                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))  # Каждый 2-й месяц
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            elif num_points <= 120:
-                # Квартальные данные - показываем каждый квартал
-                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-            elif years_span <= 5:
-                # Много данных, но короткий период - показываем каждый год
-                ax.xaxis.set_major_locator(mdates.YearLocator())
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-            elif years_span <= 15:
-                # Средний период - показываем каждый 2-й год
-                ax.xaxis.set_major_locator(mdates.YearLocator(2))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-            else:
-                # Длинный период - показываем каждый 5-й год
-                ax.xaxis.set_major_locator(mdates.YearLocator(5))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-            
-            # Поворачиваем подписи дат для лучшей читаемости
-            for label in ax.get_xticklabels():
-                label.set_rotation(45)
-            
-        except Exception as e:
-            logger.warning(f"Error optimizing x-axis ticks: {e}")
-            # Fallback к стандартному поведению
-            for label in ax.get_xticklabels():
-                label.set_rotation(45)
+        # Используем новый улучшенный метод форматирования
+        self._enhanced_x_axis_formatting(ax, date_index)
 
 # Глобальный экземпляр
 chart_styles = ChartStyles()
