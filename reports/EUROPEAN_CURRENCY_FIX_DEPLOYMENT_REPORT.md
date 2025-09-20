@@ -67,3 +67,4 @@ git push origin DEV --force
 - Monitor bot performance after deployment
 - Collect user feedback on currency consistency
 - Consider adding more European exchanges if needed
+
