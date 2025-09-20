@@ -2517,61 +2517,22 @@ class ShansAi:
                 # If no symbols found, add a message
                 response += "❌ Символы не найдены для данной страницы\n"
             
-            # Create keyboard for navigation
-            keyboard = []
+            # Create reply keyboard for navigation
+            reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
             
-            # Navigation buttons
-            if total_pages > 1:
-                nav_buttons = []
-                
-                if current_page > 0:
-                    nav_buttons.append(InlineKeyboardButton(
-                        "⬅️ Назад", 
-                        callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
-                    ))
-                
-                nav_buttons.append(InlineKeyboardButton(
-                    f"{current_page + 1}/{total_pages}", 
-                    callback_data="noop"
-                ))
-                
-                if current_page < total_pages - 1:
-                    nav_buttons.append(InlineKeyboardButton(
-                        "➡️ Вперед", 
-                        callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
-                    ))
-                
-                keyboard.append(nav_buttons)
-            
-            # Excel export button
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"📊 Полный список в Excel ({total_symbols:,})", 
-                    callback_data=f"excel_namespace_{namespace}"
-                )
-            ])
-            
-            # Home button after Excel
-            keyboard.append([
-                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
-            ])
-            
-            # Analysis, Compare, Portfolio buttons
-            keyboard.append([
-                InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
-                InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
-                InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
-            ])
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            # Save current namespace context for reply keyboard handling
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, 
+                current_namespace=namespace,
+                current_namespace_page=current_page
+            )
             
             # Отправляем сообщение с таблицей и кнопками
             self.logger.info(f"About to send message. Response length: {len(response)}, Is callback: {is_callback}")
             if is_callback:
-                # Для callback сообщений редактируем существующее сообщение
-                await context.bot.edit_message_text(
+                # Для callback сообщений отправляем новое сообщение с reply keyboard
+                await context.bot.send_message(
                     chat_id=update.callback_query.message.chat_id,
-                    message_id=update.callback_query.message.message_id,
                     text=response,
                     parse_mode='Markdown',
                     reply_markup=reply_markup
@@ -3754,7 +3715,7 @@ class ShansAi:
                     response += f"• {row[0]} - {row[1]}\n"
                 response += "\n"
                 
-                response += "💡 Используйте кнопки ниже для выбора биржи"
+                response += "💡 Используйте кнопки ниже для выбора биржи\n\Используйте команду /search для поиска активов"
                 
                 # Создаем reply keyboard для пространств имен
                 reply_markup = self._create_namespace_reply_keyboard()
@@ -4513,18 +4474,23 @@ class ShansAi:
                     except Exception as e:
                         self.logger.warning(f"Could not delete loading message: {e}")
                 
-                # Send comparison chart with buttons using _send_photo_safe for Markdown formatting
+                # Create compare reply keyboard
+                compare_reply_keyboard = self._create_compare_reply_keyboard()
+                
+                # Send comparison chart with buttons and reply keyboard
                 await self._send_photo_safe(
                     update=update,
                     photo_bytes=img_bytes,
                     caption=self._truncate_caption(caption),
-                    reply_markup=reply_markup,
+                    reply_markup=compare_reply_keyboard,
                     context=context,
                     parse_mode='HTML'  # Try HTML instead of Markdown for better compatibility
                 )
                 
-                # Show Reply Keyboard for compare management
-                await self._manage_reply_keyboard(update, context, "compare")
+                # Update user context to track active keyboard
+                user_id = update.effective_user.id
+                self._update_user_context(user_id, active_reply_keyboard="compare")
+                self.logger.info("Compare reply keyboard set with chart")
                 
                 # Table statistics now available via Metrics button
                 
@@ -10042,7 +10008,7 @@ class ShansAi:
             # Send persistent message with keyboard
             await self._send_message_safe(
                 update, 
-                "", 
+                "⚖️ Выберите действие для сравнения:", 
                 reply_markup=compare_reply_keyboard
             )
         except Exception as e:
@@ -10704,15 +10670,20 @@ class ShansAi:
             if specified_period:
                 caption += f"📅 Период: {specified_period}\n"
             
-            # Send chart without period selection keyboard
+            # Create compare reply keyboard
+            compare_reply_keyboard = self._create_compare_reply_keyboard()
+            
+            # Send chart with reply keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(caption)
+                caption=self._truncate_caption(caption),
+                reply_markup=compare_reply_keyboard
             )
             
-            # Show Reply Keyboard for compare management
-            await self._manage_reply_keyboard(update, context, "compare")
+            # Update user context to track active keyboard
+            self._update_user_context(user_id, active_reply_keyboard="compare")
+            self.logger.info("Compare reply keyboard set with comparison chart")
             
         except Exception as e:
             self.logger.error(f"Error creating comparison wealth chart: {e}")
@@ -15985,20 +15956,21 @@ class ShansAi:
                 chart_caption += f"• Макс. просадка: Недоступно\n"
 
 
-            # Send the chart with caption (no period selection buttons)
+            # Create portfolio reply keyboard
+            portfolio_reply_keyboard = self._create_portfolio_reply_keyboard()
+            
+            # Send the chart with caption and portfolio keyboard
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(chart_caption)
+                caption=self._truncate_caption(chart_caption),
+                reply_markup=portfolio_reply_keyboard
             )
             
-            # Ensure portfolio keyboard is shown and send confirmation message
-            await self._manage_reply_keyboard(update, context, "portfolio")
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="📊 Портфель готов к анализу",
-                parse_mode='Markdown'
-            )
+            # Update user context to track active keyboard
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, active_reply_keyboard="portfolio")
+            self.logger.info("Portfolio reply keyboard set with chart")
             
         except Exception as e:
             self.logger.error(f"Error creating portfolio wealth chart with info: {e}")
