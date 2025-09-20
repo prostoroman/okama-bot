@@ -2407,7 +2407,7 @@ class ShansAi:
                 
                 # Home button after Excel
                 keyboard.append([
-                    InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+                    InlineKeyboardButton("📚 База данных", callback_data="namespace_home")
                 ])
                 
                 # Analysis, Compare, Portfolio buttons
@@ -3708,7 +3708,7 @@ class ShansAi:
                 
                 # Sort by namespace
                 namespace_data.sort(key=lambda x: x[0])
-                response = "📚 Доступные данные\n\n"
+                response = "📚 База данных\n\n"
                 
                 # Create bulleted list format
                 for row in namespace_data:
@@ -3744,7 +3744,7 @@ class ShansAi:
             if not context.args:
                 await self._send_message_safe(update, 
                     "🔍 **Поиск активов**\n\n"
-                    "Используйте команду `/search <запрос>` для поиска активов по названию или ISIN.\n\n"
+                    "Используйте команду `/search <запрос>` для поиска тикеров по названию или ISIN.\n\n"
                     "**Примеры:**\n"
                     "• `/search Apple` - найти акции Apple\n"
                     "• `/search SBER` - найти Сбербанк\n"
@@ -9862,14 +9862,14 @@ class ShansAi:
             
             # Action buttons
             keyboard.append([
-                KeyboardButton("📊 Excel"),
+                KeyboardButton("📊 ВыгрузиExcel"),
                 KeyboardButton("🔍 Анализ"),
                 KeyboardButton("⚖️ Сравнить")
             ])
             
             keyboard.append([
                 KeyboardButton("💼 В портфель"),
-                KeyboardButton("🏠 Домой")
+                KeyboardButton("📚 База данных")
             ])
             
             return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -10054,7 +10054,7 @@ class ShansAi:
             "🔍 Анализ",
             "⚖️ Сравнить",
             "💼 В портфель",
-            "🏠 Домой"
+            "📚 База данных"
         ]
         # Also check for page indicators like "1/5", "2/5", etc.
         import re
@@ -10352,7 +10352,7 @@ class ShansAi:
                 # Handle portfolio button
                 await self._handle_namespace_portfolio_button(update, context)
                 
-            elif text == "🏠 Домой":
+            elif text == "📚 База данных":
                 # Return to namespace list
                 await self.namespace_command(update, context)
                 
@@ -16403,6 +16403,17 @@ class ShansAi:
             portfolio_weights = user_context.get('portfolio_weights', [])
             portfolio_currency = user_context.get('current_currency', 'USD')
             
+            # Try to find portfolio name from saved portfolios
+            portfolio_name = None
+            saved_portfolios = user_context.get('saved_portfolios', {})
+            
+            # Look for matching portfolio in saved portfolios
+            for portfolio_symbol, portfolio_data in saved_portfolios.items():
+                if portfolio_data.get('symbols') == final_symbols:
+                    portfolio_name = portfolio_data.get('portfolio_name')
+                    self.logger.info(f"Found matching portfolio: {portfolio_symbol} with name: {portfolio_name}")
+                    break
+            
             # If we have portfolio weights, use them; otherwise use equal weights
             if portfolio_weights and len(portfolio_weights) == len(final_symbols):
                 weights = portfolio_weights
@@ -16469,7 +16480,7 @@ class ShansAi:
             # Create Portfolio with validated symbols and period
             portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
-            await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
+            await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights, portfolio_name)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio compare assets button: {e}")
@@ -16499,8 +16510,9 @@ class ShansAi:
             symbols = portfolio_info.get('symbols', [])
             weights = portfolio_info.get('weights', [])
             currency = portfolio_info.get('currency', 'USD')
+            portfolio_name = portfolio_info.get('portfolio_name')
             
-            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}")
+            self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights}, currency={currency}, name={portfolio_name}")
             
             if not symbols:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
@@ -16560,14 +16572,14 @@ class ShansAi:
             # Create Portfolio with validated symbols and period
             portfolio = self._create_portfolio_with_period(valid_symbols, valid_weights, currency, user_context)
             
-            await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights)
+            await self._create_portfolio_compare_assets_chart(update, context, portfolio, final_symbols, currency, weights, portfolio_name)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio compare assets by symbol: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             await self._send_callback_message(update, context, f"❌ Ошибка при создании графика сравнения: {str(e)}")
 
-    async def _create_portfolio_compare_assets_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list):
+    async def _create_portfolio_compare_assets_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio, symbols: list, currency: str, weights: list, portfolio_name: str = None):
         """Create and send portfolio compare assets chart"""
         try:
             self.logger.info(f"Creating portfolio compare assets chart for portfolio: {symbols}")
@@ -16807,7 +16819,7 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при анализе портфеля: {str(e)}", parse_mode='Markdown')
 
     async def _handle_portfolio_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
-        """Handle portfolio compare button click - execute /compare command with pre-filled portfolio symbol"""
+        """Handle portfolio compare button click - redirect to /compare command without arguments"""
         try:
             # Remove buttons from the old message
             try:
@@ -16815,45 +16827,12 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not remove buttons from old message: {e}")
             
-            # Set user context to wait for comparison input with pre-filled portfolio symbol
-            user_id = update.effective_user.id
-            self._update_user_context(user_id, 
-                waiting_for_compare=True,
-                compare_base_symbol=portfolio_symbol
-            )
-            
-            # Get user's saved portfolios for suggestions
-            user_context = self._get_user_context(user_id)
-            saved_portfolios = user_context.get('saved_portfolios', {})
-            
-            compare_text = f"⚖️ **Сравнить портфель {portfolio_symbol} с:**\n\n"
-            compare_text += "Отправьте название актива или другого портфеля для сравнения:\n\n"
-            
-            # Add suggestions from saved portfolios (excluding current one)
-            if saved_portfolios:
-                compare_text += "💼 Ваши другие портфели:\n"
-                for other_symbol, portfolio_info in saved_portfolios.items():
-                    if other_symbol != portfolio_symbol:
-                        symbols = portfolio_info.get('symbols', [])
-                        escaped_symbol = other_symbol.replace('_', '\\_')
-                        escaped_symbols = [symbol.replace('_', '\\_') for symbol in symbols]
-                        portfolio_str = ', '.join(escaped_symbols)
-                        compare_text += f"• `{escaped_symbol}` ({portfolio_str})\n"
-                compare_text += "\n"
-            
-            # Add popular asset suggestions
-            suggestions = self._get_popular_alternatives("SPY.US")  # Use SPY as base for suggestions
-            compare_text += "📈 Популярные активы:\n"
-            for suggestion in suggestions[:5]:  # Limit to 5 suggestions
-                compare_text += f"• `{suggestion}`\n"
-            
-            compare_text += f"\nИли отправьте любой другой тикер для сравнения с {portfolio_symbol}"
-            
-            await self._send_callback_message(update, context, compare_text, parse_mode='Markdown')
+            # Call the compare command without arguments
+            await self.compare_command(update, context)
             
         except Exception as e:
             self.logger.error(f"Error handling portfolio compare button: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при подготовке сравнения: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при переходе к сравнению: {str(e)}")
 
     async def _handle_portfolio_main_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, portfolio_symbol: str):
         """Handle portfolio main button click - show portfolio main information with keyboard"""
