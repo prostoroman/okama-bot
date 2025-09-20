@@ -2204,8 +2204,8 @@ class ShansAi:
             [InlineKeyboardButton("🔍 Анализ", callback_data="start_info")],
             [InlineKeyboardButton("⚖️ Сравнение", callback_data="start_compare")],
             [InlineKeyboardButton("💼 Портфель", callback_data="start_portfolio")],
-            [InlineKeyboardButton("📊 Все данные", callback_data="start_list")],
-            [InlineKeyboardButton("📚 Полная справка", callback_data="start_help")]
+            [InlineKeyboardButton("📚 База данных", callback_data="start_list")],
+            [InlineKeyboardButton("❓ Справка", callback_data="start_help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -2229,23 +2229,11 @@ class ShansAi:
 `/portfolio <тикер1:вес> <тикер2:вес>` ... — создание и анализ портфеля (состав, риски, доходность, прогнозы)
 Пример: `/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3`
 
-`/my` — просмотр сохранённых портфелей
-`/list` — список доступных данных и символов
+`/list` — список доступных данных и тм
 `/search <название или ISIN>` — поиск актива по базе okama и tushare
 Пример: `/search Apple`
 
-🔹 *Поддерживаемые форматы тикеров*
 
-• *Акции США*: `AAPL.US`, `VOO.US`, `SPY.US`, `QQQ.US`
-• *MOEX (Россия)*: `SBER.MOEX`, `GAZP.MOEX`, `LKOH.MOEX`
-• *Индексы*: `SPX.INDX`, `IXIC.INDX`, `RGBITR.INDX`
-• *Товары (commodities)*: `GC.COMM` (золото), `CL.COMM` (нефть), `SI.COMM` (серебро)
-• *Валюты (Forex)*: `EURUSD.FX`, `GBPUSD.FX`, `USDJPY.FX`
-• *LSE (Лондон)*: `VOD.LSE`, `HSBA.LSE`, `BP.LSE`
-• *SSE (Шанхай)*: `600000.SSE`, `601318.SSE`, `601398.SSE`
-• *SZSE (Шэньчжэнь)*: `000001.SZSE`, `000002.SZSE`, `000003.SZSE`
-• *PEK (Пекин)*: `430047.PEK`, `830799.PEK`, `870976.PEK`
-• *HKEX (Гонконг)*: `00001.HKEX`, `00002.HKEX`, `00003.HKEX`
 
 🔹 *Примеры использования*
 
@@ -2536,6 +2524,53 @@ class ShansAi:
                 # If no symbols found, add a message
                 response += "❌ Символы не найдены для данной страницы\n"
             
+            # Create keyboard for navigation
+            keyboard = []
+            
+            # Navigation buttons
+            if total_pages > 1:
+                nav_buttons = []
+                
+                if current_page > 0:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "⬅️ Назад", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
+                    ))
+                
+                nav_buttons.append(InlineKeyboardButton(
+                    f"{current_page + 1}/{total_pages}", 
+                    callback_data="noop"
+                ))
+                
+                if current_page < total_pages - 1:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "➡️ Вперед", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
+                    ))
+                
+                keyboard.append(nav_buttons)
+            
+            # Excel export button
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📊 Полный список в Excel ({total_symbols:,})", 
+                    callback_data=f"excel_namespace_{namespace}"
+                )
+            ])
+            
+            # Home button after Excel
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+            ])
+            
+            # Analysis, Compare, Portfolio buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
+                InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
             
             # Отправляем сообщение с таблицей и кнопками
             self.logger.info(f"About to send message. Response length: {len(response)}, Is callback: {is_callback}")
@@ -2961,9 +2996,14 @@ class ShansAi:
                 # Формируем структурированный ответ
                 info_text = self._format_asset_info_response(asset, symbol, key_metrics)
                 
-                # Создаем интерактивную панель управления с выделенным периодом 1Y
-                keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                # Создаем reply keyboard для управления
+                reply_markup = self._create_info_reply_keyboard()
+                
+                # Save current symbol context for reply keyboard handling
+                user_id = update.effective_user.id
+                self._update_user_context(user_id, 
+                    current_info_symbol=symbol
+                )
                 
                 # Получаем график доходности за 1 год
                 self.logger.info(f"Getting daily chart for {symbol}")
@@ -3013,9 +3053,14 @@ class ShansAi:
             # Format information according to new structure
             info_text = self._format_tushare_info_response(symbol_info, symbol)
             
-            # Create interactive keyboard with highlighted 1Y period
-            keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            # Create reply keyboard for management
+            reply_markup = self._create_info_reply_keyboard()
+            
+            # Save current symbol context for reply keyboard handling
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, 
+                current_info_symbol=symbol
+            )
             
             # Try to get chart data
             chart_data = await self._get_tushare_chart(symbol)
@@ -4541,109 +4586,6 @@ class ShansAi:
                     self.logger.warning(f"Could not delete loading message: {delete_error}")
             await self._send_message_safe(update, f"❌ Ошибка в команде сравнения: {str(e)}")
 
-    async def my_portfolios_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /my command for displaying saved portfolios"""
-        # Ensure no reply keyboard is shown
-        await self._ensure_no_reply_keyboard(update, context)
-        
-        try:
-            user_id = update.effective_user.id
-            self.logger.info(f"Processing /my command for user {user_id}")
-            
-            # Get user context with detailed logging
-            user_context = self._get_user_context(user_id)
-            self.logger.info(f"User context keys: {list(user_context.keys())}")
-            self.logger.info(f"Full user context: {user_context}")
-            
-            saved_portfolios = user_context.get('saved_portfolios', {})
-            self.logger.info(f"Saved portfolios count: {len(saved_portfolios)}")
-            self.logger.info(f"Saved portfolios keys: {list(saved_portfolios.keys())}")
-            self.logger.info(f"Saved portfolios content: {saved_portfolios}")
-            
-            if not saved_portfolios:
-                await self._send_message_safe(update, 
-                    "💼 У вас пока нет сохраненных портфелей\n\n"
-                    "Создайте портфель командой:\n"
-                    "`/portfolio символ1:доля1 символ2:доля2 ...`\n\n"
-                    "Пример:\n"
-                    "`/portfolio SPY.US:0.6 QQQ.US:0.4`"
-                )
-                return
-            
-            # Create comprehensive portfolio list
-            portfolio_list = "💼 Ваши сохраненные портфели:\n\n"
-            
-            self.logger.info(f"Processing {len(saved_portfolios)} portfolios for display")
-            
-            for portfolio_symbol, portfolio_info in saved_portfolios.items():
-                self.logger.info(f"Processing portfolio: {portfolio_symbol}")
-                self.logger.info(f"Portfolio info keys: {list(portfolio_info.keys())}")
-                
-                # Get portfolio name or fallback to symbol
-                portfolio_name = portfolio_info.get('portfolio_name', portfolio_symbol)
-                portfolio_list += f"🏷️ **{portfolio_name}** (`{portfolio_symbol}`)\n"
-                
-                # Basic info
-                symbols = portfolio_info.get('symbols', [])
-                weights = portfolio_info.get('weights', [])
-                currency = portfolio_info.get('currency', 'N/A')
-                created_at = portfolio_info.get('created_at', 'N/A')
-                
-                portfolio_list += f"📊 Состав: {', '.join(symbols)}\n"
-                
-                # Weights breakdown
-                if symbols and weights and len(symbols) == len(weights):
-                    portfolio_list += "💰 Доли:\n"
-                    for i, (symbol, weight) in enumerate(zip(symbols, weights)):
-                        portfolio_list += f"   • {symbol}: {weight:.1%}\n"
-                
-                portfolio_list += f"💱 Валюта: {currency}\n"
-                
-                # Performance metrics if available
-                if 'mean_return_annual' in portfolio_info:
-                    portfolio_list += f"📈 Годовая доходность: {portfolio_info['mean_return_annual']:.2%}\n"
-                if 'volatility_annual' in portfolio_info:
-                    portfolio_list += f"📉 Годовая волатильность: {portfolio_info['volatility_annual']:.2%}\n"
-                if 'sharpe_ratio' in portfolio_info:
-                    portfolio_list += f"⚡ Коэффициент Шарпа: {portfolio_info['sharpe_ratio']:.2f}\n"
-                
-                # Dates if available
-                if 'first_date' in portfolio_info and 'last_date' in portfolio_info:
-                    portfolio_list += f"📅 Период: {portfolio_info['first_date']} - {portfolio_info['last_date']}\n"
-                
-                # Final value if available
-                if 'final_value' in portfolio_info and portfolio_info['final_value'] is not None:
-                    portfolio_list += f"💵 Финальная стоимость: {portfolio_info['final_value']:.2f} {currency}\n"
-                
-                portfolio_list += f"🕐 Создан: {created_at}\n"
-                portfolio_list += "\n" + "─" * 40 + "\n\n"
-            
-            # Add usage instructions
-                portfolio_list += "💡 **Использование в сравнении:**\n"
-                portfolio_list += "• `/compare PF1 SPY.US` - сравнить портфель с активом\n"
-                portfolio_list += "• `/compare PF1 PF2` - сравнить два портфеля\n"
-                portfolio_list += "• `/compare PF1 SPY.US QQQ.US` - смешанное сравнение\n"
-                portfolio_list += "• `/compare portfolio_123.PF SPY.US` - сравнить портфель с активом\n\n"
-                
-                portfolio_list += "🔧 **Управление:**\n"
-                portfolio_list += "• Портфели автоматически сохраняются при создании\n"
-                portfolio_list += "• Портфели с одинаковыми активами и пропорциями не дублируются\n"
-                portfolio_list += "• Используйте символы для сравнения и анализа\n"
-                portfolio_list += "• Все данные сохраняются в контексте сессии\n\n"
-                
-                # Create keyboard with clear portfolios button
-                keyboard = [
-                    [InlineKeyboardButton("💼 Очистить все портфели", callback_data="clear_all_portfolios")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                # Send the portfolio list with clear button
-                await self._send_message_safe(update, portfolio_list, reply_markup=reply_markup)
-            
-        except Exception as e:
-            self.logger.error(f"Error in my portfolios command: {e}")
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
-            await self._send_message_safe(update, f"❌ Ошибка при получении списка портфелей: {str(e)}\n\n💡 Попробуйте создать новый портфель командой `/portfolio`")
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command for creating portfolio with weights"""
@@ -7247,9 +7189,6 @@ class ShansAi:
                 symbols = [self.clean_symbol(s) for s in callback_data.replace('compare_assets_', '').split(',')]
                 self.logger.info(f"Compare assets button clicked for symbols: {symbols}")
                 await self._handle_portfolio_compare_assets_button(update, context, symbols)
-            elif callback_data == 'clear_all_portfolios':
-                self.logger.info("Clear all portfolios button clicked")
-                await self._handle_clear_all_portfolios_button(update, context)
             elif callback_data == 'compare_risk_return':
                 self.logger.info("Compare Risk / Return button clicked")
                 await self._handle_risk_return_compare_button(update, context)
@@ -7311,12 +7250,6 @@ class ShansAi:
                     page = int(parts[1])
                     self.logger.info(f"Navigation button clicked for tushare namespace: {namespace}, page: {page}")
                     await self._show_tushare_namespace_symbols(update, context, namespace, is_callback=True, page=page)
-            elif callback_data == 'utility_clear_portfolios':
-                self.logger.info("Utility clear portfolios button clicked")
-                await self._handle_clear_all_portfolios_button(update, context)
-            elif callback_data == 'clear_all_portfolios':
-                self.logger.info("Clear all portfolios button clicked")
-                await self._handle_clear_all_portfolios_button(update, context)
             elif callback_data == 'noop':
                 # Handle page number buttons - do nothing
                 self.logger.info("Page number button clicked - no action needed")
@@ -10072,6 +10005,32 @@ class ShansAi:
             # Return empty keyboard as fallback
             return ReplyKeyboardMarkup([])
 
+    def _create_info_reply_keyboard(self) -> ReplyKeyboardMarkup:
+        """Create Reply Keyboard for /info command with period and action buttons"""
+        try:
+            keyboard = []
+            
+            # Row 1: Period buttons
+            keyboard.append([
+                KeyboardButton("1 год"),
+                KeyboardButton("5 лет"),
+                KeyboardButton("Макс. срок"),
+                KeyboardButton("Дивиденды")
+            ])
+            
+            # Row 2: Action buttons
+            keyboard.append([
+                KeyboardButton("Сравнение"),
+                KeyboardButton("В Портфель")
+            ])
+            
+            return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating info reply keyboard: {e}")
+            # Return empty keyboard as fallback
+            return ReplyKeyboardMarkup([])
+
     async def _show_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show Reply Keyboard for portfolio management"""
         try:
@@ -10157,12 +10116,25 @@ class ShansAi:
         ]
         return text in namespace_buttons
 
+    def _is_info_reply_keyboard_button(self, text: str) -> bool:
+        """Check if the text is an info Reply Keyboard button"""
+        info_buttons = [
+            "1 год",
+            "5 лет", 
+            "Макс. срок",
+            "Дивиденды",
+            "Сравнение",
+            "В Портфель"
+        ]
+        return text in info_buttons
+
     def _is_reply_keyboard_button(self, text: str) -> bool:
-        """Check if the text is any Reply Keyboard button (portfolio, compare, list, or namespace)"""
+        """Check if the text is any Reply Keyboard button (portfolio, compare, list, namespace, or info)"""
         return (self._is_portfolio_reply_keyboard_button(text) or 
                 self._is_compare_reply_keyboard_button(text) or 
                 self._is_list_reply_keyboard_button(text) or
-                self._is_namespace_reply_keyboard_button(text))
+                self._is_namespace_reply_keyboard_button(text) or
+                self._is_info_reply_keyboard_button(text))
 
     async def _handle_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle Reply Keyboard button presses - determine context and call appropriate handler"""
@@ -17107,45 +17079,6 @@ class ShansAi:
             self.logger.error(f"Error in namespace portfolio button handler: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка: {str(e)}")
 
-    async def _handle_clear_all_portfolios_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle clear all portfolios button click"""
-        try:
-            user_id = update.effective_user.id
-            self.logger.info(f"Handling clear all portfolios button for user {user_id}")
-            
-            # Get user context
-            user_context = self._get_user_context(user_id)
-            saved_portfolios = user_context.get('saved_portfolios', {})
-            
-            if not saved_portfolios:
-                await self._send_callback_message(update, context, "💼 У вас нет сохраненных портфелей для очистки")
-                return
-            
-            # Count portfolios before clearing
-            portfolio_count = len(saved_portfolios)
-            
-            # Clear all portfolios
-            user_context['saved_portfolios'] = {}
-            user_context['portfolio_count'] = 0
-            
-            # Update context
-            self._update_user_context(user_id, **user_context)
-            
-            # Send confirmation message
-            await self._send_callback_message(
-                update, 
-                context, 
-                f"🗑️ **Очистка завершена!**\n\n"
-                f"✅ Удалено портфелей: {portfolio_count}\n"
-                f"✅ Счетчик портфелей сброшен\n\n"
-                f"💡 Для создания новых портфелей используйте команду `/portfolio`"
-            )
-            
-            self.logger.info(f"Successfully cleared {portfolio_count} portfolios for user {user_id}")
-            
-        except Exception as e:
-            self.logger.error(f"Error in clear all portfolios button handler: {e}")
-            await self._send_callback_message(update, context, f"❌ Ошибка при очистке портфелей: {str(e)}")
 
 
     def run(self):
@@ -17161,7 +17094,6 @@ class ShansAi:
         application.add_handler(CommandHandler("search", self.search_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
-        application.add_handler(CommandHandler("my", self.my_portfolios_command))
         application.add_handler(CommandHandler("test", self.test_command))
         
         # Add callback query handler for buttons
