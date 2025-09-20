@@ -6653,7 +6653,7 @@ class ShansAi:
             # Fallback: отправляем обычное сообщение
             await self._send_callback_message(update, context, text, parse_mode)
 
-    async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
+    async def _send_callback_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, reply_markup=None):
         """Отправить сообщение в callback query - исправлено для обработки None и разбивки длинных сообщений"""
         try:
             # Проверяем, что update и context не None
@@ -6685,7 +6685,8 @@ class ShansAi:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
                         text=text,
-                        parse_mode=parse_mode
+                        parse_mode=parse_mode,
+                        reply_markup=reply_markup
                     )
                 except Exception as callback_error:
                     self.logger.error(f"Error sending callback message: {callback_error}")
@@ -6693,14 +6694,15 @@ class ShansAi:
                     try:
                         await context.bot.send_message(
                             chat_id=update.callback_query.message.chat_id,
-                            text=f"❌ Ошибка отправки сообщения: {text[:500]}..."
+                            text=f"❌ Ошибка отправки сообщения: {text[:500]}...",
+                            reply_markup=reply_markup
                         )
                     except Exception as fallback_error:
                         self.logger.error(f"Fallback callback message sending also failed: {fallback_error}")
             elif hasattr(update, 'message') and update.message is not None:
                 # Для обычных сообщений используем _send_message_safe
                 self.logger.info("_send_callback_message: Using message path")
-                await self._send_message_safe(update, text)
+                await self._send_message_safe(update, text, reply_markup=reply_markup)
             else:
                 # Если ни то, ни другое - логируем ошибку
                 self.logger.error("_send_callback_message: Cannot send message - neither callback_query nor message available")
@@ -10612,7 +10614,7 @@ class ShansAi:
             if chart_data:
                 # Send chart with info text
                 chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, period)
-                await self._send_photo_safe(update, chart_data, caption=chart_caption, reply_markup=reply_markup)
+                await self._send_photo_safe(update, chart_data, caption=chart_caption, reply_markup=reply_markup, context=context)
             else:
                 # Send only text
                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
@@ -10648,7 +10650,7 @@ class ShansAi:
             if chart_data:
                 # Send chart with info text
                 caption = f"📈 График доходности за {period}\n\n{info_text}"
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
             else:
                 # Send only text
                 await self._send_message_safe(update, info_text, reply_markup=reply_markup)
