@@ -4682,9 +4682,9 @@ class ShansAi:
             
             # Add usage instructions
                 portfolio_list += "💡 **Использование в сравнении:**\n"
-                portfolio_list += "• `/compare PF_1 SPY.US` - сравнить портфель с активом\n"
-                portfolio_list += "• `/compare PF_1 PF_2` - сравнить два портфеля\n"
-                portfolio_list += "• `/compare PF_1 SPY.US QQQ.US` - смешанное сравнение\n"
+                portfolio_list += "• `/compare PF1 SPY.US` - сравнить портфель с активом\n"
+                portfolio_list += "• `/compare PF1 PF2` - сравнить два портфеля\n"
+                portfolio_list += "• `/compare PF1 SPY.US QQQ.US` - смешанное сравнение\n"
                 portfolio_list += "• `/compare portfolio_123.PF SPY.US` - сравнить портфель с активом\n\n"
                 
                 portfolio_list += "🔧 **Управление:**\n"
@@ -4983,7 +4983,7 @@ class ShansAi:
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
                 
                 # Use PF namespace with custom symbol (okama's symbol is composition string, not suitable for bot)
-                portfolio_symbol = f"PF_{portfolio_count}"
+                portfolio_symbol = f"PF{portfolio_count}"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
@@ -5634,7 +5634,7 @@ class ShansAi:
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
                 
                 # Use PF namespace with custom symbol (okama's symbol is composition string, not suitable for bot)
-                portfolio_symbol = f"PF_{portfolio_count}"
+                portfolio_symbol = f"PF{portfolio_count}"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
@@ -5898,7 +5898,7 @@ class ShansAi:
                 
                 # Use PF namespace with okama's assigned symbol
                 # Use PF namespace with custom symbol (okama's symbol is composition string, not suitable for bot)
-                portfolio_symbol = f"PF_{portfolio_count}"
+                portfolio_symbol = f"PF{portfolio_count}"
                 
                 # Create compact portfolio data string for callback (only symbols to avoid Button_data_invalid)
                 portfolio_data_str = ','.join(symbols)
@@ -6204,7 +6204,7 @@ class ShansAi:
                 # Generate portfolio symbol
                 user_context = self._get_user_context(user_id)
                 portfolio_count = user_context.get('portfolio_count', 0) + 1
-                portfolio_symbol = f"PF_{portfolio_count}"
+                portfolio_symbol = f"PF{portfolio_count}"
                 
                 # Add portfolio symbol display
                 portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
