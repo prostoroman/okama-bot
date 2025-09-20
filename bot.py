@@ -5106,6 +5106,15 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio command: {e}")
+            # Clear user context to prevent fallback to compare command
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, 
+                waiting_for_portfolio=False,
+                waiting_for_portfolio_weights=False,
+                waiting_for_compare=False,
+                portfolio_tickers=None,
+                portfolio_base_symbols=None
+            )
             await self._send_message_safe(update, f"❌ Ошибка при выполнении команды портфеля: {str(e)}")
 
 
@@ -5436,8 +5445,14 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio input handler: {e}")
-            # Restore waiting flag so user can try again
-            self._update_user_context(user_id, waiting_for_portfolio=True)
+            # Clear user context to prevent fallback to compare command
+            self._update_user_context(user_id, 
+                waiting_for_portfolio=False,
+                waiting_for_portfolio_weights=False,
+                waiting_for_compare=False,
+                portfolio_tickers=None,
+                portfolio_base_symbols=None
+            )
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}\n\n🔄 Попробуйте ввести портфель снова:")
 
     async def _handle_portfolio_weights_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
@@ -5699,8 +5714,14 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio weights input handler: {e}")
-            # Restore waiting flag so user can try again
-            self._update_user_context(user_id, waiting_for_portfolio_weights=True)
+            # Clear user context to prevent fallback to compare command
+            self._update_user_context(user_id, 
+                waiting_for_portfolio=False,
+                waiting_for_portfolio_weights=False,
+                waiting_for_compare=False,
+                portfolio_tickers=None,
+                portfolio_base_symbols=None
+            )
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода портфеля: {str(e)}\n\n🔄 Попробуйте ввести веса снова:")
 
     async def _handle_portfolio_tickers_weights_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
@@ -7498,7 +7519,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "🤖 Анализирую данные...", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "Анализирую данные...", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
