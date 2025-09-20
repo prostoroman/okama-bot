@@ -4632,10 +4632,32 @@ class ShansAi:
                     symbol = original_symbol.upper()
                     tickers_only.append(symbol)
             
-            # Если есть только тикеры без весов, запрашиваем веса
+            # Если есть только тикеры без весов
             if tickers_only and not portfolio_data:
-                await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
-                return
+                # Если только один тикер, запрашиваем веса (вместо автоматического создания с весом 100%)
+                if len(tickers_only) == 1:
+                    single_ticker = tickers_only[0]
+                    
+                    # Проверяем на китайские и гонконгские символы
+                    if self._is_chinese_or_hongkong_symbol(single_ticker):
+                        await self._send_message_safe(update, 
+                            "🚧 **Поддержка китайских и гонконгских символов в разработке**\n\n"
+                            "К сожалению, создание портфелей с китайскими и гонконгскими активами "
+                            "пока не поддерживается. Эта функциональность находится в разработке.\n\n"
+                            "💡 Попробуйте использовать активы с других бирж:\n"
+                            "• `SPY.US` - американские ETF\n"
+                            "• `SBER.MOEX` - российские акции\n"
+                            "• `VTI.US` - глобальные ETF"
+                        )
+                        return
+                    
+                    # Запрашиваем веса для одного актива
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
+                else:
+                    # Несколько тикеров без весов - запрашиваем веса
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
             
             # Если есть смешанный ввод (тикеры с весами и без), это ошибка
             if tickers_only and portfolio_data:
@@ -5239,10 +5261,32 @@ class ShansAi:
                     symbol = original_symbol.upper()
                     tickers_only.append(symbol)
             
-            # Если есть только тикеры без весов, запрашиваем веса
+            # Если есть только тикеры без весов
             if tickers_only and not portfolio_data:
-                await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
-                return
+                # Если только один тикер, запрашиваем веса (вместо автоматического создания с весом 100%)
+                if len(tickers_only) == 1:
+                    single_ticker = tickers_only[0]
+                    
+                    # Проверяем на китайские и гонконгские символы
+                    if self._is_chinese_or_hongkong_symbol(single_ticker):
+                        await self._send_message_safe(update, 
+                            "🚧 **Поддержка китайских и гонконгских символов в разработке**\n\n"
+                            "К сожалению, создание портфелей с китайскими и гонконгскими активами "
+                            "пока не поддерживается. Эта функциональность находится в разработке.\n\n"
+                            "💡 Попробуйте использовать активы с других бирж:\n"
+                            "• `SPY.US` - американские ETF\n"
+                            "• `SBER.MOEX` - российские акции\n"
+                            "• `VTI.US` - глобальные ETF"
+                        )
+                        return
+                    
+                    # Запрашиваем веса для одного актива
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
+                else:
+                    # Несколько тикеров без весов - запрашиваем веса
+                    await self._request_portfolio_weights(update, tickers_only, specified_currency, specified_period)
+                    return
             
             # Если есть смешанный ввод (тикеры с весами и без), это ошибка
             if tickers_only and portfolio_data:
@@ -10624,43 +10668,52 @@ class ShansAi:
             currency = user_context.get('last_currency', 'USD')
             specified_period = user_context.get('last_period')
             
-            # Create comparison
-            comparison = ok.AssetList(symbols, ccy=currency)
+            # Check if this is a mixed comparison (portfolios + assets)
+            last_analysis_type = user_context.get('last_analysis_type', 'comparison')
+            expanded_symbols = user_context.get('expanded_symbols', [])
             
-            # Create chart
-            fig, ax = chart_styles.create_comparison_chart(
-                comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
-            )
-            
-            # Save chart to bytes
-            img_buffer = io.BytesIO()
-            chart_styles.save_figure(fig, img_buffer)
-            img_buffer.seek(0)
-            img_bytes = img_buffer.getvalue()
-            
-            # Clear matplotlib cache
-            chart_styles.cleanup_figure(fig)
-            
-            # Create caption
-            caption = f"⚖️ Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
-            caption += f"💵 Валюта: {currency}\n"
-            if specified_period:
-                caption += f"📅 Период: {specified_period}\n"
-            
-            # Create compare reply keyboard
-            compare_reply_keyboard = self._create_compare_reply_keyboard()
-            
-            # Send chart with reply keyboard
-            await context.bot.send_photo(
-                chat_id=update.effective_chat.id,
-                photo=img_buffer,
-                caption=self._truncate_caption(caption),
-                reply_markup=compare_reply_keyboard
-            )
-            
-            # Update user context to track active keyboard
-            self._update_user_context(user_id, active_reply_keyboard="compare")
-            self.logger.info("Compare reply keyboard set with comparison chart")
+            if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
+                # This is a mixed comparison, handle differently
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности для смешанного сравнения...", delete_after=3)
+                await self._create_mixed_comparison_wealth_chart(update, context, symbols, currency)
+            else:
+                # Regular comparison, create AssetList
+                comparison = ok.AssetList(symbols, ccy=currency)
+                
+                # Create chart
+                fig, ax = chart_styles.create_comparison_chart(
+                    comparison.wealth_indexes, symbols, currency, title="Сравнение накопленной доходности"
+                )
+                
+                # Save chart to bytes
+                img_buffer = io.BytesIO()
+                chart_styles.save_figure(fig, img_buffer)
+                img_buffer.seek(0)
+                img_bytes = img_buffer.getvalue()
+                
+                # Clear matplotlib cache
+                chart_styles.cleanup_figure(fig)
+                
+                # Create caption
+                caption = f"⚖️ Сравнение накопленной доходности: {', '.join(symbols)}\n\n"
+                caption += f"💵 Валюта: {currency}\n"
+                if specified_period:
+                    caption += f"📅 Период: {specified_period}\n"
+                
+                # Create compare reply keyboard
+                compare_reply_keyboard = self._create_compare_reply_keyboard()
+                
+                # Send chart with reply keyboard
+                await context.bot.send_photo(
+                    chat_id=update.effective_chat.id,
+                    photo=img_buffer,
+                    caption=self._truncate_caption(caption),
+                    reply_markup=compare_reply_keyboard
+                )
+                
+                # Update user context to track active keyboard
+                self._update_user_context(user_id, active_reply_keyboard="compare")
+                self.logger.info("Compare reply keyboard set with comparison chart")
             
         except Exception as e:
             self.logger.error(f"Error creating comparison wealth chart: {e}")
