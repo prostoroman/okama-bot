@@ -6516,10 +6516,10 @@ class ShansAi:
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
         try:
             # Отправляем сообщение с ReplyKeyboardRemove для немедленного скрытия
-            # Используем невидимый символ Unicode для минимального визуального воздействия
+            # Используем обычный текст, который не вызывает ошибок форматирования
             await self._send_message_safe(
                 update, 
-                "‌",  # Невидимый символ (Zero Width Non-Joiner)
+                "⌨️",  # Эмодзи клавиатуры - минимальное визуальное воздействие
                 reply_markup=ReplyKeyboardRemove(),
                 parse_mode=None
             )
@@ -9941,54 +9941,46 @@ class ShansAi:
         try:
             keyboard = []
             
-            # Основные биржи
-            keyboard.append([
-                KeyboardButton("🇺🇸 US"),
+            # Россия
+            keyboard.append([          
                 KeyboardButton("🇷🇺 MOEX"),
                 KeyboardButton("🇷🇺 PIF"),
                 KeyboardButton("🇷🇺 RE")
             ])
-            
-            # Европейские биржи
+            # США и проч.
             keyboard.append([
-                KeyboardButton("🇩🇪 XETR"),
-                KeyboardButton("🇫🇷 XFRA"),
+                KeyboardButton("🇺🇸 US"),
+                KeyboardButton("🇬🇧 LSE"),
                 KeyboardButton("🇳🇱 XAMS"),
-                KeyboardButton("🇬🇧 LSE")
+                KeyboardButton("🇮🇱 XTAE")                 
             ])
-            
-            # Китайские биржи
+            # Китай
             keyboard.append([
                 KeyboardButton("🇨🇳 SSE"),
                 KeyboardButton("🇨🇳 SZSE"),
                 KeyboardButton("🇨🇳 BSE"),
                 KeyboardButton("🇭🇰 HKEX")
-            ])
-            
+            ])                        
+            # Германия
             keyboard.append([
-                
-            ])
-            
-            # Индексы и валюты
-            keyboard.append([
-                KeyboardButton("📊 INDX"),
-                KeyboardButton("💱 FX"),
-                KeyboardButton("🏦 CBR")
-            ])
-            
+                KeyboardButton("🇩🇪 XETR"),
+                KeyboardButton("🇩🇪 XSTU"),                
+                KeyboardButton("🇩🇪 XFRA")
+            ])                         
             # Товары и криптовалюты
             keyboard.append([
                 KeyboardButton("🛢️ COMM"),
                 KeyboardButton("₿ CC"),
-                KeyboardButton("🏠 RE")
-            ])
-            
-            # Инфляция и депозиты
-            keyboard.append([
+                KeyboardButton("💱 FX"),
+                KeyboardButton("📊 INDX")
+            ])                 
+            # Индексы и валюты
+            keyboard.append([                
                 KeyboardButton("📈 INFL"),
-                KeyboardButton("🏦 RATE")
+                KeyboardButton("🏦 CBR"),
+                KeyboardButton("🏦 RATE")                
             ])
-            
+           
             return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
             
         except Exception as e:
