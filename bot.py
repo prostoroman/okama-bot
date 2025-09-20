@@ -7420,22 +7420,70 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not remove buttons from old message: {e}")
             
-            # Set user context to wait for portfolio weights input
+            # Get user context to check for portfolio contexts
             user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            portfolio_contexts = user_context.get('portfolio_contexts', [])
+            expanded_symbols = user_context.get('expanded_symbols', [])
+            
+            # Filter symbols to only include regular assets (not portfolios)
+            # If there are both portfolios and regular assets in context, only offer regular assets
+            regular_assets = []
+            portfolio_symbols = []
+            
+            for i, symbol in enumerate(symbols):
+                # Check if this symbol corresponds to a portfolio in the context
+                is_portfolio = False
+                if i < len(expanded_symbols) and isinstance(expanded_symbols[i], (pd.Series, pd.DataFrame)):
+                    # This is a portfolio
+                    is_portfolio = True
+                    portfolio_symbols.append(symbol)
+                elif i < len(portfolio_contexts):
+                    # Check if this symbol has portfolio context
+                    portfolio_context = portfolio_contexts[i]
+                    if len(portfolio_context.get('portfolio_symbols', [])) > 1:
+                        # This is a portfolio (has multiple symbols)
+                        is_portfolio = True
+                        portfolio_symbols.append(symbol)
+                
+                if not is_portfolio:
+                    regular_assets.append(symbol)
+            
+            # If we have both portfolios and regular assets, only offer regular assets
+            if portfolio_symbols and regular_assets:
+                symbols_to_use = regular_assets
+                portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
+                portfolio_text += f"⚠️ В контексте есть портфели и обычные активы. Предлагаем только обычные активы (портфель в портфеле создать нельзя).\n\n"
+                portfolio_text += f"Активы для добавления: `{' '.join(symbols_to_use)}`\n\n"
+            else:
+                # Use all symbols if no mixed context
+                symbols_to_use = symbols
+                portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
+                portfolio_text += f"Активы для добавления: `{' '.join(symbols_to_use)}`\n\n"
+            
+            # Set user context to wait for portfolio weights input
             self._update_user_context(user_id, 
                 waiting_for_portfolio_weights=True,
-                portfolio_base_symbols=symbols
+                portfolio_base_symbols=symbols_to_use
             )
             
             # Create message with symbols and request for weights
-            symbols_text = ' '.join(symbols)
-            portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
-            portfolio_text += f"Активы для добавления: `{symbols_text}`\n\n"
             portfolio_text += "**Укажите доли для каждого актива:**\n"
-            portfolio_text += f"• `{symbols[0]}:0.4 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.3 {symbols[2] if len(symbols) > 2 else 'BND.US'}:0.3`\n\n"
+            if len(symbols_to_use) >= 1:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.4"
+                if len(symbols_to_use) >= 2:
+                    portfolio_text += f" {symbols_to_use[1]}:0.3"
+                if len(symbols_to_use) >= 3:
+                    portfolio_text += f" {symbols_to_use[2]}:0.3"
+                portfolio_text += "`\n\n"
+            
             portfolio_text += "**Примеры:**\n"
-            portfolio_text += f"• `{symbols[0]}:0.6 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.4`\n"
-            portfolio_text += f"• `{symbols[0]}:0.5 {symbols[1] if len(symbols) > 1 else 'QQQ.US'}:0.3 {symbols[2] if len(symbols) > 2 else 'BND.US'}:0.2`\n\n"
+            if len(symbols_to_use) >= 2:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.6 {symbols_to_use[1]}:0.4`\n"
+            if len(symbols_to_use) >= 3:
+                portfolio_text += f"• `{symbols_to_use[0]}:0.5 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2`\n"
+            portfolio_text += "\n"
+            
             portfolio_text += "💡 Сумма долей должна равняться 1.0 (100%)\n"
             portfolio_text += "💡 Можно добавить дополнительные активы к сравниваемым\n\n"
             portfolio_text += "💬 Введите тикеры для включения в состав портфеля:"
