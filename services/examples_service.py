@@ -97,7 +97,11 @@ class ExamplesService:
                 ('CHMF.MOEX', 'Severstal'),
                 ('MOEX.MOEX', 'Moscow Exchange'),
                 ('AFKS.MOEX', 'Sistema'),
-                ('IRAO.MOEX', 'Inter RAO')
+                ('YDEX.MOEX', 'Yandex'),
+                ('LQDT.MOEX', 'VIM LQDT'),
+                ('RGBITR.INDX', 'Russian Government Bond Index'),
+                ('MCFTR.INDX', 'MOEX Russia Total Return Index'),
+                ('T.MOEX', 'T-technologies')
             ],
             'SSE': [
                 ('600519.SSE', 'Kweichow Moutai'),
