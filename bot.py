@@ -1306,6 +1306,24 @@ class ShansAi:
         
         return "; ".join(summary) if summary else "Новый пользователь"
     
+    def _get_currency_with_russian_indices(self, symbol: str, asset_currency: str) -> tuple[str, str]:
+        """
+        Определить валюту с учетом российских индексов
+        
+        Args:
+            symbol: Символ актива
+            asset_currency: Валюта, полученная от okama Asset
+            
+        Returns:
+            tuple: (currency, currency_info)
+        """
+        # Специальная логика для российских индексов
+        if symbol in ['RGBITR.INDX', 'MCFTR.INDX']:
+            return "RUB", f"автоматически определена для российского индекса ({symbol})"
+        
+        # Для остальных активов используем валюту от okama
+        return asset_currency, f"автоматически определена по первому активу ({symbol})"
+
     def _get_currency_by_symbol(self, symbol: str) -> tuple[str, str]:
         """
         Определить валюту по символу с учетом китайских бирж
@@ -1339,6 +1357,9 @@ class ShansAi:
                 elif namespace == 'COMM':
                     return "USD", f"автоматически определена по бирже COMM ({symbol})"
                 elif namespace == 'INDX':
+                    # Специальная логика для российских индексов
+                    if symbol in ['RGBITR.INDX', 'MCFTR.INDX']:
+                        return "RUB", f"автоматически определена для российского индекса ({symbol})"
                     return "USD", f"автоматически определена по бирже INDX ({symbol})"
                 else:
                     return "USD", f"автоматически определена по умолчанию ({symbol})"
@@ -4271,8 +4292,7 @@ class ShansAi:
                     if assets_for_comparison:
                         first_asset = assets_for_comparison[0]
                         if hasattr(first_asset, 'currency'):
-                            currency = first_asset.currency
-                            currency_info = f"автоматически определена по первому активу/портфелю"
+                            currency, currency_info = self._get_currency_with_russian_indices(str(first_asset), first_asset.currency)
                         else:
                             # Try to determine from symbol
                             if '.' in str(first_asset):
@@ -4736,8 +4756,13 @@ class ShansAi:
                             currency = "USD"
                             currency_info = f"автоматически определена по первому активу ({first_symbol})"
                         elif namespace == 'INDX':
-                            currency = "USD"
-                            currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                            # Специальная логика для российских индексов
+                            if first_symbol in ['RGBITR.INDX', 'MCFTR.INDX']:
+                                currency = "RUB"
+                                currency_info = f"автоматически определена для российского индекса ({first_symbol})"
+                            else:
+                                currency = "USD"
+                                currency_info = f"автоматически определена по первому активу ({first_symbol})"
                         else:
                             currency = "USD"
                             currency_info = "по умолчанию (USD)"
@@ -5332,8 +5357,7 @@ class ShansAi:
                 try:
                     # Create asset to get its currency
                     first_asset = ok.Asset(first_symbol)
-                    currency = first_asset.currency
-                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    currency, currency_info = self._get_currency_with_russian_indices(first_symbol, first_asset.currency)
                     self.logger.info(f"Currency determined from asset {first_symbol}: {currency}")
                 except Exception as e:
                     self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
@@ -5601,8 +5625,7 @@ class ShansAi:
                 try:
                     # Create asset to get its currency
                     first_asset = ok.Asset(first_symbol)
-                    currency = first_asset.currency
-                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    currency, currency_info = self._get_currency_with_russian_indices(first_symbol, first_asset.currency)
                     self.logger.info(f"Currency determined from asset {first_symbol}: {currency}")
                 except Exception as e:
                     self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
@@ -5924,8 +5947,7 @@ class ShansAi:
                 first_symbol = symbols[0]
                 try:
                     first_asset = ok.Asset(first_symbol)
-                    currency = first_asset.currency
-                    currency_info = f"автоматически определена по первому активу ({first_symbol})"
+                    currency, currency_info = self._get_currency_with_russian_indices(first_symbol, first_asset.currency)
                 except Exception as e:
                     self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
                     currency, currency_info = self._get_currency_by_symbol(first_symbol)
@@ -16790,7 +16812,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
             
-            await self._send_ephemeral_message(update, context, "🤖 Анализирую портфель...", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "Анализирую портфель...", parse_mode='Markdown', delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]

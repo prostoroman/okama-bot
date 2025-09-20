@@ -488,10 +488,12 @@ class GeminiService:
         
         description_parts = []
         
+        # Initialize asset_names at the beginning to ensure it's always available
+        asset_names = data_info.get('asset_names', {})
+        
         # Basic info
         if 'symbols' in data_info:
             symbols = data_info['symbols']
-            asset_names = data_info.get('asset_names', {})
             
             # Create list with asset names if available
             assets_with_names = []
@@ -565,7 +567,6 @@ class GeminiService:
             
             # Use asset names with tickers if available
             ef_symbols = ef_data.get('asset_names', [])
-            asset_names = data_info.get('asset_names', {})
             ef_assets_with_names = []
             for symbol in ef_symbols:
                 if symbol in asset_names and asset_names[symbol] != symbol:
@@ -786,11 +787,13 @@ class GeminiService:
         
         description_parts = []
         
+        # Initialize asset_names at the beginning to ensure it's always available
+        asset_names = portfolio_data.get('asset_names', {})
+        
         # Basic portfolio info
         if 'symbols' in portfolio_data:
             symbols = portfolio_data['symbols']
             weights = portfolio_data.get('weights', [])
-            asset_names = portfolio_data.get('asset_names', {})
             
             # Create portfolio composition
             composition = []
@@ -832,17 +835,34 @@ class GeminiService:
                         corr = portfolio_data['correlations'][i][j]
                         
                         # Use asset names if available
-                        name1 = asset_names.get(symbol1, symbol1)
-                        name2 = asset_names.get(symbol2, symbol2)
+                        if symbol1 in asset_names and asset_names[symbol1] != symbol1:
+                            name1 = f"{symbol1} ({asset_names[symbol1]})"
+                        else:
+                            name1 = symbol1
+                        
+                        if symbol2 in asset_names and asset_names[symbol2] != symbol2:
+                            name2 = f"{symbol2} ({asset_names[symbol2]})"
+                        else:
+                            name2 = symbol2
                         
                         description_parts.append(f"  • {name1} ↔ {name2}: {corr:.3f}")
         
         # Efficient frontier data
+        ef_symbols = []  # Initialize ef_symbols outside the if block
         if 'efficient_frontier' in portfolio_data and portfolio_data['efficient_frontier']:
             ef_data = portfolio_data['efficient_frontier']
             description_parts.append("\n**📈 ДАННЫЕ ЭФФЕКТИВНОЙ ГРАНИЦЫ (okama.EfficientFrontier):**")
             description_parts.append(f"**Валюта:** {ef_data.get('currency', 'USD')}")
-            description_parts.append(f"**Активы:** {', '.join(ef_data.get('asset_names', []))}")
+            
+            # Use asset names with tickers if available
+            ef_symbols = ef_data.get('asset_names', [])
+            ef_assets_with_names = []
+            for symbol in ef_symbols:
+                if symbol in asset_names and asset_names[symbol] != symbol:
+                    ef_assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                else:
+                    ef_assets_with_names.append(symbol)
+            description_parts.append(f"**Активы:** {', '.join(ef_assets_with_names)}")
             
             # Min risk portfolio
             min_risk = ef_data.get('min_risk_portfolio', {})
