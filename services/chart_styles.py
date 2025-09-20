@@ -1170,8 +1170,17 @@ class ChartStyles:
             # Создаем фигуру с правильными размерами и стилем
             fig, ax = self.create_chart(**kwargs)
             
+            if fig is None or ax is None:
+                logger.error("Failed to create chart figure and axes")
+                return None, None
+            
             # Создаем эффективную границу с помощью okama
             ef.plot_transition_map(x_axe='risk', ax=ax)
+            
+            # Проверяем, что фигура все еще валидна после построения
+            if fig is None:
+                logger.error("Figure became None after plotting efficient frontier")
+                return None, None
             
             # Применяем базовый стиль к оси
             self._apply_base_style(fig, ax)
@@ -1190,6 +1199,9 @@ class ChartStyles:
             
         except Exception as e:
             logger.error(f"Error creating efficient frontier chart: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None, None
 
     def create_percentile_forecast_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):

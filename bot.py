@@ -2039,7 +2039,7 @@ class ShansAi:
             if correlation_matrix is None or correlation_matrix.empty:
                 return ""
             
-            values_text = "📊 **Численные значения корреляции:**\n"
+            values_text = ""
             
             # Get upper triangle values only (avoid duplicates)
             symbols = correlation_matrix.columns.tolist()
@@ -2193,7 +2193,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}")
+                caption=self._truncate_caption(f"🔗 Корреляция {len(symbols)} активов\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}")
             )
             self.logger.info("Correlation matrix image sent successfully")
             
@@ -7368,12 +7368,19 @@ class ShansAi:
                 # Create Efficient Frontier
                 ef = ok.EfficientFrontier(asset_list, ccy=currency)
                 
+                # Log debug information
+                self.logger.info(f"Created EfficientFrontier with {len(asset_names)} assets: {asset_names}")
+                
                 # Create chart with proper styling using chart_styles
                 current_fig, ax = chart_styles.create_efficient_frontier_chart(
                     ef, 
                     asset_names, 
                     data_source='okama'
                 )
+                
+                # Check if chart creation was successful
+                if current_fig is None:
+                    raise Exception("Failed to create efficient frontier chart - chart creation returned None")
                 
                 img_buffer = io.BytesIO()
                 chart_styles.save_figure(current_fig, img_buffer)
