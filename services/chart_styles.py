@@ -36,8 +36,8 @@ class ChartStyles:
     def __init__(self):
         # Централизованные настройки шрифтов с поддержкой CJK
         mpl.rcParams.update({
-            'font.family': ['Open Sans'],  # Будет обновлено в _configure_cjk_fonts()
-            'font.sans-serif': ['Open Sans', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
+            'font.family': ['Lato'],  # Будет обновлено в _configure_cjk_fonts()
+            'font.sans-serif': ['Lato', 'Open Sans', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
             'font.weight': 'medium',
             'axes.titleweight': 'semibold',
             'axes.labelweight': 'medium',
@@ -128,17 +128,18 @@ class ChartStyles:
             
             # Приоритетные CJK шрифты
             cjk_fonts = [
-                'Open Sans',             # Основной шрифт
-                'DejaVu Sans',           # Поддерживает CJK
-                'Arial Unicode MS',      # Windows CJK
-                'SimHei',                # Windows Chinese
-                'Microsoft YaHei',       # Windows Chinese
-                'PingFang SC',           # macOS Chinese
-                'Hiragino Sans GB',      # macOS Chinese
-                'Noto Sans CJK SC',      # Google Noto CJK
-                'Source Han Sans SC',    # Adobe Source Han
-                'WenQuanYi Micro Hei',   # Linux Chinese
-                'Droid Sans Fallback',   # Android CJK
+                'Lato',                    # Основной шрифт
+                'Open Sans',               # Резервный шрифт
+                'DejaVu Sans',             # Поддерживает CJK
+                'Arial Unicode MS',        # Windows CJK
+                'SimHei',                  # Windows Chinese
+                'Microsoft YaHei',         # Windows Chinese
+                'PingFang SC',             # macOS Chinese
+                'Hiragino Sans GB',        # macOS Chinese
+                'Noto Sans CJK SC',        # Google Noto CJK
+                'Source Han Sans SC',      # Adobe Source Han
+                'WenQuanYi Micro Hei',     # Linux Chinese
+                'Droid Sans Fallback',    # Android CJK
             ]
             
             # Находим первый доступный CJK шрифт
@@ -157,13 +158,13 @@ class ChartStyles:
                 mpl.rcParams['axes.unicode_minus'] = False
             else:
                 logger.warning("No CJK fonts found, Chinese characters may not display correctly")
-                # Используем Open Sans как fallback, затем DejaVu Sans
-                mpl.rcParams['font.family'] = ['Open Sans', 'DejaVu Sans']
+                # Используем Lato как fallback, затем Open Sans и DejaVu Sans
+                mpl.rcParams['font.family'] = ['Lato', 'Open Sans', 'DejaVu Sans']
                 
         except Exception as e:
             logger.warning(f"Could not configure CJK fonts: {e}")
-            # Fallback к Open Sans, затем DejaVu Sans
-            mpl.rcParams['font.family'] = ['Open Sans', 'DejaVu Sans']
+            # Fallback к Lato, затем Open Sans и DejaVu Sans
+            mpl.rcParams['font.family'] = ['Lato', 'Open Sans', 'DejaVu Sans']
 
     def _safe_text_render(self, text):
         """Безопасное отображение текста с CJK символами"""
