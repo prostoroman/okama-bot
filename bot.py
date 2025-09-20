@@ -2235,7 +2235,7 @@ class ShansAi:
 
 
 
-🔹 *Примеры использования*
+🔹 *Примеры команд*
 
 *Сравнение активов*
 `/compare SBER.MOEX,GAZP.MOEX` — сравнить Сбербанк и Газпром
@@ -2257,7 +2257,7 @@ class ShansAi:
 
 Используйте команду `/info [тикер] [период]` для получения полной информации об активе.
 
-Примеры:
+Примеры команд:
 • `/info AAPL.US` - информация об Apple
 • `/info SBER.MOEX` - информация о Сбербанке
 • `/info GC.COMM 5Y` - золото за 5 лет
@@ -3760,7 +3760,7 @@ class ShansAi:
                     "• `/search US0378331005` - найти по ISIN\n"
                     "• `/search золото` - найти золото\n"
                     "• `/search SP500` - найти индекс S&P 500\n\n"
-                    "Поиск работает в базе данных okama и tushare."
+                    "Поиск работает в базе данных okama и tushare на английском языке."
                 )
                 return
             
@@ -7342,22 +7342,13 @@ class ShansAi:
                 # Create Efficient Frontier
                 ef = ok.EfficientFrontier(asset_list, ccy=currency)
                 
-                # Plot transition map
-                ef.plot_transition_map(x_axe='risk')
-                current_fig = plt.gcf()
+                # Create chart with proper styling using chart_styles
+                current_fig, ax = chart_styles.create_efficient_frontier_chart(
+                    ef, 
+                    asset_names, 
+                    data_source='okama'
+                )
                 
-                # Apply styling
-                if current_fig.axes:
-                    ax = current_fig.axes[0]
-                    chart_styles.apply_styling(
-                        ax,
-                        title=f"Эффективная граница\n{', '.join(asset_names)}",
-                        xlabel='Риск (волатильность)',
-                        ylabel='Вес (%)',
-                        grid=True,
-                        legend=True,
-                        copyright=True
-                    )
                 img_buffer = io.BytesIO()
                 chart_styles.save_figure(current_fig, img_buffer)
                 img_buffer.seek(0)
@@ -12007,7 +11998,7 @@ class ShansAi:
             
             portfolio_text = f"💼 **Добавить {symbol} в портфель**\n\n"
             portfolio_text += f"Введите состав портфеля, включая {symbol}.\n\n"
-            portfolio_text += "**Примеры:**\n"
+            portfolio_text += "**Примеры команд:**\n"
             portfolio_text += f"• `{symbol}:0.6 QQQ.US:0.4`\n"
             portfolio_text += f"• `{symbol}:0.5 BND.US:0.3 GC.COMM:0.2`\n"
             portfolio_text += f"• `{symbol}:0.7 VTI.US:0.3`\n\n"
@@ -17130,7 +17121,7 @@ class ShansAi:
             examples_text = ", ".join(examples)
             
             help_text = "⚖️ Сравнение\n\n"
-            help_text += f"Примеры активов: {examples_text}\n\n"
+            help_text += f"Примеры команд: {examples_text}\n\n"
 
             # Add saved portfolios information
             if saved_portfolios:

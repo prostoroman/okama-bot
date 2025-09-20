@@ -1163,6 +1163,79 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error applying Monte Carlo chart styles: {e}")
 
+    def create_efficient_frontier_chart(self, ef, asset_names, data_source='okama', **kwargs):
+        """Создать график эффективной границы с правильным стилем"""
+        try:
+            # Создаем фигуру с правильными размерами и стилем
+            fig, ax = self.create_chart(**kwargs)
+            
+            # Создаем эффективную границу с помощью okama
+            ef.plot_transition_map(x_axe='risk', ax=ax)
+            
+            # Применяем базовый стиль к оси
+            self._apply_base_style(fig, ax)
+            
+            # Применяем стилизацию
+            title = f"Эффективная граница\n{', '.join(asset_names)}"
+            self.apply_styling(
+                ax,
+                title=title,
+                xlabel='Риск (волатильность)',
+                ylabel='Вес (%)',
+                grid=True,
+                legend=True,
+                copyright=True,
+                data_source=data_source
+            )
+            
+            return fig, ax
+            
+        except Exception as e:
+            logger.error(f"Error creating efficient frontier chart: {e}")
+            # Fallback к стандартному методу
+            return self._create_efficient_frontier_fallback(ef, asset_names, data_source, **kwargs)
+    
+    def _create_efficient_frontier_fallback(self, ef, asset_names, data_source='okama', **kwargs):
+        """Fallback метод для создания эффективной границы"""
+        try:
+            # Используем стандартный метод okama
+            ef.plot_transition_map(x_axe='risk')
+            current_fig = plt.gcf()
+            
+            # Применяем стилизацию к существующей фигуре
+            if current_fig.axes:
+                ax = current_fig.axes[0]
+                
+                # Устанавливаем правильные размеры
+                current_fig.set_size_inches(self.style['figsize'])
+                current_fig.set_dpi(self.style['dpi'])
+                
+                # Применяем базовый стиль
+                self._apply_base_style(current_fig, ax)
+                
+                # Применяем стилизацию
+                title = f"Эффективная граница\n{', '.join(asset_names)}"
+                self.apply_styling(
+                    ax,
+                    title=title,
+                    xlabel='Риск (волатильность)',
+                    ylabel='Вес (%)',
+                    grid=True,
+                    legend=True,
+                    copyright=True,
+                    data_source=data_source
+                )
+            
+            return current_fig, current_fig.axes[0] if current_fig.axes else None
+            
+        except Exception as e:
+            logger.error(f"Error in efficient frontier fallback: {e}")
+            # Последний fallback - создаем пустую фигуру
+            fig, ax = self.create_chart(**kwargs)
+            ax.text(0.5, 0.5, f"Ошибка создания эффективной границы: {str(e)}", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig, ax
+
     def _optimize_x_axis_ticks(self, ax, date_index):
         """Оптимизировать отображение дат на оси X в зависимости от количества данных"""
         try:
