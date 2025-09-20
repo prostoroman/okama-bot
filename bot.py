@@ -12107,7 +12107,7 @@ class ShansAi:
                 'period': 'полный доступный период данных',
                 'performance': {},
                 'analysis_type': 'single_asset_analysis',
-                'asset_name': getattr(asset, 'name', symbol)
+                'asset_names': {symbol: getattr(asset, 'name', symbol)}
             }
             
             # Get AI analysis

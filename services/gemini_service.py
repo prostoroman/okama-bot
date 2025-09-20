@@ -562,7 +562,17 @@ class GeminiService:
             ef_data = data_info['efficient_frontier']
             description_parts.append("\n**📈 ДАННЫЕ ЭФФЕКТИВНОЙ ГРАНИЦЫ (okama.EfficientFrontier):**")
             description_parts.append(f"**Валюта:** {ef_data.get('currency', 'USD')}")
-            description_parts.append(f"**Активы:** {', '.join(ef_data.get('asset_names', []))}")
+            
+            # Use asset names with tickers if available
+            ef_symbols = ef_data.get('asset_names', [])
+            asset_names = data_info.get('asset_names', {})
+            ef_assets_with_names = []
+            for symbol in ef_symbols:
+                if symbol in asset_names and asset_names[symbol] != symbol:
+                    ef_assets_with_names.append(f"{symbol} ({asset_names[symbol]})")
+                else:
+                    ef_assets_with_names.append(symbol)
+            description_parts.append(f"**Активы:** {', '.join(ef_assets_with_names)}")
             
             # Min risk portfolio
             min_risk = ef_data.get('min_risk_portfolio', {})
@@ -573,7 +583,14 @@ class GeminiService:
                 if min_risk.get('weights'):
                     weights_str = []
                     for i, weight in enumerate(min_risk['weights']):
-                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        if i < len(ef_symbols):
+                            symbol = ef_symbols[i]
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                asset_name = f"{symbol} ({asset_names[symbol]})"
+                            else:
+                                asset_name = symbol
+                        else:
+                            asset_name = f"Asset_{i}"
                         weights_str.append(f"{asset_name}: {weight:.1%}")
                     description_parts.append(f"  • Веса: {', '.join(weights_str)}")
             
@@ -586,7 +603,14 @@ class GeminiService:
                 if max_return.get('weights'):
                     weights_str = []
                     for i, weight in enumerate(max_return['weights']):
-                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        if i < len(ef_symbols):
+                            symbol = ef_symbols[i]
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                asset_name = f"{symbol} ({asset_names[symbol]})"
+                            else:
+                                asset_name = symbol
+                        else:
+                            asset_name = f"Asset_{i}"
                         weights_str.append(f"{asset_name}: {weight:.1%}")
                     description_parts.append(f"  • Веса: {', '.join(weights_str)}")
             
@@ -600,7 +624,14 @@ class GeminiService:
                 if max_sharpe.get('weights'):
                     weights_str = []
                     for i, weight in enumerate(max_sharpe['weights']):
-                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        if i < len(ef_symbols):
+                            symbol = ef_symbols[i]
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                asset_name = f"{symbol} ({asset_names[symbol]})"
+                            else:
+                                asset_name = symbol
+                        else:
+                            asset_name = f"Asset_{i}"
                         weights_str.append(f"{asset_name}: {weight:.1%}")
                     description_parts.append(f"  • Веса: {', '.join(weights_str)}")
 
@@ -765,7 +796,10 @@ class GeminiService:
             composition = []
             for i, symbol in enumerate(symbols):
                 weight = weights[i] if i < len(weights) else 0
-                asset_name = asset_names.get(symbol, symbol)
+                if symbol in asset_names and asset_names[symbol] != symbol:
+                    asset_name = f"{symbol} ({asset_names[symbol]})"
+                else:
+                    asset_name = symbol
                 composition.append(f"{asset_name}: {weight:.1%}")
             
             description_parts.append(f"**Состав портфеля:** {', '.join(composition)}")
@@ -819,7 +853,14 @@ class GeminiService:
                 if min_risk.get('weights'):
                     weights_str = []
                     for i, weight in enumerate(min_risk['weights']):
-                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        if i < len(ef_symbols):
+                            symbol = ef_symbols[i]
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                asset_name = f"{symbol} ({asset_names[symbol]})"
+                            else:
+                                asset_name = symbol
+                        else:
+                            asset_name = f"Asset_{i}"
                         weights_str.append(f"{asset_name}: {weight:.1%}")
                     description_parts.append(f"  • Веса: {', '.join(weights_str)}")
             
@@ -832,7 +873,14 @@ class GeminiService:
                 if max_return.get('weights'):
                     weights_str = []
                     for i, weight in enumerate(max_return['weights']):
-                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        if i < len(ef_symbols):
+                            symbol = ef_symbols[i]
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                asset_name = f"{symbol} ({asset_names[symbol]})"
+                            else:
+                                asset_name = symbol
+                        else:
+                            asset_name = f"Asset_{i}"
                         weights_str.append(f"{asset_name}: {weight:.1%}")
                     description_parts.append(f"  • Веса: {', '.join(weights_str)}")
             
@@ -846,7 +894,14 @@ class GeminiService:
                 if max_sharpe.get('weights'):
                     weights_str = []
                     for i, weight in enumerate(max_sharpe['weights']):
-                        asset_name = ef_data.get('asset_names', [])[i] if i < len(ef_data.get('asset_names', [])) else f"Asset_{i}"
+                        if i < len(ef_symbols):
+                            symbol = ef_symbols[i]
+                            if symbol in asset_names and asset_names[symbol] != symbol:
+                                asset_name = f"{symbol} ({asset_names[symbol]})"
+                            else:
+                                asset_name = symbol
+                        else:
+                            asset_name = f"Asset_{i}"
                         weights_str.append(f"{asset_name}: {weight:.1%}")
                     description_parts.append(f"  • Веса: {', '.join(weights_str)}")
         
