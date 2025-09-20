@@ -6770,6 +6770,9 @@ class ShansAi:
             callback_data = query.data
             self.logger.info(f"Processing callback data: {callback_data}")
             
+            # Ensure reply keyboard is removed when transitioning between methods
+            # This prevents keyboard from staying visible when switching contexts
+            await self._ensure_no_reply_keyboard(update, context)
             
             # Handle start command callbacks
             if callback_data.startswith("start_"):
@@ -10136,6 +10139,10 @@ class ShansAi:
         try:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
+            
+            # Ensure reply keyboard is removed when transitioning between different contexts
+            # This prevents keyboard from staying visible when switching between different analysis types
+            await self._ensure_no_reply_keyboard(update, context)
             
             # Determine context based on user's last activity and available data
             last_assets = user_context.get('last_assets', [])
