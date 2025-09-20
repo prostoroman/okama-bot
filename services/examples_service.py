@@ -86,7 +86,6 @@ class ExamplesService:
                 ('ROSN.MOEX', 'Rosneft'),
                 ('NVTK.MOEX', 'Novatek'),
                 ('GMKN.MOEX', 'Norilsk Nickel'),
-                ('PLZL.MOEX', 'Polyus'),
                 ('SIBN.MOEX', 'Gazprom Neft'),
                 ('PHOR.MOEX', 'PhosAgro'),
                 ('SNGS.MOEX', 'Surgutneftegas'),
@@ -287,12 +286,53 @@ class ExamplesService:
         
         return examples
 
-    def get_compare_examples(self, count: int = 3, context_tickers: List[str] = None) -> List[str]:
-        """Get random examples for /compare command with ready commands from same exchange"""
+    def get_compare_examples(self, count: int = 3, context_tickers: List[str] = None, saved_portfolios: dict = None) -> List[str]:
+        """Get random examples for /compare command with ready commands from same exchange and saved portfolios"""
         examples = []
         
+        # Если есть сохраненные портфели, создаем примеры с ними
+        if saved_portfolios:
+            portfolio_symbols = list(saved_portfolios.keys())
+            
+            # Пример 1: Сравнение портфеля с активом
+            if len(portfolio_symbols) >= 1 and context_tickers:
+                portfolio_symbol = random.choice(portfolio_symbols)
+                context_ticker = random.choice(context_tickers)
+                
+                # Находим название компании для контекстного тикера
+                context_company = self._get_company_name_for_ticker(context_ticker)
+                
+                if context_company:
+                    command = f"`{portfolio_symbol} {context_ticker}`"
+                    description = f"сравнить портфель {portfolio_symbol} и {context_company}"
+                    examples.append(f"{command} - {description}")
+            
+            # Пример 2: Сравнение двух портфелей (если есть минимум 2)
+            if len(portfolio_symbols) >= 2:
+                selected_portfolios = random.sample(portfolio_symbols, 2)
+                portfolio1, portfolio2 = selected_portfolios
+                
+                command = f"`{portfolio1} {portfolio2}`"
+                description = f"сравнить портфели {portfolio1} и {portfolio2}"
+                examples.append(f"{command} - {description}")
+            
+            # Пример 3: Сравнение портфеля с популярным активом
+            if len(portfolio_symbols) >= 1:
+                portfolio_symbol = random.choice(portfolio_symbols)
+                
+                # Выбираем популярный актив (MOEX или US)
+                popular_exchanges = ['MOEX', 'US']
+                for exchange in popular_exchanges:
+                    exchange_tickers = self.top_tickers.get(exchange, [])
+                    if exchange_tickers:
+                        ticker, company = random.choice(exchange_tickers)
+                        command = f"`{portfolio_symbol} {ticker}`"
+                        description = f"сравнить портфель {portfolio_symbol} и {company}"
+                        examples.append(f"{command} - {description}")
+                        break
+        
         # Если есть активы в контексте, используем их для формирования примеров
-        if context_tickers:
+        if context_tickers and len(examples) < count:
             exchange = self._get_exchange_from_context_tickers(context_tickers)
             if exchange:
                 # Получаем тикеры с той же биржи, исключая уже использованные
@@ -305,11 +345,7 @@ class ExamplesService:
                     new_ticker, new_company = random.choice(available_tickers)
                     
                     # Находим название компании для контекстного тикера
-                    context_company = None
-                    for ticker, company in self.top_tickers.get(exchange, []):
-                        if ticker == context_ticker:
-                            context_company = company
-                            break
+                    context_company = self._get_company_name_for_ticker(context_ticker)
                     
                     if context_company:
                         command = f"`{context_ticker} {new_ticker}`"
@@ -547,3 +583,15 @@ class ExamplesService:
         # Берем первый тикер для определения биржи
         first_ticker = context_tickers[0]
         return self._get_exchange_from_ticker(first_ticker)
+
+    def _get_company_name_for_ticker(self, ticker: str) -> Optional[str]:
+        """Получить название компании по тикеру"""
+        exchange = self._get_exchange_from_ticker(ticker)
+        if not exchange:
+            return None
+            
+        exchange_tickers = self.top_tickers.get(exchange, [])
+        for ticker_name, company_name in exchange_tickers:
+            if ticker_name == ticker:
+                return company_name
+        return None

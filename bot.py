@@ -3884,7 +3884,7 @@ class ShansAi:
                 analyzed_tickers = user_context.get('analyzed_tickers', [])
                 
                 # Get random examples for user using context tickers if available
-                examples = self.examples_service.get_compare_examples(3, analyzed_tickers)
+                examples = self.examples_service.get_compare_examples(3, analyzed_tickers, saved_portfolios)
                 examples_text = "\n".join([f"{example}" for example in examples])
                 
                 help_text = "⚖️ *Сравнение*\n\n"
@@ -9693,8 +9693,8 @@ class ShansAi:
                 # Первый ряд
                 [
                     KeyboardButton("▫️ Накоп. доходность"),
-                    KeyboardButton("▫️ Годовая доходность"),
-                    KeyboardButton("▫️ Скользящая CAGR"),
+                    KeyboardButton("▫️ Доходность ГГ"),
+                    KeyboardButton("▫️ Динамика дох."),
                     KeyboardButton("▫️ Дивиденды")
                 ],
                 # Второй ряд
@@ -9706,7 +9706,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ AI-анализ"),
+                    KeyboardButton("▫️ Нейроанализ"),
                     KeyboardButton("▫️ Портфель vs Активы"),
                     KeyboardButton("▫️ Сравнить")
                 ]
@@ -9737,7 +9737,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ AI-анализ"),
+                    KeyboardButton("▫️ Нейроанализ"),
                     KeyboardButton("▫️ В Портфель")
                 ]
             ]
@@ -10102,14 +10102,14 @@ class ShansAi:
             # Map button text to callback data
             button_mapping = {
                 "▫️ Накоп. доходность": f"portfolio_wealth_chart_{portfolio_symbol}",
-                "▫️ Годовая доходность": f"portfolio_returns_{portfolio_symbol}",
-                "▫️ Скользящая CAGR": f"portfolio_rolling_cagr_{portfolio_symbol}",
+                "▫️ Доходность ГГ": f"portfolio_returns_{portfolio_symbol}",
+                "▫️ Динамика дох.": f"portfolio_rolling_cagr_{portfolio_symbol}",
                 "▫️ Дивиденды": f"portfolio_dividends_{portfolio_symbol}",
                 "▫️ Метрики": f"portfolio_risk_metrics_{portfolio_symbol}",
                 "▫️ Монте-Карло": f"portfolio_monte_carlo_{portfolio_symbol}",
                 "▫️ Процентили (10/50/90)": f"portfolio_forecast_{portfolio_symbol}",
                 "▫️ Просадки": f"portfolio_drawdowns_{portfolio_symbol}",
-                "▫️ AI-анализ": f"portfolio_ai_analysis_{portfolio_symbol}",
+                "▫️ Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
                 "▫️ Портфель vs Активы": f"portfolio_compare_assets_{portfolio_symbol}",
                 "▫️ Сравнить": f"portfolio_compare_{portfolio_symbol}"
             }
@@ -10177,7 +10177,7 @@ class ShansAi:
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif text == "▫️ AI-анализ":
+            elif text == "▫️ Нейроанализ":
                 await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
@@ -16272,7 +16272,7 @@ class ShansAi:
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
                 caption += f"• Окно: MAX период (весь доступный период)\n\n"
-                caption = f"💡 График показывает динамику изменения доходноси во времени\n"
+                caption = f"💡 График показывает динамику изменения доходности во времени\n"
 
             
             # Ensure portfolio keyboard is shown
