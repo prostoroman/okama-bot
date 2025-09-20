@@ -378,7 +378,11 @@ class TushareService:
             # Get data using the existing method
             df = self.get_daily_data(ts_code, start_date, end_date)
             
-            # Filter to get only the last 'days' trading days
+            # For MAX period, get all available data instead of limiting to days
+            if days >= 2520:  # MAX period (10+ years)
+                return df  # Return all available data
+            
+            # Filter to get only the last 'days' trading days for shorter periods
             if not df.empty and len(df) > days:
                 df = df.tail(days)
             
@@ -462,16 +466,24 @@ class TushareService:
             
             symbol_code = symbol.split('.')[0]
             
+            # Get ts_code from symbol info for proper format
+            symbol_info = self.get_symbol_info(symbol)
+            if 'error' in symbol_info or 'ts_code' not in symbol_info:
+                self.logger.warning(f"No ts_code found for {symbol}, using fallback format")
+                ts_code = f"{symbol_code}.{exchange}"
+            else:
+                ts_code = symbol_info['ts_code']
+            
             if exchange == 'HKEX':
                 # Hong Kong dividend data - get more comprehensive data
                 df = self.pro.hk_dividend(
-                    ts_code=f"{symbol_code}.HK",
+                    ts_code=ts_code,
                     fields='ts_code,ann_date,div_proc_date,stk_div_date,cash_div_tax,cash_div_before_tax,stk_div,stk_bo_rate,stk_co_rate,cash_div_after_tax'
                 )
             else:
                 # Mainland China dividend data - get more comprehensive data
                 df = self.pro.dividend(
-                    ts_code=f"{symbol_code}.{exchange}",
+                    ts_code=ts_code,
                     fields='ts_code,ann_date,div_proc_date,stk_div_date,cash_div_tax,cash_div_before_tax,stk_div,stk_bo_rate,stk_co_rate,cash_div_after_tax'
                 )
             

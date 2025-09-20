@@ -1615,8 +1615,8 @@ class ShansAi:
                     if len(symbol_name) > 30:
                         symbol_name = symbol_name[:27] + "..."
                     
-                    # Добавляем в данные для сравнения
-                    comparison_data[f"{symbol} - {symbol_name}"] = normalized_data
+                    # Добавляем в данные для сравнения (используем только тикер в легенде)
+                    comparison_data[symbol] = normalized_data
             
             # Добавляем данные по инфляции если доступны
             if inflation_data is not None and not inflation_data.empty:
@@ -1631,7 +1631,7 @@ class ShansAi:
             import pandas as pd
             comparison_df = pd.DataFrame(comparison_data)
             
-            # Формируем заголовок
+            # Формируем заголовок с тикерами (не английскими названиями)
             title_parts = ["Comparison"]
             if symbols_list:
                 symbols_str = ", ".join(symbols_list)
@@ -1665,12 +1665,15 @@ class ShansAi:
             caption += f"💱 Валюта: {currency} ({currency_info})\n"
             caption += f"📊 Инфляция: {inflation_ticker}\n"
 
+            # Создаем reply keyboard для управления сравнением
+            reply_markup = self._create_comparison_reply_keyboard(symbols)
             
             # Отправляем график
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_bytes,
-                caption=caption
+                caption=caption,
+                reply_markup=reply_markup
             )
             
             self.logger.info(f"Successfully created hybrid comparison for {len(symbols)} Chinese symbols")
@@ -2955,7 +2958,7 @@ class ShansAi:
         # Treat text as single asset symbol and process with /info logic
         symbol = text
         
-        await self._send_ephemeral_message(update, context, f"🔍 Ищу актив '{symbol}'...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"🔍 Поиск {symbol}...", delete_after=3)
         
         try:
             # Search for assets with selection possibility
@@ -10021,6 +10024,38 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating info reply keyboard: {e}")
             # Return empty keyboard as fallback
+            return ReplyKeyboardMarkup([])
+
+    def _create_comparison_reply_keyboard(self, symbols: list) -> ReplyKeyboardMarkup:
+        """Create Reply Keyboard for comparison results with action buttons"""
+        try:
+            keyboard = []
+            
+            # Row 1: Main actions
+            keyboard.append([
+                KeyboardButton("▫️ Доходность"),
+                KeyboardButton("▫️ Дивиденды"),
+                KeyboardButton("▫️ Просадки")
+            ])
+            
+            # Row 2: Additional actions
+            keyboard.append([
+                KeyboardButton("▫️ Корреляция"),
+                KeyboardButton("▫️ Риски"),
+                KeyboardButton("▫️ Метрики")
+            ])
+            
+            # Row 3: Navigation
+            keyboard.append([
+                KeyboardButton("🔙 Назад"),
+                KeyboardButton("📊 Портфель"),
+                KeyboardButton("ℹ️ Помощь")
+            ])
+            
+            return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating comparison reply keyboard: {e}")
             return ReplyKeyboardMarkup([])
 
     def _create_start_reply_keyboard(self) -> ReplyKeyboardMarkup:
