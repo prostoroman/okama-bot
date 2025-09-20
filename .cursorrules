@@ -1,43 +1,19 @@
-# Cursor Rules for okama-bot project
+# Cursor Rules for shans-ai project
 
-## File Organization Rules
+## Git Configuration
+- Default working branch: DEV
+- Always checkout DEV branch when opening the project
+- Use DEV branch for all development work
+- Only merge to main when features are complete and tested
 
-### Reports and Documentation
-- All implementation reports, fix reports, enhancement reports, and any other .md documentation files should be saved in the `/reports` directory
-- Never create .md report files in the root directory
-- Use descriptive names for report files following the pattern: `[FEATURE]_[TYPE]_REPORT.md`
-- Examples: `PORTFOLIO_COMMAND_IMPLEMENTATION_REPORT.md`, `BUTTON_FIX_REPORT.md`, `CHART_ENHANCEMENT_REPORT.md`
+## Branch Management
+- Work exclusively on DEV branch
+- Create feature branches from DEV when needed
+- Never work directly on main branch
+- Always pull latest changes from origin/DEV before starting work
 
-### Code Files
-- Keep all source code files in the root directory or appropriate subdirectories
-- Configuration files should be in the root directory
-
-### Test Files
-- All test files should be saved in the `/tests` directory
-- Never create test files in the root directory
-- Test files should be prefixed with `test_`
-- Use descriptive names for test files following the pattern: `test_[FEATURE]_[FUNCTIONALITY].py`
-- Examples: `test_portfolio_command.py`, `test_button_fix.py`, `test_chart_enhancement.py`
-
-### Project Structure
-- Maintain clean root directory with only essential files
-- Use `/reports` for all documentation and reports
-- Use `/tests` for all test files
-- Use `/docs` for user-facing documentation
-- Use `/scripts` for utility scripts
-- Use `/services` for service modules
-
-## Code Style Guidelines
-- Follow PEP 8 for Python code
-- Use descriptive variable and function names
-- Add comments for complex logic
-- Keep functions focused and single-purpose
-
-## Git Workflow
-- Commit messages should be descriptive and follow conventional commits
-- Create feature branches for major changes
-- Update documentation in `/reports` for significant changes
-- After completing work, always push code to GitHub
-- Use meaningful commit messages that describe the changes made
-- Ensure all tests pass before pushing to GitHub
-- Update README.md if new features or changes are significant
+## Development Workflow
+- Start all work on DEV branch
+- Commit changes to DEV branch
+- Push changes to origin/DEV
+- Use DEV branch for all AI-assisted development

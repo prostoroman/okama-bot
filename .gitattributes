@@ -1,0 +1,6 @@
+# Git attributes for shans-ai project
+# Ensure consistent line endings
+* text=auto
+
+# Default branch configuration
+# This helps ensure DEV is used as the primary development branch
