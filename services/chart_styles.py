@@ -36,8 +36,8 @@ class ChartStyles:
     def __init__(self):
         # Централизованные настройки шрифтов с поддержкой CJK
         mpl.rcParams.update({
-            'font.family': ['DejaVu Sans'],  # Будет обновлено в _configure_cjk_fonts()
-            'font.sans-serif': ['DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
+            'font.family': ['Open Sans'],  # Будет обновлено в _configure_cjk_fonts()
+            'font.sans-serif': ['Open Sans', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
             'font.weight': 'medium',
             'axes.titleweight': 'semibold',
             'axes.labelweight': 'medium',
@@ -128,6 +128,7 @@ class ChartStyles:
             
             # Приоритетные CJK шрифты
             cjk_fonts = [
+                'Open Sans',             # Основной шрифт
                 'DejaVu Sans',           # Поддерживает CJK
                 'Arial Unicode MS',      # Windows CJK
                 'SimHei',                # Windows Chinese
@@ -156,13 +157,13 @@ class ChartStyles:
                 mpl.rcParams['axes.unicode_minus'] = False
             else:
                 logger.warning("No CJK fonts found, Chinese characters may not display correctly")
-                # Используем DejaVu Sans как fallback (поддерживает базовые CJK)
-                mpl.rcParams['font.family'] = ['DejaVu Sans']
+                # Используем Open Sans как fallback, затем DejaVu Sans
+                mpl.rcParams['font.family'] = ['Open Sans', 'DejaVu Sans']
                 
         except Exception as e:
             logger.warning(f"Could not configure CJK fonts: {e}")
-            # Fallback к DejaVu Sans
-            mpl.rcParams['font.family'] = ['DejaVu Sans']
+            # Fallback к Open Sans, затем DejaVu Sans
+            mpl.rcParams['font.family'] = ['Open Sans', 'DejaVu Sans']
 
     def _safe_text_render(self, text):
         """Безопасное отображение текста с CJK символами"""
