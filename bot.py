@@ -2033,6 +2033,29 @@ class ShansAi:
             safe_text = "" if text is None else str(text)
             return safe_text[:1024]
     
+    def _format_correlation_values(self, correlation_matrix: pd.DataFrame) -> str:
+        """Форматировать численные значения корреляции для отображения под матрицей"""
+        try:
+            if correlation_matrix is None or correlation_matrix.empty:
+                return ""
+            
+            values_text = "📊 **Численные значения корреляции:**\n"
+            
+            # Get upper triangle values only (avoid duplicates)
+            symbols = correlation_matrix.columns.tolist()
+            
+            for i, symbol1 in enumerate(symbols):
+                for j, symbol2 in enumerate(symbols):
+                    if i < j:  # Only upper triangle
+                        corr_value = correlation_matrix.iloc[i, j]
+                        values_text += f"• {symbol1} ↔ {symbol2}: {corr_value:.3f}\n"
+            
+            return values_text
+            
+        except Exception as e:
+            self.logger.error(f"Error formatting correlation values: {e}")
+            return ""
+    
     async def _send_additional_charts(self, update: Update, context: ContextTypes.DEFAULT_TYPE, asset_list, symbols: list, currency: str):
         """Отправить дополнительные графики анализа (drawdowns, dividend yield)"""
         try:
@@ -2162,12 +2185,15 @@ class ShansAi:
             # Clear matplotlib cache to free memory
             chart_styles.cleanup_figure(fig)
             
+            # Prepare correlation values text for caption
+            correlation_values_text = self._format_correlation_values(correlation_matrix)
+            
             # Send correlation matrix without keyboard
             self.logger.info("Sending correlation matrix image...")
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция")
+                caption=self._truncate_caption(f"🔗 Корреляционная матрица для {len(symbols)} активов\n\nПоказывает корреляцию между доходностями активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}")
             )
             self.logger.info("Correlation matrix image sent successfully")
             
@@ -3892,7 +3918,7 @@ class ShansAi:
 
                 # Add saved portfolios information
                 if saved_portfolios:
-                    help_text += "💼 Ваши сохраненные портфели:\n"
+                    help_text += "💼 Ваши портфели:\n"
                     for portfolio_symbol, portfolio_info in saved_portfolios.items():
                         symbols = portfolio_info.get('symbols', [])
                         weights = portfolio_info.get('weights', [])
@@ -3912,11 +3938,11 @@ class ShansAi:
                         
                         # Escape underscores in portfolio symbol for markdown
                         escaped_symbol = portfolio_symbol.replace('_', '\\_')
-                        help_text += f"• `{escaped_symbol}` ({portfolio_str})\n"
+                        help_text += f"• `{escaped_symbol}` ({portfolio_str})\n\n"
                     
                 
                 # Add usage tips
-                help_text += "💡 Можно сравнивать портфели и обычные активы\n"
+                help_text += "💡 Можно сравнивать портфели и обычные активы (для этого нужно сначала создать портфель)\n"
                 help_text += "💡 Первый актив в списке определяет базовую валюту для инфляции\n\n"
                 help_text += "💬 Введите тикеры для сравнения через пробел:"
                 
@@ -11472,107 +11498,42 @@ class ShansAi:
             self.logger.info(f"Expanded symbols: {len(expanded_symbols)}")
             self.logger.info(f"Expanded symbols types: {[type(s).__name__ for s in expanded_symbols]}")
             
-            # Separate portfolios and individual assets using expanded_symbols
-            portfolio_data = []
-            asset_symbols = []
+            # Collect all individual assets from portfolios and simple assets
+            all_assets = set()
             
-            for i, expanded_symbol in enumerate(expanded_symbols):
-                if isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
-                    # This is a portfolio wealth index
-                    portfolio_data.append(expanded_symbol)
-                else:
+            # Add assets from portfolios
+            for portfolio_context in portfolio_contexts:
+                portfolio_assets = portfolio_context.get('portfolio_symbols', [])
+                all_assets.update(portfolio_assets)
+                self.logger.info(f"Added {len(portfolio_assets)} assets from portfolio: {portfolio_assets}")
+            
+            # Add simple assets (not portfolios)
+            for expanded_symbol in expanded_symbols:
+                if not isinstance(expanded_symbol, (pd.Series, pd.DataFrame)):
                     # This is an individual asset symbol
-                    asset_symbols.append(expanded_symbol)
+                    all_assets.add(expanded_symbol)
             
-            # Calculate correlation data for all items
-            correlation_data = {}
+            all_assets = list(all_assets)
+            self.logger.info(f"Total unique assets for correlation: {len(all_assets)} - {all_assets}")
             
-            # Process portfolios separately to avoid AssetList creation issues
-            for i, portfolio_context in enumerate(portfolio_contexts):
-                if i < len(portfolio_data):
-                    try:
-                        self.logger.info(f"Processing portfolio {i} for correlation")
-                        
-                        # Get portfolio details from context
-                        assets = portfolio_context.get('portfolio_symbols', [])
-                        weights = portfolio_context.get('portfolio_weights', [])
-                        symbol = portfolio_context.get('symbol', f'Portfolio_{i+1}')
-                        
-                        if assets and weights and len(assets) == len(weights):
-                            self.logger.info(f"Portfolio {i} assets: {assets}, weights: {weights}")
-                            
-                            # Create portfolio using ok.Portfolio
-                            import okama as ok
-                            portfolio = ok.Portfolio(
-                                assets=assets,
-                                weights=weights,
-                                rebalancing_strategy=ok.Rebalance(period="year"),
-                                symbol=symbol
-                            )
-                            
-                            # Calculate returns for portfolio
-                            wealth_series = portfolio.wealth_index
-                            self.logger.info(f"Portfolio {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
-                            
-                            returns = wealth_series.pct_change().dropna()
-                            if len(returns) > 0:
-                                correlation_data[symbol] = returns
-                                self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
-                            else:
-                                self.logger.warning(f"Portfolio {symbol}: No returns data after pct_change")
-                        else:
-                            self.logger.warning(f"Portfolio {i} missing valid assets/weights data for correlation")
-                    except Exception as portfolio_error:
-                        self.logger.warning(f"Could not process portfolio {i} for correlation: {portfolio_error}")
-                        continue
-            
-            # Process individual assets separately
-            if asset_symbols:
-                try:
-                    asset_asset_list = ok.AssetList(asset_symbols, ccy=currency)
-                    
-                    for symbol in asset_symbols:
-                        if symbol in asset_asset_list.wealth_indexes.columns:
-                            # Calculate returns for individual asset
-                            wealth_series = asset_asset_list.wealth_indexes[symbol]
-                            self.logger.info(f"Asset {symbol} wealth_series length: {len(wealth_series)}, dtype: {wealth_series.dtype}")
-                            
-                            returns = wealth_series.pct_change().dropna()
-                            if len(returns) > 0:
-                                correlation_data[symbol] = returns
-                                self.logger.info(f"Successfully created correlation data for {symbol}: {len(returns)} points")
-                            else:
-                                self.logger.warning(f"Asset {symbol}: No returns data after pct_change")
-                        else:
-                            self.logger.warning(f"Asset {symbol} not found in wealth_indexes columns")
-                except Exception as asset_error:
-                    self.logger.warning(f"Could not process individual assets: {asset_error}")
-            
-            if len(correlation_data) < 2:
-                self.logger.warning(f"Not enough correlation data: {len(correlation_data)}")
-                self.logger.warning(f"Available correlation data keys: {list(correlation_data.keys())}")
-                self.logger.warning(f"Portfolio contexts count: {len(portfolio_contexts)}")
-                self.logger.warning(f"Asset symbols count: {len(asset_symbols)}")
-                self.logger.warning(f"Expanded symbols count: {len(expanded_symbols)}")
-                
-                # Provide more specific error message
-                if len(correlation_data) == 0:
-                    error_msg = "❌ Не удалось получить данные о доходности для создания корреляционной матрицы"
-                elif len(correlation_data) == 1:
-                    error_msg = f"❌ Недостаточно данных для корреляционной матрицы (только {list(correlation_data.keys())[0]}). Нужно минимум 2 актива."
-                else:
-                    error_msg = "❌ Недостаточно данных для создания корреляционной матрицы"
-                
+            if len(all_assets) < 2:
+                error_msg = f"❌ Недостаточно данных для корреляционной матрицы (только {len(all_assets)} актив). Нужно минимум 2 актива."
                 await self._send_callback_message(update, context, error_msg)
                 return
             
-            # Create correlation matrix
+            # Create AssetList with all assets for correlation matrix
             try:
-                # Combine all returns into a DataFrame
-                returns_df = pd.DataFrame(correlation_data)
+                import okama as ok
+                asset_list = ok.AssetList(all_assets, ccy=currency)
                 
-                # Calculate correlation matrix
-                correlation_matrix = returns_df.corr()
+                # Check if assets_ror data is available
+                if not hasattr(asset_list, 'assets_ror') or asset_list.assets_ror is None or asset_list.assets_ror.empty:
+                    self.logger.warning("assets_ror data not available for mixed comparison")
+                    await self._send_callback_message(update, context, "ℹ️ Данные о доходности активов недоступны для создания корреляционной матрицы")
+                    return
+                
+                # Get correlation matrix
+                correlation_matrix = asset_list.assets_ror.corr()
                 
                 self.logger.info(f"Correlation matrix created successfully, shape: {correlation_matrix.shape}")
                 
@@ -11583,7 +11544,7 @@ class ShansAi:
                 
                 # Create correlation matrix visualization using chart_styles
                 fig, ax = chart_styles.create_correlation_matrix_chart(
-                    correlation_matrix
+                    correlation_matrix, data_source='okama'
                 )
                 
                 # Save chart to bytes with memory optimization
@@ -11594,6 +11555,9 @@ class ShansAi:
                 
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
+                
+                # Prepare correlation values text for caption
+                correlation_values_text = self._format_correlation_values(correlation_matrix)
                 
                 # Create keyboard for compare command
                 keyboard = self._create_compare_command_keyboard(symbols, currency, update)
@@ -11606,7 +11570,7 @@ class ShansAi:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(f"🔗 Корреляционная матрица для смешанного сравнения\n\nПоказывает корреляцию между доходностями портфелей и активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция"),
+                    caption=self._truncate_caption(f"🔗 Корреляционная матрица для смешанного сравнения\n\nПоказывает корреляцию между доходностями всех активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}"),
                     reply_markup=keyboard
                 )
                 self.logger.info("Correlation matrix image sent successfully")
