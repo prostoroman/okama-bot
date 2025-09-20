@@ -1904,11 +1904,32 @@ class ShansAi:
     async def _send_message_safe(self, update: Update, text: str, reply_markup=None, parse_mode='Markdown'):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
         try:
-            # Проверяем, что update и message не None
+            # Проверяем, что update не None
             if update is None:
                 self.logger.error("Cannot send message: update is None")
                 return
             
+            # Если это callback query, используем специальную функцию
+            if hasattr(update, 'callback_query') and update.callback_query is not None:
+                self.logger.info("_send_message_safe: Redirecting to _send_callback_message for callback query")
+                # Для callback query нужно использовать context.bot.send_message напрямую
+                try:
+                    await update.callback_query.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+                except Exception as e:
+                    self.logger.error(f"Error sending callback message: {e}")
+                    # Fallback: попробуем через context.bot
+                    try:
+                        await update.callback_query.bot.send_message(
+                            chat_id=update.callback_query.message.chat_id,
+                            text=text,
+                            parse_mode=parse_mode,
+                            reply_markup=reply_markup
+                        )
+                    except Exception as fallback_error:
+                        self.logger.error(f"Fallback callback message sending also failed: {fallback_error}")
+                return
+            
+            # Проверяем, что message не None для обычных сообщений
             if not hasattr(update, 'message') or update.message is None:
                 self.logger.error("Cannot send message: update.message is None")
                 return
@@ -2158,7 +2179,7 @@ class ShansAi:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары 12 бирж всего мира, всего более 120 000 инструментов.
+        welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары 12 бирж, всего более 120 000 инструментов.
 
 Попробуйте одну из ключевых функций прямо сейчас:
 
