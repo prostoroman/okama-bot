@@ -2196,7 +2196,7 @@ class ShansAi:
 
 📚 Просмотр всех доступных данных и символов /list
 
-© Использованы библиотеки okama, tushare и нейронные сети YandexGPT и Google Gemini.
+© Okama, tushare, YandexGPT, Google Gemini.
 """
 
         # Create inline keyboard with interactive buttons
@@ -10437,6 +10437,155 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error handling namespace reply keyboard button: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_info_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle info Reply Keyboard button presses (from /info command)"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Get current symbol from context
+            current_symbol = user_context.get('current_info_symbol')
+            if not current_symbol:
+                await self._send_message_safe(update, "❌ Нет активного символа для анализа. Используйте команду `/info <символ>`")
+                return
+            
+            self.logger.info(f"Handling info reply keyboard button: {text} for symbol: {current_symbol}")
+            
+            # Handle period buttons
+            if text == "1 год":
+                await self._handle_info_period_reply_button(update, context, current_symbol, "1Y")
+            elif text == "5 лет":
+                await self._handle_info_period_reply_button(update, context, current_symbol, "5Y")
+            elif text == "Макс. срок":
+                await self._handle_info_period_reply_button(update, context, current_symbol, "MAX")
+            elif text == "Дивиденды":
+                await self._handle_info_dividends_reply_button(update, context, current_symbol)
+            elif text == "Сравнение":
+                await self._handle_info_compare_reply_button(update, context, current_symbol)
+            elif text == "В Портфель":
+                await self._handle_info_portfolio_reply_button(update, context, current_symbol)
+            else:
+                await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling info reply keyboard button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_info_period_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
+        """Handle period switching for info command via reply keyboard"""
+        try:
+            await self._send_ephemeral_message(update, context, f"📊 Обновляю данные за {period}...", delete_after=2)
+            
+            # Determine data source
+            data_source = self.determine_data_source(symbol)
+            
+            if data_source == 'tushare':
+                # Handle Tushare assets
+                await self._handle_tushare_info_period_reply_button(update, context, symbol, period)
+            else:
+                # Handle Okama assets
+                await self._handle_okama_info_period_reply_button(update, context, symbol, period)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling info period reply button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}")
+
+    async def _handle_info_dividends_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle dividends button for info command via reply keyboard"""
+        try:
+            await self._handle_single_dividends_button(update, context, symbol)
+        except Exception as e:
+            self.logger.error(f"Error handling info dividends reply button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при получении дивидендов: {str(e)}")
+
+    async def _handle_info_compare_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle compare button for info command via reply keyboard"""
+        try:
+            await self._handle_info_compare_button(update, context, symbol)
+        except Exception as e:
+            self.logger.error(f"Error handling info compare reply button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при сравнении: {str(e)}")
+
+    async def _handle_info_portfolio_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle portfolio button for info command via reply keyboard"""
+        try:
+            await self._handle_info_portfolio_button(update, context, symbol)
+        except Exception as e:
+            self.logger.error(f"Error handling info portfolio reply button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при добавлении в портфель: {str(e)}")
+
+    async def _handle_tushare_info_period_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
+        """Handle period switching for Tushare assets via reply keyboard"""
+        try:
+            # Get symbol info
+            symbol_info = self.tushare_service.get_symbol_info(symbol)
+            if not symbol_info:
+                await self._send_message_safe(update, f"❌ Информация о символе {symbol} не найдена")
+                return
+            
+            # Format information according to new structure
+            info_text = self._format_tushare_info_response(symbol_info, symbol)
+            
+            # Create reply keyboard for management
+            reply_markup = self._create_info_reply_keyboard()
+            
+            # Save current symbol context for reply keyboard handling
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, 
+                current_info_symbol=symbol
+            )
+            
+            # Try to get chart data
+            chart_data = await self._get_tushare_chart(symbol)
+            
+            if chart_data:
+                # Send chart with info text
+                chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, period)
+                await self._send_photo_safe(update, chart_data, caption=chart_caption, reply_markup=reply_markup)
+            else:
+                # Send only text
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling Tushare info period reply button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}")
+
+    async def _handle_okama_info_period_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
+        """Handle period switching for Okama assets via reply keyboard"""
+        try:
+            # Get asset
+            asset = ok.Asset(symbol)
+            
+            # Get key metrics for the period
+            key_metrics = await self._get_asset_key_metrics(asset, symbol, period=period)
+            
+            # Format information
+            info_text = self._format_asset_info_response(asset, symbol, key_metrics)
+            
+            # Create reply keyboard for management
+            reply_markup = self._create_info_reply_keyboard()
+            
+            # Save current symbol context for reply keyboard handling
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, 
+                current_info_symbol=symbol
+            )
+            
+            # Get chart data
+            chart_data = await self._get_daily_chart(symbol)
+            
+            if chart_data:
+                # Send chart with info text
+                caption = f"📈 График доходности за {period}\n\n{info_text}"
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup)
+            else:
+                # Send only text
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling Okama info period reply button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}")
 
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists - DEPRECATED: Use _manage_reply_keyboard instead"""
