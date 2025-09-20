@@ -2863,9 +2863,14 @@ class ShansAi:
             self.logger.info(f"Processing as portfolio weights input: {text}")
             
             # Check if this is from portfolio command (tickers only) or compare command
-            if user_context.get('portfolio_tickers'):
-                # This is from portfolio command with tickers only
-                await self._handle_portfolio_tickers_weights_input(update, context, text)
+            if user_context.get('portfolio_tickers') or user_context.get('portfolio_base_symbols'):
+                # This is from portfolio command with tickers only OR from compare portfolio button
+                if user_context.get('portfolio_tickers'):
+                    # This is from portfolio command with tickers only
+                    await self._handle_portfolio_tickers_weights_input(update, context, text)
+                else:
+                    # This is from compare portfolio button - handle as portfolio weights input
+                    await self._handle_portfolio_weights_input(update, context, text)
             else:
                 # This is from compare command - handle as compare input instead of portfolio weights
                 await self._handle_compare_input(update, context, text)
