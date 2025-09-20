@@ -12307,48 +12307,24 @@ class ShansAi:
                     dividend_chart = await self._get_dividend_chart(symbol)
                     
                     if dividend_chart:
-                        # Создаем клавиатуру для возврата к информации об активе
-                        keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
-                        reply_markup = InlineKeyboardMarkup(keyboard)
-                        
                         # Send photo - handle both callback query and regular message
                         if hasattr(update, 'callback_query') and update.callback_query is not None:
                             await update.callback_query.message.reply_photo(
                                 photo=dividend_chart,
-                                caption=f"💵 Дивиденды {symbol}",
-                                reply_markup=reply_markup
+                                caption=f"💵 Дивиденды {symbol}"
                             )
                         else:
-                            await self._send_photo_safe(update, dividend_chart, f"💵 Дивиденды {symbol}", reply_markup=reply_markup, context=context)
+                            await self._send_photo_safe(update, dividend_chart, f"💵 Дивиденды {symbol}", context=context)
                     else:
-                        # Создаем клавиатуру для возврата к информации об активе
-                        keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
-                        reply_markup = InlineKeyboardMarkup(keyboard)
-                        
-                        await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен", reply_markup=reply_markup)
+                        await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен")
                 else:
-                    # Создаем клавиатуру для возврата к информации об активе
-                    keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    
-                    await self._send_callback_message(update, context, f"💵 Дивиденды по активу {symbol} не найдены", reply_markup=reply_markup)
+                    await self._send_callback_message(update, context, f"💵 Дивиденды по активу {symbol} не найдены")
             else:
-                # Создаем клавиатуру для возврата к информации об активе
-                keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await self._send_callback_message(update, context, f"💵 Информация о дивидендах по активу {symbol} недоступна", reply_markup=reply_markup)
+                await self._send_callback_message(update, context, f"💵 Информация о дивидендах по активу {symbol} недоступна")
                 
         except Exception as e:
             self.logger.error(f"Error handling dividends button: {e}")
-            # Создаем клавиатуру для возврата к информации об активе
-            try:
-                keyboard = self._create_info_interactive_keyboard_with_period(symbol, "1Y")
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}", reply_markup=reply_markup)
-            except Exception as keyboard_error:
-                self.logger.error(f"Error creating keyboard for dividends error: {keyboard_error}")
-                await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
+            await self._send_callback_message(update, context, f"❌ Ошибка при получении дивидендов: {str(e)}")
 
     async def _handle_tushare_daily_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle Tushare daily chart button click"""
