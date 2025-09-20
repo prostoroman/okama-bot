@@ -24,18 +24,18 @@ class TushareService:
         
         # Exchange mappings
         self.exchange_mappings = {
-            'SSE': '.SH',      # Shanghai Stock Exchange
-            'SZSE': '.SZ',     # Shenzhen Stock Exchange  
-            'BSE': '.BJ',      # Beijing Stock Exchange
-            'HKEX': '.HK'      # Hong Kong Stock Exchange
+            'SSE': ['.SH', '.SSE'],      # Shanghai Stock Exchange
+            'SZSE': ['.SZ', '.SZSE'],    # Shenzhen Stock Exchange  
+            'BSE': ['.BJ', '.BSE'],      # Beijing Stock Exchange
+            'HKEX': ['.HK', '.HKEX']     # Hong Kong Stock Exchange
         }
         
         # Symbol patterns for validation
         self.symbol_patterns = {
-            'SSE': r'^[0-9]{6}\.SH$',      # 600000.SH, 000001.SH
-            'SZSE': r'^[0-9]{6}\.SZ$',     # 000001.SZ, 399005.SZ
-            'BSE': r'^[0-9]{6}\.BJ$',      # 900001.BJ, 800001.BJ
-            'HKEX': r'^[0-9]{5}\.HK$'      # 00001.HK, 00700.HK
+            'SSE': r'^[0-9]{6}\.(SH|SSE)$',      # 600000.SH, 000001.SH, 600000.SSE
+            'SZSE': r'^[0-9]{6}\.(SZ|SZSE)$',    # 000001.SZ, 399005.SZ, 002594.SZSE
+            'BSE': r'^[0-9]{6}\.(BJ|BSE)$',      # 900001.BJ, 800001.BJ, 900001.BSE
+            'HKEX': r'^[0-9]{5}\.(HK|HKEX)$'     # 00001.HK, 00700.HK, 00001.HKEX
         }
     
     def is_tushare_symbol(self, symbol: str) -> bool:
@@ -48,9 +48,10 @@ class TushareService:
     
     def get_exchange_from_symbol(self, symbol: str) -> Optional[str]:
         """Get exchange code from symbol"""
-        for exchange, suffix in self.exchange_mappings.items():
-            if symbol.endswith(suffix):
-                return exchange
+        for exchange, suffixes in self.exchange_mappings.items():
+            for suffix in suffixes:
+                if symbol.endswith(suffix):
+                    return exchange
         return None
     
     def _is_index_symbol(self, symbol: str) -> bool:
@@ -262,8 +263,9 @@ class TushareService:
             df = self.pro.index_basic()
             
             # Find matching index by ts_code
-            # Map exchange to suffix
-            exchange_suffix = self.exchange_mappings.get(exchange, f'.{exchange}')
+            # Map exchange to suffix (use first suffix for Tushare API)
+            exchange_suffixes = self.exchange_mappings.get(exchange, [f'.{exchange}'])
+            exchange_suffix = exchange_suffixes[0]  # Use first suffix for Tushare API
             ts_code = f"{symbol_code}{exchange_suffix}"
             index_info = df[df['ts_code'] == ts_code]
             if index_info.empty:

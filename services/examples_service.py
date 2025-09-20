@@ -96,7 +96,6 @@ class ExamplesService:
                 ('MGNT.MOEX', 'Magnit'),
                 ('ALRS.MOEX', 'ALROSA'),
                 ('CHMF.MOEX', 'Severstal'),
-                ('POLY.MOEX', 'Polymetal'),
                 ('MOEX.MOEX', 'Moscow Exchange'),
                 ('AFKS.MOEX', 'Sistema'),
                 ('IRAO.MOEX', 'Inter RAO')

@@ -977,10 +977,10 @@ class ShansAi:
             Best symbol string
         """
         # Allowed exchanges from okama configuration (all official namespaces)
-        allowed_exchanges = ['US', 'LSE', 'XETR', 'XFRA', 'XSTU', 'XAMS', 'MOEX', 'XTAE', 'PIF', 'FX', 'CC', 'INDX', 'COMM', 'RE', 'CBR', 'PF', 'INFL', 'RATE', 'RATIO']
+        allowed_exchanges = ['US', 'LSE', 'XETR', 'XFRA', 'XSTU', 'XAMS', 'MOEX', 'XTAE', 'PIF', 'FX', 'CC', 'INDX', 'COMM', 'RE', 'CBR', 'PF', 'INFL', 'RATE', 'RATIO', 'SSE', 'SZSE', 'HKEX', 'BSE']
         
         # Priority order for exchanges (subset of allowed exchanges)
-        priority_exchanges = ['US', 'MOEX', 'LSE', 'XETR', 'XFRA', 'XAMS']
+        priority_exchanges = ['US', 'MOEX', 'LSE', 'XETR', 'XFRA', 'XAMS', 'SSE', 'SZSE', 'HKEX']
         
         # First, try to find exact match with priority exchanges
         for _, row in search_result.iterrows():
