@@ -6430,10 +6430,11 @@ class ShansAi:
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
         try:
-            # Отправляем невидимое сообщение с ReplyKeyboardRemove для немедленного скрытия
+            # Отправляем сообщение с ReplyKeyboardRemove для немедленного скрытия
+            # Используем обычный пробел вместо невидимого символа
             await self._send_message_safe(
                 update, 
-                "‌",  # Невидимый символ
+                " ",  # Обычный пробел
                 reply_markup=ReplyKeyboardRemove(),
                 parse_mode=None
             )
