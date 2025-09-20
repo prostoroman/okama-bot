@@ -10015,8 +10015,8 @@ class ShansAi:
             
             # Row 2: Action buttons
             keyboard.append([
-                KeyboardButton("Сравнение"),
-                KeyboardButton("В Портфель")
+                KeyboardButton("⚖️ Сравнение"),
+                KeyboardButton("💼 В Портфель")
             ])
             
             return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -10143,8 +10143,8 @@ class ShansAi:
             "5 лет", 
             "Макс. срок",
             "Дивиденды",
-            "Сравнение",
-            "В Портфель"
+            "⚖️ Сравнение",
+            "💼 В Портфель"
         ]
         return text in info_buttons
 
@@ -10501,16 +10501,46 @@ class ShansAi:
                 await self._handle_info_period_reply_button(update, context, current_symbol, "MAX")
             elif text == "Дивиденды":
                 await self._handle_info_dividends_reply_button(update, context, current_symbol)
-            elif text == "Сравнение":
-                await self._handle_info_compare_reply_button(update, context, current_symbol)
-            elif text == "В Портфель":
-                await self._handle_info_portfolio_reply_button(update, context, current_symbol)
+            elif text == "⚖️ Сравнение":
+                await self._handle_info_compare_redirect_button(update, context, current_symbol)
+            elif text == "💼 В Портфель":
+                await self._handle_info_portfolio_redirect_button(update, context, current_symbol)
             else:
                 await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
                 
         except Exception as e:
             self.logger.error(f"Error handling info reply keyboard button: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_info_compare_redirect_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle compare redirect button for info command - redirect to /compare"""
+        try:
+            self.logger.info(f"Redirecting to compare command with symbol: {symbol}")
+            
+            # Set the symbol as argument for compare command
+            context.args = [symbol]
+            
+            # Execute compare command
+            await self.compare_command(update, context)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling info compare redirect button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при перенаправлении на сравнение: {str(e)}")
+
+    async def _handle_info_portfolio_redirect_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
+        """Handle portfolio redirect button for info command - redirect to /portfolio"""
+        try:
+            self.logger.info(f"Redirecting to portfolio command with symbol: {symbol}")
+            
+            # Set the symbol as argument for portfolio command
+            context.args = [symbol]
+            
+            # Execute portfolio command
+            await self.portfolio_command(update, context)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling info portfolio redirect button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при перенаправлении на портфель: {str(e)}")
 
     async def _handle_start_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle start Reply Keyboard button presses (from /start command)"""
