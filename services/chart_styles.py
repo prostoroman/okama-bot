@@ -1183,6 +1183,14 @@ class ChartStyles:
                 title=title,
                 xlabel='Риск (волатильность)',
                 ylabel='Вес (%)',
+                data_source=data_source
+            )
+            
+            return fig, ax
+            
+        except Exception as e:
+            logger.error(f"Error creating efficient frontier chart: {e}")
+            return None, None
 
     def create_percentile_forecast_chart(self, fig, ax, symbols, currency, weights=None, portfolio_name=None, data_source='okama', **kwargs):
         """Применить стили к графику прогноза с процентилями в едином стиле"""
