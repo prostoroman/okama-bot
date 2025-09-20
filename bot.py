@@ -3954,8 +3954,8 @@ class ShansAi:
                 examples = self.examples_service.get_compare_examples(3)
                 examples_text = "\n".join([f"• {example}" for example in examples])
                 
-                help_text = "📊 Сравнение\n\n"
-                help_text += f"*Примеры команд:*\n{examples_text}\n\n"
+                help_text = "📊 Сравнение\n\n💬 Введите тикеры для сравнения через пробел."
+                help_text += f"*Примеры:*\n{examples_text}\n\n"
 
                 # Add saved portfolios information
                 if saved_portfolios:
