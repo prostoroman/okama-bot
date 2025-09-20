@@ -2407,7 +2407,7 @@ class ShansAi:
                 
                 # Home button after Excel
                 keyboard.append([
-                    InlineKeyboardButton("📚 База данных", callback_data="namespace_home")
+                    InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
                 ])
                 
                 # Analysis, Compare, Portfolio buttons
@@ -3715,7 +3715,7 @@ class ShansAi:
                     response += f"• {row[0]} - {row[1]}\n"
                 response += "\n"
                 
-                response += "💡 Используйте кнопки ниже для выбора биржи\n\Используйте команду /search для поиска активов"
+                response += "💡 Используйте кнопки ниже для выбора биржи\n\nИспользуйте команду /search для поиска активов"
                 
                 # Создаем reply keyboard для пространств имен
                 reply_markup = self._create_namespace_reply_keyboard()
@@ -9862,7 +9862,7 @@ class ShansAi:
             
             # Action buttons
             keyboard.append([
-                KeyboardButton("📊 ВыгрузиExcel"),
+                KeyboardButton("📊 Excel"),
                 KeyboardButton("🔍 Анализ"),
                 KeyboardButton("⚖️ Сравнить")
             ])
@@ -10054,7 +10054,7 @@ class ShansAi:
             "🔍 Анализ",
             "⚖️ Сравнить",
             "💼 В портфель",
-            "📚 База данных"
+            "🏠 Домой"
         ]
         # Also check for page indicators like "1/5", "2/5", etc.
         import re
