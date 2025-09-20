@@ -3727,33 +3727,12 @@ class ShansAi:
                 # Show available namespaces
                 namespaces = ok.namespaces
                 
-                # Prepare data for tabulate
-                headers = ["Код", "Описание", "Категория"]
+                # Prepare data for list
                 namespace_data = []
                 
-                # Categorize namespaces for better organization
-                categories = {
-                    'Биржи': ['MOEX', 'US', 'LSE', 'XAMS', 'XETR', 'XFRA', 'XSTU', 'XTAE', 'SSE', 'SZSE', 'BSE', 'HKEX'],
-                    'Индексы': ['INDX'],
-                    'Валюты': ['FX', 'CBR'],
-                    'Товары': ['COMM'],
-                    'Криптовалюты': ['CC'],
-                    'Инфляция': ['INFL'],
-                    'Недвижимость': ['RE'],
-                    'Портфели': ['PF', 'PIF'],
-                    'Депозиты': ['RATE'],
-                    'Коэффициенты': ['RATIO']
-                }
-                
-                # Create categorized data
+                # Create data with only code and description
                 for namespace, description in namespaces.items():
-                    category = "Другое"
-                    for cat_name, cat_namespaces in categories.items():
-                        if namespace in cat_namespaces:
-                            category = cat_name
-                            break
-                    
-                    namespace_data.append([namespace, description, category])
+                    namespace_data.append([namespace, description])
                 
                 # Add Chinese exchanges manually (not in ok.namespaces)
                 chinese_exchanges = {
@@ -3764,26 +3743,18 @@ class ShansAi:
                 }
                 
                 for exchange_code, exchange_name in chinese_exchanges.items():
-                    namespace_data.append([exchange_code, exchange_name, 'Биржи'])
+                    namespace_data.append([exchange_code, exchange_name])
                 
-                # Sort by category and then by namespace
-                namespace_data.sort(key=lambda x: (x[2], x[0]))
+                # Sort by namespace
+                namespace_data.sort(key=lambda x: x[0])
                 response = "📚 Доступные данные\n\n"
                 
-                # Create table using tabulate or fallback to simple format
-                if TABULATE_AVAILABLE:
-                    # Use plain format for best Telegram display
-                    table = tabulate.tabulate(namespace_data, headers=headers, tablefmt="plain")
-                    response += f"```\n{table}\n```\n\n"
-                else:
-                    # Fallback to simple text format
-                    response += "Код | Описание | Категория\n"
-                    response += "--- | --- | ---\n"
-                    for row in namespace_data:
-                        response += f"{row[0]} | {row[1]} | {row[2]}\n"
-                    response += "\n"
+                # Create bulleted list format
+                for row in namespace_data:
+                    response += f"• {row[0]} - {row[1]}\n"
+                response += "\n"
                 
-                response += "💡 Используйте кнопки  для просмотра символов в конкретном пространстве"
+                response += "💡 Используйте кнопки ниже для выбора биржи"
                 
                 # Создаем reply keyboard для пространств имен
                 reply_markup = self._create_namespace_reply_keyboard()
