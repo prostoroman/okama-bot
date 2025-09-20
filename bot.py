@@ -2192,7 +2192,7 @@ class ShansAi:
 📚 Просмотр всех доступных данных и символов /list
 
 © Использованы библиотеки okama, tushare и нейронные сети YandexGPT и Google Gemini.
-⚠️ Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
+"""
 
         # Create inline keyboard with interactive buttons
         keyboard = [
@@ -3782,7 +3782,7 @@ class ShansAi:
                 
                 # Sort by category and then by namespace
                 namespace_data.sort(key=lambda x: (x[2], x[0]))
-                response = "📚 Доступные пространства имен (namespaces): {len(namespaces)}\n\n"
+                response = "📚 Доступные данные\n\n"
                 
                 # Create table using tabulate or fallback to simple format
                 if TABULATE_AVAILABLE:
@@ -3794,7 +3794,7 @@ class ShansAi:
                     response += "Код | Описание | Категория\n"
                     response += "--- | --- | ---\n"
                     for row in namespace_data:
-                        response += f"`{row[0]}` | {row[1]} | {row[2]}\n"
+                        response += f"{row[0]} | {row[1]} | {row[2]}\n"
                     response += "\n"
                 
                 response += "💡 Используйте кнопки ниже для просмотра символов в конкретном пространстве"
@@ -10504,9 +10504,9 @@ class ShansAi:
             # Check if it's a Chinese exchange
             chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
             if namespace in chinese_exchanges:
-                await self._show_tushare_namespace_symbols_with_reply_keyboard(update, context, namespace, page=0)
+                await self._show_tushare_namespace_symbols(update, context, namespace, is_callback=False, page=0)
             else:
-                await self._show_namespace_symbols_with_reply_keyboard(update, context, namespace, page=0)
+                await self._show_namespace_symbols(update, context, namespace, is_callback=False, page=0)
                 
         except Exception as e:
             self.logger.error(f"Error handling namespace reply keyboard button: {e}")
