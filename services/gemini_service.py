@@ -560,6 +560,7 @@ class GeminiService:
                         description_parts.append(f"  • {name1} ↔ {name2}: {corr:.3f}")
         
         # Efficient frontier data
+        ef_symbols = []  # Initialize ef_symbols outside the if block
         if 'efficient_frontier' in data_info and data_info['efficient_frontier']:
             ef_data = data_info['efficient_frontier']
             description_parts.append("\n**📈 ДАННЫЕ ЭФФЕКТИВНОЙ ГРАНИЦЫ (okama.EfficientFrontier):**")
