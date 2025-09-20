@@ -1935,6 +1935,10 @@ class ShansAi:
                 self.logger.error("Cannot send message: text is empty")
                 return
             
+            # Clean Markdown if parse_mode is Markdown
+            if parse_mode == 'Markdown':
+                text = self._safe_markdown(text)
+            
             # Дополнительная проверка для callback query
             if hasattr(update, 'callback_query') and update.callback_query is not None:
                 # Проверяем еще раз для callback query
