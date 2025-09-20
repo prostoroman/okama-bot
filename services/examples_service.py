@@ -518,7 +518,7 @@ class ExamplesService:
         return examples[:count]
 
     def _generate_portfolio_weights(self, num_assets: int) -> List[float]:
-        """Generate random weights that sum to 1.0"""
+        """Generate random weights that sum to 1.0, ensuring no zero weights"""
         # Generate random numbers
         weights = [random.random() for _ in range(num_assets)]
         
@@ -529,10 +529,26 @@ class ExamplesService:
         # Round to 1 decimal place and ensure sum is exactly 1.0
         rounded_weights = [round(w, 1) for w in normalized_weights]
         
-        # Adjust the last weight to ensure sum is exactly 1.0
+        # Ensure no zero weights by setting minimum weight to 0.1
+        for i in range(len(rounded_weights)):
+            if rounded_weights[i] == 0.0:
+                rounded_weights[i] = 0.1
+        
+        # Adjust weights to ensure sum is exactly 1.0
         current_sum = sum(rounded_weights)
         if current_sum != 1.0:
-            rounded_weights[-1] = round(1.0 - sum(rounded_weights[:-1]), 1)
+            # Find the largest weight to adjust
+            max_weight_index = rounded_weights.index(max(rounded_weights))
+            adjustment = round(1.0 - current_sum, 1)
+            rounded_weights[max_weight_index] = round(rounded_weights[max_weight_index] + adjustment, 1)
+            
+            # Final check: if adjustment resulted in negative weight, redistribute
+            if rounded_weights[max_weight_index] <= 0.0:
+                # Redistribute equally among all weights
+                equal_weight = round(1.0 / num_assets, 1)
+                rounded_weights = [equal_weight] * num_assets
+                # Adjust last weight to ensure exact sum
+                rounded_weights[-1] = round(1.0 - sum(rounded_weights[:-1]), 1)
         
         return rounded_weights
 
