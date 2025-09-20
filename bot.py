@@ -2158,17 +2158,16 @@ class ShansAi:
         # Remove any special characters that could break Markdown
         user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
         
-        welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары со всего мира.
+        welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары 12 бирж всего мира, всего более 120 000 инструментов.
 
 Попробуйте одну из ключевых функций прямо сейчас:
 
-🔍 Анализ: полная сводка по любой бумаге, валюте или товару `/info`
-⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик `/compare`
-💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей `/portfolio`
-
+🔍 Анализ: полная сводка по любой бумаге, валюте или товару /info
+⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик /compare
+💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей /portfolio
 📚 Просмотр всех доступных данных и символов `/list`
 
-
+© Использованы библиотеки okama, tushare и нейронные сети YandexGPT и Google Gemini.
 ⚠️ Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
 
         # Create inline keyboard with interactive buttons
@@ -6974,6 +6973,7 @@ class ShansAi:
         await query.answer()
         
         self.logger.info(f"Button callback received: {query.data}")
+        self.logger.info(f"Full callback query: {query}")
         
         try:
             # Parse callback data
@@ -6983,19 +6983,24 @@ class ShansAi:
             
             # Handle start command callbacks
             if callback_data.startswith("start_"):
+                self.logger.info(f"Processing start command callback: {callback_data}")
                 if callback_data == "start_help":
                     # Execute help command
+                    self.logger.info("Executing help command from callback")
                     await self.help_command(update, context)
                 elif callback_data == "start_info":
                     # Execute info command without parameters
+                    self.logger.info("Executing info command from callback")
                     context.args = []
                     await self.info_command(update, context)
                 elif callback_data == "start_compare":
                     # Execute compare command without parameters
+                    self.logger.info("Executing compare command from callback")
                     context.args = []
                     await self.compare_command(update, context)
                 elif callback_data == "start_portfolio":
                     # Execute portfolio command without parameters
+                    self.logger.info("Executing portfolio command from callback")
                     context.args = []
                     await self.portfolio_command(update, context)
                 elif callback_data.startswith("start_info_"):
