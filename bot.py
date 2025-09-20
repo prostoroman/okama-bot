@@ -10188,11 +10188,24 @@ class ShansAi:
         page_pattern = r'^\d+/\d+$'
         return text in list_buttons or bool(re.match(page_pattern, text))
 
+    def _is_namespace_reply_keyboard_button(self, text: str) -> bool:
+        """Check if the text is a namespace Reply Keyboard button"""
+        namespace_buttons = [
+            "🇺🇸 US", "🇷🇺 MOEX", "🇬🇧 LSE",
+            "🇩🇪 XETR", "🇫🇷 XFRA", "🇳🇱 XAMS",
+            "🇨🇳 SSE", "🇨🇳 SZSE", "🇨🇳 BSE", "🇭🇰 HKEX",
+            "📊 INDX", "💱 FX", "🏦 CBR",
+            "🛢️ COMM", "₿ CC", "🏠 RE",
+            "📈 INFL", "💰 PIF", "🏦 RATE"
+        ]
+        return text in namespace_buttons
+
     def _is_reply_keyboard_button(self, text: str) -> bool:
-        """Check if the text is any Reply Keyboard button (portfolio, compare, or list)"""
+        """Check if the text is any Reply Keyboard button (portfolio, compare, list, or namespace)"""
         return (self._is_portfolio_reply_keyboard_button(text) or 
                 self._is_compare_reply_keyboard_button(text) or 
-                self._is_list_reply_keyboard_button(text))
+                self._is_list_reply_keyboard_button(text) or
+                self._is_namespace_reply_keyboard_button(text))
 
     async def _handle_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle Reply Keyboard button presses - determine context and call appropriate handler"""
@@ -10208,8 +10221,12 @@ class ShansAi:
             is_compare_button = self._is_compare_reply_keyboard_button(text)
             is_portfolio_button = self._is_portfolio_reply_keyboard_button(text)
             is_list_button = self._is_list_reply_keyboard_button(text)
+            is_namespace_button = self._is_namespace_reply_keyboard_button(text)
             
-            if is_list_button:
+            if is_namespace_button:
+                # Handle namespace buttons (from /list command)
+                await self._handle_namespace_reply_keyboard_button(update, context, text)
+            elif is_list_button:
                 # Handle list namespace buttons
                 await self._handle_list_reply_keyboard_button(update, context, text)
             elif is_compare_button and is_portfolio_button:
@@ -10446,6 +10463,50 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error handling list reply keyboard button: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
+
+    async def _handle_namespace_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle namespace Reply Keyboard button presses (from /list command)"""
+        try:
+            # Extract namespace code from button text
+            namespace_mapping = {
+                "🇺🇸 US": "US",
+                "🇷🇺 MOEX": "MOEX", 
+                "🇬🇧 LSE": "LSE",
+                "🇩🇪 XETR": "XETR",
+                "🇫🇷 XFRA": "XFRA",
+                "🇳🇱 XAMS": "XAMS",
+                "🇨🇳 SSE": "SSE",
+                "🇨🇳 SZSE": "SZSE",
+                "🇨🇳 BSE": "BSE",
+                "🇭🇰 HKEX": "HKEX",
+                "📊 INDX": "INDX",
+                "💱 FX": "FX",
+                "🏦 CBR": "CBR",
+                "🛢️ COMM": "COMM",
+                "₿ CC": "CC",
+                "🏠 RE": "RE",
+                "📈 INFL": "INFL",
+                "💰 PIF": "PIF",
+                "🏦 RATE": "RATE"
+            }
+            
+            namespace = namespace_mapping.get(text)
+            if not namespace:
+                await self._send_message_safe(update, f"❌ Неизвестное пространство имен: {text}")
+                return
+            
+            self.logger.info(f"Handling namespace reply keyboard button: {text} -> {namespace}")
+            
+            # Check if it's a Chinese exchange
+            chinese_exchanges = ['SSE', 'SZSE', 'BSE', 'HKEX']
+            if namespace in chinese_exchanges:
+                await self._show_tushare_namespace_symbols_with_reply_keyboard(update, context, namespace, page=0)
+            else:
+                await self._show_namespace_symbols_with_reply_keyboard(update, context, namespace, page=0)
+                
+        except Exception as e:
+            self.logger.error(f"Error handling namespace reply keyboard button: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке кнопки: {str(e)}")
 
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
