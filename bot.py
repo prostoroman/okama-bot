@@ -6516,10 +6516,10 @@ class ShansAi:
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
         try:
             # Отправляем сообщение с ReplyKeyboardRemove для немедленного скрытия
-            # Используем обычный пробел вместо невидимого символа
+            # Используем невидимый символ Unicode для минимального визуального воздействия
             await self._send_message_safe(
                 update, 
-                " ",  # Обычный пробел
+                "‌",  # Невидимый символ (Zero Width Non-Joiner)
                 reply_markup=ReplyKeyboardRemove(),
                 parse_mode=None
             )
@@ -9945,14 +9945,16 @@ class ShansAi:
             keyboard.append([
                 KeyboardButton("🇺🇸 US"),
                 KeyboardButton("🇷🇺 MOEX"),
-                KeyboardButton("🇬🇧 LSE")
+                KeyboardButton("🇷🇺 PIF"),
+                
             ])
             
             # Европейские биржи
             keyboard.append([
                 KeyboardButton("🇩🇪 XETR"),
                 KeyboardButton("🇫🇷 XFRA"),
-                KeyboardButton("🇳🇱 XAMS")
+                KeyboardButton("🇳🇱 XAMS"),
+                KeyboardButton("🇬🇧 LSE")
             ])
             
             # Китайские биржи
@@ -9983,7 +9985,6 @@ class ShansAi:
             # Инфляция и депозиты
             keyboard.append([
                 KeyboardButton("📈 INFL"),
-                KeyboardButton("💰 PIF"),
                 KeyboardButton("🏦 RATE")
             ])
             
