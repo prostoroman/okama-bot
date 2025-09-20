@@ -4564,34 +4564,8 @@ class ShansAi:
         
         try:
             if not context.args:
-                # Get user context for recently analyzed tickers
-                user_id = update.effective_user.id
-                user_context = self._get_user_context(user_id)
-                
-                help_text = "💼 *Создание портфеля*\n\n"
-                
-                # Get analyzed tickers from context for examples
-                analyzed_tickers = user_context.get('analyzed_tickers', [])
-                
-                # Get random examples for user using context tickers if available
-                examples = self.examples_service.get_portfolio_examples(3, analyzed_tickers)
-                examples_text = "\n".join([f"• {example}" for example in examples])
-                
-                help_text += "*Примеры команд:*\n"
-                help_text += f"{examples_text}\n\n"
-                help_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n\n"
-
-                help_text += "💬 Введите тикеры для создания портфеля:"
-                
-                await self._send_message_safe(update, help_text)
-                
-                # Set flag to wait for portfolio input
-                self.logger.info(f"Setting waiting_for_portfolio=True for user {user_id}")
-                self._update_user_context(user_id, waiting_for_portfolio=True)
-                
-                # Verify the flag was set
-                updated_context = self._get_user_context(user_id)
-                self.logger.info(f"Updated context waiting_for_portfolio: {updated_context.get('waiting_for_portfolio', False)}")
+                # Use unified portfolio creation method
+                await self._create_portfolio_from_context(update, context, [])
                 return
 
             # Parse currency and period parameters from command arguments
@@ -7434,7 +7408,7 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при построении эффективной границы: {str(e)}")
 
     async def _handle_compare_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
-        """Handle portfolio button for compare command - add compared assets to portfolio"""
+        """Handle portfolio button for compare command - call unified portfolio creation method"""
         try:
             # Remove buttons from the old message
             try:
@@ -7474,42 +7448,73 @@ class ShansAi:
             # If we have both portfolios and regular assets, only offer regular assets
             if portfolio_symbols and regular_assets:
                 symbols_to_use = regular_assets
-                portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
-                portfolio_text += f"Активы для добавления: `{' '.join(symbols_to_use)}`\n\n"
             else:
                 # Use all symbols if no mixed context
                 symbols_to_use = symbols
-                portfolio_text = f"💼 **Добавить активы в портфель**\n\n"
-                portfolio_text += f"Активы для добавления: `{' '.join(symbols_to_use)}`\n\n"
             
-            # Set user context to wait for portfolio weights input
-            self._update_user_context(user_id, 
-                waiting_for_portfolio_weights=True,
-                portfolio_base_symbols=symbols_to_use
-            )
-            
-            portfolio_text += "**Примеры:**\n"
-            if len(symbols_to_use) >= 2:
-                portfolio_text += f"• `{symbols_to_use[0]}:0.6 {symbols_to_use[1]}:0.4`\n"
-            if len(symbols_to_use) >= 3:
-                portfolio_text += f"• `{symbols_to_use[0]}:0.5 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2`\n"
-            if len(symbols_to_use) >= 4:
-                portfolio_text += f"• `{symbols_to_use[0]}:0.4 {symbols_to_use[1]}:0.3 {symbols_to_use[2]}:0.2 {symbols_to_use[3]}:0.1`\n"
-            if len(symbols_to_use) >= 5:
-                portfolio_text += f"• `{symbols_to_use[0]}:0.3 {symbols_to_use[1]}:0.25 {symbols_to_use[2]}:0.2 {symbols_to_use[3]}:0.15 {symbols_to_use[4]}:0.1`\n"
-            if len(symbols_to_use) >= 6:
-                portfolio_text += f"• `{symbols_to_use[0]}:0.25 {symbols_to_use[1]}:0.2 {symbols_to_use[2]}:0.15 {symbols_to_use[3]}:0.15 {symbols_to_use[4]}:0.15 {symbols_to_use[5]}:0.1`\n"
-            portfolio_text += "\n"
-            
-            portfolio_text += "💡 Сумма долей должна равняться 1.0 (100%)\n"
-            portfolio_text += "💡 Можно добавить дополнительные активы к сравниваемым\n\n"
-            portfolio_text += "💬 Введите тикеры для включения в состав портфеля:"
-            
-            await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
+            # Call unified portfolio creation method with context data
+            await self._create_portfolio_from_context(update, context, symbols_to_use)
             
         except Exception as e:
             self.logger.error(f"Error handling compare portfolio button: {e}")
             await self._send_callback_message(update, context, f"❌ Ошибка при подготовке портфеля: {str(e)}", parse_mode='Markdown')
+
+    async def _create_portfolio_from_context(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbols: list):
+        """Unified method for creating portfolio from context data (compare button or portfolio command)"""
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            
+            # Get analyzed tickers from context for examples
+            analyzed_tickers = user_context.get('analyzed_tickers', [])
+            
+            # Create portfolio text with context-specific information
+            portfolio_text = f"💼 **Создание портфеля**\n\n"
+            
+            if symbols:
+                portfolio_text += f"Активы для добавления: `{' '.join(symbols)}`\n\n"
+            
+            # Get random examples for user using context tickers if available
+            examples = self.examples_service.get_portfolio_examples(3, analyzed_tickers)
+            examples_text = "\n".join([f"• {example}" for example in examples])
+            
+            portfolio_text += "*Примеры команд:*\n"
+            portfolio_text += f"{examples_text}\n\n"
+            
+            # Add specific examples based on provided symbols
+            if symbols:
+                portfolio_text += "*Примеры с вашими активами:*\n"
+                if len(symbols) >= 2:
+                    portfolio_text += f"• `{symbols[0]}:0.6 {symbols[1]}:0.4`\n"
+                if len(symbols) >= 3:
+                    portfolio_text += f"• `{symbols[0]}:0.5 {symbols[1]}:0.3 {symbols[2]}:0.2`\n"
+                if len(symbols) >= 4:
+                    portfolio_text += f"• `{symbols[0]}:0.4 {symbols[1]}:0.3 {symbols[2]}:0.2 {symbols[3]}:0.1`\n"
+                if len(symbols) >= 5:
+                    portfolio_text += f"• `{symbols[0]}:0.3 {symbols[1]}:0.25 {symbols[2]}:0.2 {symbols[3]}:0.15 {symbols[4]}:0.1`\n"
+                portfolio_text += "\n"
+            
+            portfolio_text += "💡 Доли должны суммироваться в 1.0 (100%), максимум 10 активов в портфеле\n"
+            portfolio_text += "💡 Можно добавить дополнительные активы к предложенным\n\n"
+            portfolio_text += "💬 Введите тикеры для создания портфеля:"
+            
+            # Send message (different methods for callback vs direct command)
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
+            else:
+                await self._send_message_safe(update, portfolio_text)
+            
+            # Set flag to wait for portfolio input
+            self.logger.info(f"Setting waiting_for_portfolio=True for user {user_id}")
+            self._update_user_context(user_id, waiting_for_portfolio=True)
+            
+        except Exception as e:
+            self.logger.error(f"Error in unified portfolio creation: {e}")
+            error_msg = f"❌ Ошибка при подготовке портфеля: {str(e)}"
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await self._send_callback_message(update, context, error_msg, parse_mode='Markdown')
+            else:
+                await self._send_message_safe(update, error_msg)
 
     async def _handle_data_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle data analysis button click for comparison charts"""
@@ -12155,7 +12160,7 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при подготовке сравнения: {str(e)}")
 
     async def _handle_info_portfolio_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
-        """Handle portfolio button for info command"""
+        """Handle portfolio button for info command - call unified portfolio creation method"""
         try:
             # Remove buttons from the old message
             try:
@@ -12163,22 +12168,8 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not remove buttons from old message: {e}")
             
-            # Set user context to wait for portfolio input
-            user_id = update.effective_user.id
-            self._update_user_context(user_id, 
-                waiting_for_portfolio=True,
-                portfolio_base_symbol=symbol
-            )
-            
-            portfolio_text = f"💼 **Добавить {symbol} в портфель**\n\n"
-            portfolio_text += f"Введите состав портфеля, включая {symbol}.\n\n"
-            portfolio_text += "**Примеры команд:**\n"
-            portfolio_text += f"• `{symbol}:0.6 QQQ.US:0.4`\n"
-            portfolio_text += f"• `{symbol}:0.5 BND.US:0.3 GC.COMM:0.2`\n"
-            portfolio_text += f"• `{symbol}:0.7 VTI.US:0.3`\n\n"
-            portfolio_text += f"Или введите любой другой состав портфеля с {symbol}"
-            
-            await self._send_callback_message(update, context, portfolio_text, parse_mode='Markdown')
+            # Call unified portfolio creation method with the single symbol
+            await self._create_portfolio_from_context(update, context, [symbol])
             
         except Exception as e:
             self.logger.error(f"Error handling info portfolio button: {e}")
