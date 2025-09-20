@@ -2486,8 +2486,8 @@ class ShansAi:
             end_idx = min(start_idx + symbols_per_page, total_symbols)
             
             # Navigation info instead of first symbols
-            response = f"📊 **{namespace}** - Всего символов: {total_symbols:,}\n\n"
-            response += f"📋 **Навигация:** Показаны символы {start_idx + 1}-{end_idx} из {total_symbols}\n"
+            response = f"📊 **{namespace}** - Всего тикеров: {total_symbols:,}\n\n"
+            response += f"📋 Показаны символы {start_idx + 1}-{end_idx} из {total_symbols}\n"
             response += f"📄 Страница {current_page + 1} из {total_pages}\n\n"
             
             # Get symbols for current page
@@ -2516,7 +2516,9 @@ class ShansAi:
             else:
                 # If no symbols found, add a message
                 response += "❌ Символы не найдены для данной страницы\n"
-            
+
+            response += "\n💡 Используйте /search для поиска активов"
+
             # Create reply keyboard for navigation
             reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
             
@@ -17306,7 +17308,7 @@ class ShansAi:
 
 if __name__ == "__main__":
     try:
-        logger.info(f"Starting Okama Finance Bot with Python {sys.version}")
+        logger.info(f"Starting Finance Bot with Python {sys.version}")
         logger.info(f"Python version info: {sys.version_info}")
         
         # Perform health check
