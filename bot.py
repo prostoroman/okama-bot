@@ -2799,9 +2799,6 @@ class ShansAi:
                 reply_markup = InlineKeyboardMarkup(keyboard)
             else:
                 # For direct command calls, use reply keyboard
-                # First, manage keyboard switching
-                await self._manage_reply_keyboard(update, context, "list")
-                
                 reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_count)
                 
                 # Save current namespace context for reply keyboard handling
@@ -2950,9 +2947,6 @@ class ShansAi:
                 reply_markup = InlineKeyboardMarkup(keyboard)
             else:
                 # For direct command calls, use reply keyboard
-                # First, manage keyboard switching
-                await self._manage_reply_keyboard(update, context, "list")
-                
                 reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
                 
                 # Save current namespace context for reply keyboard handling
@@ -2997,7 +2991,7 @@ class ShansAi:
         
         if not context.args:
             # Get random examples for user
-            examples = self.get_info_examples(3)
+            examples = self.get_info_examples(5)
             examples_text = "\n".join([f"• {example}" for example in examples])
             
             # Set flag that user is waiting for info input and clear portfolio flags
