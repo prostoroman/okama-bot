@@ -4,7 +4,7 @@
 """
 
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 
 class ExamplesService:
@@ -267,10 +267,11 @@ class ExamplesService:
         else:
             selected_tickers = []
         
-        # Collect remaining tickers from all exchanges
+        # Collect remaining tickers from all exchanges (excluding Chinese and Hong Kong)
+        excluded_exchanges = {'MOEX', 'SSE', 'SZSE', 'HKEX'}
         remaining_tickers = []
         for exchange, tickers in self.top_tickers.items():
-            if exchange != 'MOEX':  # Skip MOEX as we already selected one
+            if exchange not in excluded_exchanges:  # Skip MOEX, Chinese and Hong Kong exchanges
                 remaining_tickers.extend(tickers)
         
         # Select remaining random tickers
@@ -287,95 +288,199 @@ class ExamplesService:
         
         return examples
 
-    def get_compare_examples(self, count: int = 3) -> List[str]:
+    def get_compare_examples(self, count: int = 3, context_tickers: List[str] = None) -> List[str]:
         """Get random examples for /compare command with ready commands from same exchange"""
         examples = []
         
-        # Always start with MOEX example
-        moex_tickers = self.top_tickers.get('MOEX', [])
-        if len(moex_tickers) >= 2:
-            selected_tickers = random.sample(moex_tickers, 2)
-            ticker1, company1 = selected_tickers[0]
-            ticker2, company2 = selected_tickers[1]
-            
-            # Create MOEX command example
-            command = f"`{ticker1} {ticker2}`"
-            description = f"сравнить {company1} и {company2}"
-            examples.append(f"{command} - {description}")
-        
-        # Get remaining random exchanges (excluding MOEX)
-        remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex != 'MOEX']
-        remaining_count = min(count - len(examples), len(remaining_exchanges))
-        
-        if remaining_count > 0:
-            selected_exchanges = random.sample(remaining_exchanges, remaining_count)
-            
-            for exchange in selected_exchanges:
-                # Get 2 random tickers from the same exchange
-                exchange_tickers = self.top_tickers[exchange]
-                if len(exchange_tickers) >= 2:
-                    selected_tickers = random.sample(exchange_tickers, 2)
-                    ticker1, company1 = selected_tickers[0]
-                    ticker2, company2 = selected_tickers[1]
+        # Если есть активы в контексте, используем их для формирования примеров
+        if context_tickers:
+            exchange = self._get_exchange_from_context_tickers(context_tickers)
+            if exchange:
+                # Получаем тикеры с той же биржи, исключая уже использованные
+                available_tickers = self._get_tickers_from_exchange(exchange, context_tickers)
+                
+                # Если есть достаточно тикеров для сравнения
+                if len(available_tickers) >= 2:
+                    # Берем один из контекстных тикеров и один новый
+                    context_ticker = random.choice(context_tickers)
+                    new_ticker, new_company = random.choice(available_tickers)
                     
-                    # Create command example
-                    command = f"`{ticker1} {ticker2}`"
-                    description = f"сравнить {company1} и {company2}"
-                    examples.append(f"{command} - {description}")
+                    # Находим название компании для контекстного тикера
+                    context_company = None
+                    for ticker, company in self.top_tickers.get(exchange, []):
+                        if ticker == context_ticker:
+                            context_company = company
+                            break
+                    
+                    if context_company:
+                        command = f"`{context_ticker} {new_ticker}`"
+                        description = f"сравнить {context_company} и {new_company}"
+                        examples.append(f"{command} - {description}")
+                
+                # Добавляем еще примеры с той же биржи если нужно
+                if len(examples) < count and len(available_tickers) >= 2:
+                    remaining_count = count - len(examples)
+                    for _ in range(min(remaining_count, len(available_tickers) // 2)):
+                        selected_tickers = random.sample(available_tickers, 2)
+                        ticker1, company1 = selected_tickers[0]
+                        ticker2, company2 = selected_tickers[1]
+                        
+                        command = f"`{ticker1} {ticker2}`"
+                        description = f"сравнить {company1} и {company2}"
+                        examples.append(f"{command} - {description}")
         
-        return examples
+        # Если примеров недостаточно, добавляем стандартные примеры
+        if len(examples) < count:
+            remaining_count = count - len(examples)
+            
+            # Always start with MOEX example if not already present
+            moex_tickers = self.top_tickers.get('MOEX', [])
+            if len(moex_tickers) >= 2 and not any('MOEX' in ex for ex in examples):
+                selected_tickers = random.sample(moex_tickers, 2)
+                ticker1, company1 = selected_tickers[0]
+                ticker2, company2 = selected_tickers[1]
+                
+                command = f"`{ticker1} {ticker2}`"
+                description = f"сравнить {company1} и {company2}"
+                examples.append(f"{command} - {description}")
+                remaining_count -= 1
+            
+            # Get remaining random exchanges (excluding MOEX, Chinese and Hong Kong exchanges)
+            excluded_exchanges = {'MOEX', 'SSE', 'SZSE', 'HKEX'}
+            remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex not in excluded_exchanges]
+            
+            if remaining_count > 0:
+                selected_exchanges = random.sample(remaining_exchanges, min(remaining_count, len(remaining_exchanges)))
+                
+                for exchange in selected_exchanges:
+                    exchange_tickers = self.top_tickers[exchange]
+                    if len(exchange_tickers) >= 2:
+                        selected_tickers = random.sample(exchange_tickers, 2)
+                        ticker1, company1 = selected_tickers[0]
+                        ticker2, company2 = selected_tickers[1]
+                        
+                        command = f"`{ticker1} {ticker2}`"
+                        description = f"сравнить {company1} и {company2}"
+                        examples.append(f"{command} - {description}")
+        
+        return examples[:count]
 
-    def get_portfolio_examples(self, count: int = 3) -> List[str]:
+    def get_portfolio_examples(self, count: int = 3, context_tickers: List[str] = None) -> List[str]:
         """Get random examples for /portfolio command with weights that sum to 1.0"""
         examples = []
         
-        # Always start with MOEX example
-        moex_tickers = self.top_tickers.get('MOEX', [])
-        if len(moex_tickers) >= 3:
-            selected_tickers = random.sample(moex_tickers, 3)
-            
-            # Generate weights that sum to 1.0
-            weights = self._generate_portfolio_weights(3)
-            
-            # Create MOEX command example
-            command_parts = []
-            companies = []
-            for i, (ticker, company) in enumerate(selected_tickers):
-                command_parts.append(f"{ticker}:{weights[i]:.1f}")
-                companies.append(company)
-            
-            command = f"`{' '.join(command_parts)}`"
-            description = f"создать портфель {', '.join(companies)}"
-            examples.append(f"{command} - {description}")
-        
-        # Get remaining random exchanges (excluding MOEX)
-        remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex != 'MOEX']
-        remaining_count = min(count - len(examples), len(remaining_exchanges))
-        
-        if remaining_count > 0:
-            selected_exchanges = random.sample(remaining_exchanges, remaining_count)
-            
-            for exchange in selected_exchanges:
-                # Get 3 random tickers from the same exchange
-                exchange_tickers = self.top_tickers[exchange]
-                if len(exchange_tickers) >= 3:
-                    selected_tickers = random.sample(exchange_tickers, 3)
+        # Если есть активы в контексте, используем их для формирования примеров
+        if context_tickers:
+            exchange = self._get_exchange_from_context_tickers(context_tickers)
+            if exchange:
+                # Получаем тикеры с той же биржи, исключая уже использованные
+                available_tickers = self._get_tickers_from_exchange(exchange, context_tickers)
+                
+                # Если есть достаточно тикеров для портфеля (минимум 3)
+                if len(available_tickers) >= 2:  # Нужно минимум 2 дополнительных к контекстным
+                    # Берем один из контекстных тикеров и добавляем еще 2-3 новых
+                    context_ticker = random.choice(context_tickers)
                     
-                    # Generate weights that sum to 1.0
-                    weights = self._generate_portfolio_weights(3)
+                    # Находим название компании для контекстного тикера
+                    context_company = None
+                    for ticker, company in self.top_tickers.get(exchange, []):
+                        if ticker == context_ticker:
+                            context_company = company
+                            break
                     
-                    # Create command example
-                    command_parts = []
-                    companies = []
-                    for i, (ticker, company) in enumerate(selected_tickers):
-                        command_parts.append(f"{ticker}:{weights[i]:.1f}")
-                        companies.append(company)
-                    
-                    command = f"`{' '.join(command_parts)}`"
-                    description = f"создать портфель {', '.join(companies)}"
-                    examples.append(f"{command} - {description}")
+                    if context_company:
+                        # Выбираем еще 2 тикера для портфеля
+                        additional_tickers = random.sample(available_tickers, min(2, len(available_tickers)))
+                        
+                        # Создаем список всех тикеров для портфеля
+                        portfolio_tickers = [(context_ticker, context_company)] + additional_tickers
+                        
+                        # Генерируем веса
+                        weights = self._generate_portfolio_weights(len(portfolio_tickers))
+                        
+                        # Создаем команду
+                        command_parts = []
+                        companies = []
+                        for i, (ticker, company) in enumerate(portfolio_tickers):
+                            command_parts.append(f"{ticker}:{weights[i]:.1f}")
+                            companies.append(company)
+                        
+                        command = f"`{' '.join(command_parts)}`"
+                        description = f"создать портфель {', '.join(companies)}"
+                        examples.append(f"{command} - {description}")
+                
+                # Добавляем еще примеры с той же биржи если нужно
+                if len(examples) < count and len(available_tickers) >= 3:
+                    remaining_count = count - len(examples)
+                    for _ in range(min(remaining_count, len(available_tickers) // 3)):
+                        selected_tickers = random.sample(available_tickers, 3)
+                        
+                        # Generate weights that sum to 1.0
+                        weights = self._generate_portfolio_weights(3)
+                        
+                        # Create command example
+                        command_parts = []
+                        companies = []
+                        for i, (ticker, company) in enumerate(selected_tickers):
+                            command_parts.append(f"{ticker}:{weights[i]:.1f}")
+                            companies.append(company)
+                        
+                        command = f"`{' '.join(command_parts)}`"
+                        description = f"создать портфель {', '.join(companies)}"
+                        examples.append(f"{command} - {description}")
         
-        return examples
+        # Если примеров недостаточно, добавляем стандартные примеры
+        if len(examples) < count:
+            remaining_count = count - len(examples)
+            
+            # Always start with MOEX example if not already present
+            moex_tickers = self.top_tickers.get('MOEX', [])
+            if len(moex_tickers) >= 3 and not any('MOEX' in ex for ex in examples):
+                selected_tickers = random.sample(moex_tickers, 3)
+                
+                # Generate weights that sum to 1.0
+                weights = self._generate_portfolio_weights(3)
+                
+                # Create MOEX command example
+                command_parts = []
+                companies = []
+                for i, (ticker, company) in enumerate(selected_tickers):
+                    command_parts.append(f"{ticker}:{weights[i]:.1f}")
+                    companies.append(company)
+                
+                command = f"`{' '.join(command_parts)}`"
+                description = f"создать портфель {', '.join(companies)}"
+                examples.append(f"{command} - {description}")
+                remaining_count -= 1
+            
+            # Get remaining random exchanges (excluding MOEX, Chinese and Hong Kong exchanges)
+            excluded_exchanges = {'MOEX', 'SSE', 'SZSE', 'HKEX'}
+            remaining_exchanges = [ex for ex in self.top_tickers.keys() if ex not in excluded_exchanges]
+            
+            if remaining_count > 0:
+                selected_exchanges = random.sample(remaining_exchanges, min(remaining_count, len(remaining_exchanges)))
+                
+                for exchange in selected_exchanges:
+                    # Get 3 random tickers from the same exchange
+                    exchange_tickers = self.top_tickers[exchange]
+                    if len(exchange_tickers) >= 3:
+                        selected_tickers = random.sample(exchange_tickers, 3)
+                        
+                        # Generate weights that sum to 1.0
+                        weights = self._generate_portfolio_weights(3)
+                        
+                        # Create command example
+                        command_parts = []
+                        companies = []
+                        for i, (ticker, company) in enumerate(selected_tickers):
+                            command_parts.append(f"{ticker}:{weights[i]:.1f}")
+                            companies.append(company)
+                        
+                        command = f"`{' '.join(command_parts)}`"
+                        description = f"создать портфель {', '.join(companies)}"
+                        examples.append(f"{command} - {description}")
+        
+        return examples[:count]
 
     def _generate_portfolio_weights(self, num_assets: int) -> List[float]:
         """Generate random weights that sum to 1.0"""
@@ -395,3 +500,51 @@ class ExamplesService:
             rounded_weights[-1] = round(1.0 - sum(rounded_weights[:-1]), 1)
         
         return rounded_weights
+
+    def _get_exchange_from_ticker(self, ticker: str) -> Optional[str]:
+        """Определить биржу по тикеру"""
+        if '.' not in ticker:
+            return None
+        
+        exchange = ticker.split('.')[-1]
+        
+        # Маппинг бирж
+        exchange_mapping = {
+            'US': 'US',
+            'LSE': 'LSE', 
+            'HKEX': 'HKEX',
+            'MOEX': 'MOEX',
+            'SSE': 'SSE',
+            'SZSE': 'SZSE',
+            'XETR': 'XETR',
+            'XFRA': 'XFRA',
+            'XSTU': 'XSTU',
+            'XAMS': 'XAMS',
+            'XTAE': 'XTAE'
+        }
+        
+        return exchange_mapping.get(exchange)
+
+    def _get_tickers_from_exchange(self, exchange: str, exclude_tickers: List[str] = None) -> List[Tuple[str, str]]:
+        """Получить тикеры с указанной биржи, исключая переданные тикеры"""
+        if exclude_tickers is None:
+            exclude_tickers = []
+            
+        exchange_tickers = self.top_tickers.get(exchange, [])
+        
+        # Исключаем переданные тикеры
+        filtered_tickers = [
+            (ticker, company) for ticker, company in exchange_tickers 
+            if ticker not in exclude_tickers
+        ]
+        
+        return filtered_tickers
+
+    def _get_exchange_from_context_tickers(self, context_tickers: List[str]) -> Optional[str]:
+        """Определить биржу из списка тикеров в контексте"""
+        if not context_tickers:
+            return None
+            
+        # Берем первый тикер для определения биржи
+        first_ticker = context_tickers[0]
+        return self._get_exchange_from_ticker(first_ticker)

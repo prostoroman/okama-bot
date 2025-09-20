@@ -1909,6 +1909,11 @@ class ShansAi:
                 self.logger.error("Cannot send message: update is None")
                 return
             
+            # Проверяем, что text не пустой
+            if not text or text.strip() == "":
+                self.logger.error("Cannot send message: text is empty")
+                return
+            
             # Если это callback query, используем специальную функцию
             if hasattr(update, 'callback_query') and update.callback_query is not None:
                 self.logger.info("_send_message_safe: Redirecting to _send_callback_message for callback query")
@@ -2199,6 +2204,7 @@ class ShansAi:
             [InlineKeyboardButton("🔍 Анализ", callback_data="start_info")],
             [InlineKeyboardButton("⚖️ Сравнение", callback_data="start_compare")],
             [InlineKeyboardButton("💼 Портфель", callback_data="start_portfolio")],
+            [InlineKeyboardButton("📊 Все данные", callback_data="start_list")],
             [InlineKeyboardButton("📚 Полная справка", callback_data="start_help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2383,54 +2389,54 @@ class ShansAi:
             if is_callback:
                 # For callback messages, use inline keyboard (original behavior)
                 keyboard = []
+            
+            # Navigation buttons (only if more than one page)
+            if total_pages > 1:
+                nav_buttons = []
                 
-                # Navigation buttons (only if more than one page)
-                if total_pages > 1:
-                    nav_buttons = []
-                    
-                    # Previous button
-                    if current_page > 0:
-                        nav_buttons.append(InlineKeyboardButton(
-                            "⬅️ Назад", 
-                            callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
-                        ))
-                    
-                    # Page indicator
+                # Previous button
+                if current_page > 0:
                     nav_buttons.append(InlineKeyboardButton(
-                        f"{current_page + 1}/{total_pages}", 
-                        callback_data="noop"
+                        "⬅️ Назад", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
                     ))
-                    
-                    # Next button
-                    if current_page < total_pages - 1:
-                        nav_buttons.append(InlineKeyboardButton(
-                            "➡️ Вперед", 
-                            callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
-                        ))
-                    
-                    keyboard.append(nav_buttons)
                 
-                # Excel export button
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"📊 Полный список в Excel ({total_count:,})", 
-                        callback_data=f"excel_namespace_{namespace}"
-                    )
-                ])
+                # Page indicator
+                nav_buttons.append(InlineKeyboardButton(
+                    f"{current_page + 1}/{total_pages}", 
+                    callback_data="noop"
+                ))
                 
-                # Home button after Excel
-                keyboard.append([
-                    InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
-                ])
+                # Next button
+                if current_page < total_pages - 1:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "➡️ Вперед", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
+                    ))
                 
-                # Analysis, Compare, Portfolio buttons
-                keyboard.append([
-                    InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
-                    InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
-                    InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
-                ])
-                
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                keyboard.append(nav_buttons)
+            
+            # Excel export button
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📊 Полный список в Excel ({total_count:,})", 
+                    callback_data=f"excel_namespace_{namespace}"
+                )
+            ])
+            
+            # Home button after Excel
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+            ])
+            
+            # Analysis, Compare, Portfolio buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
+                InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
             else:
                 # For direct command calls, use reply keyboard
                 reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_count)
@@ -2526,59 +2532,62 @@ class ShansAi:
             # Add symbol list to response
             if symbol_list:
                 response += "\n".join(symbol_list) + "\n"
+            else:
+                # If no symbols found, add a message
+                response += "❌ Символы не найдены для данной страницы\n"
             
             # Create appropriate keyboard based on context
             if is_callback:
                 # For callback messages, use inline keyboard (original behavior)
                 keyboard = []
+            
+            # Navigation buttons (only if more than one page)
+            if total_pages > 1:
+                nav_buttons = []
                 
-                # Navigation buttons (only if more than one page)
-                if total_pages > 1:
-                    nav_buttons = []
-                    
-                    # Previous button
-                    if current_page > 0:
-                        nav_buttons.append(InlineKeyboardButton(
-                            "⬅️ Назад", 
-                            callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
-                        ))
-                    
-                    # Page indicator
+                # Previous button
+                if current_page > 0:
                     nav_buttons.append(InlineKeyboardButton(
-                        f"{current_page + 1}/{total_pages}", 
-                        callback_data="noop"
+                        "⬅️ Назад", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page - 1}"
                     ))
-                    
-                    # Next button
-                    if current_page < total_pages - 1:
-                        nav_buttons.append(InlineKeyboardButton(
-                            "➡️ Вперед", 
-                            callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
-                        ))
-                    
-                    keyboard.append(nav_buttons)
                 
-                # Excel export button
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"📊 Полный список в Excel ({total_symbols:,})", 
-                        callback_data=f"excel_namespace_{namespace}"
-                    )
-                ])
+                # Page indicator
+                nav_buttons.append(InlineKeyboardButton(
+                    f"{current_page + 1}/{total_pages}", 
+                    callback_data="noop"
+                ))
                 
-                # Home button after Excel
-                keyboard.append([
-                    InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
-                ])
+                # Next button
+                if current_page < total_pages - 1:
+                    nav_buttons.append(InlineKeyboardButton(
+                        "➡️ Вперед", 
+                        callback_data=f"nav_namespace_{namespace}_{current_page + 1}"
+                    ))
                 
-                # Analysis, Compare, Portfolio buttons
-                keyboard.append([
-                    InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
-                    InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
-                    InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
-                ])
-                
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                keyboard.append(nav_buttons)
+            
+            # Excel export button
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📊 Полный список в Excel ({total_symbols:,})", 
+                    callback_data=f"excel_namespace_{namespace}"
+                )
+            ])
+            
+            # Home button after Excel
+            keyboard.append([
+                InlineKeyboardButton("🏠 Домой", callback_data="namespace_home")
+            ])
+            
+            # Analysis, Compare, Portfolio buttons
+            keyboard.append([
+                InlineKeyboardButton("🔍 Анализ", callback_data="namespace_analysis"),
+                InlineKeyboardButton("⚖️ Сравнить", callback_data="namespace_compare"),
+                InlineKeyboardButton("💼 В портфель", callback_data="namespace_portfolio")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
             else:
                 # For direct command calls, use reply keyboard
                 reply_markup = self._create_list_namespace_reply_keyboard(namespace, current_page, total_pages, total_symbols)
@@ -2591,6 +2600,7 @@ class ShansAi:
                 )
             
             # Отправляем сообщение с таблицей и кнопками
+            self.logger.info(f"About to send message. Response length: {len(response)}, Is callback: {is_callback}")
             if is_callback:
                 # Для callback сообщений редактируем существующее сообщение
                 await context.bot.edit_message_text(
@@ -3953,11 +3963,14 @@ class ShansAi:
                 # Clear any existing compare context when starting fresh
                 self._update_user_context(user_id, compare_first_symbol=None, waiting_for_compare=False)
                 
-                # Get random examples for user
-                examples = self.examples_service.get_compare_examples(3)
+                # Get analyzed tickers from context for examples
+                analyzed_tickers = user_context.get('analyzed_tickers', [])
+                
+                # Get random examples for user using context tickers if available
+                examples = self.examples_service.get_compare_examples(3, analyzed_tickers)
                 examples_text = "\n".join([f"{example}" for example in examples])
                 
-                help_text = "⚖️ Сравнение\n\n"
+                help_text = "⚖️ *Сравнение*\n\n"
                 help_text += f"*Примеры:*\n{examples_text}\n\n"
 
                 # Add saved portfolios information
@@ -3984,15 +3997,6 @@ class ShansAi:
                         escaped_symbol = portfolio_symbol.replace('_', '\\_')
                         help_text += f"• `{escaped_symbol}` ({portfolio_str})\n"
                     
-                # Add recently analyzed tickers
-                analyzed_tickers = user_context.get('analyzed_tickers', [])
-                if analyzed_tickers:
-                    recent_tickers = analyzed_tickers[:5]  # Show last 5 tickers
-                    help_text += "\n🕒 *История:*\n"
-                    for ticker in recent_tickers:
-                        escaped_ticker = ticker.replace('_', '\\_')
-                        help_text += f"• `{escaped_ticker}`\n"
-                    help_text += "\n"
                 
                 # Add usage tips
                 help_text += "💡 Можно сравнивать портфели и обычные активы\n"
@@ -4710,26 +4714,17 @@ class ShansAi:
         
         try:
             if not context.args:
-
-                
                 # Get user context for recently analyzed tickers
                 user_id = update.effective_user.id
                 user_context = self._get_user_context(user_id)
                 
                 help_text = "💼 *Создание портфеля*\n\n"
                 
-                # Add recently analyzed tickers
+                # Get analyzed tickers from context for examples
                 analyzed_tickers = user_context.get('analyzed_tickers', [])
-                if analyzed_tickers:
-                    recent_tickers = analyzed_tickers[:5]  # Show last 5 tickers
-                    help_text += "🕒 *Последние анализируемые активы:*\n"
-                    for ticker in recent_tickers:
-                        escaped_ticker = ticker.replace('_', '\\_')
-                        help_text += f"• `{escaped_ticker}`\n"
-                    help_text += "\n"
-
-                # Get random examples for user
-                examples = self.examples_service.get_portfolio_examples(3)
+                
+                # Get random examples for user using context tickers if available
+                examples = self.examples_service.get_portfolio_examples(3, analyzed_tickers)
                 examples_text = "\n".join([f"• {example}" for example in examples])
                 
                 help_text += "*Примеры команд:*\n"
@@ -4864,6 +4859,22 @@ class ShansAi:
             
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
+            
+            # Проверяем на китайские и гонконгские символы
+            chinese_hk_symbols = [symbol for symbol in symbols if self._is_chinese_or_hongkong_symbol(symbol)]
+            if chinese_hk_symbols:
+                await self._send_message_safe(update, 
+                    "🚧 **Портфельный анализ для китайских и гонконгских активов находится в разработке**\n\n"
+                    f"Обнаружены неподдерживаемые активы: {', '.join(chinese_hk_symbols)}\n\n"
+                    "К сожалению, создание портфелей с китайскими и гонконгскими активами "
+                    "пока не поддерживается. Эта функциональность находится в разработке.\n\n"
+                    "💡 Попробуйте использовать активы с других бирж:\n"
+                    "• `SPY.US` - американские ETF\n"
+                    "• `SBER.MOEX` - российские акции\n"
+                    "• `VTI.US` - глобальные ETF\n\n"
+                    "🔄 Для создания нового портфеля используйте команду `/portfolio`"
+                )
+                return
             
             await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
             
@@ -6978,6 +6989,11 @@ class ShansAi:
                     self.logger.info("Executing portfolio command from callback")
                     context.args = []
                     await self.portfolio_command(update, context)
+                elif callback_data == "start_list":
+                    # Execute list command without parameters
+                    self.logger.info("Executing list command from callback")
+                    context.args = []
+                    await self.namespace_command(update, context)
                 elif callback_data.startswith("start_info_"):
                     # Extract symbol and execute info command
                     symbol = callback_data.replace("start_info_", "")
@@ -9918,7 +9934,7 @@ class ShansAi:
     def _create_compare_command_keyboard(self, symbols: list, currency: str, update: Update = None, specified_period: str = None) -> InlineKeyboardMarkup:
         """Create keyboard for compare command button responses"""
         try:
-            keyboard = []
+                keyboard = []
             
             # Remove inline keyboards for comparison analysis buttons as requested
             # Only keep AI analysis button if available
@@ -10022,24 +10038,24 @@ class ShansAi:
     def _create_list_namespace_reply_keyboard(self, namespace: str, current_page: int, total_pages: int, total_symbols: int) -> ReplyKeyboardMarkup:
         """Create Reply Keyboard for /list <код> command with navigation and action buttons"""
         try:
-            keyboard = []
+                                keyboard = []
             
-            # Navigation buttons (only if more than one page)
-            if total_pages > 1:
-                nav_buttons = []
+                # Navigation buttons (only if more than one page)
+                if total_pages > 1:
+                    nav_buttons = []
                 
-                # Previous button
-                if current_page > 0:
+                    # Previous button
+                    if current_page > 0:
                     nav_buttons.append(KeyboardButton("⬅️ Назад"))
                 
-                # Page indicator
+                    # Page indicator
                 nav_buttons.append(KeyboardButton(f"{current_page + 1}/{total_pages}"))
                 
-                # Next button
-                if current_page < total_pages - 1:
+                    # Next button
+                    if current_page < total_pages - 1:
                     nav_buttons.append(KeyboardButton("➡️ Вперед"))
                 
-                keyboard.append(nav_buttons)
+                    keyboard.append(nav_buttons)
             
             # Action buttons
             keyboard.append([
@@ -10063,7 +10079,7 @@ class ShansAi:
     def _create_namespace_reply_keyboard(self) -> ReplyKeyboardMarkup:
         """Create Reply Keyboard for /list command with namespace buttons"""
         try:
-            keyboard = []
+                                keyboard = []
             
             # Основные биржи
             keyboard.append([
@@ -10390,7 +10406,7 @@ class ShansAi:
             
             # Handle navigation buttons
             if text == "⬅️ Назад":
-                if current_page > 0:
+                    if current_page > 0:
                     new_page = current_page - 1
                     self._update_user_context(user_id, current_namespace_page=new_page)
                     # Check if it's a Chinese exchange
@@ -10421,7 +10437,7 @@ class ShansAi:
                     symbols_per_page = 20
                     total_pages = (total_count + symbols_per_page - 1) // symbols_per_page
                     
-                    if current_page < total_pages - 1:
+                        if current_page < total_pages - 1:
                         new_page = current_page + 1
                         self._update_user_context(user_id, current_namespace_page=new_page)
                         if current_namespace in chinese_exchanges:
@@ -17021,7 +17037,7 @@ class ShansAi:
             
             
             # Создаем кнопки для основных пространств имен
-            keyboard = []
+                keyboard = []
             
             # Основные биржи
             keyboard.append([
