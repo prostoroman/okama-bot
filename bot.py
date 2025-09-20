@@ -2103,7 +2103,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"💰 График дивидендной доходности для {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
+                caption=self._truncate_caption(f"Сравнение дивидендной доходности {len(symbols)} активов\n\nПоказывает историю дивидендных выплат и доходность")
             )
             
         except Exception as e:
@@ -5103,6 +5103,9 @@ class ShansAi:
 
     async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /test command - запускает тесты и выводит результат"""
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
+        
         try:
             # Отправляем сообщение о начале тестирования
             await self._send_message_safe(update, "🧪 Запуск тестов... Пожалуйста, подождите...")
@@ -11033,7 +11036,7 @@ class ShansAi:
             period = user_context.get('current_period', None)
             
             self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}, period: {period}")
-            await self._send_ephemeral_message(update, context, "📉 Создаю график drawdowns...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📉 Создаю график...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -11042,7 +11045,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_ephemeral_message(update, context, "📉 Создаю график drawdowns для смешанного сравнения...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "📉 Создаю график для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList with period support

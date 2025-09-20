@@ -510,16 +510,16 @@ class ChartStyles:
         
         # Create title with portfolio name if provided, otherwise use asset percentages
         if portfolio_name:
-            title = f'Дивидендная доходность портфеля\n{portfolio_name}'
+            title = f'Дивидендная доходность\n{portfolio_name}'
         elif weights:
             asset_with_weights = []
             for i, symbol in enumerate(symbols):
                 symbol_name = symbol.split('.')[0] if '.' in symbol else symbol
                 weight = weights[i] if i < len(weights) else 0.0
                 asset_with_weights.append(f"{symbol_name} ({weight:.1%})")
-            title = f'Дивидендная доходность портфеля\n{", ".join(asset_with_weights)}'
+            title = f'Дивидендная доходность\n{", ".join(asset_with_weights)}'
         else:
-            title = f'Дивидендная доходность портфеля\n{", ".join(symbols)}'
+            title = f'Дивидендная доходность\n{", ".join(symbols)}'
         
         # Убираем подписи осей
         ylabel = ''  # No y-axis label
@@ -552,8 +552,7 @@ class ChartStyles:
                 ax.plot(cleaned_data.index, cleaned_data[column].values * 100,
                        color=color, alpha=self.lines['alpha'], label=column)
         
-        title = f'Просадки активов: {", ".join(symbols)}'
-        ylabel = f'Просадка (%)'
+        title = f'Просадки {", ".join(symbols)}'
         
         # Apply drawdown-specific styling with standard grid colors and date labels above
         self.apply_drawdown_styling(ax, title=title, ylabel=ylabel, grid=True, legend=True, copyright=True, data_source=data_source)
@@ -790,7 +789,7 @@ class ChartStyles:
                    color=color, alpha=self.lines['alpha'], label=column)
         
         # Извлекаем параметры из kwargs
-        title = kwargs.get('title', f'Сравнение активов: {", ".join(symbols)}')
+        title = kwargs.get('title', f'Сравнение {", ".join(symbols)}')
         xlabel = kwargs.get('xlabel', '')
         ylabel = kwargs.get('ylabel', '')  # Скрываем подпись оси Y
         
