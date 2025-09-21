@@ -10008,11 +10008,11 @@ class ShansAi:
             # Split table into lines
             lines = markdown_table.strip().split('\n')
             
-            # Find the separator line (contains |---|)
+            # Find the separator line (contains |---| or |:---|)
             separator_line = None
             separator_index = -1
             for i, line in enumerate(lines):
-                if '|---' in line or '| ---' in line:
+                if '|---' in line or '| ---' in line or '|:---' in line or '| ---:' in line:
                     separator_line = line
                     separator_index = i
                     break
