@@ -10687,8 +10687,8 @@ class ShansAi:
                 current_info_symbol=symbol
             )
             
-            # Try to get chart data
-            chart_data = await self._get_tushare_chart(symbol)
+            # Try to get chart data for the specified period
+            chart_data = await self._get_tushare_chart_for_period(symbol, period)
             
             if chart_data:
                 # Send chart with info text
@@ -10723,8 +10723,8 @@ class ShansAi:
                 current_info_symbol=symbol
             )
             
-            # Get chart data
-            chart_data = await self._get_daily_chart(symbol)
+            # Get chart data for the specified period
+            chart_data = await self._get_chart_for_period(symbol, period)
             
             if chart_data:
                 # Send chart with info text
