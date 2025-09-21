@@ -1,0 +1,31 @@
+# CODEOWNERS file for shans-ai project
+# This file defines who should review changes to specific parts of the codebase
+
+# Global owners - review all changes
+* @prostoroman
+
+# Core bot functionality
+bot.py @prostoroman
+config.py @prostoroman
+services/ @prostoroman
+
+# Configuration files
+config_files/ @prostoroman
+requirements.txt @prostoroman
+
+# Documentation
+docs/ @prostoroman
+README.md @prostoroman
+SECURITY.md @prostoroman
+
+# GitHub workflows and configuration
+.github/ @prostoroman
+
+# Scripts and utilities
+scripts/ @prostoroman
+
+# Tests
+tests/ @prostoroman
+
+# Reports
+reports/ @prostoroman

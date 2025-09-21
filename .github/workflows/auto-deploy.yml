@@ -3,11 +3,16 @@ name: Deploy to Production (Render)
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [ closed ]
   workflow_dispatch:
 
 jobs:
   deploy-prod:
     runs-on: ubuntu-latest
+    # Деплой только если PR был merged (не просто закрыт)
+    if: github.event.pull_request.merged == true || github.event_name == 'push'
     
     steps:
     - name: Checkout code

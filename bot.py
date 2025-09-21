@@ -1257,6 +1257,102 @@ class ShansAi:
         
         return portfolio
 
+    async def _create_portfolio_unified(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                      symbols: list, weights: list, currency: str, 
+                                      specified_period: str = None, portfolio_text_prefix: str = "💼 **Портфель создан успешно!**") -> bool:
+        """Универсальный метод для создания портфеля с весами"""
+        try:
+            user_id = update.effective_user.id
+            
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            
+            # Create portfolio using okama with period support
+            try:
+                if specified_period:
+                    years = int(specified_period[:-1])
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                           first_date=start_date.strftime('%Y-%m-%d'), 
+                                           last_date=end_date.strftime('%Y-%m-%d'))
+                    self.logger.info(f"Created portfolio with period {specified_period}")
+                else:
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                    self.logger.info(f"Created portfolio with maximum available period")
+                
+                # Create portfolio information text
+                portfolio_text = f"{portfolio_text_prefix}\n\n"
+                
+                # Add basic metrics to portfolio text
+                try:
+                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
+                    portfolio_text += metrics_text
+                except Exception as e:
+                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
+                
+                # Generate portfolio symbol
+                user_context = self._get_user_context(user_id)
+                portfolio_count = user_context.get('portfolio_count', 0) + 1
+                portfolio_symbol = f"PF{portfolio_count}"
+                
+                # Add portfolio symbol display
+                portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
+                
+                # Add buttons
+                keyboard = [
+                    [InlineKeyboardButton("💼 Анализ портфеля", callback_data=f"portfolio_analysis_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 График доходности", callback_data=f"portfolio_chart_{portfolio_symbol}"),
+                     InlineKeyboardButton("📋 Метрики риска", callback_data=f"portfolio_risk_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💼 Сохранить портфель", callback_data=f"portfolio_save_{portfolio_symbol}")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
+                
+                # Save portfolio to user context
+                portfolio_attributes = {
+                    'symbols': symbols,
+                    'weights': weights,
+                    'currency': currency,
+                    'created_at': datetime.now().isoformat(),
+                    'description': f"Портфель: {', '.join(symbols)}",
+                    'portfolio_symbol': portfolio_symbol,
+                    'total_weight': sum(weights),
+                    'asset_count': len(symbols),
+                    'period': specified_period
+                }
+                
+                saved_portfolios = user_context.get('saved_portfolios', {})
+                saved_portfolios[portfolio_symbol] = portfolio_attributes
+                
+                self._update_user_context(
+                    user_id,
+                    saved_portfolios=saved_portfolios,
+                    portfolio_count=portfolio_count
+                )
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"Error creating portfolio: {e}")
+                await self._send_message_safe(update, 
+                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
+                    "💡 Возможные причины:\n"
+                    "• Один из символов недоступен\n"
+                    "• Проблемы с данными\n"
+                    "• Неверный формат символа\n\n"
+                    "Проверьте:\n"
+                    "• Правильность написания символов\n"
+                    "• Доступность данных для указанных активов"
+                )
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error in unified portfolio creation: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании портфеля: {str(e)}")
+            return False
+
     def _clear_all_waiting_flags(self, user_id: int):
         """Clear all waiting flags in user context"""
         self._update_user_context(user_id, 
@@ -5306,9 +5402,8 @@ class ShansAi:
             
             # Create message with tickers and request for weights
             tickers_text = ' '.join(tickers)
-            message = f"💼 **Укажите доли активов**\n\n"
-            message += f"Активы: `{tickers_text}`\n\n"
-            message += "**Введите веса в том же порядке:**\n"
+            message = f"💼 **Укажите доли активов {tickers_text}**\n\n"
+            message += "**Введите их веса в портфеле в том же порядке:**\n"
             
             # Show suggested equal weights
             equal_weight = 1.0 / len(tickers)
@@ -5316,12 +5411,10 @@ class ShansAi:
             for i, ticker in enumerate(tickers):
                 suggested_weights.append(f"{ticker}:{equal_weight:.3f}")
             
-            message += f"• Равномерное распределение: `{' '.join(suggested_weights)}`\n"
-            message += f"• Или укажите свои доли: `{' '.join([f'{ticker}:0.XX' for ticker in tickers])}`\n\n"
-            message += "**Форматы весов:**\n"
-            message += "• Десятичные: `0.5` (50%)\n"
-            message += "• Проценты: `50%`\n\n"
-            message += "⚠️ Сумма долей должна быть равна 1.0 (100%)"
+            message += f"Например, `{' '.join(suggested_weights)}`\n"
+            message += "• Можно указать в десятичном формате: `0.5`\n"
+            message += "• Можно проценты: `50%`\n\n"
+            message += "⚠️ Сумма долей должна быть равна 1.0 или 100%"
             
             await self._send_message_safe(update, message)
             
@@ -6102,15 +6195,9 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
-            
-            # Create portfolio using okama
-            self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
-            
             # Determine base currency
             if specified_currency:
                 currency = specified_currency
-                currency_info = f"указана пользователем ({specified_currency})"
             else:
                 # Auto-detect currency from the first asset
                 first_symbol = symbols[0]
@@ -6121,82 +6208,13 @@ class ShansAi:
                     self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
                     currency, currency_info = self._get_currency_by_symbol(first_symbol)
             
-            # Create portfolio using okama with period support
-            try:
-                if specified_period:
-                    years = int(specified_period[:-1])
-                    from datetime import timedelta
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=years * 365)
-                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
-                                           first_date=start_date.strftime('%Y-%m-%d'), 
-                                           last_date=end_date.strftime('%Y-%m-%d'))
-                else:
-                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
-                
-                # Create portfolio information text
-                portfolio_text = f"💼 **Портфель создан успешно!**\n\n"
-                
-                # Add basic metrics to portfolio text
-                try:
-                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
-                    portfolio_text += metrics_text
-                except Exception as e:
-                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
-                
-                # Generate portfolio symbol
-                user_context = self._get_user_context(user_id)
-                portfolio_count = user_context.get('portfolio_count', 0) + 1
-                portfolio_symbol = f"PF{portfolio_count}"
-                
-                # Add portfolio symbol display
-                portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
-                
-                # Add buttons
-                keyboard = [
-                    [InlineKeyboardButton("💼 Анализ портфеля", callback_data=f"portfolio_analysis_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 График доходности", callback_data=f"portfolio_chart_{portfolio_symbol}"),
-                     InlineKeyboardButton("📋 Метрики риска", callback_data=f"portfolio_risk_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💼 Сохранить портфель", callback_data=f"portfolio_save_{portfolio_symbol}")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
-                
-                # Save portfolio to user context
-                portfolio_attributes = {
-                    'symbols': symbols,
-                    'weights': weights,
-                    'currency': currency,
-                    'created_at': datetime.now().isoformat(),
-                    'description': f"Портфель: {', '.join(symbols)}",
-                    'portfolio_symbol': portfolio_symbol,
-                    'total_weight': sum(weights),
-                    'asset_count': len(symbols),
-                    'period': specified_period
-                }
-                
-                saved_portfolios = user_context.get('saved_portfolios', {})
-                saved_portfolios[portfolio_symbol] = portfolio_attributes
-                
-                self._update_user_context(
-                    user_id,
-                    saved_portfolios=saved_portfolios,
-                    portfolio_count=portfolio_count
-                )
-                
-            except Exception as e:
-                self.logger.error(f"Error creating portfolio: {e}")
-                await self._send_message_safe(update, 
-                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
-                    "💡 Возможные причины:\n"
-                    "• Один из символов недоступен\n"
-                    "• Проблемы с данными\n"
-                    "• Неверный формат символа\n\n"
-                    "Проверьте:\n"
-                    "• Правильность написания символов\n"
-                    "• Доступность данных для указанных активов"
-                )
+            # Use unified portfolio creation method
+            success = await self._create_portfolio_unified(
+                update, context, symbols, weights, currency, specified_period
+            )
+            
+            if not success:
+                return
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio tickers weights input handler: {e}")
@@ -6700,13 +6718,15 @@ class ShansAi:
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
         try:
-            # Отправляем сообщение с ReplyKeyboardRemove для немедленного скрытия
+            # Отправляем исчезающее сообщение с ReplyKeyboardRemove для немедленного скрытия
             # Используем эмодзи обновления - логично для скрытия клавиатуры
-            await self._send_message_safe(
+            await self._send_ephemeral_message(
                 update, 
+                context,
                 "🔄",  # Эмодзи обновления - логично для скрытия клавиатуры
-                reply_markup=ReplyKeyboardRemove(),
-                parse_mode=None
+                parse_mode=None,
+                delete_after=2,  # Удаляем через 2 секунды
+                reply_markup=ReplyKeyboardRemove()
             )
             
             # Обновляем контекст пользователя
@@ -6718,6 +6738,56 @@ class ShansAi:
             self.logger.error(f"Error removing reply keyboard: {e}")
             # Fallback к старому методу
             await self._manage_reply_keyboard(update, context, keyboard_type=None)
+
+    async def _hide_reply_keyboard_silently(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Тихо скрыть reply keyboard без видимых сообщений (для переходов между контекстами)"""
+        try:
+            # Отправляем обычное сообщение с ReplyKeyboardRemove
+            await self._send_message_safe(
+                update, 
+                "🔄",  # Эмодзи обновления - логично для скрытия клавиатуры
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode=None
+            )
+            
+            # Обновляем контекст пользователя
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, active_reply_keyboard=None)
+            self.logger.info("Reply keyboard removed silently using ReplyKeyboardRemove")
+            
+        except Exception as e:
+            self.logger.error(f"Error removing reply keyboard silently: {e}")
+            # Fallback к старому методу
+            await self._manage_reply_keyboard(update, context, keyboard_type=None)
+
+    def _get_active_reply_keyboard(self, user_id: int) -> Optional[str]:
+        """Получить текущую активную reply keyboard для пользователя"""
+        user_context = self._get_user_context(user_id)
+        return user_context.get('active_reply_keyboard')
+
+    async def _ensure_correct_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, target_keyboard: str):
+        """Убедиться что отображается правильная reply keyboard"""
+        try:
+            user_id = update.effective_user.id
+            current_keyboard = self._get_active_reply_keyboard(user_id)
+            
+            if current_keyboard == target_keyboard:
+                # Правильная клавиатура уже активна, ничего не делаем
+                self.logger.info(f"Correct reply keyboard '{target_keyboard}' is already active")
+                return
+            
+            # Нужно сменить клавиатуру
+            if current_keyboard is not None:
+                # Скрываем текущую клавиатуру
+                await self._hide_reply_keyboard_silently(update, context)
+            
+            # Показываем нужную клавиатуру
+            await self._manage_reply_keyboard(update, context, target_keyboard)
+            
+        except Exception as e:
+            self.logger.error(f"Error ensuring correct reply keyboard: {e}")
+            # Fallback: просто показываем нужную клавиатуру
+            await self._manage_reply_keyboard(update, context, target_keyboard)
 
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
@@ -6954,7 +7024,7 @@ class ShansAi:
             
             # Ensure reply keyboard is removed when transitioning between methods
             # This prevents keyboard from staying visible when switching contexts
-            await self._ensure_no_reply_keyboard(update, context)
+            await self._hide_reply_keyboard_silently(update, context)
             
             # Handle start command callbacks
             if callback_data.startswith("start_"):
@@ -7174,6 +7244,15 @@ class ShansAi:
                 else:
                     portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio risk metrics button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_risk_metrics_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith('portfolio_risk_'):
+                portfolio_symbol_raw = callback_data.replace('portfolio_risk_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
+                self.logger.info(f"Portfolio risk button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_risk_metrics_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('risk_metrics_'):
                 symbols = [self.clean_symbol(s) for s in callback_data.replace('risk_metrics_', '').split(',')]
@@ -7503,8 +7582,6 @@ class ShansAi:
                     await self._send_callback_message(update, context, "❌ Не удалось построить график Risk / Return (CAGR)")
                     return
 
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -7777,31 +7854,21 @@ class ShansAi:
 
 
                         
-                        # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                        await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown')
                     else:
-                        # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                        await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown')
                         
                 else:
                     error_msg = data_analysis.get('error', 'Неизвестная ошибка') if data_analysis else 'Анализ не выполнен'
-                    # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                    await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
+                    await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown')
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for analysis: {data_error}")
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown')
 
         except Exception as e:
             self.logger.error(f"Error handling data analysis button: {e}")
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown')
 
     async def _handle_yandexgpt_analysis_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle Gemini analysis button click for comparison charts"""
@@ -7858,28 +7925,22 @@ class ShansAi:
                             
                             # Create keyboard for compare command
                             keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                            await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown', reply_markup=keyboard)
+                            await self._send_callback_message_with_keyboard_removal(update, context, analysis_text, parse_mode='Markdown')
                         else:
                             # Create keyboard for compare command
                             keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                            await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown', reply_markup=keyboard)
+                            await self._send_callback_message_with_keyboard_removal(update, context, "🤖 Анализ данных выполнен, но результат пуст", parse_mode='Markdown')
                     else:
                         error_msg = gemini_analysis.get('error', 'Неизвестная ошибка') if gemini_analysis else 'Анализ не выполнен'
-                        # Create keyboard for compare command
-                        keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                        await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown', reply_markup=keyboard)
+                        await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка анализа данных: {error_msg}", parse_mode='Markdown')
                     
             except Exception as data_error:
                 self.logger.error(f"Error preparing data for Gemini analysis: {data_error}")
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при подготовке данных для анализа: {str(data_error)}", parse_mode='Markdown')
 
         except Exception as e:
             self.logger.error(f"Error handling Gemini analysis button: {e}")
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при анализе данных: {str(e)}", parse_mode='Markdown')
 
     async def _handle_metrics_compare_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle metrics button click for comparison charts - show summary metrics table"""
@@ -7906,32 +7967,78 @@ class ShansAi:
                 )
                 
                 if summary_table and not summary_table.startswith("❌"):
-                    # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                    
-                    # Send table as message with keyboard
-                    period_text = self._format_period_for_display(specified_period)
-                    header_text = f"📊 **Сводная таблица ключевых метрик**"
-                    if period_text:
-                        header_text += f" {period_text}"
-                    table_message = f"{header_text}\n\n```\n{summary_table}\n```"
-                    await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown', reply_markup=keyboard)
+                    # Convert text table to DataFrame and create image
+                    try:
+                        # Parse the markdown table to create DataFrame
+                        df = self._parse_markdown_table_to_dataframe(summary_table)
+                        
+                        if df is not None and not df.empty:
+                            # Create table image using chart_styles
+                            period_text = self._format_period_for_display(specified_period)
+                            title = f"Сводная таблица ключевых метрик"
+                            if period_text:
+                                title += f" {period_text}"
+                            footnote = f"Источник: шанс, okama • валюта: {currency}"
+                            
+                            # Create image buffer
+                            img_buffer = self.chart_styles.render_table_image(
+                                df=df,
+                                title=title,
+                                footnote=footnote,
+                                col_formats=None,  # Values are already formatted
+                                max_col_width=25,
+                                row_zebra=True,
+                                header_bg="#0F172A",
+                                header_fg="#FFFFFF",
+                                even_bg="#F8FAFC",
+                                odd_bg="#FFFFFF",
+                                text_color="#0B1221",
+                                edge_color="#CBD5E1",
+                                fontsize=11,
+                                title_fontsize=14,
+                                footnote_fontsize=9,
+                                dpi=200
+                            )
+                            
+                            # Create keyboard for compare command
+                            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
+                            
+                            # Send image with keyboard
+                            await context.bot.send_photo(
+                                chat_id=update.effective_chat.id,
+                                photo=img_buffer,
+                                caption=f"📊 **Сводная таблица ключевых метрик**{period_text}",
+                parse_mode='Markdown'
+                            )
+                        else:
+                            # Fallback to text table
+                            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
+                            period_text = self._format_period_for_display(specified_period)
+                            header_text = f"📊 **Сводная таблица ключевых метрик**"
+                            if period_text:
+                                header_text += f" {period_text}"
+                            table_message = f"{header_text}\n\n```\n{summary_table}\n```"
+                            await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown')
+                    except Exception as e:
+                        self.logger.error(f"Error creating table image: {e}")
+                        # Fallback to text table
+                        keyboard = self._create_compare_command_keyboard(symbols, currency, update)
+                        period_text = self._format_period_for_display(specified_period)
+                        header_text = f"📊 **Сводная таблица ключевых метрик**"
+                        if period_text:
+                            header_text += f" {period_text}"
+                        table_message = f"{header_text}\n\n```\n{summary_table}\n```"
+                        await self._send_callback_message_with_keyboard_removal(update, context, table_message, parse_mode='Markdown')
                 else:
-                    # Create keyboard for compare command
-                    keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                    await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось создать таблицу метрик", reply_markup=keyboard)
+                    await self._send_callback_message_with_keyboard_removal(update, context, "❌ Не удалось создать таблицу метрик")
                     
             except Exception as metrics_error:
                 self.logger.error(f"Error creating metrics table: {metrics_error}")
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown', reply_markup=keyboard)
+                await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при создании таблицы метрик: {str(metrics_error)}", parse_mode='Markdown')
 
         except Exception as e:
             self.logger.error(f"Error handling metrics button: {e}")
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
-            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при обработке кнопки метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при обработке кнопки метрик: {str(e)}", parse_mode='Markdown')
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
@@ -9985,11 +10092,11 @@ class ShansAi:
             # Split table into lines
             lines = markdown_table.strip().split('\n')
             
-            # Find the separator line (contains |---|)
+            # Find the separator line (contains |---| or |:---|)
             separator_line = None
             separator_index = -1
             for i, line in enumerate(lines):
-                if '|---' in line or '| ---' in line:
+                if '|---' in line or '| ---' in line or '|:---' in line or '| ---:' in line:
                     separator_line = line
                     separator_index = i
                     break
@@ -10033,27 +10140,8 @@ class ShansAi:
     def _create_compare_command_keyboard(self, symbols: list, currency: str, update: Update = None, specified_period: str = None) -> InlineKeyboardMarkup:
         """Create keyboard for compare command button responses"""
         try:
-            keyboard = []
-            
-            # Remove inline keyboards for comparison analysis buttons as requested
-            # Only keep AI analysis button if available
-            if self.gemini_service and self.gemini_service.is_available():
-                keyboard.append([
-                    InlineKeyboardButton("🧠 AI-анализ", callback_data="data_analysis_compare")
-                ])
-            
-            # Add Portfolio button - store symbols in context to avoid callback_data size limit
-            # Store symbols in user context for portfolio button
-            if update:
-                user_id = update.effective_user.id
-                user_context = self._get_user_context(user_id)
-                user_context['compare_portfolio_symbols'] = symbols
-            
-            keyboard.append([
-                InlineKeyboardButton("💼 В Портфель", callback_data="compare_portfolio")
-            ])
-            
-            return InlineKeyboardMarkup(keyboard)
+            # Return empty keyboard - inline buttons removed as requested
+            return InlineKeyboardMarkup([])
             
         except Exception as e:
             self.logger.error(f"Error creating compare command keyboard: {e}")
@@ -10091,7 +10179,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ Нейроанализ"),
+                    KeyboardButton("🧠 ▫️ Нейроанализ"),
                     KeyboardButton("▫️ Портфель vs Активы"),
                     KeyboardButton("▫️ Сравнить")
                 ]
@@ -10122,7 +10210,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ Нейроанализ"),
+                    KeyboardButton("🧠 ▫️ Нейроанализ"),
                     KeyboardButton("▫️ В Портфель")
                 ]
             ]
@@ -10347,7 +10435,7 @@ class ShansAi:
             "▫️ Монте-Карло",
             "▫️ Процентили (10/50/90)",
             "▫️ Просадки",
-            "▫️ Нейроанализ",
+            "🧠 ▫️ Нейроанализ",
             "▫️ Портфель vs Активы",
             "▫️ Сравнить"
         ]
@@ -10362,7 +10450,7 @@ class ShansAi:
             "▫️ Метрики",
             "▫️ Корреляция",
             "▫️ Эффективная граница",
-            "▫️ Нейроанализ",
+            "🧠 ▫️ Нейроанализ",
             "▫️ В Портфель"
         ]
         return text in compare_buttons
@@ -10433,10 +10521,6 @@ class ShansAi:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             
-            # Ensure reply keyboard is removed when transitioning between different contexts
-            # This prevents keyboard from staying visible when switching between different analysis types
-            await self._ensure_no_reply_keyboard(update, context)
-            
             # Determine context based on user's last activity and available data
             last_assets = user_context.get('last_assets', [])
             saved_portfolios = user_context.get('saved_portfolios', {})
@@ -10499,6 +10583,9 @@ class ShansAi:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             
+            # Ensure portfolio keyboard is active
+            await self._ensure_correct_reply_keyboard(update, context, "portfolio")
+            
             # Get the last portfolio symbol from user context
             saved_portfolios = user_context.get('saved_portfolios', {})
             if not saved_portfolios:
@@ -10524,7 +10611,7 @@ class ShansAi:
                 "▫️ Монте-Карло": f"portfolio_monte_carlo_{portfolio_symbol}",
                 "▫️ Процентили (10/50/90)": f"portfolio_forecast_{portfolio_symbol}",
                 "▫️ Просадки": f"portfolio_drawdowns_{portfolio_symbol}",
-                "▫️ Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
+                "🧠 ▫️ Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
                 "▫️ Портфель vs Активы": f"portfolio_compare_assets_{portfolio_symbol}",
                 "▫️ Сравнить": f"portfolio_compare_{portfolio_symbol}"
             }
@@ -10572,6 +10659,9 @@ class ShansAi:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
             
+            # Ensure compare keyboard is active
+            await self._ensure_correct_reply_keyboard(update, context, "compare")
+            
             # Get the last compare symbols from user context
             last_symbols = user_context.get('last_assets', [])
             if not last_symbols:
@@ -10592,7 +10682,7 @@ class ShansAi:
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif text == "▫️ Нейроанализ":
+            elif text == "🧠 ▫️ Нейроанализ":
                 await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
@@ -10608,6 +10698,9 @@ class ShansAi:
         try:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
+            
+            # Ensure list keyboard is active
+            await self._ensure_correct_reply_keyboard(update, context, "list")
             
             # Get the current namespace context
             current_namespace = user_context.get('current_namespace')
@@ -10746,6 +10839,9 @@ class ShansAi:
         try:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
+            
+            # Ensure info keyboard is active
+            await self._ensure_correct_reply_keyboard(update, context, "info")
             
             # Get current symbol from context
             current_symbol = user_context.get('current_info_symbol')
@@ -11131,8 +11227,6 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
@@ -11493,7 +11587,7 @@ class ShansAi:
             period = user_context.get('current_period', None)
             
             self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}, period: {period}")
-            await self._send_ephemeral_message(update, context, "📉 Создаю график...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -11502,7 +11596,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_ephemeral_message(update, context, "📉 Создаю график для смешанного сравнения...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "📈 Создаю график для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList with period support
@@ -11637,8 +11731,6 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
@@ -11707,8 +11799,6 @@ class ShansAi:
                 caption += f"• Индивидуальные активы: {', '.join(asset_symbols)}\n"
             caption += f"• Валюта: {currency}\n"
             
-            # Create keyboard for compare command
-            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -11904,8 +11994,6 @@ class ShansAi:
                 # Clear matplotlib cache to free memory
                 chart_styles.cleanup_figure(fig)
                 
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
@@ -12053,8 +12141,6 @@ class ShansAi:
                 # Prepare correlation values text for caption
                 correlation_values_text = self._format_correlation_values(correlation_matrix)
                 
-                # Create keyboard for compare command
-                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
@@ -12104,7 +12190,7 @@ class ShansAi:
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle monthly chart button click for single asset"""
         try:
-            await self._send_ephemeral_message(update, context, "📅 Создаю график за 5 лет...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график за 5 лет...", delete_after=3)
             
             # Получаем месячный график за 5 лет
             monthly_chart = await self._get_monthly_chart(symbol)
@@ -12126,7 +12212,7 @@ class ShansAi:
     async def _handle_all_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle all chart button click for single asset"""
         try:
-            await self._send_ephemeral_message(update, context, "📊 Создаю график за весь период...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график за макс. период...", delete_after=3)
             
             # Получаем график за весь период
             all_chart = await self._get_all_chart(symbol)
@@ -15758,7 +15844,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating returns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_ephemeral_message(update, context, "💰 Создаю график доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график доходности...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -15944,7 +16030,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "💰 Создаю график доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график доходности...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
