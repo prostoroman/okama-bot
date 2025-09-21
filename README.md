@@ -5,6 +5,18 @@
 [![Telegram Bot](https://img.shields.io/badge/telegram-bot-blue.svg)](https://core.telegram.org/bots)
 [![AI Powered](https://img.shields.io/badge/AI-Powered-orange.svg)](https://yandex.ru/ai/)
 [![Multi-Exchange](https://img.shields.io/badge/multi--exchange-green.svg)](https://tushare.pro/)
+[![GitHub Actions](https://img.shields.io/badge/GitHub-Actions-blue.svg)](https://github.com/prostoroman/shans-ai/actions)
+[![Branch Protection](https://img.shields.io/badge/Branch-Protected-green.svg)](https://github.com/prostoroman/shans-ai/settings/branches)
+
+## 🚀 Deployment Status
+
+- **Development**: [![DEV Deploy](https://github.com/prostoroman/shans-ai/workflows/Deploy%20to%20Development%20(Render)/badge.svg)](https://github.com/prostoroman/shans-ai/actions/workflows/deploy-dev.yml)
+- **Production**: [![Production Deploy](https://github.com/prostoroman/shans-ai/workflows/Deploy%20to%20Production%20(Render)/badge.svg)](https://github.com/prostoroman/shans-ai/actions/workflows/auto-deploy.yml)
+
+### 🔄 Development Workflow
+- **DEV branch**: Автоматические деплои при push
+- **main branch**: Деплои только через Pull Request с review
+- **Branch Protection**: main ветка защищена от прямых push
 
 
 ## 🌟 Обзор функциональности
@@ -500,7 +512,60 @@ okama-bot/
 
 ## 🔧 Разработка
 
-### Структура кода
+### 🚀 Development Workflow
+
+#### Быстрый старт для разработчиков:
+```bash
+# Клонировать репозиторий
+git clone https://github.com/prostoroman/shans-ai.git
+cd shans-ai
+
+# Переключиться на DEV ветку (основная ветка разработки)
+git checkout DEV
+
+# Установить зависимости
+pip install -r requirements.txt
+
+# Настроить переменные окружения
+cp config_files/config.env.example .env
+# Отредактировать .env файл с вашими настройками
+```
+
+#### Ежедневная работа:
+```bash
+# Получить последние изменения
+git pull origin DEV
+
+# Внести изменения в код
+# ... работа с кодом ...
+
+# Закоммитить и отправить
+git add .
+git commit -m "feat: описание изменений"
+git push origin DEV
+```
+
+**Результат:** Автоматический деплой в development environment
+
+#### Релиз в продакшн:
+```bash
+# Создать Pull Request из DEV в main через GitHub UI
+# Или через GitHub CLI:
+gh pr create --base main --head DEV --title "Release: $(date +%Y-%m-%d)" --body "Production release"
+```
+
+**Процесс:**
+1. ✅ Автоматическая валидация PR
+2. ✅ Требуется review и approval  
+3. ✅ После merge - автоматический деплой в продакшн
+
+### 🛡️ Branch Protection
+
+- **DEV ветка**: Открыта для прямых push, автоматические деплои
+- **main ветка**: Защищена, деплои только через Pull Request
+- **Требования для main**: Review, approval, статус-чеки, подписанные коммиты
+
+### 📁 Структура кода
 - **Модульная архитектура** - Каждый сервис в отдельном файле
 - **Доменные объекты** - Чистые бизнес-объекты без зависимостей
 - **Централизованная конфигурация** - Все настройки в `config.py`
@@ -512,12 +577,17 @@ okama-bot/
 3. Обновите конфигурацию в `config.py` при необходимости
 4. Добавьте тесты в `tests/`
 5. Обновите документацию
+6. Создайте PR для релиза в продакшн
 
 ### Стиль кода
 - Следуйте PEP 8
 - Используйте type hints
 - Добавляйте docstrings
 - Обрабатывайте исключения gracefully
+
+### 📚 Дополнительная документация
+- [GitHub Branch Protection Setup](docs/GITHUB_BRANCH_PROTECTION_SETUP.md) - Настройка защиты веток
+- [Deployment Workflow Guide](docs/DEPLOYMENT_WORKFLOW_GUIDE.md) - Подробное руководство по деплою
 
 ## 📈 Roadmap
 
