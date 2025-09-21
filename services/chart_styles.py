@@ -729,7 +729,18 @@ class ChartStyles:
             # Конвертируем индекс в datetime если необходимо
             if not isinstance(date_index, pd.DatetimeIndex):
                 if hasattr(date_index, 'to_timestamp'):
-                    date_index = date_index.to_timestamp()
+                    try:
+                        date_index = date_index.to_timestamp()
+                    except Exception as e:
+                        logger.warning(f"Could not convert PeriodIndex to timestamp: {e}")
+                        # Fallback: конвертируем через строки
+                        try:
+                            date_index = pd.to_datetime(date_index.astype(str))
+                        except Exception as e2:
+                            logger.warning(f"Fallback conversion failed: {e2}")
+                            for label in ax.get_xticklabels():
+                                label.set_rotation(45)
+                            return
                 else:
                     try:
                         date_index = pd.to_datetime(date_index)
@@ -747,29 +758,8 @@ class ChartStyles:
             else:
                 years_span = 1
             
-            # Настройка форматирования в зависимости от временного диапазона
-            if years_span <= 1:
-                # Короткий период (до 1 года) - показываем месяцы
-                ax.xaxis.set_major_locator(mdates.MonthLocator())
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-                ax.xaxis.set_minor_locator(mdates.MonthLocator())
-            elif years_span <= 3:
-                # Средний период (1-3 года) - показываем кварталы
-                ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-                ax.xaxis.set_minor_locator(mdates.MonthLocator())
-            elif years_span <= 10:
-                # Длинный период (3-10 лет) - показываем годы с месяцами
-                ax.xaxis.set_major_locator(mdates.YearLocator())
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-                ax.xaxis.set_minor_locator(mdates.MonthLocator(interval=6))
-            else:
-                # Очень длинный период (более 10 лет) - показываем годы
-                ax.xaxis.set_major_locator(mdates.YearLocator(2))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-                ax.xaxis.set_minor_locator(mdates.YearLocator())
-            
-            # Поворачиваем подписи дат для лучшей читаемости
+            # Просто поворачиваем подписи дат для лучшей читаемости
+            # Не перезаписываем тики matplotlib, так как они уже правильно настроены
             for label in ax.get_xticklabels():
                 label.set_rotation(45)
                 label.set_ha('right')
@@ -793,13 +783,24 @@ class ChartStyles:
             if hasattr(data, 'index'):
                 if hasattr(data.index, 'dtype') and str(data.index.dtype).startswith('period'):
                     data = data.copy()
+                    # Конвертируем PeriodIndex в DatetimeIndex правильно
                     data.index = data.index.to_timestamp()
-                elif data.index.dtype == 'object':
+                elif hasattr(data.index, 'dtype') and data.index.dtype == 'object':
                     # Конвертируем object индекс в datetime
                     data = data.copy()
                     data.index = pd.to_datetime(data.index)
+                elif hasattr(data.index, 'to_timestamp'):
+                    # Дополнительная проверка для PeriodIndex
+                    data = data.copy()
+                    data.index = data.index.to_timestamp()
         except Exception as e:
             logger.warning(f"Error processing data index: {e}")
+            # Fallback: попробуем конвертировать индекс в строки и затем в datetime
+            try:
+                data = data.copy()
+                data.index = pd.to_datetime(data.index.astype(str))
+            except Exception as e2:
+                logger.warning(f"Fallback conversion also failed: {e2}")
         
         # Определяем тип графика и создаем заголовок
         is_comparison = kwargs.get('title', '').startswith('Сравнение') or 'compare' in kwargs.get('title', '').lower()
@@ -807,6 +808,14 @@ class ChartStyles:
         if is_comparison:
             # График сравнения
             title = kwargs.get('title', f'Сравнение накопленной доходности\n{", ".join(symbols)} | {currency}')
+            
+            # Убеждаемся, что индекс правильно конвертирован перед рисованием
+            if hasattr(data, 'index') and hasattr(data.index, 'to_timestamp'):
+                try:
+                    data = data.copy()
+                    data.index = data.index.to_timestamp()
+                except Exception as e:
+                    logger.warning(f"Final index conversion failed for comparison: {e}")
             
             # Рисуем данные для сравнения
             for i, column in enumerate(data.columns):
@@ -866,6 +875,14 @@ class ChartStyles:
                     # Rename the first column (portfolio column) to our desired name
                     data = data.copy()
                     data.columns = [column_name] + list(data.columns[1:])
+            
+            # Убеждаемся, что индекс правильно конвертирован перед рисованием
+            if hasattr(data, 'index') and hasattr(data.index, 'to_timestamp'):
+                try:
+                    data = data.copy()
+                    data.index = data.index.to_timestamp()
+                except Exception as e:
+                    logger.warning(f"Final index conversion failed: {e}")
             
             # Рисуем данные для портфеля
             if hasattr(data, 'plot'):

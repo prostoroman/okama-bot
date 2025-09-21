@@ -2082,6 +2082,144 @@ class ShansAi:
             safe_text = "" if text is None else str(text)
             return safe_text[:1024]
     
+    def _create_efficient_frontier_caption(self, ef, asset_names, currency):
+        """Создать подробное описание для графика эффективной границы с расчетными значениями"""
+        try:
+            caption_parts = [f"📈 Эффективная граница: {', '.join(asset_names)}"]
+            caption_parts.append(f"💱 Валюта: {currency}")
+            caption_parts.append("")
+            
+            # Получаем данные портфелей
+            portfolio_data = self._get_efficient_frontier_portfolio_data(ef, asset_names)
+            
+            if portfolio_data:
+                # GMV портфель (минимальный риск)
+                if 'gmv' in portfolio_data:
+                    gmv = portfolio_data['gmv']
+                    caption_parts.append("🎯 GMV портфель (мин. риск):")
+                    caption_parts.append(f"• Риск: {gmv['risk']*100:.2f}%")
+                    caption_parts.append(f"• Доходность: {gmv['return']*100:.2f}%")
+                    if gmv['weights']:
+                        weights_text = self._format_portfolio_weights(gmv['weights'], asset_names)
+                        caption_parts.append(f"• Веса: {weights_text}")
+                    caption_parts.append("")
+                
+                # Максимальная доходность
+                if 'max_return' in portfolio_data:
+                    max_ret = portfolio_data['max_return']
+                    caption_parts.append("🚀 Максимальная доходность:")
+                    caption_parts.append(f"• Риск: {max_ret['risk']*100:.2f}%")
+                    caption_parts.append(f"• Доходность: {max_ret['return']*100:.2f}%")
+                    if max_ret['weights']:
+                        weights_text = self._format_portfolio_weights(max_ret['weights'], asset_names)
+                        caption_parts.append(f"• Веса: {weights_text}")
+                    caption_parts.append("")
+                
+                # Тангенциальный портфель (максимальный Шарп)
+                if 'tangency' in portfolio_data:
+                    tangency = portfolio_data['tangency']
+                    caption_parts.append("⚡ Тангенциальный портфель (макс. Шарп):")
+                    caption_parts.append(f"• Риск: {tangency['risk']*100:.2f}%")
+                    caption_parts.append(f"• Доходность: {tangency['return']*100:.2f}%")
+                    if tangency['weights']:
+                        weights_text = self._format_portfolio_weights(tangency['weights'], asset_names)
+                        caption_parts.append(f"• Веса: {weights_text}")
+                    
+                    # Добавляем коэффициент Шарпа если доступен
+                    if 'sharpe_ratio' in tangency and tangency['sharpe_ratio'] is not None:
+                        caption_parts.append(f"• Коэффициент Шарпа: {tangency['sharpe_ratio']:.3f}")
+                    caption_parts.append("")
+                
+                # Добавляем общую информацию
+                caption_parts.append("📊 Интерпретация:")
+                caption_parts.append("• GMV: минимальный риск при данной доходности")
+                caption_parts.append("• Макс. доходность: максимальная ожидаемая доходность")
+                caption_parts.append("• Тангенциальный: оптимальный риск/доходность")
+            
+            else:
+                caption_parts.append("⚠️ Не удалось получить данные портфелей")
+            
+            return "\n".join(caption_parts)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating efficient frontier caption: {e}")
+            # Fallback к простому описанию
+            return f"📈 Эффективная граница: {', '.join(asset_names)}\n💱 Валюта: {currency}"
+    
+    def _get_efficient_frontier_portfolio_data(self, ef, asset_names):
+        """Получить данные портфелей для эффективной границы"""
+        try:
+            portfolio_data = {}
+            
+            # GMV портфель (минимальный риск)
+            if hasattr(ef, 'gmv_annualized') and ef.gmv_annualized is not None:
+                gmv_risk = ef.gmv_annualized[0]
+                gmv_return = ef.gmv_annualized[1]
+                portfolio_data['gmv'] = {
+                    'risk': gmv_risk,
+                    'return': gmv_return,
+                    'weights': ef.gmv_weights.tolist() if hasattr(ef, 'gmv_weights') and ef.gmv_weights is not None else None
+                }
+            
+            # Максимальная доходность
+            try:
+                max_return_result = ef.optimize_return()
+                if max_return_result:
+                    max_risk = max_return_result['Risk_monthly']
+                    max_return = max_return_result['Mean_return_monthly']
+                    portfolio_data['max_return'] = {
+                        'risk': max_risk,
+                        'return': max_return,
+                        'weights': max_return_result['Weights'].tolist()
+                    }
+            except Exception as e:
+                self.logger.warning(f"Failed to get max return portfolio: {e}")
+            
+            # Тангенциальный портфель (максимальный Шарп)
+            try:
+                tangency_result = ef.get_tangency_portfolio()
+                if tangency_result:
+                    tangency_risk = tangency_result['Risk']
+                    tangency_return = tangency_result['Rate_of_return']
+                    portfolio_data['tangency'] = {
+                        'risk': tangency_risk,
+                        'return': tangency_return,
+                        'weights': tangency_result['Weights'].tolist(),
+                        'sharpe_ratio': tangency_result.get('Sharpe_ratio')
+                    }
+            except Exception as e:
+                self.logger.warning(f"Failed to get tangency portfolio: {e}")
+            
+            return portfolio_data if portfolio_data else None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting portfolio data: {e}")
+            return None
+    
+    def _format_portfolio_weights(self, weights, asset_names):
+        """Форматировать веса портфеля для отображения"""
+        try:
+            if not weights or not asset_names:
+                return "Недоступно"
+            
+            # Ограничиваем количество активов для читаемости
+            max_assets = 3
+            if len(weights) > max_assets:
+                # Показываем только первые max_assets активов
+                weights = weights[:max_assets]
+                asset_names = asset_names[:max_assets]
+            
+            weight_texts = []
+            for i, (weight, asset) in enumerate(zip(weights, asset_names)):
+                asset_name = asset.split('.')[0] if '.' in asset else asset
+                weight_texts.append(f"{asset_name}: {weight:.1%}")
+            
+            return ", ".join(weight_texts)
+            
+        except Exception as e:
+            self.logger.error(f"Error formatting portfolio weights: {e}")
+            return "Ошибка форматирования"
+    
     def _format_correlation_values(self, correlation_matrix: pd.DataFrame) -> str:
         """Форматировать численные значения корреляции для отображения под матрицей"""
         try:
@@ -2149,7 +2287,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"📉 Периоды падения и восстановления")
+                caption=self._truncate_caption(f"Периоды падения и восстановления")
             )
             
         except Exception as e:
@@ -3984,8 +4122,8 @@ class ShansAi:
                     
                 
                 # Add usage tips
-                help_text += "💡 Можно сравнивать портфели и обычные активы (для этого нужно сначала создать портфель)\n"
-                help_text += "💡 Первый актив в списке определяет базовую валюту для инфляции\n\n"
+                help_text += "💡 Можно сравнивать портфели и обычные активы\n"
+                help_text += "💡 Первый тикер в списке определяет базовую валюту для инфляции\n\n"
                 help_text += "💬 Введите тикеры для сравнения через пробел:"
                 
                 await self._send_message_safe(update, help_text)
@@ -7450,7 +7588,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=img_buffer,
-                caption=self._truncate_caption(f"📈 Эффективная граница для сравнения: {', '.join(asset_names)}")
+                caption=self._truncate_caption(self._create_efficient_frontier_caption(ef, asset_names, currency))
             )
 
         except Exception as e:
@@ -16732,7 +16870,7 @@ class ShansAi:
             
             # Create standardized comparison chart using chart_styles
             fig, ax = chart_styles.create_portfolio_compare_assets_chart(
-                data=compare_data, symbols=symbols, currency=currency, weights=weights
+                data=compare_data, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_name
             )
             
             # Save the figure using standardized method

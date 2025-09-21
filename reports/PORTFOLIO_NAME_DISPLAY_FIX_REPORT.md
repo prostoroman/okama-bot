@@ -42,6 +42,15 @@ self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights
 ### 4. Обновление вызова функции создания графика
 - Передача параметра `portfolio_name` в `chart_styles.create_portfolio_compare_assets_chart`
 
+**ВАЖНО:** В первоначальном исправлении была пропущена передача параметра `portfolio_name` в метод `create_portfolio_compare_assets_chart`. Это было исправлено в текущем обновлении:
+
+```python
+# Исправлено в строке 16772-16774 bot.py
+fig, ax = chart_styles.create_portfolio_compare_assets_chart(
+    data=compare_data, symbols=symbols, currency=currency, weights=weights, portfolio_name=portfolio_name
+)
+```
+
 ## Результат
 Теперь в графике "Портфель vs Активы" будет отображаться сохраненное название портфеля вместо случайного названия, основанного на символах и весах.
 
@@ -52,4 +61,4 @@ self.logger.info(f"Retrieved portfolio data: symbols={symbols}, weights={weights
 - `bot.py` - основные изменения в функциях обработки кнопок и создания графиков
 
 ## Дата исправления
-${new Date().toISOString().split('T')[0]}
+2024-12-19 (обновлено)
