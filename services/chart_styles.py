@@ -1245,7 +1245,7 @@ class ChartStyles:
             logger.error(f"Error applying Monte Carlo chart styles: {e}")
 
     def create_efficient_frontier_chart(self, ef, asset_names, data_source='okama', **kwargs):
-        """Создать график эффективной границы с правильным стилем"""
+        """Создать график эффективной границы с правильным стилем и валидацией данных"""
         try:
             # Создаем фигуру с правильными размерами и стилем
             fig, ax = self.create_chart(**kwargs)
@@ -1254,64 +1254,21 @@ class ChartStyles:
                 logger.error("Failed to create chart figure and axes")
                 return None, None
             
-            # Создаем эффективную границу с помощью okama
-            # Попробуем сначала с ax параметром
-            try:
-                ef.plot_transition_map(x_axe='risk', ax=ax)
-                
-                # Проверяем, что фигура все еще валидна после построения
-                if fig is None:
-                    logger.error("Figure became None after plotting efficient frontier")
-                    return None, None
-                    
-            except Exception as plot_error:
-                logger.warning(f"Failed to plot with ax parameter: {plot_error}")
-                # Fallback: попробуем без ax параметра и затем скопируем на наш ax
-                try:
-                    # Очищаем текущую фигуру
-                    ax.clear()
-                    
-                    # Создаем новую фигуру для okama
-                    ef.plot_transition_map(x_axe='risk')
-                    temp_fig = plt.gcf()
-                    
-                    if temp_fig.axes:
-                        temp_ax = temp_fig.axes[0]
-                        
-                        # Копируем содержимое с временной оси на нашу ось
-                        for line in temp_ax.get_lines():
-                            ax.plot(line.get_xdata(), line.get_ydata(), 
-                                   color=line.get_color(), 
-                                   linestyle=line.get_linestyle(),
-                                   linewidth=line.get_linewidth(),
-                                   alpha=line.get_alpha(),
-                                   label=line.get_label())
-                        
-                        # Копируем scatter points если есть
-                        for collection in temp_ax.collections:
-                            if hasattr(collection, 'get_offsets'):
-                                offsets = collection.get_offsets()
-                                if len(offsets) > 0:
-                                    ax.scatter(offsets[:, 0], offsets[:, 1], 
-                                             c=collection.get_facecolors(),
-                                             s=collection.get_sizes(),
-                                             alpha=collection.get_alpha(),
-                                             label=collection.get_label())
-                        
-                        # Копируем легенду если есть
-                        if temp_ax.get_legend():
-                            ax.legend()
-                        
-                        # Закрываем временную фигуру
-                        plt.close(temp_fig)
-                        
-                except Exception as fallback_error:
-                    logger.error(f"Fallback plotting also failed: {fallback_error}")
-                    # Последний fallback - создаем простой график
-                    ax.text(0.5, 0.5, f"Ошибка построения эффективной границы\n{str(fallback_error)}", 
-                           transform=ax.transAxes, ha='center', va='center')
-                    ax.set_xlim(0, 1)
-                    ax.set_ylim(0, 1)
+            # Сначала попробуем создать график с валидацией данных
+            success = self._create_efficient_frontier_with_validation(ef, ax, asset_names)
+            
+            if not success:
+                # Если основной метод не сработал, используем альтернативный подход
+                logger.warning("Primary efficient frontier creation failed, trying alternative method")
+                success = self._create_efficient_frontier_alternative(ef, ax, asset_names)
+            
+            if not success:
+                # Последний fallback - создаем простой график с сообщением об ошибке
+                logger.error("All efficient frontier creation methods failed")
+                ax.text(0.5, 0.5, "Ошибка построения эффективной границы\nНе удалось создать корректный график", 
+                       transform=ax.transAxes, ha='center', va='center')
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
             
             # Применяем базовый стиль к оси
             self._apply_base_style(fig, ax)
@@ -1381,6 +1338,296 @@ class ChartStyles:
             # Return the original fig, ax even if styling failed
             return fig, ax
     
+    def _create_efficient_frontier_with_validation(self, ef, ax, asset_names):
+        """Создать эффективную границу с валидацией данных"""
+        try:
+            # Очищаем ось
+            ax.clear()
+            
+            # Создаем график с помощью okama
+            ef.plot_transition_map(x_axe='risk')
+            temp_fig = plt.gcf()
+            
+            if not temp_fig.axes:
+                logger.error("No axes created by okama plot_transition_map")
+                plt.close(temp_fig)
+                return False
+            
+            temp_ax = temp_fig.axes[0]
+            
+            # Получаем данные для валидации
+            x_data = []
+            y_data = []
+            
+            # Собираем данные из всех линий
+            for line in temp_ax.get_lines():
+                x_line_data = line.get_xdata()
+                y_line_data = line.get_ydata()
+                if len(x_line_data) > 0:
+                    x_data.extend(x_line_data)
+                    y_data.extend(y_line_data)
+            
+            # Валидация данных
+            if not self._validate_efficient_frontier_data(x_data, y_data):
+                logger.error("Efficient frontier data validation failed")
+                plt.close(temp_fig)
+                return False
+            
+            # Копируем данные на нашу ось
+            for line in temp_ax.get_lines():
+                ax.plot(line.get_xdata(), line.get_ydata(), 
+                       color=line.get_color(), 
+                       linestyle=line.get_linestyle(),
+                       linewidth=line.get_linewidth(),
+                       alpha=line.get_alpha(),
+                       label=line.get_label())
+            
+            # Копируем scatter points если есть
+            for collection in temp_ax.collections:
+                if hasattr(collection, 'get_offsets'):
+                    offsets = collection.get_offsets()
+                    if len(offsets) > 0:
+                        ax.scatter(offsets[:, 0], offsets[:, 1], 
+                                 c=collection.get_facecolors(),
+                                 s=collection.get_sizes(),
+                                 alpha=collection.get_alpha(),
+                                 label=collection.get_label())
+            
+            # Копируем легенду если есть
+            if temp_ax.get_legend():
+                ax.legend()
+            
+            # Закрываем временную фигуру
+            plt.close(temp_fig)
+            
+            logger.info("Efficient frontier created successfully with validation")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in efficient frontier with validation: {e}")
+            return False
+    
+    def _validate_efficient_frontier_data(self, x_data, y_data):
+        """Валидация данных эффективной границы"""
+        try:
+            if not x_data or not y_data:
+                logger.error("Empty data arrays")
+                return False
+            
+            min_risk = min(x_data)
+            max_risk = max(x_data)
+            
+            # Проверяем разумность значений риска
+            if min_risk < 0:
+                logger.error(f"Negative risk values detected: {min_risk}")
+                return False
+            
+            if max_risk > 1.0:  # Более 100% риска
+                logger.warning(f"High risk values detected: max_risk={max_risk} ({max_risk*100:.2f}%)")
+                # Не блокируем, но предупреждаем
+                if max_risk > 10.0:  # Более 1000% риска - критическая ошибка
+                    logger.error(f"Critical unrealistic risk values: max_risk={max_risk} ({max_risk*100:.2f}%)")
+                    return False
+            
+            # Проверяем логичность диапазона
+            risk_range = max_risk - min_risk
+            if risk_range < 0.001:
+                logger.warning(f"Very narrow risk range: {risk_range:.6f}")
+            elif risk_range > 0.5:
+                logger.warning(f"Very wide risk range: {risk_range:.6f}")
+            
+            logger.info(f"Risk validation passed: {min_risk:.6f} - {max_risk:.6f} ({risk_range:.6f})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in data validation: {e}")
+            return False
+    
+    def _create_efficient_frontier_alternative(self, ef, ax, asset_names):
+        """Альтернативный метод создания эффективной границы"""
+        try:
+            # Очищаем ось
+            ax.clear()
+            
+            # Получаем данные портфелей напрямую
+            portfolio_data = self._get_efficient_frontier_portfolio_data(ef)
+            
+            if not portfolio_data:
+                logger.error("Failed to get portfolio data for alternative method")
+                return False
+            
+            # Создаем график вручную
+            risks = portfolio_data['risks']
+            returns = portfolio_data['returns']
+            weights = portfolio_data['weights']
+            
+            # Проверяем и нормализуем данные
+            normalized_data = self._normalize_risk_data(risks, returns)
+            if not normalized_data:
+                logger.error("Alternative method data normalization failed")
+                return False
+            
+            risks = normalized_data['risks']
+            returns = normalized_data['returns']
+            
+            # Строим эффективную границу
+            ax.plot(risks, returns, 'b-', linewidth=2, label='Эффективная граница', alpha=0.8)
+            
+            # Добавляем точки портфелей с нормализованными данными
+            if 'gmv' in portfolio_data:
+                gmv = portfolio_data['gmv']
+                # Нормализуем риск для отображения
+                normalized_gmv_risk = self._normalize_single_risk(gmv['risk'])
+                ax.scatter([normalized_gmv_risk], [gmv['return']], color='green', s=100, 
+                          label=f'GMV ({gmv["risk"]*100:.1f}%)', zorder=5)
+            
+            if 'max_return' in portfolio_data:
+                max_ret = portfolio_data['max_return']
+                # Нормализуем риск для отображения
+                normalized_max_risk = self._normalize_single_risk(max_ret['risk'])
+                ax.scatter([normalized_max_risk], [max_ret['return']], color='red', s=100,
+                          label=f'Макс. доходность ({max_ret["risk"]*100:.1f}%)', zorder=5)
+            
+            if 'tangency' in portfolio_data:
+                tangency = portfolio_data['tangency']
+                # Нормализуем риск для отображения
+                normalized_tangency_risk = self._normalize_single_risk(tangency['risk'])
+                ax.scatter([normalized_tangency_risk], [tangency['return']], color='orange', s=100,
+                          label=f'Тангенциальный ({tangency["risk"]*100:.1f}%)', zorder=5)
+            
+            # Настраиваем оси
+            ax.set_xlim(min(risks) * 0.95, max(risks) * 1.05)
+            ax.set_ylim(min(returns) * 0.95, max(returns) * 1.05)
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+            
+            logger.info("Alternative efficient frontier created successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in alternative efficient frontier creation: {e}")
+            return False
+    
+    def _get_efficient_frontier_portfolio_data(self, ef):
+        """Получить данные портфелей для построения эффективной границы"""
+        try:
+            portfolio_data = {
+                'risks': [],
+                'returns': [],
+                'weights': []
+            }
+            
+            # Получаем GMV портфель
+            if hasattr(ef, 'gmv_annualized') and ef.gmv_annualized is not None:
+                gmv_risk = ef.gmv_annualized[0]
+                gmv_return = ef.gmv_annualized[1]
+                portfolio_data['gmv'] = {
+                    'risk': gmv_risk,
+                    'return': gmv_return,
+                    'weights': ef.gmv_weights.tolist() if hasattr(ef, 'gmv_weights') else None
+                }
+                portfolio_data['risks'].append(gmv_risk)
+                portfolio_data['returns'].append(gmv_return)
+            
+            # Получаем максимальную доходность
+            try:
+                max_return_result = ef.optimize_return()
+                if max_return_result:
+                    max_risk = max_return_result['Risk_monthly']
+                    max_return = max_return_result['Mean_return_monthly']
+                    portfolio_data['max_return'] = {
+                        'risk': max_risk,
+                        'return': max_return,
+                        'weights': max_return_result['Weights'].tolist()
+                    }
+                    portfolio_data['risks'].append(max_risk)
+                    portfolio_data['returns'].append(max_return)
+            except Exception as e:
+                logger.warning(f"Failed to get max return portfolio: {e}")
+            
+            # Получаем тангенциальный портфель
+            try:
+                tangency_result = ef.get_tangency_portfolio()
+                if tangency_result:
+                    tangency_risk = tangency_result['Risk']
+                    tangency_return = tangency_result['Rate_of_return']
+                    portfolio_data['tangency'] = {
+                        'risk': tangency_risk,
+                        'return': tangency_return,
+                        'weights': tangency_result['Weights'].tolist()
+                    }
+                    portfolio_data['risks'].append(tangency_risk)
+                    portfolio_data['returns'].append(tangency_return)
+            except Exception as e:
+                logger.warning(f"Failed to get tangency portfolio: {e}")
+            
+            # Если у нас есть только две точки, создаем простую линию
+            if len(portfolio_data['risks']) >= 2:
+                # Сортируем по риску
+                sorted_data = sorted(zip(portfolio_data['risks'], portfolio_data['returns']))
+                portfolio_data['risks'], portfolio_data['returns'] = zip(*sorted_data)
+                portfolio_data['risks'] = list(portfolio_data['risks'])
+                portfolio_data['returns'] = list(portfolio_data['returns'])
+            
+            return portfolio_data if portfolio_data['risks'] else None
+            
+        except Exception as e:
+            logger.error(f"Error getting portfolio data: {e}")
+            return None
+    
+    def _normalize_risk_data(self, risks, returns):
+        """Нормализация данных риска для корректного отображения"""
+        try:
+            if not risks or not returns:
+                return None
+            
+            # Конвертируем в списки если нужно
+            risks = list(risks)
+            returns = list(returns)
+            
+            # Проверяем на критические значения
+            max_risk = max(risks)
+            min_risk = min(risks)
+            
+            # Если максимальный риск превышает 1000%, нормализуем данные
+            if max_risk > 10.0:  # Более 1000%
+                logger.warning(f"Normalizing extreme risk values: max_risk={max_risk:.2f}")
+                
+                # Используем логарифмическое масштабирование для экстремальных значений
+                normalized_risks = []
+                for risk in risks:
+                    if risk > 1.0:  # Если риск больше 100%
+                        # Применяем логарифмическое масштабирование
+                        normalized_risk = 1.0 + (risk - 1.0) / 100.0  # Сжимаем в диапазон 1-2
+                        normalized_risks.append(min(normalized_risk, 2.0))  # Ограничиваем максимумом 200%
+                    else:
+                        normalized_risks.append(risk)
+                
+                risks = normalized_risks
+                logger.info(f"Risk values normalized: {min(risks):.6f} - {max(risks):.6f}")
+            
+            return {
+                'risks': risks,
+                'returns': returns
+            }
+            
+        except Exception as e:
+            logger.error(f"Error normalizing risk data: {e}")
+            return None
+    
+    def _normalize_single_risk(self, risk):
+        """Нормализация одного значения риска"""
+        try:
+            if risk > 10.0:  # Более 1000%
+                # Применяем логарифмическое масштабирование
+                normalized_risk = 1.0 + (risk - 1.0) / 100.0
+                return min(normalized_risk, 2.0)  # Ограничиваем максимумом 200%
+            else:
+                return risk
+        except Exception as e:
+            logger.error(f"Error normalizing single risk: {e}")
+            return risk
+
     def _create_efficient_frontier_fallback(self, ef, asset_names, data_source='okama', **kwargs):
         """Fallback метод для создания эффективной границы"""
         try:
