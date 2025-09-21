@@ -6700,8 +6700,31 @@ class ShansAi:
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
         try:
-            # Отправляем сообщение с ReplyKeyboardRemove для немедленного скрытия
+            # Отправляем исчезающее сообщение с ReplyKeyboardRemove для немедленного скрытия
             # Используем эмодзи обновления - логично для скрытия клавиатуры
+            await self._send_ephemeral_message(
+                update, 
+                context,
+                "🔄",  # Эмодзи обновления - логично для скрытия клавиатуры
+                parse_mode=None,
+                delete_after=2,  # Удаляем через 2 секунды
+                reply_markup=ReplyKeyboardRemove()
+            )
+            
+            # Обновляем контекст пользователя
+            user_id = update.effective_user.id
+            self._update_user_context(user_id, active_reply_keyboard=None)
+            self.logger.info("Reply keyboard removed using ReplyKeyboardRemove")
+            
+        except Exception as e:
+            self.logger.error(f"Error removing reply keyboard: {e}")
+            # Fallback к старому методу
+            await self._manage_reply_keyboard(update, context, keyboard_type=None)
+
+    async def _hide_reply_keyboard_silently(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Тихо скрыть reply keyboard без видимых сообщений (для переходов между контекстами)"""
+        try:
+            # Отправляем обычное сообщение с ReplyKeyboardRemove
             await self._send_message_safe(
                 update, 
                 "🔄",  # Эмодзи обновления - логично для скрытия клавиатуры
@@ -6712,10 +6735,10 @@ class ShansAi:
             # Обновляем контекст пользователя
             user_id = update.effective_user.id
             self._update_user_context(user_id, active_reply_keyboard=None)
-            self.logger.info("Reply keyboard removed using ReplyKeyboardRemove")
+            self.logger.info("Reply keyboard removed silently using ReplyKeyboardRemove")
             
         except Exception as e:
-            self.logger.error(f"Error removing reply keyboard: {e}")
+            self.logger.error(f"Error removing reply keyboard silently: {e}")
             # Fallback к старому методу
             await self._manage_reply_keyboard(update, context, keyboard_type=None)
 
@@ -6954,7 +6977,7 @@ class ShansAi:
             
             # Ensure reply keyboard is removed when transitioning between methods
             # This prevents keyboard from staying visible when switching contexts
-            await self._ensure_no_reply_keyboard(update, context)
+            await self._hide_reply_keyboard_silently(update, context)
             
             # Handle start command callbacks
             if callback_data.startswith("start_"):
@@ -10435,7 +10458,7 @@ class ShansAi:
             
             # Ensure reply keyboard is removed when transitioning between different contexts
             # This prevents keyboard from staying visible when switching between different analysis types
-            await self._ensure_no_reply_keyboard(update, context)
+            await self._hide_reply_keyboard_silently(update, context)
             
             # Determine context based on user's last activity and available data
             last_assets = user_context.get('last_assets', [])
