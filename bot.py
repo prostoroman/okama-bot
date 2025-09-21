@@ -2242,7 +2242,7 @@ class ShansAi:
             await context.bot.send_photo(
                 chat_id=update.effective_chat.id, 
                 photo=io.BytesIO(img_bytes),
-                caption=self._truncate_caption(f"🔗 Корреляция {len(symbols)} активов\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}")
+                caption=self._truncate_caption(f"🔗 Корреляция {len(symbols)} активов\n\n+1: полная положительная корреляция\n0: отсутствие корреляции\n-1: полная отрицательная корреляция\n\n{correlation_values_text}")
             )
             self.logger.info("Correlation matrix image sent successfully")
             
@@ -11852,7 +11852,7 @@ class ShansAi:
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
                     photo=io.BytesIO(img_bytes),
-                    caption=self._truncate_caption(f"🔗 Корреляционная матрица для смешанного сравнения\n\nПоказывает корреляцию между доходностями всех активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}"),
+                    caption=self._truncate_caption(f"🔗 Показывает корреляцию между доходностями всех активов (от -1 до +1)\n\n• +1: полная положительная корреляция\n• 0: отсутствие корреляции\n• -1: полная отрицательная корреляция\n\n{correlation_values_text}"),
                     reply_markup=keyboard
                 )
                 self.logger.info("Correlation matrix image sent successfully")
@@ -16387,7 +16387,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "📈 Создаю график Rolling CAGR...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
@@ -16486,13 +16486,12 @@ class ShansAi:
                     weight = weights[i] if i < len(weights) else 0.0
                     symbols_with_weights.append(f"{symbol_name} ({weight:.1%})")
                 
-                caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols_with_weights)}\n\n"
-                caption += f"📊 Параметры:\n"
+                caption = f"Позволяет отслеживать динамику изменения темпов роста во времени\n\n"
                 caption += f"• Валюта: {currency}\n"
-                caption += f"• Окно: макс. период (весь доступный период)\n\n"
+                caption += f"• Окно: макс. доступный период\n\n"
                 
                 # Add rolling CAGR statistics
-                caption += f"📈 Статистика Rolling CAGR:\n"
+                caption += f"Позволяет отслеживать динамику изменения темпов роста во времени:\n"
                 if current_rolling_cagr is not None:
                     caption += f"• Текущий Rolling CAGR: {current_rolling_cagr:.2%}\n"
                 caption += f"• Средний Rolling CAGR: {mean_rolling_cagr:.2%}\n"
@@ -16503,11 +16502,10 @@ class ShansAi:
             except Exception as e:
                 self.logger.warning(f"Could not get rolling CAGR statistics: {e}")
                 # Fallback to basic caption
-                caption = f"📈 Rolling CAGR (MAX период) портфеля: {', '.join(symbols)}\n\n"
-                caption += f"📊 Параметры:\n"
+                caption = f"Позволяет отслеживать динамику изменения темпов роста во времени\n\n"
                 caption += f"• Валюта: {currency}\n"
                 caption += f"• Веса: {', '.join([f'{w:.1%}' for w in weights])}\n"
-                caption += f"• Окно: макс. период (весь доступный период)\n\n"
+                caption += f"• Окно: макс. доступный период\n\n"
             
             # Ensure portfolio keyboard is shown
             await self._manage_reply_keyboard(update, context, "portfolio")
