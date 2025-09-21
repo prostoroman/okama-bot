@@ -7227,6 +7227,15 @@ class ShansAi:
                     portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
                 self.logger.info(f"Portfolio risk metrics button clicked for portfolio: {portfolio_symbol}")
                 await self._handle_portfolio_risk_metrics_by_symbol(update, context, portfolio_symbol)
+            elif callback_data.startswith('portfolio_risk_'):
+                portfolio_symbol_raw = callback_data.replace('portfolio_risk_', '')
+                # Don't apply clean_symbol to portfolio symbols that contain commas (okama portfolio symbols)
+                if ',' in portfolio_symbol_raw:
+                    portfolio_symbol = portfolio_symbol_raw
+                else:
+                    portfolio_symbol = self.clean_symbol(portfolio_symbol_raw)
+                self.logger.info(f"Portfolio risk button clicked for portfolio: {portfolio_symbol}")
+                await self._handle_portfolio_risk_metrics_by_symbol(update, context, portfolio_symbol)
             elif callback_data.startswith('risk_metrics_'):
                 symbols = [self.clean_symbol(s) for s in callback_data.replace('risk_metrics_', '').split(',')]
                 self.logger.info(f"Risk metrics button clicked for symbols: {symbols}")
