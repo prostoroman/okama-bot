@@ -19,6 +19,10 @@ import warnings
 import contextlib
 from matplotlib.patches import Rectangle
 import matplotlib.patches as mpatches
+from io import BytesIO
+import math
+import textwrap
+from typing import Dict, Optional, Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -1706,6 +1710,163 @@ class ChartStyles:
         """Оптимизировать отображение дат на оси X в зависимости от количества данных"""
         # Используем новый улучшенный метод форматирования
         self._enhanced_x_axis_formatting(ax, date_index)
+
+    def render_table_image(
+        self,
+        df: pd.DataFrame,
+        title: Optional[str] = None,
+        footnote: Optional[str] = None,
+        col_formats: Optional[Dict[str, str]] = None,  # например {"CAGR":"{:.2%}","Vol":"{:.2f}"}
+        max_col_width: int = 28,          # максимум символов в строке до переноса
+        row_zebra: bool = True,
+        header_bg: str = "#0F172A",       # тёмно-синий (слегка)
+        header_fg: str = "#FFFFFF",
+        even_bg: str = "#F8FAFC",
+        odd_bg: str = "#FFFFFF",
+        text_color: str = "#0B1221",
+        edge_color: str = "#CBD5E1",
+        cell_padding_x: float = 0.4,      # поля по X (в «символьных» ширинах)
+        cell_padding_y: float = 0.28,     # поля по Y (в «строках»)
+        fontsize: int = 12,
+        title_fontsize: int = 16,
+        footnote_fontsize: int = 10,
+        dpi: int = 200,
+        as_document: bool = True,         # True → без сжатия, подходит для send_document
+    ) -> BytesIO:
+        """
+        Превращает DataFrame в PNG-изображение и возвращает BytesIO.
+        """
+
+        # 1) Копия и форматирование значений под вывод
+        df2 = df.copy()
+
+        # Применим пользовательские форматы к колонкам (если переданы)
+        if col_formats:
+            for col, fmt in col_formats.items():
+                if col in df2.columns:
+                    df2[col] = df2[col].apply(lambda x: fmt.format(x) if pd.notna(x) else "")
+
+        # Остальные значения приведём к строкам (чтобы переносить)
+        for c in df2.columns:
+            df2[c] = df2[c].apply(lambda x: "" if pd.isna(x) else str(x))
+
+        # 2) Функция переноса по ширине колонки
+        def wrap_cell(text: str, width: int) -> str:
+            if not text:
+                return ""
+            # аккуратный перенос с сохранением слов
+            wrapped = textwrap.fill(text, width=width, replace_whitespace=False, drop_whitespace=False)
+            return wrapped
+
+        # 3) Оценка «идеальной» ширины для каждой колонки по длинам строк
+        def estimate_col_widths(frame: pd.DataFrame, max_width: int, pad_x: float) -> Iterable[int]:
+            widths = []
+            for col in frame.columns:
+                # оценка по заголовку и данным
+                samples = [str(col)] + frame[col].astype(str).tolist()
+                # «желаемая» ширина — квантиль 0.85, чтобы не раздувать из-за единичных длинных значений
+                base = int(np.quantile([len(s) for s in samples], 0.85))
+                base = min(max(6, base), max_width)  # не слишком узко и не шире лимита
+                widths.append(base + int(pad_x * 2)) # с горизонтальными полями
+            return widths
+
+        col_widths = list(estimate_col_widths(df2, max_col_width, cell_padding_x))
+
+        # 4) Перенесём тексты по рассчитанным ширинам колонок
+        for i, col in enumerate(df2.columns):
+            df2[col] = df2[col].map(lambda s: wrap_cell(s, col_widths[i]))
+
+        # 5) Определим высоты строк (по максимальному числу переносов в строке)
+        def row_height_factor(row) -> int:
+            # количество строк в самой «высокой» ячейке
+            max_lines = max((str(val).count("\n") + 1 if val else 1) for val in row)
+            return max_lines
+
+        line_heights = [row_height_factor(r) for _, r in df2.iterrows()]
+        # Заголовок как 1.2 строки
+        header_height = 1.2
+
+        # 6) Конвертация «символьных» ширин в фигуру (дюймы)
+        #   Примем эмпирическое соответствие: 1 «символ» ≈ 0.18 дюйма при fontsize~12
+        sym_to_inch = 0.18 * (fontsize / 12)
+        fig_width_in = sum(col_widths) * sym_to_inch
+
+        # Высота: (шапка + строки) в «строках». 1 «строка» ≈ 0.38 дюйма при fontsize~12
+        line_to_inch = 0.38 * (fontsize / 12)
+        total_lines = header_height + sum([h + 2 * cell_padding_y for h in line_heights])
+        # + место под заголовок/подвал
+        extra_top = 0.0 if not title else 1.0
+        extra_bottom = 0.0 if not footnote else 0.8
+        fig_height_in = total_lines * line_to_inch + extra_top + extra_bottom
+
+        # 7) Рендер
+        fig, ax = plt.subplots(figsize=(fig_width_in, fig_height_in), dpi=dpi)
+        ax.axis("off")
+
+        y_cursor = 1.0  # нормированная координата (используем аннотации)
+
+        # Заголовок (если есть)
+        if title:
+            ax.text(0.0, 1.0, title, transform=ax.transAxes, ha="left", va="top",
+                    fontsize=title_fontsize, fontweight="bold", color=text_color)
+            y_cursor -= extra_top / fig_height_in  # сдвиг вниз пропорционально использованной высоте
+
+        # Функция для рисования одной «табличной» строки прямоугольниками и текстом
+        def draw_row_text(y_top_ax, texts, bg, height_in_lines: float, is_header=False):
+            # Преобразование высоты в координаты Axes
+            height_in = height_in_lines * line_to_inch
+            height_ax = height_in / fig_height_in
+
+            # X-координаты колонок в Axes
+            x_positions_in = np.cumsum([0] + [w * sym_to_inch for w in col_widths])
+            x_positions_ax = x_positions_in / fig_width_in
+
+            # Заливка фона ячеек + рамки
+            for j in range(len(col_widths)):
+                x0 = x_positions_ax[j]
+                x1 = x_positions_ax[j+1]
+                rect = plt.Rectangle((x0, y_top_ax - height_ax), x1 - x0, height_ax,
+                                     transform=ax.transAxes, facecolor=bg,
+                                     edgecolor=edge_color, linewidth=1)
+                ax.add_patch(rect)
+
+                # Текст
+                pad_x_ax = (cell_padding_x * sym_to_inch) / fig_width_in
+                pad_y_ax = (cell_padding_y * line_to_inch) / fig_height_in
+                ax.text(x0 + pad_x_ax,
+                        y_top_ax - pad_y_ax - 0.01,  # лёгкий отступ от верхней границы
+                        texts[j],
+                        transform=ax.transAxes,
+                        ha="left", va="top",
+                        fontsize=fontsize,
+                        color=(header_fg if is_header else text_color),
+                        fontweight="bold" if is_header else "normal")
+
+            # Вернуть новую «верхнюю» координату после этой строки
+            return y_top_ax - height_ax
+
+        # Шапка
+        header_texts = [str(c) for c in df2.columns]
+        y_cursor = draw_row_text(y_cursor, header_texts, header_bg, header_height, is_header=True)
+
+        # Данные
+        for i, (_, row) in enumerate(df2.iterrows()):
+            bg = even_bg if (i % 2 == 0) else odd_bg
+            height_lines = (row_height_factor(row) + 2 * cell_padding_y)
+            y_cursor = draw_row_text(y_cursor, list(row.values), bg, height_lines, is_header=False)
+
+        # Подвал/примечание
+        if footnote:
+            ax.text(0.0, y_cursor - 0.02, footnote,
+                    transform=ax.transAxes, ha="left", va="top",
+                    fontsize=footnote_fontsize, color="#64748B")
+
+        # Экспорт в BytesIO
+        buf = BytesIO()
+        plt.savefig(buf, format="png", dpi=dpi, bbox_inches="tight", pad_inches=0.08)
+        plt.close(fig)
+        buf.seek(0)
+        return buf
 
 # Глобальный экземпляр
 chart_styles = ChartStyles()

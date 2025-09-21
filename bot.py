@@ -6492,6 +6492,25 @@ class ShansAi:
             # Fallback: send message without keyboard
             await self._send_message_safe(update, text)
 
+    async def _send_portfolio_image_with_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, img_buffer, caption: str = None):
+        """Отправить изображение портфеля с reply keyboard"""
+        try:
+            # Ensure portfolio keyboard is shown
+            await self._manage_reply_keyboard(update, context, "portfolio")
+            
+            # Send image
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=img_buffer,
+                caption=caption,
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error in _send_portfolio_image_with_reply_keyboard: {e}")
+            # Fallback: send error message
+            await self._send_message_safe(update, f"❌ Ошибка при отправке изображения: {str(e)}")
+
     async def _send_portfolio_ai_analysis_with_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None):
         """Отправить длинный AI анализ портфеля с reply keyboard, поддерживая разбиение на части"""
         try:
@@ -9956,6 +9975,60 @@ class ShansAi:
             self.logger.error(f"Error creating enhanced markdown table: {e}")
             # Fallback to simple tabulate
             return tabulate.tabulate(table_data, headers=headers, tablefmt="pipe")
+
+    def _parse_markdown_table_to_dataframe(self, markdown_table: str) -> Optional[pd.DataFrame]:
+        """Parse markdown table string to pandas DataFrame"""
+        try:
+            import io
+            import re
+            
+            # Split table into lines
+            lines = markdown_table.strip().split('\n')
+            
+            # Find the separator line (contains |---|)
+            separator_line = None
+            separator_index = -1
+            for i, line in enumerate(lines):
+                if '|---' in line or '| ---' in line:
+                    separator_line = line
+                    separator_index = i
+                    break
+            
+            if separator_index == -1:
+                self.logger.warning("No separator line found in markdown table")
+                return None
+            
+            # Extract headers (line before separator)
+            if separator_index > 0:
+                header_line = lines[separator_index - 1]
+                headers = [col.strip() for col in header_line.split('|')[1:-1]]  # Remove empty first/last elements
+            else:
+                self.logger.warning("No header line found before separator")
+                return None
+            
+            # Extract data rows (lines after separator)
+            data_rows = []
+            for i in range(separator_index + 1, len(lines)):
+                line = lines[i].strip()
+                if line and line.startswith('|') and line.endswith('|'):
+                    # Split by | and remove empty first/last elements
+                    row_data = [cell.strip() for cell in line.split('|')[1:-1]]
+                    if len(row_data) == len(headers):
+                        data_rows.append(row_data)
+            
+            if not data_rows:
+                self.logger.warning("No data rows found in markdown table")
+                return None
+            
+            # Create DataFrame
+            df = pd.DataFrame(data_rows, columns=headers)
+            
+            self.logger.info(f"Successfully parsed markdown table: {df.shape}")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing markdown table to DataFrame: {e}")
+            return None
 
     def _create_compare_command_keyboard(self, symbols: list, currency: str, update: Update = None, specified_period: str = None) -> InlineKeyboardMarkup:
         """Create keyboard for compare command button responses"""
@@ -13590,10 +13663,52 @@ class ShansAi:
                 )
                 
                 if summary_table and not summary_table.startswith("❌"):
-                    # Send table as message with reply keyboard
-                    header_text = f"📊 **Сводная таблица ключевых метрик**"
-                    table_message = f"{header_text}\n\n```\n{summary_table}\n```"
-                    await self._send_portfolio_message_with_reply_keyboard(update, context, table_message, parse_mode='Markdown')
+                    # Convert text table to DataFrame and create image
+                    try:
+                        # Parse the markdown table to create DataFrame
+                        df = self._parse_markdown_table_to_dataframe(summary_table)
+                        
+                        if df is not None and not df.empty:
+                            # Create table image using chart_styles
+                            title = f"📊 Сводная таблица ключевых метрик"
+                            footnote = f"Источник: okama + расчёты Shans.ai • Валюта: {currency}"
+                            
+                            # Create image buffer
+                            img_buffer = self.chart_styles.render_table_image(
+                                df=df,
+                                title=title,
+                                footnote=footnote,
+                                col_formats=None,  # Values are already formatted
+                                max_col_width=25,
+                                row_zebra=True,
+                                header_bg="#0F172A",
+                                header_fg="#FFFFFF",
+                                even_bg="#F8FAFC",
+                                odd_bg="#FFFFFF",
+                                text_color="#0B1221",
+                                edge_color="#CBD5E1",
+                                fontsize=11,
+                                title_fontsize=14,
+                                footnote_fontsize=9,
+                                dpi=200
+                            )
+                            
+                            # Send image with reply keyboard
+                            await self._send_portfolio_image_with_reply_keyboard(
+                                update, context, img_buffer, 
+                                caption="📊 **Сводная таблица ключевых метрик**"
+                            )
+                        else:
+                            # Fallback to text table
+                            header_text = f"📊 **Сводная таблица ключевых метрик**"
+                            table_message = f"{header_text}\n\n```\n{summary_table}\n```"
+                            await self._send_portfolio_message_with_reply_keyboard(update, context, table_message, parse_mode='Markdown')
+                    except Exception as e:
+                        self.logger.error(f"Error creating table image: {e}")
+                        # Fallback to text table
+                        header_text = f"📊 **Сводная таблица ключевых метрик**"
+                        table_message = f"{header_text}\n\n```\n{summary_table}\n```"
+                        await self._send_portfolio_message_with_reply_keyboard(update, context, table_message, parse_mode='Markdown')
                 else:
                     await self._send_portfolio_message_with_reply_keyboard(update, context, "❌ Не удалось создать таблицу метрик")
                     
