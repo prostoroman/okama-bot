@@ -1610,17 +1610,21 @@ class ChartStyles:
             max_risk = max(risks)
             min_risk = min(risks)
             
-            # Если максимальный риск превышает 1000%, нормализуем данные
-            if max_risk > 10.0:  # Более 1000%
+            # Если максимальный риск превышает 200%, нормализуем данные
+            if max_risk > 2.0:  # Более 200%
                 logger.warning(f"Normalizing extreme risk values: max_risk={max_risk:.2f}")
                 
-                # Используем логарифмическое масштабирование для экстремальных значений
+                # Используем более агрессивную нормализацию для экстремальных значений
                 normalized_risks = []
                 for risk in risks:
-                    if risk > 1.0:  # Если риск больше 100%
+                    if risk > 2.0:  # Если риск больше 200%
                         # Применяем логарифмическое масштабирование
-                        normalized_risk = 1.0 + (risk - 1.0) / 100.0  # Сжимаем в диапазон 1-2
-                        normalized_risks.append(min(normalized_risk, 2.0))  # Ограничиваем максимумом 200%
+                        normalized_risk = 2.0 + np.log10(risk / 2.0) * 0.5  # Сжимаем в диапазон 2-2.5
+                        normalized_risks.append(min(normalized_risk, 2.5))  # Ограничиваем максимумом 250%
+                    elif risk > 1.0:  # Если риск больше 100%
+                        # Линейное масштабирование для умеренно высоких значений
+                        normalized_risk = 1.0 + (risk - 1.0) / 10.0  # Сжимаем в диапазон 1-2
+                        normalized_risks.append(min(normalized_risk, 2.0))
                     else:
                         normalized_risks.append(risk)
                 
@@ -1639,10 +1643,14 @@ class ChartStyles:
     def _normalize_single_risk(self, risk):
         """Нормализация одного значения риска"""
         try:
-            if risk > 10.0:  # Более 1000%
+            if risk > 2.0:  # Более 200%
                 # Применяем логарифмическое масштабирование
-                normalized_risk = 1.0 + (risk - 1.0) / 100.0
-                return min(normalized_risk, 2.0)  # Ограничиваем максимумом 200%
+                normalized_risk = 2.0 + np.log10(risk / 2.0) * 0.5
+                return min(normalized_risk, 2.5)  # Ограничиваем максимумом 250%
+            elif risk > 1.0:  # Более 100%
+                # Линейное масштабирование для умеренно высоких значений
+                normalized_risk = 1.0 + (risk - 1.0) / 10.0
+                return min(normalized_risk, 2.0)
             else:
                 return risk
         except Exception as e:
