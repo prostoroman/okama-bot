@@ -1848,7 +1848,7 @@ class ChartStyles:
                         ha="left", va="top",
                         fontsize=fontsize,
                         color=(header_fg if is_header else text_color),
-                        fontweight="bold" if is_header else "normal")
+                        fontweight="normal" if is_header else "normal")
 
             # Вернуть новую «верхнюю» координату после этой строки
             return y_top_ax - height_ax

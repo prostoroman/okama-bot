@@ -10179,7 +10179,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ Нейроанализ"),
+                    KeyboardButton("🧠 ▫️ Нейроанализ"),
                     KeyboardButton("▫️ Портфель vs Активы"),
                     KeyboardButton("▫️ Сравнить")
                 ]
@@ -10210,7 +10210,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("▫️ Нейроанализ"),
+                    KeyboardButton("🧠 ▫️ Нейроанализ"),
                     KeyboardButton("▫️ В Портфель")
                 ]
             ]
@@ -10435,7 +10435,7 @@ class ShansAi:
             "▫️ Монте-Карло",
             "▫️ Процентили (10/50/90)",
             "▫️ Просадки",
-            "▫️ Нейроанализ",
+            "🧠 ▫️ Нейроанализ",
             "▫️ Портфель vs Активы",
             "▫️ Сравнить"
         ]
@@ -10450,7 +10450,7 @@ class ShansAi:
             "▫️ Метрики",
             "▫️ Корреляция",
             "▫️ Эффективная граница",
-            "▫️ Нейроанализ",
+            "🧠 ▫️ Нейроанализ",
             "▫️ В Портфель"
         ]
         return text in compare_buttons
@@ -10611,7 +10611,7 @@ class ShansAi:
                 "▫️ Монте-Карло": f"portfolio_monte_carlo_{portfolio_symbol}",
                 "▫️ Процентили (10/50/90)": f"portfolio_forecast_{portfolio_symbol}",
                 "▫️ Просадки": f"portfolio_drawdowns_{portfolio_symbol}",
-                "▫️ Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
+                "🧠 ▫️ Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
                 "▫️ Портфель vs Активы": f"portfolio_compare_assets_{portfolio_symbol}",
                 "▫️ Сравнить": f"portfolio_compare_{portfolio_symbol}"
             }
@@ -10682,7 +10682,7 @@ class ShansAi:
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif text == "▫️ Нейроанализ":
+            elif text == "🧠 ▫️ Нейроанализ":
                 await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
@@ -11587,7 +11587,7 @@ class ShansAi:
             period = user_context.get('current_period', None)
             
             self.logger.info(f"Creating drawdowns chart for symbols: {symbols}, currency: {currency}, period: {period}")
-            await self._send_ephemeral_message(update, context, "📉 Создаю график...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график...", delete_after=3)
             
             # Check if this is a mixed comparison (portfolios + assets)
             user_context = self._get_user_context(user_id)
@@ -11596,7 +11596,7 @@ class ShansAi:
             
             if last_analysis_type == 'comparison' and any(isinstance(s, (pd.Series, pd.DataFrame)) for s in expanded_symbols):
                 # This is a mixed comparison, handle differently
-                await self._send_ephemeral_message(update, context, "📉 Создаю график для смешанного сравнения...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "📈 Создаю график для смешанного сравнения...", delete_after=3)
                 await self._create_mixed_comparison_drawdowns_chart(update, context, symbols, currency)
             else:
                 # Regular comparison, create AssetList with period support
@@ -12190,7 +12190,7 @@ class ShansAi:
     async def _handle_monthly_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle monthly chart button click for single asset"""
         try:
-            await self._send_ephemeral_message(update, context, "📅 Создаю график за 5 лет...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график за 5 лет...", delete_after=3)
             
             # Получаем месячный график за 5 лет
             monthly_chart = await self._get_monthly_chart(symbol)
@@ -12212,7 +12212,7 @@ class ShansAi:
     async def _handle_all_chart_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str):
         """Handle all chart button click for single asset"""
         try:
-            await self._send_ephemeral_message(update, context, "📊 Создаю график за весь период...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график за макс. период...", delete_after=3)
             
             # Получаем график за весь период
             all_chart = await self._get_all_chart(symbol)
@@ -15844,7 +15844,7 @@ class ShansAi:
             self.logger.info(f"Filtered symbols: {final_symbols}")
             
             self.logger.info(f"Creating returns chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_ephemeral_message(update, context, "💰 Создаю график доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график доходности...", delete_after=3)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -16030,7 +16030,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "💰 Создаю график доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "Создаю график доходности...", delete_after=3)
             
             # Filter out None values and empty strings
             final_symbols = [s for s in symbols if s is not None and str(s).strip()]
