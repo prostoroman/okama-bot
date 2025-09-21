@@ -8038,7 +8038,7 @@ class ShansAi:
 
         except Exception as e:
             self.logger.error(f"Error handling metrics button: {e}")
-            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при обработке кнопки метрик: {str(e)}", parse_mode='Markdown', reply_markup=keyboard)
+            await self._send_callback_message_with_keyboard_removal(update, context, f"❌ Ошибка при обработке кнопки метрик: {str(e)}", parse_mode='Markdown')
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as string"""
