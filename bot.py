@@ -6681,12 +6681,13 @@ class ShansAi:
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
         try:
-            # Отправляем сообщение с ReplyKeyboardRemove напрямую через context.bot
-            # Это обходит все проверки в _send_message_safe
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="",  # Пустое сообщение для скрытия клавиатуры
-                reply_markup=ReplyKeyboardRemove()
+            # Отправляем сообщение с ReplyKeyboardRemove для немедленного скрытия
+            # Используем эмодзи обновления - логично для скрытия клавиатуры
+            await self._send_message_safe(
+                update, 
+                "🔄",  # Эмодзи обновления - логично для скрытия клавиатуры
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode=None
             )
             
             # Обновляем контекст пользователя
