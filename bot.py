@@ -1257,6 +1257,102 @@ class ShansAi:
         
         return portfolio
 
+    async def _create_portfolio_unified(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                      symbols: list, weights: list, currency: str, 
+                                      specified_period: str = None, portfolio_text_prefix: str = "💼 **Портфель создан успешно!**") -> bool:
+        """Универсальный метод для создания портфеля с весами"""
+        try:
+            user_id = update.effective_user.id
+            
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            
+            # Create portfolio using okama with period support
+            try:
+                if specified_period:
+                    years = int(specified_period[:-1])
+                    from datetime import timedelta
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=years * 365)
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
+                                           first_date=start_date.strftime('%Y-%m-%d'), 
+                                           last_date=end_date.strftime('%Y-%m-%d'))
+                    self.logger.info(f"Created portfolio with period {specified_period}")
+                else:
+                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
+                    self.logger.info(f"Created portfolio with maximum available period")
+                
+                # Create portfolio information text
+                portfolio_text = f"{portfolio_text_prefix}\n\n"
+                
+                # Add basic metrics to portfolio text
+                try:
+                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
+                    portfolio_text += metrics_text
+                except Exception as e:
+                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
+                
+                # Generate portfolio symbol
+                user_context = self._get_user_context(user_id)
+                portfolio_count = user_context.get('portfolio_count', 0) + 1
+                portfolio_symbol = f"PF{portfolio_count}"
+                
+                # Add portfolio symbol display
+                portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
+                
+                # Add buttons
+                keyboard = [
+                    [InlineKeyboardButton("💼 Анализ портфеля", callback_data=f"portfolio_analysis_{portfolio_symbol}")],
+                    [InlineKeyboardButton("📈 График доходности", callback_data=f"portfolio_chart_{portfolio_symbol}"),
+                     InlineKeyboardButton("📋 Метрики риска", callback_data=f"portfolio_risk_{portfolio_symbol}")],
+                    [InlineKeyboardButton("💼 Сохранить портфель", callback_data=f"portfolio_save_{portfolio_symbol}")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
+                
+                # Save portfolio to user context
+                portfolio_attributes = {
+                    'symbols': symbols,
+                    'weights': weights,
+                    'currency': currency,
+                    'created_at': datetime.now().isoformat(),
+                    'description': f"Портфель: {', '.join(symbols)}",
+                    'portfolio_symbol': portfolio_symbol,
+                    'total_weight': sum(weights),
+                    'asset_count': len(symbols),
+                    'period': specified_period
+                }
+                
+                saved_portfolios = user_context.get('saved_portfolios', {})
+                saved_portfolios[portfolio_symbol] = portfolio_attributes
+                
+                self._update_user_context(
+                    user_id,
+                    saved_portfolios=saved_portfolios,
+                    portfolio_count=portfolio_count
+                )
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"Error creating portfolio: {e}")
+                await self._send_message_safe(update, 
+                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
+                    "💡 Возможные причины:\n"
+                    "• Один из символов недоступен\n"
+                    "• Проблемы с данными\n"
+                    "• Неверный формат символа\n\n"
+                    "Проверьте:\n"
+                    "• Правильность написания символов\n"
+                    "• Доступность данных для указанных активов"
+                )
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error in unified portfolio creation: {e}")
+            await self._send_message_safe(update, f"❌ Ошибка при создании портфеля: {str(e)}")
+            return False
+
     def _clear_all_waiting_flags(self, user_id: int):
         """Clear all waiting flags in user context"""
         self._update_user_context(user_id, 
@@ -5306,9 +5402,8 @@ class ShansAi:
             
             # Create message with tickers and request for weights
             tickers_text = ' '.join(tickers)
-            message = f"💼 **Укажите доли активов**\n\n"
-            message += f"Активы: `{tickers_text}`\n\n"
-            message += "**Введите веса в том же порядке:**\n"
+            message = f"💼 **Укажите доли активов {tickers_text}**\n\n"
+            message += "**Введите их веса в портфеле в том же порядке:**\n"
             
             # Show suggested equal weights
             equal_weight = 1.0 / len(tickers)
@@ -5316,12 +5411,10 @@ class ShansAi:
             for i, ticker in enumerate(tickers):
                 suggested_weights.append(f"{ticker}:{equal_weight:.3f}")
             
-            message += f"• Равномерное распределение: `{' '.join(suggested_weights)}`\n"
-            message += f"• Или укажите свои доли: `{' '.join([f'{ticker}:0.XX' for ticker in tickers])}`\n\n"
-            message += "**Форматы весов:**\n"
-            message += "• Десятичные: `0.5` (50%)\n"
-            message += "• Проценты: `50%`\n\n"
-            message += "⚠️ Сумма долей должна быть равна 1.0 (100%)"
+            message += f"Например, `{' '.join(suggested_weights)}`\n"
+            message += "• Можно указать в десятичном формате: `0.5`\n"
+            message += "• Можно проценты: `50%`\n\n"
+            message += "⚠️ Сумма долей должна быть равна 1.0 или 100%"
             
             await self._send_message_safe(update, message)
             
@@ -6102,15 +6195,9 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
-            
-            # Create portfolio using okama
-            self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
-            
             # Determine base currency
             if specified_currency:
                 currency = specified_currency
-                currency_info = f"указана пользователем ({specified_currency})"
             else:
                 # Auto-detect currency from the first asset
                 first_symbol = symbols[0]
@@ -6121,82 +6208,13 @@ class ShansAi:
                     self.logger.warning(f"Could not determine currency from asset {first_symbol}: {e}")
                     currency, currency_info = self._get_currency_by_symbol(first_symbol)
             
-            # Create portfolio using okama with period support
-            try:
-                if specified_period:
-                    years = int(specified_period[:-1])
-                    from datetime import timedelta
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=years * 365)
-                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency,
-                                           first_date=start_date.strftime('%Y-%m-%d'), 
-                                           last_date=end_date.strftime('%Y-%m-%d'))
-                else:
-                    portfolio = ok.Portfolio(symbols, weights=weights, ccy=currency)
-                
-                # Create portfolio information text
-                portfolio_text = f"💼 **Портфель создан успешно!**\n\n"
-                
-                # Add basic metrics to portfolio text
-                try:
-                    metrics_text = self._get_portfolio_basic_metrics(portfolio, symbols, weights, currency)
-                    portfolio_text += metrics_text
-                except Exception as e:
-                    self.logger.warning(f"Could not add metrics to portfolio text: {e}")
-                
-                # Generate portfolio symbol
-                user_context = self._get_user_context(user_id)
-                portfolio_count = user_context.get('portfolio_count', 0) + 1
-                portfolio_symbol = f"PF{portfolio_count}"
-                
-                # Add portfolio symbol display
-                portfolio_text += f"\n\n⚖️ Сравнить портфель: `/compare {portfolio_symbol}`\n"
-                
-                # Add buttons
-                keyboard = [
-                    [InlineKeyboardButton("💼 Анализ портфеля", callback_data=f"portfolio_analysis_{portfolio_symbol}")],
-                    [InlineKeyboardButton("📈 График доходности", callback_data=f"portfolio_chart_{portfolio_symbol}"),
-                     InlineKeyboardButton("📋 Метрики риска", callback_data=f"portfolio_risk_{portfolio_symbol}")],
-                    [InlineKeyboardButton("💼 Сохранить портфель", callback_data=f"portfolio_save_{portfolio_symbol}")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await self._send_message_safe(update, portfolio_text, reply_markup=reply_markup)
-                
-                # Save portfolio to user context
-                portfolio_attributes = {
-                    'symbols': symbols,
-                    'weights': weights,
-                    'currency': currency,
-                    'created_at': datetime.now().isoformat(),
-                    'description': f"Портфель: {', '.join(symbols)}",
-                    'portfolio_symbol': portfolio_symbol,
-                    'total_weight': sum(weights),
-                    'asset_count': len(symbols),
-                    'period': specified_period
-                }
-                
-                saved_portfolios = user_context.get('saved_portfolios', {})
-                saved_portfolios[portfolio_symbol] = portfolio_attributes
-                
-                self._update_user_context(
-                    user_id,
-                    saved_portfolios=saved_portfolios,
-                    portfolio_count=portfolio_count
-                )
-                
-            except Exception as e:
-                self.logger.error(f"Error creating portfolio: {e}")
-                await self._send_message_safe(update, 
-                    f"❌ Ошибка при создании портфеля: {str(e)}\n\n"
-                    "💡 Возможные причины:\n"
-                    "• Один из символов недоступен\n"
-                    "• Проблемы с данными\n"
-                    "• Неверный формат символа\n\n"
-                    "Проверьте:\n"
-                    "• Правильность написания символов\n"
-                    "• Доступность данных для указанных активов"
-                )
+            # Use unified portfolio creation method
+            success = await self._create_portfolio_unified(
+                update, context, symbols, weights, currency, specified_period
+            )
+            
+            if not success:
+                return
                 
         except Exception as e:
             self.logger.error(f"Error in portfolio tickers weights input handler: {e}")
