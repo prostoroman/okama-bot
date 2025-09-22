@@ -68,6 +68,7 @@ from services.yandexgpt_service import YandexGPTService
 from services.tushare_service import TushareService
 from services.gemini_service import GeminiService
 from services.examples_service import ExamplesService
+from services.rate_limiter import rate_limiter, check_user_rate_limit, get_rate_limit_status
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -2542,6 +2543,9 @@ class ShansAi:
 `/search <название или ISIN>` — поиск актива по базе okama и tushare
 Пример: `/search Apple`
 
+`/rate` — показать текущий статус лимитов запросов
+`/limits` — информация о системе ограничений скорости
+
 
 
 🔹 *Примеры команд*
@@ -2559,6 +2563,49 @@ class ShansAi:
 ⚠️ *Важно*: Вся информация предоставляется исключительно в информационных целях и не является инвестиционной рекомендацией."""
 
         await self._send_message_safe(update, welcome_message)
+    
+    async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /rate command to show current rate limit status"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=0.5):
+            return
+            
+        try:
+            status_message = await get_rate_limit_status(update, context)
+            await self._send_message_safe(update, status_message)
+        except Exception as e:
+            logger.error(f"Error in rate_command: {e}")
+            await self._send_message_safe(update, "Ошибка при получении статуса лимитов.")
+
+    async def limits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /limits command to show rate limiting information"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=0.5):
+            return
+            
+        try:
+            limits_info = """📊 *Информация о лимитах*
+
+🔹 *Персональные лимиты*
+• Целевое количество запросов: ~30 в день
+• Максимальный burst: 5 запросов подряд
+• Пополнение: ~0.000347 токенов/сек
+
+🔹 *Глобальные лимиты*
+• Защита от перегрузки сервера
+• Максимальный burst: 50 запросов
+• Пополнение: 5 токенов/сек
+
+🔹 *Стоимость команд*
+• `/info`, `/compare`, `/portfolio`: 1 токен
+• `/list`, `/search`, `/rate`, `/limits`: 0.5 токена
+
+Используйте `/rate` для просмотра текущего статуса лимитов."""
+            
+            await self._send_message_safe(update, limits_info)
+        except Exception as e:
+            logger.error(f"Error in limits_command: {e}")
+            await self._send_message_safe(update, "Ошибка при получении информации о лимитах.")
     
     async def show_info_help(self, update: Update):
         """Показать справку по команде /info"""
@@ -3028,6 +3075,10 @@ class ShansAi:
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=1.0):
+            return
+            
         # Ensure no reply keyboard is shown
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -3990,6 +4041,10 @@ class ShansAi:
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /list command"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=0.5):
+            return
+            
         # Ensure no reply keyboard is shown
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -4048,6 +4103,10 @@ class ShansAi:
 
     async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /search command for searching assets by name or ISIN"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=0.5):
+            return
+            
         # Ensure no reply keyboard is shown
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -4169,6 +4228,10 @@ class ShansAi:
 
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=1.0):
+            return
+            
         # Ensure no reply keyboard is shown initially
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -4813,6 +4876,10 @@ class ShansAi:
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command for creating portfolio with weights"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=1.0):
+            return
+            
         # Ensure no reply keyboard is shown initially
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -17745,6 +17812,8 @@ class ShansAi:
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
+        application.add_handler(CommandHandler("rate", self.rate_command))
+        application.add_handler(CommandHandler("limits", self.limits_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
         application.add_handler(CommandHandler("search", self.search_command))
