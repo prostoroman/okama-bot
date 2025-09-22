@@ -233,7 +233,24 @@ class ChartStyles:
                     
         except Exception as e:
             logger.warning(f"Could not refresh font cache: {e}")
+
     
+    def get_current_font_info(self):
+        """Получить информацию о текущих настройках шрифтов"""
+        try:
+            import matplotlib.font_manager as fm
+            available_fonts = [f.name for f in fm.fontManager.ttflist]
+            
+            return {
+                'current_font_family': mpl.rcParams['font.family'],
+                'current_sans_serif': mpl.rcParams['font.sans-serif'],
+                'available_fonts_count': len(available_fonts),
+                'is_render': self._is_render_environment(),
+                'priority_fonts_available': [f for f in ['Liberation Sans', 'DejaVu Sans', 'Arial'] if f in available_fonts]
+            }
+        except Exception as e:
+            logger.error(f"Error getting font info: {e}")
+            return None
 
     def _safe_text_render(self, text):
         """Безопасное отображение текста с CJK символами"""
