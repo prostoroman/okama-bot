@@ -40,8 +40,8 @@ class ChartStyles:
     def __init__(self):
         # Централизованные настройки шрифтов с поддержкой CJK
         mpl.rcParams.update({
-            'font.family': ['Lato'],  # Будет обновлено в _configure_cjk_fonts()
-            'font.sans-serif': ['Lato', 'Open Sans', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
+            'font.family': ['Liberation Sans'],  # Будет обновлено в _configure_cjk_fonts()
+            'font.sans-serif': ['Liberation Sans', 'Liberation Sans Narrow', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
             'font.weight': 'medium',
             'axes.titleweight': 'semibold',
             'axes.labelweight': 'medium',
@@ -62,7 +62,7 @@ class ChartStyles:
             'facecolor': 'white',
             'edgecolor': 'none',
             'bbox_inches': 'tight',
-            'style': 'seaborn-v0_8-whitegrid',
+            'style': 'default',
         }
         
         # Централизованные настройки линий
@@ -121,19 +121,26 @@ class ChartStyles:
         
         # Настройка CJK шрифтов
         self._configure_cjk_fonts()
+        
+        # В Render окружении принудительно обновляем кэш шрифтов
+        if self._is_render_environment():
+            self._refresh_font_cache()
+            # Повторно настраиваем шрифты после обновления кэша
+            self._configure_cjk_fonts()
 
     def _configure_cjk_fonts(self):
-        """Настройка шрифтов для поддержки CJK символов"""
+        """Настройка шрифтов для поддержки CJK символов с улучшенной проверкой доступности"""
         try:
             import matplotlib.font_manager as fm
             
             # Получаем список доступных шрифтов
             available_fonts = [f.name for f in fm.fontManager.ttflist]
+            logger.info(f"Available fonts count: {len(available_fonts)}")
             
-            # Приоритетные CJK шрифты
-            cjk_fonts = [
-                'Lato',                    # Основной шрифт
-                'Open Sans',               # Резервный шрифт
+            # Приоритетные шрифты с проверкой доступности
+            priority_fonts = [
+                'Liberation Sans',         # Основной шрифт
+                'Liberation Sans Narrow',  # Резервный шрифт
                 'DejaVu Sans',             # Поддерживает CJK
                 'Arial Unicode MS',        # Windows CJK
                 'SimHei',                  # Windows Chinese
@@ -144,31 +151,87 @@ class ChartStyles:
                 'Source Han Sans SC',      # Adobe Source Han
                 'WenQuanYi Micro Hei',     # Linux Chinese
                 'Droid Sans Fallback',    # Android CJK
+                'Arial',                   # Fallback
+                'Helvetica',               # Fallback
+                'sans-serif'               # Generic fallback
             ]
             
-            # Находим первый доступный CJK шрифт
+            # Находим первый доступный шрифт
             selected_font = None
-            for font in cjk_fonts:
+            available_priority_fonts = []
+            
+            for font in priority_fonts:
                 if font in available_fonts:
-                    selected_font = font
-                    break
+                    available_priority_fonts.append(font)
+                    if selected_font is None:
+                        selected_font = font
             
             if selected_font:
-                logger.info(f"Using CJK font: {selected_font}")
-                # Обновляем настройки шрифта с приоритетом CJK шрифта
-                mpl.rcParams['font.family'] = [selected_font]
-                mpl.rcParams['font.sans-serif'] = [selected_font] + mpl.rcParams['font.sans-serif']
+                logger.info(f"Selected primary font: {selected_font}")
+                logger.info(f"Available priority fonts: {available_priority_fonts}")
+                
+                # Создаем список шрифтов с приоритетом доступных
+                font_family = available_priority_fonts + [f for f in priority_fonts if f not in available_priority_fonts]
+                
+                # Обновляем настройки шрифта
+                mpl.rcParams['font.family'] = font_family[:5]  # Ограничиваем до 5 шрифтов
+                mpl.rcParams['font.sans-serif'] = font_family[:10]  # Больше вариантов для sans-serif
+                
                 # Устанавливаем fallback для CJK символов
                 mpl.rcParams['axes.unicode_minus'] = False
+                
+                # Дополнительная проверка для Render окружения
+                if self._is_render_environment():
+                    logger.info("Detected Render environment, applying additional font fallbacks")
+                    # В Render добавляем дополнительные fallback шрифты
+                    render_fonts = ['DejaVu Sans', 'Arial', 'Helvetica', 'sans-serif']
+                    current_fonts = mpl.rcParams['font.sans-serif']
+                    for font in render_fonts:
+                        if font not in current_fonts:
+                            current_fonts.append(font)
+                    mpl.rcParams['font.sans-serif'] = current_fonts
+                    
             else:
-                logger.warning("No CJK fonts found, Chinese characters may not display correctly")
-                # Используем Lato как fallback, затем Open Sans и DejaVu Sans
-                mpl.rcParams['font.family'] = ['Lato', 'Open Sans', 'DejaVu Sans']
+                logger.warning("No priority fonts found, using system defaults")
+                # Используем системные шрифты по умолчанию
+                mpl.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'Helvetica', 'sans-serif']
                 
         except Exception as e:
             logger.warning(f"Could not configure CJK fonts: {e}")
-            # Fallback к Lato, затем Open Sans и DejaVu Sans
-            mpl.rcParams['font.family'] = ['Lato', 'Open Sans', 'DejaVu Sans']
+            # Fallback к базовым шрифтам
+            mpl.rcParams['font.family'] = ['DejaVu Sans', 'Arial', 'Helvetica', 'sans-serif']
+    
+    def _is_render_environment(self):
+        """Проверяет, запущено ли приложение в Render окружении"""
+        import os
+        return os.getenv('RENDER') == 'true' or os.getenv('RENDER_SERVICE_TYPE') is not None
+    
+    def _refresh_font_cache(self):
+        """Обновляет кэш шрифтов matplotlib (полезно в Render окружении)"""
+        try:
+            import matplotlib.font_manager as fm
+            # Очищаем кэш шрифтов
+            fm._rebuild()
+            logger.info("Font cache refreshed successfully")
+        except Exception as e:
+            logger.warning(f"Could not refresh font cache: {e}")
+    
+    def get_current_font_info(self):
+        """Получить информацию о текущих настройках шрифтов"""
+        try:
+            import matplotlib.font_manager as fm
+            available_fonts = [f.name for f in fm.fontManager.ttflist]
+            
+            return {
+                'current_font_family': mpl.rcParams['font.family'],
+                'current_sans_serif': mpl.rcParams['font.sans-serif'],
+                'available_fonts_count': len(available_fonts),
+                'is_render': self._is_render_environment(),
+                'priority_fonts_available': [f for f in ['Liberation Sans', 'DejaVu Sans', 'Arial'] if f in available_fonts]
+            }
+        except Exception as e:
+            logger.error(f"Error getting font info: {e}")
+            return None
 
     def _safe_text_render(self, text):
         """Безопасное отображение текста с CJK символами"""
