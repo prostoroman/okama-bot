@@ -1496,7 +1496,7 @@ class ShansAi:
         """
         inflation_mapping = {
             'USD': 'US.INFL',
-            'RUB': 'RUS.INFL', 
+            'RUB': 'RUS.INFL',  # Используется только для логирования, okama обрабатывает автоматически
             'EUR': 'EU.INFL',
             'GBP': 'GB.INFL',
             'CNY': 'CNY.INFL',  # Китайская инфляция
