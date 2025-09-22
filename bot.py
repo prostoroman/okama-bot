@@ -1265,7 +1265,7 @@ class ShansAi:
         try:
             user_id = update.effective_user.id
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama with period support
             try:
@@ -3107,7 +3107,7 @@ class ShansAi:
             waiting_for=None
         )
         
-        await self._send_ephemeral_message(update, context, f"📊 Поиск {symbol}...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"📊 Поиск {symbol}...", delete_after=3, hide_keyboard=True)
         
         try:
             # Search for assets with selection possibility
@@ -3252,7 +3252,7 @@ class ShansAi:
         # Treat text as single asset symbol and process with /info logic
         symbol = text
         
-        await self._send_ephemeral_message(update, context, f"🔍 Поиск {symbol}...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"🔍 Поиск {symbol}...", delete_after=3, hide_keyboard=True)
         
         try:
             # Search for assets with selection possibility
@@ -5060,7 +5060,7 @@ class ShansAi:
                 )
                 return
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama
             
@@ -5152,7 +5152,7 @@ class ShansAi:
                 reply_markup = None
                 
                 # Send ephemeral message about creating chart
-                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
                 
                 # Create and send wealth chart with portfolio info in caption and buttons
                 await self._create_portfolio_wealth_chart_with_info(update, context, portfolio, symbols, currency, weights, portfolio_symbol, portfolio_text, reply_markup)
@@ -5672,7 +5672,7 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama
             self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
@@ -5743,7 +5743,7 @@ class ShansAi:
                 reply_markup = None
                 
                 # Send ephemeral message about creating chart
-                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
                 
                 # Create and send wealth chart with portfolio info in caption and buttons
                 await self._create_portfolio_wealth_chart_with_info(update, context, portfolio, symbols, currency, weights, portfolio_symbol, portfolio_text, reply_markup)
@@ -5938,7 +5938,7 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama
             self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
@@ -6651,8 +6651,8 @@ class ShansAi:
             if keyboard_type is None:
                 if current_keyboard is not None:
                     self.logger.info(f"Removing active reply keyboard: {current_keyboard}")
-                    # Используем оптимизированную функцию скрытия клавиатуры
-                    await self._ensure_no_reply_keyboard(update, context)
+                    # Просто обновляем контекст без отправки сообщений
+                    self._update_user_context(user_id, active_reply_keyboard=None)
                 return
             
             # Если нужно показать клавиатуру
@@ -6660,8 +6660,8 @@ class ShansAi:
                 # Скрываем текущую клавиатуру если она есть
                 if current_keyboard is not None:
                     self.logger.info(f"Switching from {current_keyboard} to {keyboard_type} keyboard")
-                    # Используем оптимизированную функцию скрытия клавиатуры
-                    await self._ensure_no_reply_keyboard(update, context)
+                    # Просто обновляем контекст без отправки сообщений
+                    self._update_user_context(user_id, active_reply_keyboard=None)
                 
                 # Показываем новую клавиатуру
                 if keyboard_type == "portfolio":
@@ -6687,15 +6687,15 @@ class ShansAi:
 
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
-        # Просто отправляем исчезающее сообщение с автоматическим скрытием клавиатуры
-        await self._send_ephemeral_message(
-            update, 
-            context,
-            "",  # Пустое сообщение - не показываем эмодзи
-            parse_mode=None,
-            delete_after=0.5,  # Быстро удаляем
-            hide_keyboard=True  # Автоматически скрываем клавиатуру
-        )
+        # Просто обновляем контекст пользователя без отправки сообщений
+        user_id = update.effective_user.id
+        user_context = self._get_user_context(user_id)
+        current_keyboard = user_context.get('active_reply_keyboard')
+        
+        if current_keyboard is not None:
+            self.logger.info(f"Hiding active reply keyboard: {current_keyboard}")
+            # Обновляем контекст пользователя
+            self._update_user_context(user_id, active_reply_keyboard=None)
 
     def _get_active_reply_keyboard(self, user_id: int) -> Optional[str]:
         """Получить текущую активную reply keyboard для пользователя"""
@@ -7418,7 +7418,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_ephemeral_message(update, context, "📊 Создаю график Risk / Return (CAGR)…", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📊 Создаю график Risk / Return (CAGR)…", delete_after=3, hide_keyboard=True)
 
             # Prepare assets for comparison
             asset_list_items = []
@@ -7567,7 +7567,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_ephemeral_message(update, context, "📈 Создаю график эффективной границы…", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график эффективной границы…", delete_after=3, hide_keyboard=True)
 
             # Prepare assets for comparison
             asset_list_items = []
@@ -7776,7 +7776,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "Анализирую данные", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "Анализирую данные", parse_mode='Markdown', delete_after=3, hide_keyboard=True)
 
             # Prepare data for analysis
             try:
@@ -7845,7 +7845,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "Анализирую данные...", parse_mode='Markdown', delete_after=3)
+            await self._send_ephemeral_message(update, context, "Анализирую данные...", parse_mode='Markdown', delete_after=3, hide_keyboard=True)
 
             # Prepare data for analysis
             try:
@@ -10128,7 +10128,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("🧠 ▫️ Нейроанализ"),
+                    KeyboardButton("🧠 Нейроанализ"),
                     KeyboardButton("▫️ Портфель vs Активы"),
                     KeyboardButton("▫️ Сравнить")
                 ]
@@ -10159,7 +10159,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("🧠 ▫️ Нейроанализ"),
+                    KeyboardButton("🧠 Нейроанализ"),
                     KeyboardButton("▫️ В Портфель")
                 ]
             ]
@@ -10384,7 +10384,7 @@ class ShansAi:
             "▫️ Монте-Карло",
             "▫️ Процентили (10/50/90)",
             "▫️ Просадки",
-            "🧠 ▫️ Нейроанализ",
+            "🧠 Нейроанализ",
             "▫️ Портфель vs Активы",
             "▫️ Сравнить"
         ]
@@ -10399,7 +10399,7 @@ class ShansAi:
             "▫️ Метрики",
             "▫️ Корреляция",
             "▫️ Эффективная граница",
-            "🧠 ▫️ Нейроанализ",
+            "🧠 Нейроанализ",
             "▫️ В Портфель"
         ]
         return text in compare_buttons
@@ -10560,7 +10560,7 @@ class ShansAi:
                 "▫️ Монте-Карло": f"portfolio_monte_carlo_{portfolio_symbol}",
                 "▫️ Процентили (10/50/90)": f"portfolio_forecast_{portfolio_symbol}",
                 "▫️ Просадки": f"portfolio_drawdowns_{portfolio_symbol}",
-                "🧠 ▫️ Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
+                "🧠 Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
                 "▫️ Портфель vs Активы": f"portfolio_compare_assets_{portfolio_symbol}",
                 "▫️ Сравнить": f"portfolio_compare_{portfolio_symbol}"
             }
@@ -10631,7 +10631,7 @@ class ShansAi:
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif text == "🧠 ▫️ Нейроанализ":
+            elif text == "🧠 Нейроанализ":
                 await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
@@ -16168,7 +16168,7 @@ class ShansAi:
                 self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating wealth chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -16530,7 +16530,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio with period if specified
             if period:
