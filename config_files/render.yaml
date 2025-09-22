@@ -9,7 +9,9 @@ services:
     plan: starter
     
     # Build configuration
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      apt-get update && apt-get install -y fonts-liberation fontconfig
+      pip install -r requirements.txt
     
     # Start command
     startCommand: python scripts/start_bot.py
