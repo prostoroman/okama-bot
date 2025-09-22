@@ -7567,7 +7567,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_ephemeral_message(update, context, "📈 Создаю график эффективной границы…", delete_after=3, hide_keyboard=True)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график эффективной границы…", delete_after=3, hide_keyboard=False)
 
             # Prepare assets for comparison
             asset_list_items = []
@@ -7776,7 +7776,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "Анализирую данные", parse_mode='Markdown', delete_after=3, hide_keyboard=True)
+            await self._send_ephemeral_message(update, context, "Анализирую данные", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
@@ -7845,7 +7845,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Сервис анализа данных недоступен.", parse_mode='Markdown')
                 return
 
-            await self._send_ephemeral_message(update, context, "Анализирую данные...", parse_mode='Markdown', delete_after=3, hide_keyboard=True)
+            await self._send_ephemeral_message(update, context, "Анализирую данные...", parse_mode='Markdown', delete_after=3)
 
             # Prepare data for analysis
             try:
