@@ -23,7 +23,7 @@
 ```python
 inflation_config = {
     'US': {'ticker': 'US.INFL', 'currency': 'USD', 'name': 'US CPI'},
-    'RU': {'ticker': 'RUS.INFL', 'currency': 'RUB', 'name': 'Russian CPI'},
+    'RU': {'ticker': 'RUB.INFL', 'currency': 'RUB', 'name': 'Russian CPI'},
     'EU': {'ticker': 'EU.INFL', 'currency': 'EUR', 'name': 'Eurozone CPI'}
 }
 ```
@@ -43,7 +43,7 @@ if asset.endswith('.INFL'):
     return self._handle_inflation_data(asset.split('.')[0], period)
 ```
 
-Это позволяет правильно обрабатывать запросы типа `US.INFL`, `RUS.INFL`, `EU.INFL`.
+Это позволяет правильно обрабатывать запросы типа `US.INFL`, `RUB.INFL`, `EU.INFL`.
 
 ### 3. Улучшен `_build_inflation_report` в `report_builder_enhanced.py`
 

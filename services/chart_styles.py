@@ -191,6 +191,14 @@ class ChartStyles:
                             current_fonts.append(font)
                     mpl.rcParams['font.sans-serif'] = current_fonts
                     
+                    # Принудительно проверяем Liberation Sans после установки пакета
+                    if 'Liberation Sans' in available_fonts:
+                        logger.info("Liberation Sans found after package installation")
+                        # Устанавливаем Liberation Sans как приоритетный
+                        liberation_first = ['Liberation Sans'] + [f for f in current_fonts if f != 'Liberation Sans']
+                        mpl.rcParams['font.sans-serif'] = liberation_first[:10]
+                        mpl.rcParams['font.family'] = liberation_first[:5]
+                    
             else:
                 logger.warning("No priority fonts found, using system defaults")
                 # Используем системные шрифты по умолчанию
@@ -213,8 +221,19 @@ class ChartStyles:
             # Очищаем кэш шрифтов
             fm._rebuild()
             logger.info("Font cache refreshed successfully")
+            
+            # Дополнительно обновляем fontconfig в Render
+            if self._is_render_environment():
+                try:
+                    import subprocess
+                    subprocess.run(['fc-cache', '-f'], check=False, timeout=30)
+                    logger.info("Fontconfig cache updated")
+                except Exception as e:
+                    logger.warning(f"Could not update fontconfig cache: {e}")
+                    
         except Exception as e:
             logger.warning(f"Could not refresh font cache: {e}")
+
     
     def get_current_font_info(self):
         """Получить информацию о текущих настройках шрифтов"""

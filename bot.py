@@ -1265,7 +1265,7 @@ class ShansAi:
         try:
             user_id = update.effective_user.id
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama with period support
             try:
@@ -1496,7 +1496,7 @@ class ShansAi:
         """
         inflation_mapping = {
             'USD': 'US.INFL',
-            'RUB': 'RUS.INFL', 
+            'RUB': 'RUS.INFL',  # Используется только для логирования, okama обрабатывает автоматически
             'EUR': 'EU.INFL',
             'GBP': 'GB.INFL',
             'CNY': 'CNY.INFL',  # Китайская инфляция
@@ -3107,7 +3107,7 @@ class ShansAi:
             waiting_for=None
         )
         
-        await self._send_ephemeral_message(update, context, f"📊 Поиск {symbol}...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"📊 Поиск {symbol}...", delete_after=3, hide_keyboard=True)
         
         try:
             # Search for assets with selection possibility
@@ -3252,7 +3252,7 @@ class ShansAi:
         # Treat text as single asset symbol and process with /info logic
         symbol = text
         
-        await self._send_ephemeral_message(update, context, f"🔍 Поиск {symbol}...", delete_after=3)
+        await self._send_ephemeral_message(update, context, f"🔍 Поиск {symbol}...", delete_after=3, hide_keyboard=True)
         
         try:
             # Search for assets with selection possibility
@@ -5060,7 +5060,7 @@ class ShansAi:
                 )
                 return
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama
             
@@ -5152,7 +5152,7 @@ class ShansAi:
                 reply_markup = None
                 
                 # Send ephemeral message about creating chart
-                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
                 
                 # Create and send wealth chart with portfolio info in caption and buttons
                 await self._create_portfolio_wealth_chart_with_info(update, context, portfolio, symbols, currency, weights, portfolio_symbol, portfolio_text, reply_markup)
@@ -5672,7 +5672,7 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama
             self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
@@ -5743,7 +5743,7 @@ class ShansAi:
                 reply_markup = None
                 
                 # Send ephemeral message about creating chart
-                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+                await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
                 
                 # Create and send wealth chart with portfolio info in caption and buttons
                 await self._create_portfolio_wealth_chart_with_info(update, context, portfolio, symbols, currency, weights, portfolio_symbol, portfolio_text, reply_markup)
@@ -5938,7 +5938,7 @@ class ShansAi:
             symbols = [symbol for symbol, _ in portfolio_data]
             weights = [weight for _, weight in portfolio_data]
             
-            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3)
+            await self._send_ephemeral_message(update, context, f"Создаю портфель: {', '.join(symbols)}...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio using okama
             self.logger.info(f"DEBUG: About to create portfolio with symbols: {symbols}, weights: {weights}")
@@ -6633,96 +6633,6 @@ class ShansAi:
             # Fallback: send message without keyboard using safe method
             await self._send_message_safe(update, text)
 
-    async def _remove_reply_keyboard_silently(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Тихо скрыть reply keyboard без отправки сообщения пользователю"""
-        try:
-            # Проверяем, что update и context не None
-            if update is None or context is None:
-                self.logger.error("Cannot remove reply keyboard: update or context is None")
-                return
-            
-            chat_id = None
-            if hasattr(update, 'callback_query') and update.callback_query is not None:
-                chat_id = update.callback_query.message.chat_id
-            elif hasattr(update, 'message') and update.message is not None:
-                chat_id = update.message.chat_id
-            else:
-                self.logger.error("Cannot remove reply keyboard: no chat_id available")
-                return
-            
-            # Попробуем несколько способов удаления клавиатуры
-            
-            # Способ 1: Отправка сообщения с ReplyKeyboardRemove и удаление
-            try:
-                message = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="",  # Пустой текст
-                    reply_markup=ReplyKeyboardRemove()
-                )
-                
-                # Удаляем сообщение через небольшую задержку
-                await asyncio.sleep(0.1)
-                await context.bot.delete_message(chat_id=chat_id, message_id=message.message_id)
-                self.logger.info("Reply keyboard removed using method 1 (send + delete)")
-                return
-                
-            except Exception as method1_error:
-                self.logger.warning(f"Method 1 failed: {method1_error}")
-            
-            # Способ 2: Отправка сообщения с ReplyKeyboardRemove без удаления
-            try:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="",  # Пустой текст
-                    reply_markup=ReplyKeyboardRemove()
-                )
-                self.logger.info("Reply keyboard removed using method 2 (send only)")
-                return
-                
-            except Exception as method2_error:
-                self.logger.warning(f"Method 2 failed: {method2_error}")
-            
-            # Способ 3: Использование edit_message_reply_markup для callback queries
-            if hasattr(update, 'callback_query') and update.callback_query is not None:
-                try:
-                    await context.bot.edit_message_reply_markup(
-                        chat_id=chat_id,
-                        message_id=update.callback_query.message.message_id,
-                        reply_markup=ReplyKeyboardRemove()
-                    )
-                    self.logger.info("Reply keyboard removed using method 3 (edit_message_reply_markup)")
-                    return
-                except Exception as method3_error:
-                    self.logger.warning(f"Method 3 failed: {method3_error}")
-            
-            # Если все способы не сработали
-            self.logger.error("All methods to remove reply keyboard failed")
-            
-        except Exception as e:
-            self.logger.error(f"Error removing reply keyboard silently: {e}")
-
-    async def _remove_reply_keyboard_alternative(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Альтернативный способ удаления reply keyboard - отправка сообщения с невидимым символом"""
-        try:
-            chat_id = None
-            if hasattr(update, 'callback_query') and update.callback_query is not None:
-                chat_id = update.callback_query.message.chat_id
-            elif hasattr(update, 'message') and update.message is not None:
-                chat_id = update.message.chat_id
-            else:
-                return
-            
-            # Отправляем сообщение с невидимым символом и ReplyKeyboardRemove
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="\u200B",  # Невидимый символ (Zero Width Space)
-                reply_markup=ReplyKeyboardRemove()
-            )
-            self.logger.info("Reply keyboard removed using alternative method (invisible character)")
-            
-        except Exception as e:
-            self.logger.error(f"Error in alternative keyboard removal: {e}")
-
     async def _manage_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE, keyboard_type: str = None):
         """
         Универсальное управление reply keyboard на основе контекста
@@ -6741,11 +6651,7 @@ class ShansAi:
             if keyboard_type is None:
                 if current_keyboard is not None:
                     self.logger.info(f"Removing active reply keyboard: {current_keyboard}")
-                    try:
-                        await self._remove_reply_keyboard_silently(update, context)
-                    except Exception as e:
-                        self.logger.warning(f"Primary keyboard removal failed: {e}, trying alternative method")
-                        await self._remove_reply_keyboard_alternative(update, context)
+                    # Просто обновляем контекст без отправки сообщений
                     self._update_user_context(user_id, active_reply_keyboard=None)
                 return
             
@@ -6754,11 +6660,8 @@ class ShansAi:
                 # Скрываем текущую клавиатуру если она есть
                 if current_keyboard is not None:
                     self.logger.info(f"Switching from {current_keyboard} to {keyboard_type} keyboard")
-                    try:
-                        await self._remove_reply_keyboard_silently(update, context)
-                    except Exception as e:
-                        self.logger.warning(f"Primary keyboard removal failed during switch: {e}, trying alternative method")
-                        await self._remove_reply_keyboard_alternative(update, context)
+                    # Просто обновляем контекст без отправки сообщений
+                    self._update_user_context(user_id, active_reply_keyboard=None)
                 
                 # Показываем новую клавиатуру
                 if keyboard_type == "portfolio":
@@ -6784,48 +6687,15 @@ class ShansAi:
 
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
-        try:
-            # Отправляем исчезающее сообщение с ReplyKeyboardRemove для немедленного скрытия
-            # Используем эмодзи обновления - логично для скрытия клавиатуры
-            await self._send_ephemeral_message(
-                update, 
-                context,
-                "🔄",  # Эмодзи обновления - логично для скрытия клавиатуры
-                parse_mode=None,
-                delete_after=2,  # Удаляем через 2 секунды
-                reply_markup=ReplyKeyboardRemove()
-            )
-            
+        # Просто обновляем контекст пользователя без отправки сообщений
+        user_id = update.effective_user.id
+        user_context = self._get_user_context(user_id)
+        current_keyboard = user_context.get('active_reply_keyboard')
+        
+        if current_keyboard is not None:
+            self.logger.info(f"Hiding active reply keyboard: {current_keyboard}")
             # Обновляем контекст пользователя
-            user_id = update.effective_user.id
             self._update_user_context(user_id, active_reply_keyboard=None)
-            self.logger.info("Reply keyboard removed using ReplyKeyboardRemove")
-            
-        except Exception as e:
-            self.logger.error(f"Error removing reply keyboard: {e}")
-            # Fallback к старому методу
-            await self._manage_reply_keyboard(update, context, keyboard_type=None)
-
-    async def _hide_reply_keyboard_silently(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Тихо скрыть reply keyboard без видимых сообщений (для переходов между контекстами)"""
-        try:
-            # Отправляем обычное сообщение с ReplyKeyboardRemove
-            await self._send_message_safe(
-                update, 
-                "🔄",  # Эмодзи обновления - логично для скрытия клавиатуры
-                reply_markup=ReplyKeyboardRemove(),
-                parse_mode=None
-            )
-            
-            # Обновляем контекст пользователя
-            user_id = update.effective_user.id
-            self._update_user_context(user_id, active_reply_keyboard=None)
-            self.logger.info("Reply keyboard removed silently using ReplyKeyboardRemove")
-            
-        except Exception as e:
-            self.logger.error(f"Error removing reply keyboard silently: {e}")
-            # Fallback к старому методу
-            await self._manage_reply_keyboard(update, context, keyboard_type=None)
 
     def _get_active_reply_keyboard(self, user_id: int) -> Optional[str]:
         """Получить текущую активную reply keyboard для пользователя"""
@@ -6856,7 +6726,7 @@ class ShansAi:
             # Fallback: просто показываем нужную клавиатуру
             await self._manage_reply_keyboard(update, context, target_keyboard)
 
-    async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None):
+    async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None, hide_keyboard: bool = False):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
         try:
             # Проверяем, что update и context не None
@@ -6876,6 +6746,18 @@ class ShansAi:
             else:
                 self.logger.error("Cannot send ephemeral message: no chat_id available")
                 return
+            
+            # Если нужно скрыть клавиатуру, проверяем текущее состояние и добавляем ReplyKeyboardRemove
+            if hide_keyboard:
+                user_id = update.effective_user.id
+                user_context = self._get_user_context(user_id)
+                current_keyboard = user_context.get('active_reply_keyboard')
+                
+                if current_keyboard is not None:
+                    self.logger.info(f"Hiding active reply keyboard: {current_keyboard}")
+                    reply_markup = ReplyKeyboardRemove()
+                    # Обновляем контекст пользователя
+                    self._update_user_context(user_id, active_reply_keyboard=None)
             
             # Отправляем сообщение
             message = await context.bot.send_message(
@@ -7536,7 +7418,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_ephemeral_message(update, context, "📊 Создаю график Risk / Return (CAGR)…", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📊 Создаю график Risk / Return (CAGR)…", delete_after=3, hide_keyboard=True)
 
             # Prepare assets for comparison
             asset_list_items = []
@@ -7685,7 +7567,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "ℹ️ Нет данных для сравнения. Выполните команду /compare заново.")
                 return
 
-            await self._send_ephemeral_message(update, context, "📈 Создаю график эффективной границы…", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график эффективной границы…", delete_after=3, hide_keyboard=False)
 
             # Prepare assets for comparison
             asset_list_items = []
@@ -10246,7 +10128,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("🧠 ▫️ Нейроанализ"),
+                    KeyboardButton("🧠 Нейроанализ"),
                     KeyboardButton("▫️ Портфель vs Активы"),
                     KeyboardButton("▫️ Сравнить")
                 ]
@@ -10277,7 +10159,7 @@ class ShansAi:
                 ],
                 # Третий ряд
                 [
-                    KeyboardButton("🧠 ▫️ Нейроанализ"),
+                    KeyboardButton("🧠 Нейроанализ"),
                     KeyboardButton("▫️ В Портфель")
                 ]
             ]
@@ -10502,7 +10384,7 @@ class ShansAi:
             "▫️ Монте-Карло",
             "▫️ Процентили (10/50/90)",
             "▫️ Просадки",
-            "🧠 ▫️ Нейроанализ",
+            "🧠 Нейроанализ",
             "▫️ Портфель vs Активы",
             "▫️ Сравнить"
         ]
@@ -10517,7 +10399,7 @@ class ShansAi:
             "▫️ Метрики",
             "▫️ Корреляция",
             "▫️ Эффективная граница",
-            "🧠 ▫️ Нейроанализ",
+            "🧠 Нейроанализ",
             "▫️ В Портфель"
         ]
         return text in compare_buttons
@@ -10678,7 +10560,7 @@ class ShansAi:
                 "▫️ Монте-Карло": f"portfolio_monte_carlo_{portfolio_symbol}",
                 "▫️ Процентили (10/50/90)": f"portfolio_forecast_{portfolio_symbol}",
                 "▫️ Просадки": f"portfolio_drawdowns_{portfolio_symbol}",
-                "🧠 ▫️ Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
+                "🧠 Нейроанализ": f"portfolio_ai_analysis_{portfolio_symbol}",
                 "▫️ Портфель vs Активы": f"portfolio_compare_assets_{portfolio_symbol}",
                 "▫️ Сравнить": f"portfolio_compare_{portfolio_symbol}"
             }
@@ -10749,7 +10631,7 @@ class ShansAi:
                 await self._handle_correlation_button(update, context, last_symbols)
             elif text == "▫️ Эффективная граница":
                 await self._handle_efficient_frontier_compare_button(update, context)
-            elif text == "🧠 ▫️ Нейроанализ":
+            elif text == "🧠 Нейроанализ":
                 await self._handle_yandexgpt_analysis_compare_button(update, context)
             elif text == "▫️ В Портфель":
                 await self._handle_compare_portfolio_button(update, context, last_symbols)
@@ -16286,7 +16168,7 @@ class ShansAi:
                 self.logger.info(f"Using equal weights as fallback: {weights}")
             
             self.logger.info(f"Creating wealth chart for portfolio: {final_symbols}, currency: {currency}, weights: {weights}")
-            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
             
             # Validate symbols before creating portfolio
             valid_symbols = []
@@ -16648,7 +16530,7 @@ class ShansAi:
                 await self._send_callback_message(update, context, "❌ Данные о портфеле не найдены.")
                 return
             
-            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3)
+            await self._send_ephemeral_message(update, context, "📈 Создаю график накопленной доходности...", delete_after=3, hide_keyboard=True)
             
             # Create portfolio with period if specified
             if period:
