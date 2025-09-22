@@ -256,6 +256,19 @@ class ExamplesService:
                 ('ISCD.XTAE', 'Israel Corp.'),
                 ('SHLD.XTAE', 'Shikun & Binui'),
                 ('TSEM.XTAE', 'Tower Semiconductor')
+            ],
+            'CC': [
+                ('BTC-USD.CC', 'Bitcoin'),
+                ('ETH-USD.CC', 'Ethereum'),
+                ('BNB-USD.CC', 'Binance Coin'),
+                ('SOL-USD.CC', 'Solana'),
+                ('XRP-USD.CC', 'XRP'),
+                ('USDT-USD.CC', 'Tether'),
+                ('USDC-USD.CC', 'USD Coin'),
+                ('DOGE-USD.CC', 'Dogecoin'),
+                ('ADA-USD.CC', 'Cardano'),
+                ('TRX-USD.CC', 'TRON'),
+                ('TON-USD.CC', 'Toncoin')
             ]
         }
 
@@ -575,7 +588,8 @@ class ExamplesService:
             'XFRA': 'XFRA',
             'XSTU': 'XSTU',
             'XAMS': 'XAMS',
-            'XTAE': 'XTAE'
+            'XTAE': 'XTAE',
+            'CC': 'CC'
         }
         
         return exchange_mapping.get(exchange)
