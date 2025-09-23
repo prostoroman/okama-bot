@@ -35,7 +35,7 @@ def apply_unified_shans_pro_style():
         # Единая система стилей Shans Pro
         unified_style = {
             # --- Figure ---
-            "figure.figsize": (10, 6),
+            "figure.figsize": (12, 9),
             "figure.dpi": 140,
             "savefig.dpi": 220,
             "figure.facecolor": "white",
@@ -47,7 +47,7 @@ def apply_unified_shans_pro_style():
             "font.family": "sans-serif",
             "font.sans-serif": ["Liberation Sans", "Nimbus Sans", "DejaVu Sans", "Helvetica", "Arial"],
             "font.size": 11.5,
-            "axes.titlesize": 16,
+            "axes.titlesize": 14,
             "axes.titleweight": 600,
             "axes.labelsize": 12.5,
             "axes.labelweight": 500,
@@ -61,6 +61,7 @@ def apply_unified_shans_pro_style():
             "axes.labelcolor": "#111827",
             "axes.spines.top": False,
             "axes.spines.right": False,
+            "ytick.right": True,  # Отображать тики оси Y справа
 
             # --- Grid ---
             "axes.grid": True,
@@ -1182,24 +1183,25 @@ class ChartStyles:
                 table.auto_set_font_size(False)
                 table.set_fontsize(10)
                 
-                # Цветовая схема
-                header_color = '#4A90E2'  # Синий для заголовков
-                metric_color = '#F0F0F0'   # Светло-серый для метрик
+                # Цветовая схема в стиле Shans Pro
+                header_color = '#F9FAFB'  # Светло-серый фон заголовков
+                metric_color = '#F9FAFB'   # Светло-серый для метрик
                 data_color = '#FFFFFF'    # Белый для данных
                 
                 # Стилизация заголовков
                 for i in range(len(headers) + 1):
                     table[(0, i)].set_facecolor(header_color)
-                    table[(0, i)].set_text_props(weight='bold', color='white')
+                    table[(0, i)].set_text_props(weight='bold', color='#111827')
                 
                 # Стилизация строк метрик
                 for i in range(1, len(table_data) + 1):
                     table[(i, 0)].set_facecolor(metric_color)
-                    table[(i, 0)].set_text_props(weight='bold')
+                    table[(i, 0)].set_text_props(weight='bold', color='#1F2937')
                     
                     # Стилизация данных
                     for j in range(1, len(headers) + 1):
                         table[(i, j)].set_facecolor(data_color)
+                        table[(i, j)].set_text_props(color='#1F2937')
                         
                         # Подсветка лучших значений для числовых метрик
                         try:
@@ -1227,14 +1229,14 @@ class ChartStyles:
                         except (ValueError, TypeError, IndexError):
                             pass
                 
-                # Настройка границ
+                # Настройка границ в стиле Shans Pro
                 for i in range(len(table_data) + 1):
                     for j in range(len(headers) + 1):
-                        table[(i, j)].set_edgecolor('#CCCCCC')
-                        table[(i, j)].set_linewidth(0.5)
+                        table[(i, j)].set_edgecolor('#E5E7EB')
+                        table[(i, j)].set_linewidth(0.6)
                 
-                # Заголовок таблицы
-                fig.suptitle(title, fontsize=16, fontweight='bold', y=0.95)
+                # Заголовок таблицы в стиле Shans Pro
+                fig.suptitle(title, fontsize=14, fontweight=600, y=0.95, color='#111827')
                 
                 # Настройка макета
                 plt.tight_layout()
@@ -1270,8 +1272,8 @@ class ChartStyles:
                     text_content += "\n"
                 
                 ax.text(0.05, 0.95, text_content, transform=ax.transAxes,
-                       fontsize=10, verticalalignment='top',
-                       bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+                       fontsize=10, verticalalignment='top', color='#1F2937',
+                       bbox=dict(boxstyle='round,pad=0.5', facecolor='#F9FAFB', alpha=0.9, edgecolor='#E5E7EB'))
                 
                 return fig, ax
                 
@@ -1822,17 +1824,17 @@ class ChartStyles:
         col_formats: Optional[Dict[str, str]] = None,  # например {"CAGR":"{:.2%}","Vol":"{:.2f}"}
         max_col_width: int = 28,          # максимум символов в строке до переноса
         row_zebra: bool = True,
-        header_bg: str = "#0F172A",       # тёмно-синий (слегка)
-        header_fg: str = "#FFFFFF",
-        even_bg: str = "#F8FAFC",
-        odd_bg: str = "#FFFFFF",
-        text_color: str = "#0B1221",
-        edge_color: str = "#CBD5E1",
+        header_bg: str = "#F9FAFB",       # Светло-серый фон заголовков в стиле Shans Pro
+        header_fg: str = "#111827",       # Темный текст заголовков
+        even_bg: str = "#FFFFFF",         # Белый фон для четных строк
+        odd_bg: str = "#F9FAFB",          # Светло-серый фон для нечетных строк
+        text_color: str = "#1F2937",      # Темный текст ячеек
+        edge_color: str = "#E5E7EB",      # Светло-серая сетка
         cell_padding_x: float = 0.4,      # поля по X (в «символьных» ширинах)
         cell_padding_y: float = 0.28,     # поля по Y (в «строках»)
-        fontsize: int = 12,
-        title_fontsize: int = 16,
-        footnote_fontsize: int = 10,
+        fontsize: int = 10,               # Размер шрифта как в примере
+        title_fontsize: int = 14,         # Размер заголовка
+        footnote_fontsize: int = 9,       # Размер подвала
         dpi: int = 200,
         as_document: bool = True,         # True → без сжатия, подходит для send_document
     ) -> BytesIO:
