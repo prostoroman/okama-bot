@@ -26,6 +26,82 @@ from typing import Dict, Optional, Iterable
 
 logger = logging.getLogger(__name__)
 
+def apply_shans_pro_style():
+    """
+    Устанавливает глобальные стили графиков в стиле Shans Pro.
+    """
+    try:
+        mpl.rcParams.update({
+            # --- Figure ---
+            "figure.figsize": (10, 6),
+            "figure.dpi": 140,
+            "savefig.dpi": 220,
+            "figure.facecolor": "white",
+            "savefig.facecolor": "white",
+            "savefig.bbox": "tight",
+            "savefig.pad_inches": 0.05,
+
+            # --- Fonts ---
+            "font.family": "sans-serif",
+            "font.sans-serif": ["Liberation Sans", "Nimbus Sans", "DejaVu Sans", "Helvetica", "Arial"],
+            "font.size": 11.5,
+            "axes.titlesize": 16,
+            "axes.titleweight": 600,
+            "axes.labelsize": 12.5,
+            "axes.labelweight": 500,
+            "legend.fontsize": 10.5,
+            "legend.title_fontsize": 11.5,
+
+            # --- Axes ---
+            "axes.facecolor": "white",
+            "axes.edgecolor": "#D0D5DD",
+            "axes.linewidth": 1.0,
+            "axes.labelcolor": "#111827",
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+
+            # --- Grid ---
+            "axes.grid": True,
+            "grid.color": "#CBD5E1",
+            "grid.linestyle": ":",
+            "grid.linewidth": 0.8,
+            "grid.alpha": 0.7,
+
+            # --- Ticks ---
+            "xtick.labelsize": 10.5,
+            "ytick.labelsize": 10.5,
+            "xtick.color": "#475467",
+            "ytick.color": "#475467",
+
+            # --- Lines ---
+            "lines.linewidth": 2.2,
+            "lines.solid_capstyle": "round",
+            "lines.solid_joinstyle": "round",
+            "lines.markersize": 4,
+
+            # --- Legend ---
+            "legend.frameon": False,
+            "legend.loc": "best",
+
+            # --- Colors ---
+            "axes.prop_cycle": plt.cycler(
+                color=[
+                    "#0A84FF", "#34C759", "#FF9F0A", "#FF453A",
+                    "#AC8E68", "#BF5AF2", "#64D2FF", "#FFD60A"
+                ]
+            ),
+
+            # --- Text ---
+            "text.color": "#111827",
+        })
+        
+        logger.info("Shans Pro style applied successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error applying Shans Pro style: {e}")
+        return False
+
 @contextlib.contextmanager
 def suppress_cjk_warnings():
     """Context manager to suppress CJK font warnings during chart generation"""
@@ -38,31 +114,19 @@ class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
-        # Централизованные настройки шрифтов с поддержкой CJK
-        mpl.rcParams.update({
-            'font.family': ['Liberation Sans'],  # Будет обновлено в _configure_cjk_fonts()
-            'font.sans-serif': ['Liberation Sans', 'Liberation Sans Narrow', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
-            'font.weight': 'medium',
-            'axes.titleweight': 'semibold',
-            'axes.labelweight': 'medium',
-            'figure.titlesize': 16,
-            'axes.titlesize': 14,
-            'axes.labelsize': 12,
-            'xtick.labelsize': 10,
-            'ytick.labelsize': 10,
-            'legend.title_fontsize': 11,
-            'legend.fontsize': 10,
-            'axes.unicode_minus': False,  # Предотвращает проблемы с Unicode минусом
-        })
+        # Применяем стиль Shans Pro при инициализации
+        style_applied = apply_shans_pro_style()
+        
+        if not style_applied:
+            logger.warning("Failed to apply Shans Pro style, using default matplotlib settings")
         
         # Централизованные настройки стилей
         self.style = {
-            'figsize': (12, 7),
-            'dpi': 96,
+            'figsize': (10, 6),
+            'dpi': 140,
             'facecolor': 'white',
             'edgecolor': 'none',
             'bbox_inches': 'tight',
-            'style': 'default',
         }
         
         # Централизованные настройки линий
