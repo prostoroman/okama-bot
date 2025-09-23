@@ -1477,6 +1477,9 @@ class ShansAi:
                     if symbol in ['RGBITR.INDX', 'MCFTR.INDX']:
                         return "RUB", f"автоматически определена для российского индекса ({symbol})"
                     return "USD", f"автоматически определена по бирже INDX ({symbol})"
+                elif namespace == 'RE':
+                    # Недвижимость - по умолчанию RUB для российского рынка недвижимости
+                    return "RUB", f"автоматически определена для недвижимости ({symbol})"
                 # Европейские биржи
                 elif namespace == 'XSTU':
                     return "EUR", f"автоматически определена по бирже Stuttgart ({symbol})"
@@ -6422,8 +6425,25 @@ class ShansAi:
                     text = text[:last_block] + text[last_block + 3:]
                     self.logger.warning("Fixed unclosed code block")
             
-            # Escape problematic underscores
-            text = re.sub(r'(?<!\*)_(?!\*)', r'\_', text)
+            # Escape problematic underscores (but not inside backticks)
+            # First, protect content inside backticks
+            import re
+            backtick_pattern = r'`([^`]*)`'
+            backtick_matches = re.findall(backtick_pattern, text)
+            
+            # Replace backtick content with placeholders (using characters that won't be escaped)
+            placeholder_text = text
+            for i, match in enumerate(backtick_matches):
+                placeholder_text = placeholder_text.replace(f'`{match}`', f'BACKTICKPLACEHOLDER{i}', 1)
+            
+            # Escape underscores in non-backtick content
+            placeholder_text = re.sub(r'(?<!\*)_(?!\*)', r'\_', placeholder_text)
+            
+            # Restore backtick content
+            for i, match in enumerate(backtick_matches):
+                placeholder_text = placeholder_text.replace(f'BACKTICKPLACEHOLDER{i}', f'`{match}`')
+            
+            text = placeholder_text
             
             return text
             
