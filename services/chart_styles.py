@@ -26,12 +26,14 @@ from typing import Dict, Optional, Iterable
 
 logger = logging.getLogger(__name__)
 
-def apply_shans_pro_style():
+def apply_unified_shans_pro_style():
     """
-    Устанавливает глобальные стили графиков в стиле Shans Pro.
+    Устанавливает единые стили графиков в стиле Shans Pro.
+    Все стили задаются в одном месте для избежания конфликтов.
     """
     try:
-        mpl.rcParams.update({
+        # Единая система стилей Shans Pro
+        unified_style = {
             # --- Figure ---
             "figure.figsize": (10, 6),
             "figure.dpi": 140,
@@ -53,7 +55,7 @@ def apply_shans_pro_style():
             "legend.title_fontsize": 11.5,
 
             # --- Axes ---
-            "axes.facecolor": "white",
+            "axes.facecolor": "white",  # Единый белый фон для всех графиков
             "axes.edgecolor": "#D0D5DD",
             "axes.linewidth": 1.0,
             "axes.labelcolor": "#111827",
@@ -93,13 +95,16 @@ def apply_shans_pro_style():
 
             # --- Text ---
             "text.color": "#111827",
-        })
+        }
         
-        logger.info("Shans Pro style applied successfully")
+        # Применяем единые стили
+        mpl.rcParams.update(unified_style)
+        
+        logger.info("Unified Shans Pro style applied successfully")
         return True
         
     except Exception as e:
-        logger.error(f"Error applying Shans Pro style: {e}")
+        logger.error(f"Error applying unified Shans Pro style: {e}")
         return False
 
 @contextlib.contextmanager
@@ -114,13 +119,13 @@ class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
-        # Применяем стиль Shans Pro при инициализации
-        style_applied = apply_shans_pro_style()
+        # Применяем единый стиль Shans Pro при инициализации
+        style_applied = apply_unified_shans_pro_style()
         
         if not style_applied:
-            logger.warning("Failed to apply Shans Pro style, using default matplotlib settings")
+            logger.warning("Failed to apply unified Shans Pro style, using default matplotlib settings")
         
-        # Централизованные настройки стилей
+        # Минимальные настройки для работы модуля (основные стили уже применены через unified_style)
         self.style = {
             'figsize': (10, 6),
             'dpi': 140,
@@ -129,56 +134,25 @@ class ChartStyles:
             'bbox_inches': 'tight',
         }
         
-        # Централизованные настройки линий
+        # Настройки для специфичных функций модуля
         self.lines = {
             'alpha': 0.95,
             'smooth_points': 2000,
         }
         
-        # Централизованные настройки осей
-        self.axes = {
-            'fontsize': 12,
-            'fontweight': 'medium',
-            'color': '#2E3440',  # строгий графитовый
-            'tick_fontsize': 10,
-            'tick_color': '#2E3440',  # строгий графитовый
-        }
-        
-        # Централизованные настройки сетки
-        self.grid = {
-            'alpha': 0.25,
-            'linestyle': '-',
-            'linewidth': 0.7,
-            'color': '#CBD5E1',  # светло-серые линии сетки
-            'zorder': 0,
-        }
-        
-        # Централизованные настройки рамок
-        self.spines = {
-            'color': '#2E3440',  # строгий графитовый
-            'linewidth': 1.1,
-        }
-        
-        # Централизованные настройки легенды
-        self.legend = {
-            'fontsize': 10,
-            'frameon': True,
-            'loc': 'upper left',
-        }
-        
-        # Централизованные настройки заголовков
+        # Единые настройки заголовков (соответствуют unified_style)
         self.title = {
-            'fontsize': 16,
-            'fontweight': 'semibold',
+            'fontsize': 16,  # соответствует axes.titlesize
+            'fontweight': 600,  # соответствует axes.titleweight
             'pad': 18,
-            'color': '#2E3440',  # строгий графитовый
+            'color': '#111827',  # соответствует text.color
         }
         
-        # Централизованные настройки копирайта
+        # Единые настройки копирайта
         self.copyright = {
             'text': 'shans.ai | source: okama, tushare',
             'fontsize': 9,
-            'color': '#2E3440',  # строгий графитовый
+            'color': '#111827',  # соответствует text.color
             'alpha': 0.55,
             'position': (0.98, 0.00),
         }
@@ -359,20 +333,12 @@ class ChartStyles:
     def _apply_base_style(self, fig, ax):
         """Применить базовый стиль к оси"""
         try:
-            ax.set_facecolor('#E9ECEF')  # светло-серый фон
+            # Стиль уже применен через unified_style
+            # Не переопределяем фон - используем единый белый фон из unified_style
+            # ax.set_facecolor() НЕ вызываем - оставляем белый фон из unified_style
             
-            # Рамки - только снизу и справа
-            for spine in ['top', 'left']:
-                ax.spines[spine].set_visible(False)
-            for spine in ['right', 'bottom']:
-                ax.spines[spine].set_color(self.spines['color'])
-                ax.spines[spine].set_linewidth(self.spines['linewidth'])
-            
-            # Тики - ось Y справа
-            ax.tick_params(axis='both', which='major', 
-                           labelsize=self.axes['tick_fontsize'], 
-                           color=self.axes['tick_color'])
-            ax.yaxis.tick_right()  # Перемещаем тики оси Y вправо
+            # Дополнительные настройки если нужны (например, для специфичных графиков)
+            pass
                 
         except Exception as e:
             logger.error(f"Error applying base style: {e}")
@@ -386,28 +352,28 @@ class ChartStyles:
                 safe_title = self._safe_text_render(title)
                 ax.set_title(safe_title, **self.title)
             
-            # Подписи осей
+            # Подписи осей (используем стили из unified_style)
             if xlabel:
                 safe_xlabel = self._safe_text_render(xlabel)
-                ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.set_xlabel(safe_xlabel, fontsize=12.5, fontweight=500, color='#111827')
             else:
                 ax.set_xlabel('')  # Явно скрываем подпись оси X
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
-                ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.set_ylabel(safe_ylabel, fontsize=12.5, fontweight=500, color='#111827')
                 ax.yaxis.set_label_position('right')  # Перемещаем подпись оси Y вправо
             else:
                 ax.set_ylabel('')  # Явно скрываем подпись оси Y
             
-            # Сетка
+            # Сетка (используем стили из unified_style)
             if grid:
-                ax.grid(True, **self.grid)
+                ax.grid(True, alpha=0.7, linestyle=':', linewidth=0.8, color='#CBD5E1')
             
-            # Легенда
+            # Легенда (используем стили из unified_style)
             if legend:
                 handles, labels = ax.get_legend_handles_labels()
                 if handles and labels:
-                    ax.legend(**self.legend)
+                    ax.legend(fontsize=10.5, frameon=False, loc='best')
             
             # Копирайт
             if copyright:

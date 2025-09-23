@@ -41,12 +41,12 @@ except ImportError:
 if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
     matplotlib.use('Agg')
 
-# Load Shans Pro style for consistent chart styling
+# Load unified Shans Pro style for consistent chart styling
 try:
-    from services.chart_styles import apply_shans_pro_style
-    apply_shans_pro_style()
+    from services.chart_styles import apply_unified_shans_pro_style
+    apply_unified_shans_pro_style()
 except Exception as e:
-    print(f"Warning: Could not apply Shans Pro style: {e}")
+    print(f"Warning: Could not apply unified Shans Pro style: {e}")
 
 # Suppress matplotlib warnings for missing CJK glyphs
 import warnings
