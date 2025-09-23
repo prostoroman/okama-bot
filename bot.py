@@ -2403,7 +2403,7 @@ class ShansAi:
         try:
             # Check if dividend yield data is available
             if not hasattr(asset_list, 'dividend_yield') or asset_list.dividend_yield.empty:
-                await self._send_message_safe(update, "ℹ️ Данные о дивидендной доходности недоступны для выбранных активов")
+                await self._send_message_safe(update, "📊 По данным биржи, у выбранных активов нет дивидендной истории.")
                 return
             
             # Create dividend yield chart using chart_styles
@@ -11923,7 +11923,13 @@ class ShansAi:
                     valid_dividends_data[symbol] = 0  # Default to 0
             
             if not valid_dividends_data:
-                await self._send_callback_message(update, context, "❌ Не удалось создать валидные данные для графика дивидендной доходности")
+                await self._send_callback_message(update, context, "📊 По данным биржи, у выбранных активов нет дивидендной истории.")
+                return
+            
+            # Check if all dividend yields are zero (no dividends)
+            all_zero = all(yield_val == 0 for yield_val in valid_dividends_data.values())
+            if all_zero:
+                await self._send_callback_message(update, context, "📊 По данным биржи, у выбранных активов нет дивидендной истории.")
                 return
             
             # Create chart using chart_styles
@@ -12677,9 +12683,9 @@ class ShansAi:
                     else:
                         await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен")
                 else:
-                    await self._send_callback_message(update, context, f"💵 Дивиденды по активу {symbol} не найдены")
+                    await self._send_callback_message(update, context, f"📊 По данным биржи, у актива {symbol} нет дивидендной истории.")
             else:
-                await self._send_callback_message(update, context, f"💵 Информация о дивидендах по активу {symbol} недоступна")
+                await self._send_callback_message(update, context, f"📊 По данным биржи, у актива {symbol} нет дивидендной истории.")
                 
         except Exception as e:
             self.logger.error(f"Error handling dividends button: {e}")
@@ -12862,7 +12868,7 @@ class ShansAi:
             info_text += f"🏢 {english_name}\n\n"
             
             if dividend_data.empty:
-                info_text += "❌ Дивиденды не найдены\n"
+                info_text += "📊 По данным биржи, у актива нет дивидендной истории.\n"
                 info_text += "💡 Возможные причины:\n"
                 info_text += "   • Компания не выплачивает дивиденды\n"
                 info_text += "   • Данные о дивидендах недоступны в Tushare\n"
