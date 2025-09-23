@@ -10434,7 +10434,7 @@ class ShansAi:
             "🇩🇪 XETR", "🇫🇷 XFRA", "🇳🇱 XAMS",
             "🇨🇳 SSE", "🇨🇳 SZSE", "🇨🇳 BSE", "🇭🇰 HKEX",
             "📊 INDX", "💱 FX", "🏦 CBR",
-            "🛢️ COMM", "₿ CC", "🏠 RE",
+            "🛢️ COMM", "₿ CC", "🇷🇺 RE",
             "📈 INFL", "💰 PIF", "🏦 RATE"
         ]
         return text in namespace_buttons
@@ -10766,7 +10766,7 @@ class ShansAi:
                 "🏦 CBR": "CBR",
                 "🛢️ COMM": "COMM",
                 "₿ CC": "CC",
-                "🏠 RE": "RE",
+                "🇷🇺 RE": "RE",
                 "📈 INFL": "INFL",
                 "💰 PIF": "PIF",
                 "🏦 RATE": "RATE"
