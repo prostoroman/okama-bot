@@ -3335,22 +3335,22 @@ class ShansAi:
                 
                 if chart_data:
                     # Отправляем график с информацией в caption
-                    caption = f"📈 График доходности за 1 год\n\n{info_text}"
+                    caption = f"📈 <b>График доходности за 1 год</b>\n\n{info_text}"
                     self.logger.info(f"Sending chart with caption length: {len(caption)}")
-                    await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
+                    await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context, parse_mode='HTML')
                 else:
                     # Если график не удалось получить, отправляем только текст
                     self.logger.warning(f"Could not get chart for {symbol}, sending text only")
-                    await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                    await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='HTML')
                 
             except Exception as e:
                 # При ошибке получения данных актива отправляем только сообщение об ошибке без кнопок
                 error_text = f"❌ Ошибка при получении информации об активе: {str(e)}"
-                await self._send_message_safe(update, error_text)
+                await self._send_message_safe(update, error_text, parse_mode='HTML')
             
         except Exception as e:
             self.logger.error(f"Error in _handle_okama_info for {symbol}: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}", parse_mode='HTML')
 
     async def _handle_tushare_info(self, update: Update, symbol: str, context: ContextTypes.DEFAULT_TYPE = None):
         """Handle info display for Tushare assets with new interactive structure"""
@@ -3879,7 +3879,7 @@ class ShansAi:
             exchange = getattr(asset, 'exchange', 'N/A')
             isin = getattr(asset, 'isin', 'N/A')
             
-            header = f"📊 {asset_name} ({symbol})\n"
+            header = f"📊 <b>{asset_name}</b> ({symbol})\n"
             header += f"📍 {country} | {asset_type} | {exchange}"
             if isin and isin != 'N/A':
                 header += f" | ISIN: {isin}"
@@ -3892,7 +3892,7 @@ class ShansAi:
                 'MAX': 'MAX'
             }.get(period, '1 год')
             
-            metrics_text = f"\n\nКлючевые показатели (за {period_text}):\n"
+            metrics_text = f"\n\n<b>Ключевые показатели</b> (за {period_text}):\n"
             
             # Current price
             if key_metrics.get('current_price') is not None:
