@@ -3993,7 +3993,7 @@ class ShansAi:
                 
                 # Используем ChartStyles для создания графика
                 self.logger.info("Creating chart with ChartStyles")
-                fig, ax = chart_styles.create_price_chart(
+                fig, ax = self.chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
@@ -4003,17 +4003,13 @@ class ShansAi:
                 )
                 self.logger.info("Chart created successfully")
                 
-                # Убираем подписи осей
-                ax.set_xlabel('')
-                ax.set_ylabel('')
-                
                 # Сохраняем в bytes
                 output = io.BytesIO()
-                chart_styles.save_figure(fig, output)
+                self.chart_styles.save_figure(fig, output)
                 output.seek(0)
                 
                 # Очистка
-                chart_styles.cleanup_figure(fig)
+                self.chart_styles.cleanup_figure(fig)
                 
                 result = output.getvalue()
                 self.logger.info(f"Chart bytes length: {len(result)}")
@@ -4792,7 +4788,7 @@ class ShansAi:
                     user_context['describe_table'] = "📊 Данные для анализа недоступны"
                 
                 # Create comparison chart with updated title format
-                chart_title = f"Сравнение {', '.join(symbols)} | {currency}"
+                chart_title = f"Доходность {', '.join(symbols)} | {currency}"
                 if specified_period:
                     chart_title += f" | {specified_period}"
                 
@@ -12592,7 +12588,7 @@ class ShansAi:
                 currency = getattr(asset, 'currency', '')
                 
                 # Используем ChartStyles для создания графика
-                fig, ax = chart_styles.create_price_chart(
+                fig, ax = self.chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
@@ -12602,7 +12598,7 @@ class ShansAi:
                 
                 # Создаем заголовок
                 title = f"{symbol} | {asset_name} | {currency} | {period}"
-                ax.set_title(title)
+                ax.set_title(title, **self.chart_styles.title)
                 
                 # Убираем подписи осей
                 ax.set_xlabel('')

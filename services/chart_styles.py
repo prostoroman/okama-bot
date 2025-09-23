@@ -129,15 +129,6 @@ class ChartStyles:
             'font.family': ['Liberation Sans'],  # Будет обновлено в _configure_cjk_fonts()
             'font.sans-serif': ['Liberation Sans', 'Liberation Sans Narrow', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
             'font.weight': 'medium',
-            'axes.titleweight': 'semibold',
-            'axes.labelweight': 'medium',
-            'figure.titlesize': 16,
-            'axes.titlesize': 14,
-            'axes.labelsize': 12,
-            'xtick.labelsize': 10,
-            'ytick.labelsize': 10,
-            'legend.title_fontsize': 11,
-            'legend.fontsize': 10,
             'axes.unicode_minus': False,  # Предотвращает проблемы с Unicode минусом
         })
         
@@ -334,7 +325,7 @@ class ChartStyles:
     def create_chart(self, rows=1, cols=1, figsize=None, **kwargs):
         """Универсальный метод создания фигуры с применением стилей"""
         try:
-            plt.style.use(self.style['style'])
+            # Стили уже применены в конструкторе, не нужно применять их снова
             
             # Убираем параметры, которые не поддерживаются plt.subplots
             plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright', 'title', 'xlabel', 'ylabel', 'data_source']}
@@ -376,7 +367,11 @@ class ChartStyles:
             # Принудительно устанавливаем ось Y справа для всех графиков
             ax.yaxis.tick_right()
             
-            # Устанавливаем цвет правой рамки такой же как у нижней
+            # Явно скрываем верхнюю и левую рамки (как в unified_style)
+            ax.spines['top'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            
+            # Устанавливаем цвет правой и нижней рамок
             ax.spines['right'].set_color('#D0D5DD')
             ax.spines['bottom'].set_color('#D0D5DD')
             
