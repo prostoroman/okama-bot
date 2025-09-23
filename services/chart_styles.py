@@ -565,7 +565,17 @@ class ChartStyles:
     
     def create_price_chart(self, data, symbol, currency, period='', data_source='okama', **kwargs):
         """Создать график цен актива"""
-        title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
+        # Получаем asset_name из kwargs если передано
+        asset_name = kwargs.pop('asset_name', None)
+        
+        # Создаем заголовок в едином формате
+        if asset_name and currency and period:
+            title = f"{symbol} | {asset_name} | {currency} | {period}"
+        elif period:
+            title = f"{symbol} | {period}"
+        else:
+            title = f"{symbol}"
+            
         ylabel = f'Цена ({currency})' if currency else 'Цена'
         xlabel = ''  # Пустая подпись по оси X
         return self.create_line_chart(data, title, ylabel, xlabel=xlabel, data_source=data_source, **kwargs)

@@ -3998,13 +3998,10 @@ class ShansAi:
                     symbol=symbol,
                     currency=currency,
                     period='1Y',
-                    data_source='okama'
+                    data_source='okama',
+                    asset_name=asset_name
                 )
                 self.logger.info("Chart created successfully")
-                
-                # Обновляем заголовок с нужным форматом
-                title = f"{symbol} | {asset_name} | {currency} | 1Y"
-                ax.set_title(title, **chart_styles.title)
                 
                 # Убираем подписи осей
                 ax.set_xlabel('')
