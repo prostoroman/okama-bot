@@ -60,7 +60,8 @@ def apply_unified_shans_pro_style():
             "axes.linewidth": 1.0,
             "axes.labelcolor": "#111827",
             "axes.spines.top": False,
-            "axes.spines.right": False,
+            "axes.spines.left": False,  # Скрываем левую рамку
+            "axes.spines.right": True,  # Показываем правую рамку
             "ytick.right": True,  # Отображать тики оси Y справа
 
             # --- Grid ---
