@@ -35,9 +35,9 @@ def apply_unified_shans_pro_style():
         # Единая система стилей Shans Pro
         unified_style = {
             # --- Figure ---
-            "figure.figsize": (12, 9),
-            "figure.dpi": 140,
-            "savefig.dpi": 220,
+            "figure.figsize": (10, 6),
+            "figure.dpi": 120,
+            "savefig.dpi": 200,
             "figure.facecolor": "white",
             "savefig.facecolor": "white",
             "savefig.bbox": "tight",
@@ -338,6 +338,9 @@ class ChartStyles:
             # Не переопределяем фон - используем единый белый фон из unified_style
             # ax.set_facecolor() НЕ вызываем - оставляем белый фон из unified_style
             
+            # Принудительно устанавливаем ось Y справа для всех графиков
+            ax.yaxis.tick_right()
+            
             # Дополнительные настройки если нужны (например, для специфичных графиков)
             pass
                 
@@ -365,6 +368,9 @@ class ChartStyles:
                 ax.yaxis.set_label_position('right')  # Перемещаем подпись оси Y вправо
             else:
                 ax.set_ylabel('')  # Явно скрываем подпись оси Y
+            
+            # Принудительно устанавливаем ось Y справа для всех графиков
+            ax.yaxis.tick_right()
             
             # Сетка (используем стили из unified_style)
             if grid:
@@ -395,11 +401,14 @@ class ChartStyles:
             # Подписи осей
             if xlabel:
                 safe_xlabel = self._safe_text_render(xlabel)
-                ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.set_xlabel(safe_xlabel, fontsize=12.5, fontweight=500, color='#111827')
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
-                ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.set_ylabel(safe_ylabel, fontsize=12.5, fontweight=500, color='#111827')
                 ax.yaxis.set_label_position('right')  # Перемещаем подпись оси Y вправо
+            
+            # Принудительно устанавливаем ось Y справа для всех графиков
+            ax.yaxis.tick_right()
             
             # Сетка с стандартными цветами matplotlib (без кастомных цветов)
             if grid:
@@ -409,7 +418,7 @@ class ChartStyles:
             if legend:
                 handles, labels = ax.get_legend_handles_labels()
                 if handles and labels:
-                    ax.legend(**self.legend)
+                    ax.legend(fontsize=10.5, frameon=False, loc='best')
             
             # Копирайт
             if copyright:
@@ -1015,11 +1024,11 @@ class ChartStyles:
         # Специальная настройка для корреляционной матрицы - ось Y слева
         ax.yaxis.tick_left()  # Перемещаем тики оси Y влево для корреляционной матрицы
         
-        # Рамки - для корреляционной матрицы показываем все рамки
+        # Рамки - для корреляционной матрицы показываем все рамки в стиле Shans Pro
         for spine in ['top', 'left', 'right', 'bottom']:
             ax.spines[spine].set_visible(True)
-            ax.spines[spine].set_color(self.spines['color'])
-            ax.spines[spine].set_linewidth(self.spines['linewidth'])
+            ax.spines[spine].set_color('#D0D5DD')
+            ax.spines[spine].set_linewidth(1.0)
         
         # Отключаем сетку для корреляционной матрицы
         ax.grid(False)
