@@ -2721,7 +2721,7 @@ class ShansAi:
                 name = symbol_info['name']
                 
                 # Simple escaping for list display - only escape characters that interfere with bold formatting
-                escaped_name = name.replace('*', '\\*').replace('_', '\\_')
+                escaped_name = name.replace('*', '\\*')
                 
                 # Truncate name to maximum 40 characters
                 if len(escaped_name) > 40:
@@ -2871,7 +2871,7 @@ class ShansAi:
                 name = row['name'] if pd.notna(row['name']) else 'N/A'
                 
                 # Simple escaping for list display - only escape characters that interfere with bold formatting
-                escaped_name = name.replace('*', '\\*').replace('_', '\\_')
+                escaped_name = name.replace('*', '\\*')
                 
                 # Truncate name to maximum 40 characters
                 if len(escaped_name) > 40:
@@ -2964,7 +2964,7 @@ class ShansAi:
                 name = row['name'] if pd.notna(row['name']) else 'N/A'
                 
                 # Escape special characters for Markdown
-                escaped_name = name.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+                escaped_name = name.replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
                 
                 # Create bullet list item with bold ticker
                 symbol_list.append(f"• **`{symbol}`** - {escaped_name}")
@@ -3046,7 +3046,7 @@ class ShansAi:
                 name = symbol_data.get('name', 'N/A')
                 
                 # Escape special characters for Markdown
-                escaped_name = name.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]')
+                escaped_name = name.replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
                 
                 # Create bullet list item with bold ticker
                 symbol_list.append(f"• **`{symbol}`** - {escaped_name}")
