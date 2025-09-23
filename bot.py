@@ -2403,7 +2403,7 @@ class ShansAi:
         try:
             # Check if dividend yield data is available
             if not hasattr(asset_list, 'dividend_yield') or asset_list.dividend_yield.empty:
-                await self._send_message_safe(update, "ℹ️ Данные о дивидендной доходности недоступны для выбранных активов")
+                await self._send_message_safe(update, "📊 По данным биржи, у выбранных активов нет дивидендной истории.")
                 return
             
             # Create dividend yield chart using chart_styles
@@ -3993,30 +3993,23 @@ class ShansAi:
                 
                 # Используем ChartStyles для создания графика
                 self.logger.info("Creating chart with ChartStyles")
-                fig, ax = chart_styles.create_price_chart(
+                fig, ax = self.chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
                     period='1Y',
-                    data_source='okama'
+                    data_source='okama',
+                    asset_name=asset_name
                 )
                 self.logger.info("Chart created successfully")
                 
-                # Обновляем заголовок с нужным форматом
-                title = f"{symbol} | {asset_name} | {currency} | 1Y"
-                ax.set_title(title, **chart_styles.title)
-                
-                # Убираем подписи осей
-                ax.set_xlabel('')
-                ax.set_ylabel('')
-                
                 # Сохраняем в bytes
                 output = io.BytesIO()
-                chart_styles.save_figure(fig, output)
+                self.chart_styles.save_figure(fig, output)
                 output.seek(0)
                 
                 # Очистка
-                chart_styles.cleanup_figure(fig)
+                self.chart_styles.cleanup_figure(fig)
                 
                 result = output.getvalue()
                 self.logger.info(f"Chart bytes length: {len(result)}")
@@ -4795,7 +4788,7 @@ class ShansAi:
                     user_context['describe_table'] = "📊 Данные для анализа недоступны"
                 
                 # Create comparison chart with updated title format
-                chart_title = f"Сравнение {', '.join(symbols)} | {currency}"
+                chart_title = f"Доходность {', '.join(symbols)} | {currency}"
                 if specified_period:
                     chart_title += f" | {specified_period}"
                 
@@ -11930,7 +11923,13 @@ class ShansAi:
                     valid_dividends_data[symbol] = 0  # Default to 0
             
             if not valid_dividends_data:
-                await self._send_callback_message(update, context, "❌ Не удалось создать валидные данные для графика дивидендной доходности")
+                await self._send_callback_message(update, context, "📊 По данным биржи, у выбранных активов нет дивидендной истории.")
+                return
+            
+            # Check if all dividend yields are zero (no dividends)
+            all_zero = all(yield_val == 0 for yield_val in valid_dividends_data.values())
+            if all_zero:
+                await self._send_callback_message(update, context, "📊 По данным биржи, у выбранных активов нет дивидендной истории.")
                 return
             
             # Create chart using chart_styles
@@ -12595,7 +12594,7 @@ class ShansAi:
                 currency = getattr(asset, 'currency', '')
                 
                 # Используем ChartStyles для создания графика
-                fig, ax = chart_styles.create_price_chart(
+                fig, ax = self.chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
@@ -12605,7 +12604,7 @@ class ShansAi:
                 
                 # Создаем заголовок
                 title = f"{symbol} | {asset_name} | {currency} | {period}"
-                ax.set_title(title)
+                ax.set_title(title, **self.chart_styles.title)
                 
                 # Убираем подписи осей
                 ax.set_xlabel('')
@@ -12684,9 +12683,9 @@ class ShansAi:
                     else:
                         await self._send_callback_message(update, context, f"💵 Дивиденды {symbol} - график недоступен")
                 else:
-                    await self._send_callback_message(update, context, f"💵 Дивиденды по активу {symbol} не найдены")
+                    await self._send_callback_message(update, context, f"📊 По данным биржи, у актива {symbol} нет дивидендной истории.")
             else:
-                await self._send_callback_message(update, context, f"💵 Информация о дивидендах по активу {symbol} недоступна")
+                await self._send_callback_message(update, context, f"📊 По данным биржи, у актива {symbol} нет дивидендной истории.")
                 
         except Exception as e:
             self.logger.error(f"Error handling dividends button: {e}")
@@ -12869,7 +12868,7 @@ class ShansAi:
             info_text += f"🏢 {english_name}\n\n"
             
             if dividend_data.empty:
-                info_text += "❌ Дивиденды не найдены\n"
+                info_text += "📊 По данным биржи, у актива нет дивидендной истории.\n"
                 info_text += "💡 Возможные причины:\n"
                 info_text += "   • Компания не выплачивает дивиденды\n"
                 info_text += "   • Данные о дивидендах недоступны в Tushare\n"

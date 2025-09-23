@@ -36,8 +36,8 @@ def apply_unified_shans_pro_style():
         unified_style = {
             # --- Figure ---
             "figure.figsize": (10, 6),
-            "figure.dpi": 140,
-            "savefig.dpi": 220,
+            "figure.dpi": 120,
+            "savefig.dpi": 200,
             "figure.facecolor": "white",
             "savefig.facecolor": "white",
             "savefig.bbox": "tight",
@@ -47,7 +47,7 @@ def apply_unified_shans_pro_style():
             "font.family": "sans-serif",
             "font.sans-serif": ["Liberation Sans", "Nimbus Sans", "DejaVu Sans", "Helvetica", "Arial"],
             "font.size": 11.5,
-            "axes.titlesize": 16,
+            "axes.titlesize": 14,
             "axes.titleweight": 600,
             "axes.labelsize": 12.5,
             "axes.labelweight": 500,
@@ -59,8 +59,10 @@ def apply_unified_shans_pro_style():
             "axes.edgecolor": "#D0D5DD",
             "axes.linewidth": 1.0,
             "axes.labelcolor": "#111827",
-            "axes.spines.top": False,
-            "axes.spines.right": False,
+            "axes.spines.top": False,  # Скрываем верхнюю рамку
+            "axes.spines.left": False,  # Скрываем левую рамку
+            "axes.spines.right": True,  # Показываем правую рамку
+            "ytick.right": True,  # Отображать тики оси Y справа
 
             # --- Grid ---
             "axes.grid": True,
@@ -122,6 +124,14 @@ class ChartStyles:
         # Применяем единый стиль Shans Pro при инициализации
         style_applied = apply_unified_shans_pro_style()
         
+        # Централизованные настройки шрифтов с поддержкой CJK
+        mpl.rcParams.update({
+            'font.family': ['Liberation Sans'],  # Будет обновлено в _configure_cjk_fonts()
+            'font.sans-serif': ['Liberation Sans', 'Liberation Sans Narrow', 'DejaVu Sans', 'Arial Unicode MS', 'SimHei', 'Microsoft YaHei', 'PT Sans', 'Arial', 'Helvetica', 'sans-serif'],
+            'font.weight': 'medium',
+            'axes.unicode_minus': False,  # Предотвращает проблемы с Unicode минусом
+        })
+        
         if not style_applied:
             logger.warning("Failed to apply unified Shans Pro style, using default matplotlib settings")
         
@@ -132,6 +142,7 @@ class ChartStyles:
             'facecolor': 'white',
             'edgecolor': 'none',
             'bbox_inches': 'tight',
+            'style': 'default',
         }
         
         # Настройки для специфичных функций модуля
@@ -271,7 +282,23 @@ class ChartStyles:
                     
         except Exception as e:
             logger.warning(f"Could not refresh font cache: {e}")
-    
+
+    def get_current_font_info(self):
+        """Получить информацию о текущих настройках шрифтов"""
+        try:
+            import matplotlib.font_manager as fm
+            available_fonts = [f.name for f in fm.fontManager.ttflist]
+            
+            return {
+                'current_font_family': mpl.rcParams['font.family'],
+                'current_sans_serif': mpl.rcParams['font.sans-serif'],
+                'available_fonts_count': len(available_fonts),
+                'is_render': self._is_render_environment(),
+                'priority_fonts_available': [f for f in ['Liberation Sans', 'DejaVu Sans', 'Arial'] if f in available_fonts]
+            }
+        except Exception as e:
+            logger.error(f"Error getting font info: {e}")
+            return None
 
     def _safe_text_render(self, text):
         """Безопасное отображение текста с CJK символами"""
@@ -298,7 +325,7 @@ class ChartStyles:
     def create_chart(self, rows=1, cols=1, figsize=None, **kwargs):
         """Универсальный метод создания фигуры с применением стилей"""
         try:
-            plt.style.use(self.style['style'])
+            # Стили уже применены в конструкторе, не нужно применять их снова
             
             # Убираем параметры, которые не поддерживаются plt.subplots
             plot_kwargs = {k: v for k, v in kwargs.items() if k not in ['copyright', 'title', 'xlabel', 'ylabel', 'data_source']}
@@ -337,6 +364,17 @@ class ChartStyles:
             # Не переопределяем фон - используем единый белый фон из unified_style
             # ax.set_facecolor() НЕ вызываем - оставляем белый фон из unified_style
             
+            # Принудительно устанавливаем ось Y справа для всех графиков
+            ax.yaxis.tick_right()
+            
+            # Явно скрываем верхнюю и левую рамки (как в unified_style)
+            ax.spines['top'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            
+            # Устанавливаем цвет правой и нижней рамок
+            ax.spines['right'].set_color('#D0D5DD')
+            ax.spines['bottom'].set_color('#D0D5DD')
+            
             # Дополнительные настройки если нужны (например, для специфичных графиков)
             pass
                 
@@ -364,6 +402,9 @@ class ChartStyles:
                 ax.yaxis.set_label_position('right')  # Перемещаем подпись оси Y вправо
             else:
                 ax.set_ylabel('')  # Явно скрываем подпись оси Y
+            
+            # Принудительно устанавливаем ось Y справа для всех графиков
+            ax.yaxis.tick_right()
             
             # Сетка (используем стили из unified_style)
             if grid:
@@ -394,11 +435,14 @@ class ChartStyles:
             # Подписи осей
             if xlabel:
                 safe_xlabel = self._safe_text_render(xlabel)
-                ax.set_xlabel(safe_xlabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.set_xlabel(safe_xlabel, fontsize=12.5, fontweight=500, color='#111827')
             if ylabel:
                 safe_ylabel = self._safe_text_render(ylabel)
-                ax.set_ylabel(safe_ylabel, fontsize=self.axes['fontsize'], fontweight=self.axes['fontweight'], color=self.axes['color'])
+                ax.set_ylabel(safe_ylabel, fontsize=12.5, fontweight=500, color='#111827')
                 ax.yaxis.set_label_position('right')  # Перемещаем подпись оси Y вправо
+            
+            # Принудительно устанавливаем ось Y справа для всех графиков
+            ax.yaxis.tick_right()
             
             # Сетка с стандартными цветами matplotlib (без кастомных цветов)
             if grid:
@@ -408,7 +452,7 @@ class ChartStyles:
             if legend:
                 handles, labels = ax.get_legend_handles_labels()
                 if handles and labels:
-                    ax.legend(**self.legend)
+                    ax.legend(fontsize=10.5, frameon=False, loc='best')
             
             # Копирайт
             if copyright:
@@ -516,7 +560,17 @@ class ChartStyles:
     
     def create_price_chart(self, data, symbol, currency, period='', data_source='okama', **kwargs):
         """Создать график цен актива"""
-        title = f'Динамика цены: {symbol} ({period})' if period else f'Динамика цены: {symbol}'
+        # Получаем asset_name из kwargs если передано
+        asset_name = kwargs.pop('asset_name', None)
+        
+        # Создаем заголовок в едином формате
+        if asset_name and currency and period:
+            title = f"{symbol} | {asset_name} | {currency} | {period}"
+        elif period:
+            title = f"{symbol} | {period}"
+        else:
+            title = f"{symbol}"
+            
         ylabel = f'Цена ({currency})' if currency else 'Цена'
         xlabel = ''  # Пустая подпись по оси X
         return self.create_line_chart(data, title, ylabel, xlabel=xlabel, data_source=data_source, **kwargs)
@@ -1014,11 +1068,11 @@ class ChartStyles:
         # Специальная настройка для корреляционной матрицы - ось Y слева
         ax.yaxis.tick_left()  # Перемещаем тики оси Y влево для корреляционной матрицы
         
-        # Рамки - для корреляционной матрицы показываем все рамки
+        # Рамки - для корреляционной матрицы показываем все рамки в стиле Shans Pro
         for spine in ['top', 'left', 'right', 'bottom']:
             ax.spines[spine].set_visible(True)
-            ax.spines[spine].set_color(self.spines['color'])
-            ax.spines[spine].set_linewidth(self.spines['linewidth'])
+            ax.spines[spine].set_color('#D0D5DD')
+            ax.spines[spine].set_linewidth(1.0)
         
         # Отключаем сетку для корреляционной матрицы
         ax.grid(False)
@@ -1182,24 +1236,25 @@ class ChartStyles:
                 table.auto_set_font_size(False)
                 table.set_fontsize(10)
                 
-                # Цветовая схема
-                header_color = '#4A90E2'  # Синий для заголовков
-                metric_color = '#F0F0F0'   # Светло-серый для метрик
+                # Цветовая схема в стиле Shans Pro
+                header_color = '#F9FAFB'  # Светло-серый фон заголовков
+                metric_color = '#F9FAFB'   # Светло-серый для метрик
                 data_color = '#FFFFFF'    # Белый для данных
                 
                 # Стилизация заголовков
                 for i in range(len(headers) + 1):
                     table[(0, i)].set_facecolor(header_color)
-                    table[(0, i)].set_text_props(weight='bold', color='white')
+                    table[(0, i)].set_text_props(weight='bold', color='#111827')
                 
                 # Стилизация строк метрик
                 for i in range(1, len(table_data) + 1):
                     table[(i, 0)].set_facecolor(metric_color)
-                    table[(i, 0)].set_text_props(weight='bold')
+                    table[(i, 0)].set_text_props(weight='bold', color='#1F2937')
                     
                     # Стилизация данных
                     for j in range(1, len(headers) + 1):
                         table[(i, j)].set_facecolor(data_color)
+                        table[(i, j)].set_text_props(color='#1F2937')
                         
                         # Подсветка лучших значений для числовых метрик
                         try:
@@ -1227,14 +1282,14 @@ class ChartStyles:
                         except (ValueError, TypeError, IndexError):
                             pass
                 
-                # Настройка границ
+                # Настройка границ в стиле Shans Pro
                 for i in range(len(table_data) + 1):
                     for j in range(len(headers) + 1):
-                        table[(i, j)].set_edgecolor('#CCCCCC')
-                        table[(i, j)].set_linewidth(0.5)
+                        table[(i, j)].set_edgecolor('#E5E7EB')
+                        table[(i, j)].set_linewidth(0.6)
                 
-                # Заголовок таблицы
-                fig.suptitle(title, fontsize=16, fontweight='bold', y=0.95)
+                # Заголовок таблицы в стиле Shans Pro
+                fig.suptitle(title, fontsize=14, fontweight=600, y=0.95, color='#111827')
                 
                 # Настройка макета
                 plt.tight_layout()
@@ -1270,8 +1325,8 @@ class ChartStyles:
                     text_content += "\n"
                 
                 ax.text(0.05, 0.95, text_content, transform=ax.transAxes,
-                       fontsize=10, verticalalignment='top',
-                       bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8))
+                       fontsize=10, verticalalignment='top', color='#1F2937',
+                       bbox=dict(boxstyle='round,pad=0.5', facecolor='#F9FAFB', alpha=0.9, edgecolor='#E5E7EB'))
                 
                 return fig, ax
                 
@@ -1822,17 +1877,17 @@ class ChartStyles:
         col_formats: Optional[Dict[str, str]] = None,  # например {"CAGR":"{:.2%}","Vol":"{:.2f}"}
         max_col_width: int = 28,          # максимум символов в строке до переноса
         row_zebra: bool = True,
-        header_bg: str = "#0F172A",       # тёмно-синий (слегка)
-        header_fg: str = "#FFFFFF",
-        even_bg: str = "#F8FAFC",
-        odd_bg: str = "#FFFFFF",
-        text_color: str = "#0B1221",
-        edge_color: str = "#CBD5E1",
+        header_bg: str = "#F9FAFB",       # Светло-серый фон заголовков в стиле Shans Pro
+        header_fg: str = "#111827",       # Темный текст заголовков
+        even_bg: str = "#FFFFFF",         # Белый фон для четных строк
+        odd_bg: str = "#F9FAFB",          # Светло-серый фон для нечетных строк
+        text_color: str = "#1F2937",      # Темный текст ячеек
+        edge_color: str = "#E5E7EB",      # Светло-серая сетка
         cell_padding_x: float = 0.4,      # поля по X (в «символьных» ширинах)
         cell_padding_y: float = 0.28,     # поля по Y (в «строках»)
-        fontsize: int = 12,
-        title_fontsize: int = 16,
-        footnote_fontsize: int = 10,
+        fontsize: int = 10,               # Размер шрифта как в примере
+        title_fontsize: int = 14,         # Размер заголовка
+        footnote_fontsize: int = 9,       # Размер подвала
         dpi: int = 200,
         as_document: bool = True,         # True → без сжатия, подходит для send_document
     ) -> BytesIO:
