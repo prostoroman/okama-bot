@@ -41,6 +41,13 @@ except ImportError:
 if os.getenv('DISPLAY') is None and os.getenv('MPLBACKEND') is None:
     matplotlib.use('Agg')
 
+# Load unified Shans Pro style for consistent chart styling
+try:
+    from services.chart_styles import apply_unified_shans_pro_style
+    apply_unified_shans_pro_style()
+except Exception as e:
+    print(f"Warning: Could not apply unified Shans Pro style: {e}")
+
 # Suppress matplotlib warnings for missing CJK glyphs
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
@@ -3986,30 +3993,23 @@ class ShansAi:
                 
                 # Используем ChartStyles для создания графика
                 self.logger.info("Creating chart with ChartStyles")
-                fig, ax = chart_styles.create_price_chart(
+                fig, ax = self.chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
                     period='1Y',
-                    data_source='okama'
+                    data_source='okama',
+                    asset_name=asset_name
                 )
                 self.logger.info("Chart created successfully")
                 
-                # Обновляем заголовок с нужным форматом
-                title = f"{symbol} | {asset_name} | {currency} | 1Y"
-                ax.set_title(title, **chart_styles.title)
-                
-                # Убираем подписи осей
-                ax.set_xlabel('')
-                ax.set_ylabel('')
-                
                 # Сохраняем в bytes
                 output = io.BytesIO()
-                chart_styles.save_figure(fig, output)
+                self.chart_styles.save_figure(fig, output)
                 output.seek(0)
                 
                 # Очистка
-                chart_styles.cleanup_figure(fig)
+                self.chart_styles.cleanup_figure(fig)
                 
                 result = output.getvalue()
                 self.logger.info(f"Chart bytes length: {len(result)}")
@@ -4788,7 +4788,7 @@ class ShansAi:
                     user_context['describe_table'] = "📊 Данные для анализа недоступны"
                 
                 # Create comparison chart with updated title format
-                chart_title = f"Сравнение {', '.join(symbols)} | {currency}"
+                chart_title = f"Доходность {', '.join(symbols)} | {currency}"
                 if specified_period:
                     chart_title += f" | {specified_period}"
                 
@@ -12588,7 +12588,7 @@ class ShansAi:
                 currency = getattr(asset, 'currency', '')
                 
                 # Используем ChartStyles для создания графика
-                fig, ax = chart_styles.create_price_chart(
+                fig, ax = self.chart_styles.create_price_chart(
                     data=filtered_data,
                     symbol=symbol,
                     currency=currency,
@@ -12598,7 +12598,7 @@ class ShansAi:
                 
                 # Создаем заголовок
                 title = f"{symbol} | {asset_name} | {currency} | {period}"
-                ax.set_title(title)
+                ax.set_title(title, **self.chart_styles.title)
                 
                 # Убираем подписи осей
                 ax.set_xlabel('')
