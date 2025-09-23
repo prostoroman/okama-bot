@@ -121,10 +121,9 @@ class ChartStyles:
     """Класс для управления стилями графиков (Nordic Pro)"""
     
     def __init__(self):
-<<<<<<< HEAD
         # Применяем единый стиль Shans Pro при инициализации
         style_applied = apply_unified_shans_pro_style()
-=======
+        
         # Централизованные настройки шрифтов с поддержкой CJK
         mpl.rcParams.update({
             'font.family': ['Liberation Sans'],  # Будет обновлено в _configure_cjk_fonts()
@@ -141,7 +140,6 @@ class ChartStyles:
             'legend.fontsize': 10,
             'axes.unicode_minus': False,  # Предотвращает проблемы с Unicode минусом
         })
->>>>>>> 2b0bd5575ac14740bcc7f792a6d8d2bef01e4a12
         
         if not style_applied:
             logger.warning("Failed to apply unified Shans Pro style, using default matplotlib settings")
@@ -153,10 +151,7 @@ class ChartStyles:
             'facecolor': 'white',
             'edgecolor': 'none',
             'bbox_inches': 'tight',
-<<<<<<< HEAD
-=======
             'style': 'default',
->>>>>>> 2b0bd5575ac14740bcc7f792a6d8d2bef01e4a12
         }
         
         # Настройки для специфичных функций модуля
@@ -296,11 +291,7 @@ class ChartStyles:
                     
         except Exception as e:
             logger.warning(f"Could not refresh font cache: {e}")
-<<<<<<< HEAD
-    
-=======
 
-    
     def get_current_font_info(self):
         """Получить информацию о текущих настройках шрифтов"""
         try:
@@ -317,7 +308,6 @@ class ChartStyles:
         except Exception as e:
             logger.error(f"Error getting font info: {e}")
             return None
->>>>>>> 2b0bd5575ac14740bcc7f792a6d8d2bef01e4a12
 
     def _safe_text_render(self, text):
         """Безопасное отображение текста с CJK символами"""
