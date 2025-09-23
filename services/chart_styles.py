@@ -59,7 +59,7 @@ def apply_unified_shans_pro_style():
             "axes.edgecolor": "#D0D5DD",
             "axes.linewidth": 1.0,
             "axes.labelcolor": "#111827",
-            "axes.spines.top": False,
+            "axes.spines.top": False,  # Скрываем верхнюю рамку
             "axes.spines.left": False,  # Скрываем левую рамку
             "axes.spines.right": True,  # Показываем правую рамку
             "ytick.right": True,  # Отображать тики оси Y справа
