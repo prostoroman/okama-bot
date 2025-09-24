@@ -3395,13 +3395,13 @@ class ShansAi:
                 # Create enhanced caption with English information
                 chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, "1 год")
                 caption = f"{chart_caption}\n\n{info_text}"
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context, parse_mode='Markdown')
             else:
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error in _handle_tushare_info for {symbol}: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}", parse_mode='Markdown')
 
     def _format_tushare_chart_caption(self, symbol_info: Dict[str, Any], symbol: str, period_text: str) -> str:
         """Format chart caption with English information for Chinese/Hong Kong assets"""
@@ -10998,14 +10998,14 @@ class ShansAi:
             if chart_data:
                 # Send chart with info text
                 chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, period)
-                await self._send_photo_safe(update, chart_data, caption=chart_caption, reply_markup=reply_markup, context=context)
+                await self._send_photo_safe(update, chart_data, caption=chart_caption, reply_markup=reply_markup, context=context, parse_mode='Markdown')
             else:
                 # Send only text
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='Markdown')
                 
         except Exception as e:
             self.logger.error(f"Error handling Tushare info period reply button: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}", parse_mode='Markdown')
 
     async def _handle_okama_info_period_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Okama assets via reply keyboard"""
@@ -11033,15 +11033,20 @@ class ShansAi:
             
             if chart_data:
                 # Send chart with info text
-                caption = f"📈 График доходности за {period}\n\n{info_text}"
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
+                period_text = {
+                    '1Y': '1 год',
+                    '5Y': '5 лет', 
+                    'MAX': 'MAX'
+                }.get(period, period)
+                caption = f"📈 **График доходности за {period_text}**\n\n{info_text}"
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context, parse_mode='Markdown')
             else:
                 # Send only text
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='Markdown')
                 
         except Exception as e:
             self.logger.error(f"Error handling Okama info period reply button: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}", parse_mode='Markdown')
 
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists - DEPRECATED: Use _manage_reply_keyboard instead"""
