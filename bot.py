@@ -2038,11 +2038,17 @@ class ShansAi:
                 self.logger.error("Cannot find bot instance for sending photo")
                 return
             
-            # Отправляем фотографию с parse_mode по умолчанию Markdown
+            # Обрабатываем caption в зависимости от parse_mode
+            processed_caption = caption
+            if caption and parse_mode == 'Markdown':
+                # Дополнительная очистка Markdown для предотвращения ошибок парсинга
+                processed_caption = self._safe_markdown(caption)
+            
+            # Отправляем фотографию с обработанным caption
             await bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(photo_bytes),
-                caption=caption,
+                caption=processed_caption,
                 parse_mode=parse_mode,
                 reply_markup=reply_markup
             )
@@ -2051,7 +2057,7 @@ class ShansAi:
             self.logger.error(f"Error sending photo: {e}")
             # Fallback: отправляем только текст с тем же parse_mode
             if caption:
-                await self._send_message_safe(update, caption, reply_markup=reply_markup)
+                await self._send_message_safe(update, caption, reply_markup=reply_markup, parse_mode=parse_mode)
 
     async def _send_message_safe(self, update: Update, text: str, reply_markup=None, parse_mode='Markdown'):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
@@ -6389,18 +6395,58 @@ class ShansAi:
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода сравнения: {str(e)}")
 
     def _escape_markdown_special_chars(self, text: str) -> str:
-        """Escape special characters that could cause Markdown parsing issues"""
+        """Escape special characters that could cause Markdown parsing issues while preserving our formatting"""
         try:
             if not text or not isinstance(text, str):
                 return text or ""
             
-            # Escape special Markdown characters that could cause parsing issues
-            # These characters have special meaning in Markdown and need to be escaped
-            special_chars = ['*', '_', '`', '[', ']', '(', ')', '~', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+            # First, protect our intentional Markdown formatting
+            # Replace ** with a placeholder to protect it
+            text = text.replace('**', '___BOLD_START___')
             
+            # Now escape problematic characters
             escaped_text = text
-            for char in special_chars:
-                escaped_text = escaped_text.replace(char, f'\\{char}')
+            
+            # Escape underscores (but not our placeholder)
+            escaped_text = escaped_text.replace('_', '\\_')
+            
+            # Escape backticks
+            escaped_text = escaped_text.replace('`', '\\`')
+            
+            # Escape square brackets and parentheses (for links)
+            escaped_text = escaped_text.replace('[', '\\[')
+            escaped_text = escaped_text.replace(']', '\\]')
+            escaped_text = escaped_text.replace('(', '\\(')
+            escaped_text = escaped_text.replace(')', '\\)')
+            
+            # Escape tilde (for strikethrough)
+            escaped_text = escaped_text.replace('~', '\\~')
+            
+            # Escape hash (for headers)
+            escaped_text = escaped_text.replace('#', '\\#')
+            
+            # Escape plus and minus (for lists)
+            escaped_text = escaped_text.replace('+', '\\+')
+            escaped_text = escaped_text.replace('-', '\\-')
+            
+            # Escape equals (for headers)
+            escaped_text = escaped_text.replace('=', '\\=')
+            
+            # Escape pipe (for tables)
+            escaped_text = escaped_text.replace('|', '\\|')
+            
+            # Escape braces (for code blocks)
+            escaped_text = escaped_text.replace('{', '\\{')
+            escaped_text = escaped_text.replace('}', '\\}')
+            
+            # Escape exclamation mark (for images)
+            escaped_text = escaped_text.replace('!', '\\!')
+            
+            # Escape dot (for ordered lists)
+            escaped_text = escaped_text.replace('.', '\\.')
+            
+            # Restore our bold formatting
+            escaped_text = escaped_text.replace('___BOLD_START___', '**')
             
             return escaped_text
             
