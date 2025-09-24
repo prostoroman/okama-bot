@@ -735,6 +735,12 @@ class ShansAi:
                             'name': row.get('name', ''),
                             'source': 'okama'
                         })
+                else:
+                    # If no results found, try fuzzy search for common misspellings
+                    from moex_search_embedded import try_fuzzy_search
+                    fuzzy_results = try_fuzzy_search(raw)
+                    if fuzzy_results:
+                        okama_results.extend(fuzzy_results)
             except Exception as e:
                 self.logger.warning(f"Okama search failed for '{raw}': {e}")
 
@@ -1012,6 +1018,14 @@ class ShansAi:
                 if '.' in symbol and symbol.split('.')[-1] in priority_exchanges:
                     return symbol
         
+        # Special handling for Porsche - prefer XETR exchange
+        if 'porsche' in original_lower:
+            for _, row in search_result.iterrows():
+                symbol = row['symbol']
+                name = row.get('name', '').lower()
+                if 'porsche' in name and symbol.endswith('.XETR'):
+                    return symbol
+        
         # Third, try to find any result with priority exchanges
         for exchange in priority_exchanges:
             for _, row in search_result.iterrows():
@@ -1039,8 +1053,6 @@ class ShansAi:
         except Exception:
             # If even the first result fails, return it anyway (will be handled by caller)
             return first_symbol
-
-
 
     def get_random_examples(self, count: int = 3) -> list:
         """Get random examples from known assets, including Chinese and Hong Kong assets"""
@@ -2038,11 +2050,17 @@ class ShansAi:
                 self.logger.error("Cannot find bot instance for sending photo")
                 return
             
-            # Отправляем фотографию с parse_mode по умолчанию Markdown
+            # Обрабатываем caption в зависимости от parse_mode
+            processed_caption = caption
+            if caption and parse_mode == 'Markdown':
+                # Дополнительная очистка Markdown для предотвращения ошибок парсинга
+                processed_caption = self._safe_markdown(caption)
+            
+            # Отправляем фотографию с обработанным caption
             await bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=io.BytesIO(photo_bytes),
-                caption=caption,
+                caption=processed_caption,
                 parse_mode=parse_mode,
                 reply_markup=reply_markup
             )
@@ -2051,7 +2069,7 @@ class ShansAi:
             self.logger.error(f"Error sending photo: {e}")
             # Fallback: отправляем только текст с тем же parse_mode
             if caption:
-                await self._send_message_safe(update, caption, reply_markup=reply_markup)
+                await self._send_message_safe(update, caption, reply_markup=reply_markup, parse_mode=parse_mode)
 
     async def _send_message_safe(self, update: Update, text: str, reply_markup=None, parse_mode='Markdown'):
         """Безопасная отправка сообщения с автоматическим разбиением на части - исправлено для обработки None"""
@@ -2555,6 +2573,8 @@ class ShansAi:
 
 `/rate` — показать текущий статус лимитов запросов
 `/limits` — информация о системе ограничений скорости
+
+
 
 🔹 *Примеры команд*
 
@@ -3336,22 +3356,22 @@ class ShansAi:
                 
                 if chart_data:
                     # Отправляем график с информацией в caption
-                    caption = f"📈 <b>График доходности за 1 год</b>\n\n{info_text}"
+                    caption = f"📈 **График доходности за 1 год**\n\n{info_text}"
                     self.logger.info(f"Sending chart with caption length: {len(caption)}")
-                    await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context, parse_mode='HTML')
+                    await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context, parse_mode='Markdown')
                 else:
                     # Если график не удалось получить, отправляем только текст
                     self.logger.warning(f"Could not get chart for {symbol}, sending text only")
-                    await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='HTML')
+                    await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='Markdown')
                 
             except Exception as e:
                 # При ошибке получения данных актива отправляем только сообщение об ошибке без кнопок
                 error_text = f"❌ Ошибка при получении информации об активе: {str(e)}"
-                await self._send_message_safe(update, error_text, parse_mode='HTML')
+                await self._send_message_safe(update, error_text, parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error in _handle_okama_info for {symbol}: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}", parse_mode='HTML')
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}", parse_mode='Markdown')
 
     async def _handle_tushare_info(self, update: Update, symbol: str, context: ContextTypes.DEFAULT_TYPE = None):
         """Handle info display for Tushare assets with new interactive structure"""
@@ -3393,13 +3413,13 @@ class ShansAi:
                 # Create enhanced caption with English information
                 chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, "1 год")
                 caption = f"{chart_caption}\n\n{info_text}"
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context, parse_mode='Markdown')
             else:
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='Markdown')
             
         except Exception as e:
             self.logger.error(f"Error in _handle_tushare_info for {symbol}: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}", parse_mode='Markdown')
 
     def _format_tushare_chart_caption(self, symbol_info: Dict[str, Any], symbol: str, period_text: str) -> str:
         """Format chart caption with English information for Chinese/Hong Kong assets"""
@@ -3880,7 +3900,14 @@ class ShansAi:
             exchange = getattr(asset, 'exchange', 'N/A')
             isin = getattr(asset, 'isin', 'N/A')
             
-            header = f"📊 <b>{asset_name}</b> ({symbol})\n"
+            # Escape special characters that could cause Markdown parsing issues
+            asset_name = self._escape_markdown_special_chars(asset_name)
+            country = self._escape_markdown_special_chars(country)
+            asset_type = self._escape_markdown_special_chars(asset_type)
+            exchange = self._escape_markdown_special_chars(exchange)
+            isin = self._escape_markdown_special_chars(isin)
+            
+            header = f"📊 **{asset_name}** ({symbol})\n"
             header += f"📍 {country} | {asset_type} | {exchange}"
             if isin and isin != 'N/A':
                 header += f" | ISIN: {isin}"
@@ -3893,12 +3920,13 @@ class ShansAi:
                 'MAX': 'MAX'
             }.get(period, '1 год')
             
-            metrics_text = f"\n\n<b>Ключевые показатели</b> (за {period_text}):\n"
+            metrics_text = f"\n\n**Ключевые показатели** (за {period_text}):\n"
             
             # Current price
             if key_metrics.get('current_price') is not None:
                 price = key_metrics['current_price']
                 currency = getattr(asset, 'currency', 'USD')
+                currency = self._escape_markdown_special_chars(currency)
                 price_text = f"Цена: {price:.2f} {currency}"
                 
                 if key_metrics.get('price_change_pct') is not None:
@@ -4789,7 +4817,8 @@ class ShansAi:
                     user_context['describe_table'] = "📊 Данные для анализа недоступны"
                 
                 # Create comparison chart with updated title format
-                chart_title = f"Доходность {', '.join(symbols)} | {currency}"
+                chart_title = f"Сравнение доходности {', '.join(symbols)} | {currency}"
+
                 if specified_period:
                     chart_title += f" | {specified_period}"
                 
@@ -4842,7 +4871,7 @@ class ShansAi:
                     caption=self._truncate_caption(caption),
                     reply_markup=compare_reply_keyboard,
                     context=context,
-                    parse_mode='HTML'  # Try HTML instead of Markdown for better compatibility
+                    parse_mode='Markdown'  # Use Markdown instead of HTML for better compatibility
                 )
                 
                 # Update user context to track active keyboard
@@ -6378,6 +6407,75 @@ class ShansAi:
             self.logger.error(f"Error in compare input handler: {e}")
             await self._send_message_safe(update, f"❌ Ошибка при обработке ввода сравнения: {str(e)}")
 
+    def _escape_markdown_special_chars(self, text: str) -> str:
+        """Escape special characters that could cause Markdown parsing issues while preserving our formatting"""
+        try:
+            if not text or not isinstance(text, str):
+                return text or ""
+            
+            # First, protect our intentional Markdown formatting
+            # Replace ** with a placeholder to protect it
+            text = text.replace('**', '___BOLD_START___')
+            
+            # Now escape problematic characters
+            escaped_text = text
+            
+            # Escape underscores (but not our placeholder)
+            escaped_text = escaped_text.replace('_', '\\_')
+            
+            # Escape backticks
+            escaped_text = escaped_text.replace('`', '\\`')
+            
+            # Escape square brackets and parentheses (for links)
+            escaped_text = escaped_text.replace('[', '\\[')
+            escaped_text = escaped_text.replace(']', '\\]')
+            escaped_text = escaped_text.replace('(', '\\(')
+            escaped_text = escaped_text.replace(')', '\\)')
+            
+            # Escape tilde (for strikethrough)
+            escaped_text = escaped_text.replace('~', '\\~')
+            
+            # Escape hash (for headers)
+            escaped_text = escaped_text.replace('#', '\\#')
+            
+            # Escape plus and minus (for lists)
+            escaped_text = escaped_text.replace('+', '\\+')
+            escaped_text = escaped_text.replace('-', '\\-')
+            
+            # Escape equals (for headers)
+            escaped_text = escaped_text.replace('=', '\\=')
+            
+            # Escape pipe (for tables)
+            escaped_text = escaped_text.replace('|', '\\|')
+            
+            # Escape braces (for code blocks)
+            escaped_text = escaped_text.replace('{', '\\{')
+            escaped_text = escaped_text.replace('}', '\\}')
+            
+            # Escape exclamation mark (for images)
+            escaped_text = escaped_text.replace('!', '\\!')
+            
+            # Don't escape dots - they are usually safe in regular text
+            # Only escape them if they are at the beginning of a line (for ordered lists)
+            lines = escaped_text.split('\n')
+            escaped_lines = []
+            for line in lines:
+                if line.strip().startswith('.') and len(line.strip()) > 1:
+                    # This looks like an ordered list item, escape the dot
+                    escaped_lines.append(line.replace('.', '\\.', 1))
+                else:
+                    escaped_lines.append(line)
+            escaped_text = '\n'.join(escaped_lines)
+            
+            # Restore our bold formatting
+            escaped_text = escaped_text.replace('___BOLD_START___', '**')
+            
+            return escaped_text
+            
+        except Exception as e:
+            self.logger.error(f"Error escaping markdown special chars: {e}")
+            return text
+
     def _safe_markdown(self, text: str) -> str:
         """Safe Markdown cleaning to prevent parsing errors - simple version"""
         try:
@@ -6743,6 +6841,30 @@ class ShansAi:
             self.logger.error(f"Error ensuring correct reply keyboard: {e}")
             # Fallback: просто показываем нужную клавиатуру
             await self._manage_reply_keyboard(update, context, target_keyboard)
+
+    async def _hide_reply_keyboard_silently(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Silently hide the reply keyboard without sending a message.
+        Updates user context to reflect keyboard state change.
+        """
+        try:
+            user_id = update.effective_user.id
+            user_context = self._get_user_context(user_id)
+            current_keyboard = user_context.get('active_reply_keyboard')
+            
+            if current_keyboard is not None:
+                self.logger.info(f"Hiding active reply keyboard silently: {current_keyboard}")
+                # Обновляем контекст пользователя
+                self._update_user_context(user_id, active_reply_keyboard=None)
+                
+                # Отправляем ReplyKeyboardRemove без текста
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="",
+                    reply_markup=ReplyKeyboardRemove()
+                )
+        except Exception as e:
+            self.logger.error(f"Error hiding reply keyboard silently: {e}")
 
     async def _send_ephemeral_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, delete_after: int = 5, reply_markup=None, hide_keyboard: bool = False):
         """Отправить исчезающее сообщение, которое удаляется через указанное время"""
@@ -10442,11 +10564,11 @@ class ShansAi:
         """Check if the text is a namespace Reply Keyboard button"""
         namespace_buttons = [
             "🇺🇸 US", "🇷🇺 MOEX", "🇬🇧 LSE",
-            "🇩🇪 XETR", "🇫🇷 XFRA", "🇳🇱 XAMS",
+            "🇩🇪 XETR", "🇩🇪 XFRA", "🇩🇪 XSTU", "🇳🇱 XAMS", "🇮🇱 XTAE",
             "🇨🇳 SSE", "🇨🇳 SZSE", "🇨🇳 BSE", "🇭🇰 HKEX",
             "📊 INDX", "💱 FX", "🏦 CBR",
             "🛢️ COMM", "₿ CC", "🇷🇺 RE",
-            "📈 INFL", "💰 PIF", "🏦 RATE"
+            "📈 INFL", "🇷🇺 PIF", "🏦 RATE"
         ]
         return text in namespace_buttons
 
@@ -10766,8 +10888,10 @@ class ShansAi:
                 "🇷🇺 MOEX": "MOEX", 
                 "🇬🇧 LSE": "LSE",
                 "🇩🇪 XETR": "XETR",
-                "🇫🇷 XFRA": "XFRA",
+                "🇩🇪 XFRA": "XFRA",
+                "🇩🇪 XSTU": "XSTU",
                 "🇳🇱 XAMS": "XAMS",
+                "🇮🇱 XTAE": "XTAE",
                 "🇨🇳 SSE": "SSE",
                 "🇨🇳 SZSE": "SZSE",
                 "🇨🇳 BSE": "BSE",
@@ -10779,7 +10903,7 @@ class ShansAi:
                 "₿ CC": "CC",
                 "🇷🇺 RE": "RE",
                 "📈 INFL": "INFL",
-                "💰 PIF": "PIF",
+                "🇷🇺 PIF": "PIF",
                 "🏦 RATE": "RATE"
             }
             
@@ -10968,14 +11092,14 @@ class ShansAi:
             if chart_data:
                 # Send chart with info text
                 chart_caption = self._format_tushare_chart_caption(symbol_info, symbol, period)
-                await self._send_photo_safe(update, chart_data, caption=chart_caption, reply_markup=reply_markup, context=context)
+                await self._send_photo_safe(update, chart_data, caption=chart_caption, reply_markup=reply_markup, context=context, parse_mode='Markdown')
             else:
                 # Send only text
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='Markdown')
                 
         except Exception as e:
             self.logger.error(f"Error handling Tushare info period reply button: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}", parse_mode='Markdown')
 
     async def _handle_okama_info_period_reply_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, symbol: str, period: str):
         """Handle period switching for Okama assets via reply keyboard"""
@@ -11003,15 +11127,20 @@ class ShansAi:
             
             if chart_data:
                 # Send chart with info text
-                caption = f"📈 График доходности за {period}\n\n{info_text}"
-                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context)
+                period_text = {
+                    '1Y': '1 год',
+                    '5Y': '5 лет', 
+                    'MAX': 'MAX'
+                }.get(period, period)
+                caption = f"📈 **График доходности за {period_text}**\n\n{info_text}"
+                await self._send_photo_safe(update, chart_data, caption=caption, reply_markup=reply_markup, context=context, parse_mode='Markdown')
             else:
                 # Send only text
-                await self._send_message_safe(update, info_text, reply_markup=reply_markup)
+                await self._send_message_safe(update, info_text, reply_markup=reply_markup, parse_mode='Markdown')
                 
         except Exception as e:
             self.logger.error(f"Error handling Okama info period reply button: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}")
+            await self._send_message_safe(update, f"❌ Ошибка при обновлении данных: {str(e)}", parse_mode='Markdown')
 
     async def _remove_portfolio_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove portfolio Reply Keyboard if it exists - DEPRECATED: Use _manage_reply_keyboard instead"""
@@ -11267,23 +11396,23 @@ class ShansAi:
             await self._send_callback_message(update, context, f"❌ Ошибка при отправке сообщения: {str(e)}")
 
     def _create_enhanced_chart_caption(self, symbols: list, currency: str, specified_period: str) -> str:
-        """Create enhanced chart caption with HTML formatting for better Telegram compatibility"""
+        """Create enhanced chart caption with Markdown formatting for better Telegram compatibility"""
         try:
             # Create chart title section
-            chart_title = f"📈 <b>График накопленной доходности</b>"
+            chart_title = f"📈 **График накопленной доходности**"
             
             # Create assets info section
-            assets_info = f"<b>Активы:</b> {', '.join(symbols)}"
+            assets_info = f"**Активы:** {', '.join(symbols)}"
             
             # Create currency info section
-            currency_info = f"<b>Валюта:</b> {currency}"
+            currency_info = f"**Валюта:** {currency}"
             
             # Create period info section if specified
             period_info = ""
             if specified_period:
-                period_info = f"<b>Период:</b> {specified_period}"
+                period_info = f"**Период:** {specified_period}"
             
-            # Combine all sections with proper HTML formatting
+            # Combine all sections with proper Markdown formatting
             caption_parts = [
                 chart_title,
                 "",
@@ -11299,7 +11428,7 @@ class ShansAi:
         except Exception as e:
             self.logger.error(f"Error creating enhanced chart caption: {e}")
             # Fallback to simple caption
-            return f"📈 <b>График накопленной доходности</b>\n\n<b>Активы:</b> {', '.join(symbols)}\n<b>Валюта:</b> {currency}"
+            return f"📈 **График накопленной доходности**\n\n**Активы:** {', '.join(symbols)}\n**Валюта:** {currency}"
 
 
     def _create_metrics_excel(self, metrics_data: Dict[str, Any], symbols: list, currency: str) -> io.BytesIO:
