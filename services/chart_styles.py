@@ -973,8 +973,11 @@ class ChartStyles:
             # Рисуем данные для сравнения
             for i, column in enumerate(data.columns):
                 color = self.get_color(i)
+                # Используем символы из параметра symbols для легенды, а не названия колонок
+                # Это предотвращает дублирование в легенде
+                legend_label = symbols[i] if i < len(symbols) else column
                 ax.plot(data.index, data[column].values, 
-                       color=color, alpha=self.lines['alpha'], label=column)
+                       color=color, alpha=self.lines['alpha'], label=legend_label)
         else:
             # График портфеля
             if portfolio_name:
