@@ -735,6 +735,12 @@ class ShansAi:
                             'name': row.get('name', ''),
                             'source': 'okama'
                         })
+                else:
+                    # If no results found, try fuzzy search for common misspellings
+                    from moex_search_embedded import try_fuzzy_search
+                    fuzzy_results = try_fuzzy_search(raw)
+                    if fuzzy_results:
+                        okama_results.extend(fuzzy_results)
             except Exception as e:
                 self.logger.warning(f"Okama search failed for '{raw}': {e}")
 
@@ -1012,6 +1018,14 @@ class ShansAi:
                 if '.' in symbol and symbol.split('.')[-1] in priority_exchanges:
                     return symbol
         
+        # Special handling for Porsche - prefer XETR exchange
+        if 'porsche' in original_lower:
+            for _, row in search_result.iterrows():
+                symbol = row['symbol']
+                name = row.get('name', '').lower()
+                if 'porsche' in name and symbol.endswith('.XETR'):
+                    return symbol
+        
         # Third, try to find any result with priority exchanges
         for exchange in priority_exchanges:
             for _, row in search_result.iterrows():
@@ -1039,8 +1053,6 @@ class ShansAi:
         except Exception:
             # If even the first result fails, return it anyway (will be handled by caller)
             return first_symbol
-
-
 
     def get_random_examples(self, count: int = 3) -> list:
         """Get random examples from known assets, including Chinese and Hong Kong assets"""
@@ -10527,11 +10539,11 @@ class ShansAi:
         """Check if the text is a namespace Reply Keyboard button"""
         namespace_buttons = [
             "🇺🇸 US", "🇷🇺 MOEX", "🇬🇧 LSE",
-            "🇩🇪 XETR", "🇫🇷 XFRA", "🇳🇱 XAMS",
+            "🇩🇪 XETR", "🇩🇪 XFRA", "🇩🇪 XSTU", "🇳🇱 XAMS", "🇮🇱 XTAE",
             "🇨🇳 SSE", "🇨🇳 SZSE", "🇨🇳 BSE", "🇭🇰 HKEX",
             "📊 INDX", "💱 FX", "🏦 CBR",
             "🛢️ COMM", "₿ CC", "🇷🇺 RE",
-            "📈 INFL", "💰 PIF", "🏦 RATE"
+            "📈 INFL", "🇷🇺 PIF", "🏦 RATE"
         ]
         return text in namespace_buttons
 
@@ -10851,8 +10863,10 @@ class ShansAi:
                 "🇷🇺 MOEX": "MOEX", 
                 "🇬🇧 LSE": "LSE",
                 "🇩🇪 XETR": "XETR",
-                "🇫🇷 XFRA": "XFRA",
+                "🇩🇪 XFRA": "XFRA",
+                "🇩🇪 XSTU": "XSTU",
                 "🇳🇱 XAMS": "XAMS",
+                "🇮🇱 XTAE": "XTAE",
                 "🇨🇳 SSE": "SSE",
                 "🇨🇳 SZSE": "SZSE",
                 "🇨🇳 BSE": "BSE",
@@ -10864,7 +10878,7 @@ class ShansAi:
                 "₿ CC": "CC",
                 "🇷🇺 RE": "RE",
                 "📈 INFL": "INFL",
-                "💰 PIF": "PIF",
+                "🇷🇺 PIF": "PIF",
                 "🏦 RATE": "RATE"
             }
             
