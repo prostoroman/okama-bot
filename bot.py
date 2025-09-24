@@ -4818,6 +4818,7 @@ class ShansAi:
                 
                 # Create comparison chart with updated title format
                 chart_title = f"Сравнение доходности {', '.join(symbols)} | {currency}"
+
                 if specified_period:
                     chart_title += f" | {specified_period}"
                 
