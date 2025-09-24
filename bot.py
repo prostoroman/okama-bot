@@ -6442,8 +6442,17 @@ class ShansAi:
             # Escape exclamation mark (for images)
             escaped_text = escaped_text.replace('!', '\\!')
             
-            # Escape dot (for ordered lists)
-            escaped_text = escaped_text.replace('.', '\\.')
+            # Don't escape dots - they are usually safe in regular text
+            # Only escape them if they are at the beginning of a line (for ordered lists)
+            lines = escaped_text.split('\n')
+            escaped_lines = []
+            for line in lines:
+                if line.strip().startswith('.') and len(line.strip()) > 1:
+                    # This looks like an ordered list item, escape the dot
+                    escaped_lines.append(line.replace('.', '\\.', 1))
+                else:
+                    escaped_lines.append(line)
+            escaped_text = '\n'.join(escaped_lines)
             
             # Restore our bold formatting
             escaped_text = escaped_text.replace('___BOLD_START___', '**')
