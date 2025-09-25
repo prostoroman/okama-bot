@@ -2568,8 +2568,8 @@ class ShansAi:
         
         await self._send_message_safe(update, 
             "📝 *Поддержка*\n\n"
-            "Опишите вашу проблему или вопрос одним сообщением. "
-            "Ваше сообщение будет отправлено администраторам вместе с контекстом вашего использования бота.")
+            "Опишите проблему или вопрос одним сообщением. "
+            "Ваше сообщение будет отправлено администраторам вместе с историей.")
     
     async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /rate command to show current rate limit status"""
@@ -17858,8 +17858,11 @@ class ShansAi:
         try:
             user_id = update.effective_user.id
             
-            # Create support ticket
-            ticket = self.support_service.create_support_ticket(update, text)
+            # Get user context using the same method as other parts of the bot
+            user_context = self._get_user_context(user_id)
+            
+            # Create support ticket with proper context
+            ticket = self._create_support_ticket(update, text, user_context)
             
             # Send ticket to support group
             success = await self.support_service.send_support_ticket(context.bot, ticket)
@@ -17886,6 +17889,64 @@ class ShansAi:
             await self._send_message_safe(update,
                 "❌ Произошла ошибка при обработке вашего запроса. "
                 "Попробуйте еще раз позже.")
+
+    def _create_support_ticket(self, update: Update, user_message: str, user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a support ticket with user information, context, and conversation history"""
+        user = update.effective_user
+        chat = update.effective_chat
+        
+        # Create ticket metadata
+        ticket_meta = {
+            "user_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "chat_id": chat.id,
+            "chat_type": chat.type,
+            "timestamp": datetime.now().isoformat(),
+            "message_id": update.message.message_id if update.message else None
+        }
+        
+        # Prepare user message (truncate if too long)
+        truncated_message = user_message[:1000] if len(user_message) > 1000 else user_message
+        
+        # Get conversation history (last 10 messages)
+        conversation_history = user_context.get("conversation_history", [])
+        
+        # Create context summary
+        context_summary = self._create_context_summary(user_context)
+        
+        # Create full ticket
+        ticket = {
+            "meta": ticket_meta,
+            "user_message": truncated_message,
+            "context": context_summary,
+            "conversation_history": conversation_history,
+            "full_user_message": user_message  # Keep full message for JSON
+        }
+        
+        return ticket
+    
+    def _create_context_summary(self, user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a summary of user context for support ticket"""
+        return {
+            "last_assets": user_context.get("last_assets", []),
+            "last_analysis_type": user_context.get("last_analysis_type"),
+            "last_period": user_context.get("last_period"),
+            "portfolio_count": user_context.get("portfolio_count", 0),
+            "saved_portfolios_count": len(user_context.get("saved_portfolios", {})),
+            "analyzed_tickers": user_context.get("analyzed_tickers", []),
+            "current_symbols": user_context.get("current_symbols", []),
+            "current_currency": user_context.get("current_currency"),
+            "active_reply_keyboard": user_context.get("active_reply_keyboard"),
+            "preferences": user_context.get("preferences", {}),
+            "waiting_for": user_context.get("waiting_for"),
+            "compare_first_symbol": user_context.get("compare_first_symbol"),
+            "compare_base_symbol": user_context.get("compare_base_symbol"),
+            "portfolio_tickers": user_context.get("portfolio_tickers", []),
+            "portfolio_weights": user_context.get("portfolio_weights", []),
+            "portfolio_base_symbols": user_context.get("portfolio_base_symbols", [])
+        }
 
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Global error handler that sends error reports to support group"""
