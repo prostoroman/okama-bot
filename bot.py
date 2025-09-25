@@ -722,73 +722,29 @@ class ShansAi:
                 else:
                     return {'symbol': upper, 'type': 'ticker', 'source': 'input'}
 
-            # Search in okama database
-            okama_results = []
-            try:
-                import okama as ok
-                search_result = ok.search(raw)
-                if len(search_result) > 0:
-                    # Convert to list of results
-                    for _, row in search_result.iterrows():
-                        okama_results.append({
-                            'symbol': row['symbol'],
-                            'name': row.get('name', ''),
-                            'source': 'okama'
-                        })
-                else:
-                    # If no results found, try fuzzy search for common misspellings
-                    from moex_search_embedded import try_fuzzy_search
-                    fuzzy_results = try_fuzzy_search(raw)
-                    if fuzzy_results:
-                        okama_results.extend(fuzzy_results)
-            except Exception as e:
-                self.logger.warning(f"Okama search failed for '{raw}': {e}")
-
-            # Search in tushare database
-            tushare_results = []
-            if self.tushare_service:
-                try:
-                    tushare_search = self.tushare_service.search_symbols(raw)
-                    if tushare_search:
-                        for result in tushare_search:
-                            tushare_results.append({
-                                'symbol': result['symbol'],
-                                'name': result['name'],
-                                'source': 'tushare'
-                            })
-                except Exception as e:
-                    self.logger.warning(f"Tushare search failed for '{raw}': {e}")
-
-            # Combine and deduplicate results
-            all_results = okama_results + tushare_results
-            unique_results = []
-            seen_symbols = set()
-            
-            for result in all_results:
-                if result['symbol'] not in seen_symbols:
-                    unique_results.append(result)
-                    seen_symbols.add(result['symbol'])
+            # Use unified search for consistency
+            all_results = self._unified_search(raw)
 
             # If no results found
-            if not unique_results:
+            if not all_results:
                 if self._looks_like_ticker(raw):
                     return {'symbol': upper, 'type': 'ticker', 'source': 'plain'}
                 else:
                     return {'error': f'"{raw}" не найден в базе данных okama и tushare'}
 
             # If only one result, return it directly
-            if len(unique_results) == 1:
-                result = unique_results[0]
+            if len(all_results) == 1:
+                result = all_results[0]
                 return {
                     'symbol': result['symbol'],
                     'type': 'ticker' if self._looks_like_ticker(raw) else 'company_name',
-                    'source': result['source'],
-                    'name': result['name']
+                    'source': result.get('source', 'unknown'),
+                    'name': result.get('name', '')
                 }
 
             # Multiple results - return for selection
             return {
-                'results': unique_results[:20],  # Limit to 20 results
+                'results': all_results[:20],  # Limit to 20 results
                 'type': 'ticker' if self._looks_like_ticker(raw) else 'company_name',
                 'query': raw
             }
@@ -2573,22 +2529,7 @@ class ShansAi:
 `/rate` — текущий статус лимитов запросов
 `/limits` — информация о системе ограничений
 
-🔹 *Примеры использования*
-
-*Анализ активов:*
-`/info SBER.MOEX` — информация о Сбербанке
-`/compare SPY.US SBER.MOEX` — сравнить S&P 500 и Сбербанк
-
-*Портфели:*
-`/portfolio SPY.US:0.5 QQQ.US:0.3 BND.US:0.2` — портфель США
-`/portfolio SBER.MOEX:0.4 GAZP.MOEX:0.3 LKOH.MOEX:0.3` — российский портфель
-
-*Поиск:*
-`/search Apple` — найти Apple
-`/list US` — американские акции
-`/list MOEX` — российские акции
-
-⚠️ *Информация предоставляется в образовательных целях и не является инвестиционной рекомендацией*"""
+🔹 *Информация предоставляется в образовательных целях и не является инвестиционной рекомендацией*"""
 
         await self._send_message_safe(update, welcome_message)
     
@@ -4163,44 +4104,8 @@ class ShansAi:
             
             await self._send_message_safe(update, f"🔍 Ищу активы по запросу: `{cleaned_query}`...")
             
-            # Search in okama
-            okama_results = []
-            tushare_results = []
-            
-            try:
-                import okama as ok
-                search_result = ok.search(cleaned_query)
-                if not search_result.empty:
-                    for _, row in search_result.head(30).iterrows():  # Increased limit to 30 results
-                        symbol = row.get('symbol', '')
-                        name = row.get('name', '')
-                        if symbol and name:
-                            okama_results.append({
-                                'symbol': symbol,
-                                'name': name
-                            })
-            except Exception as e:
-                self.logger.warning(f"Okama search error: {e}")
-            
-            # Search in tushare for Chinese exchanges with English names
-            try:
-                if self.tushare_service:
-                    # Search in all Chinese exchanges
-                    for exchange in ['SSE', 'SZSE', 'BSE', 'HKEX']:
-                        try:
-                            exchange_results = self.tushare_service.search_symbols_english(cleaned_query, exchange)
-                            for result in exchange_results[:10]:  # Increased limit to 10 per exchange
-                                tushare_results.append({
-                                    'symbol': result['symbol'],
-                                    'name': result['name']
-                                })
-                        except Exception as e:
-                            self.logger.warning(f"Tushare search error for {exchange}: {e}")
-            except Exception as e:
-                self.logger.warning(f"Tushare search error: {e}")
-            
-            # Combine and format results
-            all_results = okama_results + tushare_results
+            # Use unified search function
+            all_results = self._unified_search(cleaned_query)
             
             if not all_results:
                 await self._send_message_safe(update, 
@@ -6795,6 +6700,74 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error managing reply keyboard: {e}")
+
+    def _unified_search(self, query: str) -> List[Dict[str, str]]:
+        """
+        Unified search function that combines all search sources.
+        Uses the same logic as the embedded search service for consistency.
+        
+        Args:
+            query: Search query
+            
+        Returns:
+            List of search results from all sources
+        """
+        from services.search_embedded import try_fuzzy_search
+        
+        # First try the unified fuzzy search
+        fuzzy_results = try_fuzzy_search(query)
+        
+        # If we have results from fuzzy search, return them
+        if fuzzy_results:
+            return fuzzy_results
+        
+        # Fallback to okama search
+        okama_results = []
+        try:
+            import okama as ok
+            search_result = ok.search(query)
+            if not search_result.empty:
+                for _, row in search_result.head(30).iterrows():
+                    symbol = row.get('symbol', '')
+                    name = row.get('name', '')
+                    if symbol and name:
+                        okama_results.append({
+                            'symbol': symbol,
+                            'name': name,
+                            'source': 'okama'
+                        })
+        except Exception as e:
+            self.logger.warning(f"Okama search error: {e}")
+        
+        # Search in tushare for Chinese exchanges
+        tushare_results = []
+        if self.tushare_service:
+            try:
+                for exchange in ['SSE', 'SZSE', 'BSE', 'HKEX']:
+                    try:
+                        exchange_results = self.tushare_service.search_symbols_english(query, exchange)
+                        for result in exchange_results[:10]:
+                            tushare_results.append({
+                                'symbol': result['symbol'],
+                                'name': result['name'],
+                                'source': 'tushare'
+                            })
+                    except Exception as e:
+                        self.logger.warning(f"Tushare search error for {exchange}: {e}")
+            except Exception as e:
+                self.logger.warning(f"Tushare search error: {e}")
+        
+        # Combine and deduplicate results
+        all_results = okama_results + tushare_results
+        unique_results = []
+        seen_symbols = set()
+        
+        for result in all_results:
+            if result['symbol'] not in seen_symbols:
+                unique_results.append(result)
+                seen_symbols.add(result['symbol'])
+        
+        return unique_results
 
     async def _ensure_no_reply_keyboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Убедиться что reply keyboard скрыта (для команд которые не должны показывать клавиатуру)"""
