@@ -1,8 +1,9 @@
-# moex_search_embedded.py
-# Zero-dependency MOEX search with an embedded, curated list of major tickers.
-# - No Excel, no web calls.
-# - Russian-friendly search via aliases, transliteration, and fuzzy scoring.
-# - Extend EMBEDDED universe below as needed.
+# search_embedded.py
+# Unified search service with embedded asset mappings and fuzzy search capabilities.
+# - Zero-dependency search with curated list of major tickers
+# - Russian-friendly search via aliases, transliteration, and fuzzy scoring
+# - Unified asset mappings for direct ticker resolution
+# - Fallback to okama search for comprehensive coverage
 
 import re
 import difflib
