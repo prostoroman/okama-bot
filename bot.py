@@ -80,6 +80,7 @@ from services.rate_limiter import rate_limiter, check_user_rate_limit, get_rate_
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
+from services.botality_service import initialize_botality_service, send_botality_analytics
 
 # Configure logging
 logging.basicConfig(
@@ -136,6 +137,9 @@ class ShansAi:
                 self.logger.info(f"Gemini status: {status}")
         except Exception as e:
             self.gemini_service = None
+            
+        # Initialize Botality analytics service
+        initialize_botality_service(Config.BOTALITY_TOKEN)
             self.logger.warning(f"Gemini service not initialized: {e}")
         
         # Initialize simple chart analysis as fallback
@@ -2484,6 +2488,9 @@ class ShansAi:
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command with welcome message and interactive buttons"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Ensure no reply keyboard is shown
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -3078,6 +3085,9 @@ class ShansAi:
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /info command - показывает ежедневный график с базовой информацией и AI анализом"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=1.0):
             return
@@ -3161,6 +3171,9 @@ class ShansAi:
         """Handle text messages - treat as asset symbol for /info or portfolio for /portfolio"""
         if not update.message or not update.message.text:
             return
+        
+        # Send analytics to Botality
+        await send_botality_analytics(update)
         
         original_text = update.message.text.strip()
         
@@ -4204,6 +4217,9 @@ class ShansAi:
 
     async def compare_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /compare command for comparing multiple assets"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=1.0):
             return
@@ -4852,6 +4868,9 @@ class ShansAi:
 
     async def portfolio_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /portfolio command for creating portfolio with weights"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=1.0):
             return
