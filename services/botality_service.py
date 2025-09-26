@@ -28,7 +28,11 @@ class BotalityService:
         self.api_url = "https://botality.cc/api/v1/messages"
         self.session = requests.Session()
         self.session.headers.update({'Content-Type': 'application/json'})
+<<<<<<< HEAD
         self.timeout = 10
+=======
+        self.session.timeout = 10
+>>>>>>> origin/main
     
     def send_message_analytics_sync(self, message_data: Dict[str, Any]) -> bool:
         """
@@ -46,7 +50,11 @@ class BotalityService:
                 "data": message_data
             }
             
+<<<<<<< HEAD
             response = self.session.post(self.api_url, json=payload, timeout=self.timeout)
+=======
+            response = self.session.post(self.api_url, json=payload)
+>>>>>>> origin/main
             if response.status_code == 200:
                 result = response.json()
                 if result.get("status") == "ok":

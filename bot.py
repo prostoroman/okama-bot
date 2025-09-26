@@ -2559,7 +2559,6 @@ class ShansAi:
         """Handle /support command - collect user message and send to support group"""
         # Send analytics to Botality
         await send_botality_analytics(update)
-        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=0.5):
             return
