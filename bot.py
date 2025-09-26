@@ -10659,8 +10659,7 @@ class ShansAi:
 
     async def _handle_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle Reply Keyboard button presses - determine context and call appropriate handler"""
-        # Send analytics to Botality
-        await send_botality_analytics(update)
+        # Analytics already sent in handle_message, no need to send again
         
         try:
             user_id = update.effective_user.id
