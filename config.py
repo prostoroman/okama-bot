@@ -27,13 +27,17 @@ class Config:
     MAX_MESSAGE_LENGTH = 4096
     MAX_CAPTION_LENGTH = 1024
     
+    # Support Configuration
+    SUPPORT_GROUP_ID = os.getenv('SUPPORT_GROUP_ID', '-1003121714572')
+    SUPPORT_THREAD_ID = os.getenv('SUPPORT_THREAD_ID')  # Optional thread ID
+    
     # Chart Style Configuration
     CHART_STYLE = os.getenv('CHART_STYLE', 'nordic')  # 'nordic' (единственный доступный стиль)
     
     # Supported Commands
     SUPPORTED_COMMANDS = {
         '/start': 'Start the bot and get help',
-    
+        '/support': 'Send support request to administrators',
         '/info': 'Show detailed information about an asset',
         '/price': 'Show current price for an asset',
         '/dividends': 'Show dividend history for an asset',

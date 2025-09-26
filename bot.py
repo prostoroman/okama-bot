@@ -75,6 +75,7 @@ from services.yandexgpt_service import YandexGPTService
 from services.tushare_service import TushareService
 from services.gemini_service import GeminiService
 from services.examples_service import ExamplesService
+from services.support_service import SupportService
 from services.rate_limiter import rate_limiter, check_user_rate_limit, get_rate_limit_status
 
 from services.chart_styles import chart_styles
@@ -109,6 +110,12 @@ class ShansAi:
         self.yandexgpt_service = YandexGPTService()
         self.chart_styles = chart_styles
         self.examples_service = ExamplesService()
+        
+        # Initialize context store
+        self.context_store = JSONUserContextStore()
+        
+        # Initialize support service
+        self.support_service = SupportService(self.context_store)
         
         # Initialize Tushare service if API key is available
         try:
@@ -2495,9 +2502,10 @@ class ShansAi:
 
 💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей /portfolio
 
-📚 Просмотр всех доступных данных и символов /list
+📚 Просмотр всех доступных данных /list
 
-© Okama, tushare, YandexGPT, Google Gemini.
+
+Бета-версия © Okama, tushare, YandexGPT, Google Gemini.
 """
 
         # Create reply keyboard with interactive buttons
@@ -2514,24 +2522,54 @@ class ShansAi:
 
 🔹 *Основные команды*
 
-`/info <тикер>` — детальная информация об активе с графиками и AI-анализом
-`/compare <тикер1> <тикер2> ...` — сравнение активов (доходность, корреляции, инфляция)
-`/portfolio <тикер1:вес> <тикер2:вес> ...` — создание и анализ портфеля (риски, доходность, прогнозы)
+/info <тикер> — детальная информация об активе с графиками и AI-анализом
+/compare <тикер1> <тикер2> ... — сравнение активов (доходность, корреляции, инфляция)
+/portfolio <тикер1:вес> <тикер2:вес> ... — создание и анализ портфеля (риски, доходность, прогнозы)
 
 🔹 *Поиск и навигация*
 
-`/list` — список всех доступных бирж и активов
-`/list <код>` — активы конкретной биржи (US, MOEX, FX, COMM и др.)
-`/search <название или ISIN>` — поиск актива по базе данных
+/list — список всех доступных бирж и активов
+/list <код> — активы конкретной биржи (US, MOEX, FX, COMM и др.)
+/search <название или ISIN> — поиск актива по базе данных
 
 🔹 *Лимиты*
 
-`/rate` — текущий статус лимитов запросов
-`/limits` — информация о системе ограничений
+/rate — текущий статус лимитов запросов
+/limits — информация о системе ограничений
+
+🔹 *Поддержка*
+
+/support — отправить запрос в службу поддержки
 
 🔹 *Информация предоставляется в образовательных целях и не является инвестиционной рекомендацией*"""
 
         await self._send_message_safe(update, welcome_message)
+    
+    async def support_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /support command - collect user message and send to support group"""
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=0.5):
+            return
+        
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
+        
+        user_id = update.effective_user.id
+        
+        # Check if user is already waiting for support input
+        user_context = self.context_store.get_user_context(user_id)
+        if user_context.get('waiting_for') == 'support':
+            await self._send_message_safe(update, 
+                "⏳ Вы уже отправили запрос в поддержку. Пожалуйста, дождитесь ответа.")
+            return
+        
+        # Set flag that user is waiting for support input
+        self._update_user_context(user_id, waiting_for='support')
+        
+        await self._send_message_safe(update, 
+            "📝 *Поддержка*\n\n"
+            "Опишите проблему или вопрос одним сообщением. "
+            "Ваше сообщение будет отправлено администраторам вместе с историей.")
     
     async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /rate command to show current rate limit status"""
@@ -3168,6 +3206,14 @@ class ShansAi:
             else:
                 # This is from compare command - handle as compare input instead of portfolio weights
                 await self._handle_compare_input(update, context, text)
+            return
+        
+        elif waiting_for == 'support':
+            self.logger.info(f"Processing as support input: {text}")
+            # Clear waiting flag
+            self._update_user_context(user_id, waiting_for=None)
+            # Process support message
+            await self._handle_support_input(update, context, original_text)
             return
         
         elif waiting_for == 'info':
@@ -17807,6 +17853,132 @@ class ShansAi:
 
 
 
+    async def _handle_support_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle support message input from user"""
+        try:
+            user_id = update.effective_user.id
+            
+            # Get user context using the same method as other parts of the bot
+            user_context = self._get_user_context(user_id)
+            
+            # Create support ticket with proper context
+            ticket = self._create_support_ticket(update, text, user_context)
+            
+            # Send ticket to support group
+            success = await self.support_service.send_support_ticket(context.bot, ticket)
+            
+            if success:
+                # Respond to user
+                await self._send_message_safe(update,
+                    "✅ Спасибо, Ваше сообщение отправлено.\n\n"
+                    "Администраторы получили ваш запрос и свяжутся с вами в ближайшее время.")
+                
+                # Add to conversation history
+                self.context_store.add_conversation_entry(
+                    user_id, f"Запрос в поддержку: {text[:100]}...", 
+                    "Сообщение отправлено в поддержку"
+                )
+            else:
+                # If sending failed, inform user
+                await self._send_message_safe(update,
+                    "❌ Произошла ошибка при отправке сообщения в поддержку. "
+                    "Попробуйте еще раз позже.")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling support input: {e}")
+            await self._send_message_safe(update,
+                "❌ Произошла ошибка при обработке вашего запроса. "
+                "Попробуйте еще раз позже.")
+
+    def _create_support_ticket(self, update: Update, user_message: str, user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a support ticket with user information, context, and conversation history"""
+        user = update.effective_user
+        chat = update.effective_chat
+        
+        # Create ticket metadata
+        ticket_meta = {
+            "user_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "chat_id": chat.id,
+            "chat_type": chat.type,
+            "timestamp": datetime.now().isoformat(),
+            "message_id": update.message.message_id if update.message else None
+        }
+        
+        # Prepare user message (truncate if too long)
+        truncated_message = user_message[:1000] if len(user_message) > 1000 else user_message
+        
+        # Get conversation history (last 10 messages)
+        conversation_history = user_context.get("conversation_history", [])
+        
+        # Create context summary
+        context_summary = self._create_context_summary(user_context)
+        
+        # Create full ticket
+        ticket = {
+            "meta": ticket_meta,
+            "user_message": truncated_message,
+            "context": context_summary,
+            "conversation_history": conversation_history,
+            "full_user_message": user_message  # Keep full message for JSON
+        }
+        
+        return ticket
+    
+    def _create_context_summary(self, user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a summary of user context for support ticket"""
+        return {
+            "last_assets": user_context.get("last_assets", []),
+            "last_analysis_type": user_context.get("last_analysis_type"),
+            "last_period": user_context.get("last_period"),
+            "portfolio_count": user_context.get("portfolio_count", 0),
+            "saved_portfolios_count": len(user_context.get("saved_portfolios", {})),
+            "analyzed_tickers": user_context.get("analyzed_tickers", []),
+            "current_symbols": user_context.get("current_symbols", []),
+            "current_currency": user_context.get("current_currency"),
+            "active_reply_keyboard": user_context.get("active_reply_keyboard"),
+            "preferences": user_context.get("preferences", {}),
+            "waiting_for": user_context.get("waiting_for"),
+            "compare_first_symbol": user_context.get("compare_first_symbol"),
+            "compare_base_symbol": user_context.get("compare_base_symbol"),
+            "portfolio_tickers": user_context.get("portfolio_tickers", []),
+            "portfolio_weights": user_context.get("portfolio_weights", []),
+            "portfolio_base_symbols": user_context.get("portfolio_base_symbols", [])
+        }
+
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Global error handler that sends error reports to support group"""
+        try:
+            # Log the error
+            self.logger.error(f"Exception while handling an update: {context.error}")
+            
+            # Create error context
+            error_context = {}
+            
+            # Add update information if available
+            if isinstance(update, Update):
+                if update.effective_user:
+                    error_context['user_id'] = update.effective_user.id
+                    error_context['username'] = update.effective_user.username
+                    error_context['first_name'] = update.effective_user.first_name
+                if update.effective_chat:
+                    error_context['chat_id'] = update.effective_chat.id
+                    error_context['chat_type'] = update.effective_chat.type
+                if update.message:
+                    error_context['message_text'] = update.message.text
+                    error_context['message_id'] = update.message.message_id
+                elif update.callback_query:
+                    error_context['callback_data'] = update.callback_query.data
+            
+            # Send error report to support group
+            await self.support_service.send_error_report(context.bot, context.error, error_context)
+            
+        except Exception as e:
+            # If we can't send error report, just log it
+            self.logger.error(f"Failed to send error report: {e}")
+
     def run(self):
         """Run the bot"""
         # Create application
@@ -17815,6 +17987,7 @@ class ShansAi:
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
+        application.add_handler(CommandHandler("support", self.support_command))
         application.add_handler(CommandHandler("rate", self.rate_command))
         application.add_handler(CommandHandler("limits", self.limits_command))
         application.add_handler(CommandHandler("info", self.info_command))
@@ -17828,6 +18001,9 @@ class ShansAi:
         
         # Add message handler for waiting user input after empty /info
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        
+        # Add global error handler
+        application.add_error_handler(self.error_handler)
         
         # Start the bot
         logger.info("Starting Okama Finance Bot...")
