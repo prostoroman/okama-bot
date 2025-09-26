@@ -28,7 +28,7 @@ class GeminiService:
         """
         self.client = None
         self.api_key = api_key or os.getenv('GEMINI_API_KEY')
-        self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+        self.api_url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent"
         
         # Централизованные промпты
         self._initialize_prompts()
