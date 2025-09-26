@@ -31,10 +31,8 @@ class Config:
     SUPPORT_GROUP_ID = os.getenv('SUPPORT_GROUP_ID', '-1003121714572')
     SUPPORT_THREAD_ID = os.getenv('SUPPORT_THREAD_ID')  # Optional thread ID
     
-
     # Botality Analytics Configuration
     BOTALITY_TOKEN = os.getenv('BOTALITY_TOKEN')
-
     # Chart Style Configuration
     CHART_STYLE = os.getenv('CHART_STYLE', 'nordic')  # 'nordic' (единственный доступный стиль)
     

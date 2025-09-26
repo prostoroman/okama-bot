@@ -2522,6 +2522,9 @@ class ShansAi:
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command with full help"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Ensure no reply keyboard is shown
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -2554,6 +2557,8 @@ class ShansAi:
     
     async def support_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /support command - collect user message and send to support group"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=0.5):
             return
@@ -2580,6 +2585,9 @@ class ShansAi:
     
     async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /rate command to show current rate limit status"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=0.5):
             return
@@ -2593,6 +2601,9 @@ class ShansAi:
 
     async def limits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /limits command to show rate limiting information"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=0.5):
             return
@@ -4066,6 +4077,9 @@ class ShansAi:
 
     async def namespace_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /list command"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=0.5):
             return
@@ -4128,6 +4142,9 @@ class ShansAi:
 
     async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /search command for searching assets by name or ISIN"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         # Check rate limit first
         if not await check_user_rate_limit(update, context, cost=0.5):
             return
@@ -7133,6 +7150,9 @@ class ShansAi:
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         query = update.callback_query
         await query.answer()
         
@@ -10639,6 +10659,9 @@ class ShansAi:
 
     async def _handle_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle Reply Keyboard button presses - determine context and call appropriate handler"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
         try:
             user_id = update.effective_user.id
             user_context = self._get_user_context(user_id)
