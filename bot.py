@@ -137,10 +137,10 @@ class ShansAi:
                 self.logger.info(f"Gemini status: {status}")
         except Exception as e:
             self.gemini_service = None
+            self.logger.warning(f"Gemini service not initialized: {e}")
             
         # Initialize Botality analytics service
         initialize_botality_service(Config.BOTALITY_TOKEN)
-            self.logger.warning(f"Gemini service not initialized: {e}")
         
         # Initialize simple chart analysis as fallback
         
