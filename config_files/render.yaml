@@ -44,6 +44,8 @@ services:
         sync: false
       - key: ADMIN_USER_ID
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
     
     # Auto-deploy on git push
     autoDeploy: true

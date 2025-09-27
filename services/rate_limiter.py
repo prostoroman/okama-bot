@@ -8,10 +8,18 @@ Based on the provided code structure with improvements for integration.
 import os
 import time
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional
+from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
+
+# Local imports
+from .db import can_use, increment_request_count, get_user_status, refund_request_count
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # ========= ENV Configuration =========
 # Per-user limits (targeting ~30/day softly)
@@ -88,6 +96,20 @@ class TokenBucketSingle:
                 self._b.last_refill = now
             return self._b.tokens, self.refill_rate
 
+    async def refund(self, cost: float = 1.0) -> bool:
+        """
+        Refund tokens to the bucket (add tokens back).
+        
+        Args:
+            cost: Number of tokens to refund
+            
+        Returns:
+            True if refund was successful
+        """
+        async with self._lock:
+            self._b.tokens = min(self.capacity, self._b.tokens + cost)
+            return True
+
 class TokenBucketsPerUser:
     """
     Bucket per user (by user_id).
@@ -158,6 +180,27 @@ class TokenBucketsPerUser:
         async with self._lock:
             return len(self._buckets)
 
+    async def refund(self, user_id: int, cost: float = 1.0) -> bool:
+        """
+        Refund tokens to user bucket (add tokens back).
+        
+        Args:
+            user_id: Telegram user ID
+            cost: Number of tokens to refund
+            
+        Returns:
+            True if refund was successful
+        """
+        async with self._lock:
+            b = self._buckets.get(user_id)
+            if b is None:
+                # If user doesn't have a bucket yet, create one with refunded tokens
+                b = _Bucket(tokens=min(self.capacity, cost), last_refill=time.monotonic())
+                self._buckets[user_id] = b
+            else:
+                b.tokens = min(self.capacity, b.tokens + cost)
+            return True
+
 # ========= Rate Limiter Manager =========
 class RateLimiter:
     """
@@ -180,13 +223,29 @@ class RateLimiter:
         Returns:
             Tuple of (allowed, error_message_if_denied)
         """
+        # Check if user is pro with active subscription first
+        user_status = get_user_status(user_id)
+        if user_status['is_pro_active']:
+            # Pro users have unlimited access - only check global bucket
+            allowed_g, wait_g = await self.global_bucket.allow(cost=cost)
+            if not allowed_g:
+                wait_time = wait_g if wait_g != float("inf") else 9999.0
+                return False, BLOCK_MESSAGE_GLOBAL.format(wait=wait_time)
+            return True, None
+        
+        # Regular user flow
         # 1) Check global bucket first
         allowed_g, wait_g = await self.global_bucket.allow(cost=cost)
         if not allowed_g:
             wait_time = wait_g if wait_g != float("inf") else 9999.0
             return False, BLOCK_MESSAGE_GLOBAL.format(wait=wait_time)
 
-        # 2) Check per-user bucket
+        # 2) Check subscription-based limits
+        can_use_result, error_message = can_use(user_id)
+        if not can_use_result:
+            return False, error_message
+
+        # 3) Check per-user bucket (only for free users)
         allowed_u, wait_u = await self.user_buckets.allow(user_id, cost=cost)
         if not allowed_u:
             wait_time = wait_u if wait_u != float("inf") else 9999.0
@@ -233,7 +292,19 @@ class RateLimiter:
             Formatted status message
         """
         status = await self.get_status(user_id)
+        user_status = get_user_status(user_id)
         
+        # Check if user is pro with active subscription
+        if user_status['is_pro_active']:
+            pro_msg = "💎 <b>Pro пользователь</b> - безлимитные запросы"
+            global_msg = (
+                f"Глобальный лимит: {self._fmt_num(status['global_tokens'])}/{self._fmt_num(GLOBAL_BUCKET_CAPACITY)} токенов, "
+                f"пополнение {self._fmt_num(status['global_rate'])} ток/сек "
+                f"(≈ {int(status['global_rate'])} rps). Активных пользователей: {status['active_users']}"
+            )
+            return f"Статус лимитов:\n• {pro_msg}\n• {global_msg}"
+        
+        # Regular user status
         per_user_msg = (
             f"Персональный лимит: {self._fmt_num(status['user_tokens'])}/{self._fmt_num(BUCKET_CAPACITY)} токенов, "
             f"пополнение {self._fmt_num(status['user_rate'])} ток/сек "
@@ -247,6 +318,35 @@ class RateLimiter:
         )
         
         return f"Статус лимитов:\n• {per_user_msg}\n• {global_msg}"
+
+    async def refund_tokens(self, user_id: int, cost: float = 1.0) -> bool:
+        """
+        Refund tokens to user when an error occurs (don't count failed requests).
+        
+        Args:
+            user_id: Telegram user ID
+            cost: Number of tokens to refund
+            
+        Returns:
+            True if refund was successful, False otherwise
+        """
+        try:
+            # Refund global tokens
+            await self.global_bucket.refund(cost)
+            
+            # Refund user tokens (only for free users)
+            user_status = get_user_status(user_id)
+            if not user_status['is_pro_active']:
+                await self.user_buckets.refund(user_id, cost)
+            
+            # Refund daily request count (only for free users)
+            if not user_status['is_pro_active']:
+                refund_request_count(user_id)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Failed to refund tokens for user {user_id}: {e}")
+            return False
 
 # ========= Global Rate Limiter Instance =========
 # Initialize global rate limiter instance
@@ -272,10 +372,55 @@ async def check_user_rate_limit(update: Update, context: ContextTypes.DEFAULT_TY
     allowed, error_message = await rate_limiter.check_rate_limit(user_id, cost)
     
     if not allowed and error_message:
-        await update.message.reply_text(error_message)
+        # Check if this is a paywall message (daily limit exceeded)
+        if "Достигнут дневной лимит" in error_message:
+            await send_paywall_message(update, context)
+        else:
+            await update.message.reply_text(error_message)
         return False
-        
+    
+    # Increment request count if allowed (only for free users)
+    user_status = get_user_status(user_id)
+    if not user_status['is_pro_active']:
+        increment_request_count(user_id)
+    
     return True
+
+async def send_paywall_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Send paywall message with purchase options
+    
+    Args:
+        update: Telegram update object
+        context: Bot context
+    """
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    user_id = update.effective_user.id
+    user_status = get_user_status(user_id)
+    
+    message = f"""🚫 <b>Достигнут дневной лимит</b>
+
+Вы использовали {user_status['requests_today']}/{user_status['daily_limit']} запросов сегодня.
+
+<b>Варианты:</b>
+⏰ Подождать до завтра (лимит обновится автоматически)
+💎 Купить <b>Pro доступ</b> - безлимитные запросы на 30 дней
+
+<b>Pro доступ включает:</b>
+✅ Безлимитные запросы
+✅ Приоритетная поддержка
+✅ Расширенные функции
+✅ Доступ к новым возможностям
+
+Нажмите кнопку ниже для покупки:"""
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💎 Купить Pro доступ", callback_data="buy_pro")],
+        [InlineKeyboardButton("📊 Мой профиль", callback_data="show_profile")]
+    ])
+    
+    await update.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
 
 async def get_rate_limit_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     """

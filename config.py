@@ -33,6 +33,15 @@ class Config:
     
     # Botality Analytics Configuration
     BOTALITY_TOKEN = os.getenv('BOTALITY_TOKEN')
+    
+    # Subscription and Payment Configuration
+    SUBSCRIPTION_DB_PATH = os.getenv('SUBSCRIPTION_DB_PATH', '/var/data/bot.db')
+    PRO_PRICE_STARS = int(os.getenv('PRO_PRICE_STARS', '1000'))
+    PRO_DURATION_DAYS = int(os.getenv('PRO_DURATION_DAYS', '30'))
+    
+    # Telegram Stars Payment Mode
+    STARS_TEST_MODE = os.getenv('STARS_TEST_MODE', 'false').lower() == 'true'
+    
     # Chart Style Configuration
     CHART_STYLE = os.getenv('CHART_STYLE', 'nordic')  # 'nordic' (единственный доступный стиль)
     
@@ -41,10 +50,8 @@ class Config:
         '/start': 'Start the bot and get help',
         '/support': 'Send support request to administrators',
         '/info': 'Show detailed information about an asset',
-        '/price': 'Show current price for an asset',
-        '/dividends': 'Show dividend history for an asset',
-        '/chat': 'Chat with YandexGPT about finance',
-        '/testai': 'Test YandexGPT integration'
+        '/buy': 'Purchase Pro subscription',
+        '/profile': 'View user profile and subscription status'
     }
     
     @classmethod

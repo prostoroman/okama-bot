@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 import io
+import logging
 
 from services.chart_styles import chart_styles
+from services.okama_service import okama_service
+
+logger = logging.getLogger(__name__)
 
 
 class Asset:
@@ -19,18 +23,12 @@ class Asset:
 
     @staticmethod
     def _create_asset(symbol: str, currency: Optional[str] = None):
-        import okama as ok
+        """Create an OKAMA Asset with retry logic and error handling."""
         try:
-            if currency is not None:
-                return ok.Asset(symbol, ccy=currency)
-            return ok.Asset(symbol)
-        except TypeError:
-            if currency is not None:
-                try:
-                    return ok.Asset(symbol, currency)
-                except Exception:
-                    return ok.Asset(symbol)
-            return ok.Asset(symbol)
+            return okama_service.create_asset(symbol, currency)
+        except Exception as e:
+            logger.error(f"Failed to create OKAMA Asset for {symbol}: {e}")
+            raise e
 
     def to_dict(self) -> Dict[str, Any]:
         return {"symbol": self.symbol, "currency": self.currency}

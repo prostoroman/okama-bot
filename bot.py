@@ -29,6 +29,9 @@ import pandas as pd
 import numpy as np
 import okama as ok
 
+# Import OKAMA service for robust API handling
+from services.okama_service import okama_service
+
 # Optional Excel support
 try:
     import openpyxl
@@ -62,7 +65,7 @@ except ImportError:
 
 # Telegram imports
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler, PreCheckoutQueryHandler
 
 # Check Python version compatibility
 if sys.version_info < (3, 7):
@@ -77,6 +80,8 @@ from services.gemini_service import GeminiService
 from services.examples_service import ExamplesService
 from services.support_service import SupportService
 from services.rate_limiter import rate_limiter, check_user_rate_limit, get_rate_limit_status
+from services.payment_service import payment_service
+from services.db import init_db
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -141,6 +146,14 @@ class ShansAi:
             
         # Initialize Botality analytics service
         initialize_botality_service(Config.BOTALITY_TOKEN)
+        
+        # Initialize database for subscription management
+        try:
+            init_db()
+            self.logger.info("Database initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize database: {e}")
+            raise
         
         # Initialize simple chart analysis as fallback
         
@@ -1035,11 +1048,36 @@ class ShansAi:
 
 
 
-    async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation") -> None:
-        """Общая функция для обработки ошибок"""
+    async def _handle_error(self, update: Update, error: Exception, context: str = "Unknown operation", cost: float = 1.0) -> None:
+        """Общая функция для обработки ошибок с автоматической отправкой в поддержку и возвратом лимитов"""
         error_msg = f"❌ Ошибка в {context}: {str(error)}"
         self.logger.error(f"{error_msg} - {traceback.format_exc()}")
         
+        # Refund tokens to user since the request failed
+        if update and update.effective_user:
+            user_id = update.effective_user.id
+            try:
+                await rate_limiter.refund_tokens(user_id, cost)
+                self.logger.info(f"Refunded {cost} tokens to user {user_id} due to error")
+            except Exception as refund_error:
+                self.logger.error(f"Failed to refund tokens to user {user_id}: {refund_error}")
+        
+        # Send error report to support
+        try:
+            if hasattr(self, 'support_service') and self.support_service:
+                error_context = {
+                    "operation": context,
+                    "user_id": update.effective_user.id if update and update.effective_user else None,
+                    "username": update.effective_user.username if update and update.effective_user else None,
+                    "error_type": type(error).__name__,
+                    "traceback": traceback.format_exc()
+                }
+                await self.support_service.send_error_report(context.bot, error, error_context)
+                self.logger.info(f"Error report sent to support for {context}")
+        except Exception as support_error:
+            self.logger.error(f"Failed to send error report to support: {support_error}")
+        
+        # Send error message to user
         try:
             await self._send_message_safe(update, error_msg)
         except Exception as send_error:
@@ -1337,7 +1375,7 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in unified portfolio creation: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при создании портфеля: {str(e)}")
+            await self._handle_error(update, e, "portfolio creation", cost=1.0)
             return False
 
     def _clear_all_waiting_flags(self, user_id: int):
@@ -1492,6 +1530,52 @@ class ShansAi:
             'HKD': 'HK.INFL'    # Гонконгская инфляция
         }
         return inflation_mapping.get(currency, 'US.INFL')
+    
+    def _get_helpful_error_message(self, error: Exception) -> str:
+        """
+        Get a helpful error message based on the error type.
+        
+        Args:
+            error: The exception that occurred
+            
+        Returns:
+            str: User-friendly error message
+        """
+        error_str = str(error).lower()
+        
+        # Check for specific error patterns and provide helpful messages
+        if '502' in error_str or 'bad gateway' in error_str:
+            return ("Сервис OKAMA временно недоступен (ошибка 502). "
+                   "Попробуйте повторить запрос через несколько минут. "
+                   "Если проблема сохраняется, возможно, ведутся технические работы.")
+        
+        elif '503' in error_str or 'service unavailable' in error_str:
+            return ("Сервис OKAMA временно недоступен (ошибка 503). "
+                   "Попробуйте повторить запрос позже.")
+        
+        elif '504' in error_str or 'gateway timeout' in error_str:
+            return ("Превышено время ожидания ответа от сервиса OKAMA. "
+                   "Попробуйте повторить запрос.")
+        
+        elif '429' in error_str or 'too many requests' in error_str:
+            return ("Превышен лимит запросов к сервису OKAMA. "
+                   "Подождите несколько минут перед повторной попыткой.")
+        
+        elif 'connection' in error_str or 'timeout' in error_str:
+            return ("Проблема с подключением к сервису OKAMA. "
+                   "Проверьте интернет-соединение и попробуйте снова.")
+        
+        elif 'max retries exceeded' in error_str:
+            return ("Не удалось подключиться к сервису OKAMA после нескольких попыток. "
+                   "Сервис может быть временно недоступен. Попробуйте позже.")
+        
+        elif 'not found' in error_str or 'invalid' in error_str:
+            return ("Один или несколько указанных активов не найдены в базе данных. "
+                   "Проверьте правильность написания тикеров.")
+        
+        else:
+            # Generic error message for unknown errors
+            return f"Произошла ошибка при обработке запроса: {str(error)}"
     
     def _parse_currency_and_period(self, args: List[str], preserve_weights: bool = False) -> tuple[List[str], Optional[str], Optional[str]]:
         """
@@ -1787,7 +1871,7 @@ class ShansAi:
             
         except Exception as e:
             self.logger.error(f"Error creating hybrid Chinese comparison: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка при создании гибридного сравнения: {str(e)}")
+            await self._handle_error(update, e, "hybrid Chinese comparison", cost=1.0)
     
     # =======================
     # Вспомогательные функции для истории
@@ -2511,6 +2595,9 @@ class ShansAi:
 
 📚 Просмотр всех доступных данных /list
 
+💎 Pro доступ: безлимитные запросы и расширенные функции /buy
+
+🆓 Бесплатный доступ: {int(rate_limiter.user_buckets.capacity)} запросов в день
 
 Бета-версия © Okama, tushare, YandexGPT, Google Gemini.
 """
@@ -2542,19 +2629,111 @@ class ShansAi:
 /list <код> — активы конкретной биржи (US, MOEX, FX, COMM и др.)
 /search <название или ISIN> — поиск актива по базе данных
 
-🔹 *Лимиты*
+🔹 *Подписка и лимиты*
 
+/profile — ваш профиль и статус подписки
+/buy — купить Pro доступ (безлимитные запросы)
 /rate — текущий статус лимитов запросов
 /limits — информация о системе ограничений
+/status — статус сервисов и API
 
 🔹 *Поддержка*
 
 /support — отправить запрос в службу поддержки
 
+💎 *Pro доступ включает:*
+• Безлимитные запросы к боту
+• Приоритетная поддержка
+• Расширенные функции анализа
+• Доступ к новым возможностям
+
+🆓 *Бесплатный доступ:* {int(rate_limiter.user_buckets.capacity)} запросов в день
+
 🔹 *Информация предоставляется в образовательных целях и не является инвестиционной рекомендацией*"""
 
         await self._send_message_safe(update, welcome_message)
-    
+        
+    async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /status command to show OKAMA API status"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=0.5):
+            return
+            
+        # Ensure no reply keyboard is shown
+        await self._ensure_no_reply_keyboard(update, context)
+        
+        try:
+            # Get API status
+            api_status = okama_service.get_api_status()
+            
+            status_message = "🔍 *Статус сервисов*\n\n"
+            
+            # OKAMA API status
+            if api_status['available']:
+                response_time = api_status.get('response_time', 0)
+                status_message += f"✅ *OKAMA API*: Доступен\n"
+                status_message += f"⏱️ Время отклика: {response_time:.2f} сек\n"
+            else:
+                status_message += f"❌ *OKAMA API*: Недоступен\n"
+                if api_status.get('error'):
+                    error_msg = api_status['error']
+                    if '502' in error_msg or 'bad gateway' in error_msg.lower():
+                        status_message += f"🔧 Причина: Ошибка сервера (502)\n"
+                    elif '503' in error_msg or 'service unavailable' in error_msg.lower():
+                        status_message += f"🔧 Причина: Сервис недоступен (503)\n"
+                    elif 'timeout' in error_msg.lower():
+                        status_message += f"🔧 Причина: Превышено время ожидания\n"
+                    else:
+                        status_message += f"🔧 Причина: {error_msg}\n"
+            
+            # Fallback status
+            if api_status.get('fallback_available'):
+                status_message += f"💾 *Кэш данных*: Доступен (резервные данные)\n"
+            else:
+                status_message += f"💾 *Кэш данных*: Недоступен\n"
+            
+            # Additional services status
+            status_message += f"\n📊 *Дополнительные сервисы:*\n"
+            
+            # Tushare service
+            if hasattr(self, 'tushare_service') and self.tushare_service:
+                status_message += f"✅ Tushare (китайские акции): Доступен\n"
+            else:
+                status_message += f"❌ Tushare: Не настроен\n"
+            
+            # Gemini service
+            if hasattr(self, 'gemini_service') and self.gemini_service:
+                gemini_status = self.gemini_service.get_service_status()
+                if gemini_status.get('available'):
+                    status_message += f"✅ Gemini AI: Доступен\n"
+                else:
+                    status_message += f"❌ Gemini AI: Недоступен\n"
+            else:
+                status_message += f"❌ Gemini AI: Не настроен\n"
+            
+            # YandexGPT service
+            if hasattr(self, 'yandexgpt_service') and self.yandexgpt_service:
+                status_message += f"✅ YandexGPT: Доступен\n"
+            else:
+                status_message += f"❌ YandexGPT: Не настроен\n"
+            
+            # Recommendations
+            if not api_status['available']:
+                status_message += f"\n💡 *Рекомендации:*\n"
+                if api_status.get('fallback_available'):
+                    status_message += f"• Используйте кэшированные данные для базового анализа\n"
+                status_message += f"• Попробуйте повторить запрос через несколько минут\n"
+                status_message += f"• Если проблема сохраняется, обратитесь в поддержку /support\n"
+            
+            await self._send_message_safe(update, status_message)
+            
+        except Exception as e:
+            self.logger.error(f"Error in status command: {e}")
+            await self._handle_error(update, e, "status command", cost=0.5)
+        
     async def support_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /support command - collect user message and send to support group"""
         # Send analytics to Botality
@@ -2580,8 +2759,8 @@ class ShansAi:
         
         await self._send_message_safe(update, 
             "📝 *Поддержка*\n\n"
-            "Опишите проблему или вопрос одним сообщением. "
-            "Ваше сообщение будет отправлено администраторам вместе с историей.")
+            "Опишите проблему или вопрос. "
+            "Ваше сообщение будет отправлено в поддержку вместе с историей.")
     
     async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /rate command to show current rate limit status"""
@@ -3176,7 +3355,7 @@ class ShansAi:
                 
         except Exception as e:
             self.logger.error(f"Error in info command for {symbol}: {e}")
-            await self._send_message_safe(update, f"❌ Ошибка: {str(e)}")
+            await self._handle_error(update, e, f"info command for {symbol}", cost=1.0)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages - treat as asset symbol for /info or portfolio for /portfolio"""
@@ -4675,13 +4854,17 @@ class ShansAi:
                             end_date = datetime.now()
                             start_date = end_date - timedelta(days=years * 365)
                             self.logger.info(f"DEBUG: Creating AssetList with portfolios and period {specified_period}, start_date={start_date.strftime('%Y-%m-%d')}, end_date={end_date.strftime('%Y-%m-%d')}")
-                            comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True, 
-                                                    first_date=start_date.strftime('%Y-%m-%d'), 
-                                                    last_date=end_date.strftime('%Y-%m-%d'))
+                            comparison = okama_service.create_asset_list(
+                                assets_for_comparison, 
+                                ccy=currency, 
+                                inflation=True, 
+                                first_date=start_date.strftime('%Y-%m-%d'), 
+                                last_date=end_date.strftime('%Y-%m-%d')
+                            )
                             self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                         else:
                             self.logger.info(f"DEBUG: No period specified for portfolio comparison, creating AssetList without period filter")
-                            comparison = ok.AssetList(assets_for_comparison, ccy=currency, inflation=True)
+                            comparison = okama_service.create_asset_list(assets_for_comparison, currency=currency, inflation=True)
                             self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
                     except Exception as asset_list_error:
                         self.logger.error(f"Error creating AssetList: {asset_list_error}")
@@ -4691,7 +4874,10 @@ class ShansAi:
                                 await loading_message.delete()
                             except Exception as delete_error:
                                 self.logger.warning(f"Could not delete loading message: {delete_error}")
-                        await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {str(asset_list_error)}")
+                        
+                        # Provide more helpful error message based on error type
+                        error_message = self._get_helpful_error_message(asset_list_error)
+                        await self._send_message_safe(update, f"❌ Ошибка при создании сравнения: {error_message}")
                         return
                     
                 else:
@@ -4751,13 +4937,17 @@ class ShansAi:
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         self.logger.info(f"DEBUG: Creating AssetList with period {specified_period}, start_date={start_date.strftime('%Y-%m-%d')}, end_date={end_date.strftime('%Y-%m-%d')}")
-                        comparison = ok.AssetList(symbols, ccy=currency, inflation=True,
-                                                first_date=start_date.strftime('%Y-%m-%d'), 
-                                                last_date=end_date.strftime('%Y-%m-%d'))
+                        comparison = okama_service.create_asset_list(
+                            symbols, 
+                            currency=currency, 
+                            inflation=True,
+                            first_date=start_date.strftime('%Y-%m-%d'), 
+                            last_date=end_date.strftime('%Y-%m-%d')
+                        )
                         self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                     else:
                         self.logger.info(f"DEBUG: No period specified, creating AssetList without period filter")
-                        comparison = ok.AssetList(symbols, ccy=currency, inflation=True)
+                        comparison = okama_service.create_asset_list(symbols, currency=currency, inflation=True)
                         self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
                 
                 # Store context for buttons - use clean portfolio symbols for current_symbols
@@ -7148,6 +7338,28 @@ class ShansAi:
         
         return parts
 
+    async def buy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /buy command for purchasing Pro subscription"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=1.0):
+            return
+        
+        await payment_service.send_stars_payment(update, context)
+
+    async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /profile command for showing user profile"""
+        # Send analytics to Botality
+        await send_botality_analytics(update)
+        
+        # Check rate limit first
+        if not await check_user_rate_limit(update, context, cost=1.0):
+            return
+        
+        await payment_service.show_profile(update, context)
+
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
         # Send analytics to Botality
@@ -7584,6 +7796,11 @@ class ShansAi:
                 # Handle page number buttons - do nothing
                 self.logger.info("Page number button clicked - no action needed")
                 return
+            elif callback_data in ['buy_pro', 'pay_stars', 'cancel_payment', 'show_profile']:
+                # Handle payment-related callbacks
+                self.logger.info(f"Payment callback received: {callback_data}")
+                await payment_service.handle_callback_query(update, context)
+                return
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
                 await self._send_callback_message(update, context, "❌ Неизвестная кнопка")
@@ -7727,6 +7944,9 @@ class ShansAi:
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
+            
+            # Create keyboard for the message
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update, period)
             
             # Send image with keyboard
             await context.bot.send_photo(
@@ -10533,6 +10753,12 @@ class ShansAi:
                 KeyboardButton("Справка")
             ])
             
+            # Row 3: Subscription actions
+            keyboard.append([
+                KeyboardButton("💎 Pro доступ"),
+                KeyboardButton("📊 Мой профиль")
+            ])
+            
             return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
             
         except Exception as e:
@@ -10644,7 +10870,9 @@ class ShansAi:
             "Сравнение",
             "Портфель",
             "База данных",
-            "Справка"
+            "Справка",
+            "💎 Pro доступ",
+            "📊 Мой профиль"
         ]
         return text in start_buttons
 
@@ -10659,8 +10887,6 @@ class ShansAi:
 
     async def _handle_reply_keyboard_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle Reply Keyboard button presses - determine context and call appropriate handler"""
-        # Send analytics to Botality
-        await send_botality_analytics(update)
         
         try:
             user_id = update.effective_user.id
@@ -11071,6 +11297,12 @@ class ShansAi:
             elif text == "Справка":
                 # Execute help command
                 await self.help_command(update, context)
+            elif text == "💎 Pro доступ":
+                # Execute buy command
+                await self.buy_command(update, context)
+            elif text == "📊 Мой профиль":
+                # Execute profile command
+                await self.profile_command(update, context)
             else:
                 await self._send_message_safe(update, f"❌ Неизвестная кнопка: {text}")
                 
@@ -11382,6 +11614,9 @@ class ShansAi:
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
+                
+                # Create keyboard for the message
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Send wealth chart with keyboard
                 await context.bot.send_photo(
@@ -11887,6 +12122,9 @@ class ShansAi:
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
                 
+                # Create keyboard for the message
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
+                
                 # Send drawdowns chart with keyboard
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
@@ -11954,6 +12192,9 @@ class ShansAi:
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
+            
+            # Create keyboard for the message
+            keyboard = self._create_compare_command_keyboard(symbols, currency, update)
             
             # Send chart with keyboard
             await context.bot.send_photo(
@@ -12156,6 +12397,9 @@ class ShansAi:
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
                 
+                # Create keyboard for the message
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
+                
                 # Send dividend yield chart with keyboard
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id, 
@@ -12302,6 +12546,9 @@ class ShansAi:
                 
                 # Remove keyboard from previous message before sending new message
                 await self._remove_keyboard_before_new_message(update, context)
+                
+                # Create keyboard for the message
+                keyboard = self._create_compare_command_keyboard(symbols, currency, update)
                 
                 # Send correlation matrix with keyboard
                 self.logger.info("Sending correlation matrix image...")
@@ -17991,10 +18238,21 @@ class ShansAi:
         }
 
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Global error handler that sends error reports to support group"""
+        """Global error handler that sends error reports to support group and refunds tokens"""
         try:
             # Log the error
             self.logger.error(f"Exception while handling an update: {context.error}")
+            
+            # Refund tokens to user since the request failed
+            if isinstance(update, Update) and update.effective_user:
+                user_id = update.effective_user.id
+                try:
+                    # Default cost is 1.0, but we could make this more sophisticated
+                    # by tracking the cost per command type
+                    await rate_limiter.refund_tokens(user_id, cost=1.0)
+                    self.logger.info(f"Refunded 1.0 tokens to user {user_id} due to error")
+                except Exception as refund_error:
+                    self.logger.error(f"Failed to refund tokens to user {user_id}: {refund_error}")
             
             # Create error context
             error_context = {}
@@ -18029,6 +18287,7 @@ class ShansAi:
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
+        application.add_handler(CommandHandler("status", self.status_command))
         application.add_handler(CommandHandler("support", self.support_command))
         application.add_handler(CommandHandler("rate", self.rate_command))
         application.add_handler(CommandHandler("limits", self.limits_command))
@@ -18037,9 +18296,15 @@ class ShansAi:
         application.add_handler(CommandHandler("search", self.search_command))
         application.add_handler(CommandHandler("compare", self.compare_command))
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
+        application.add_handler(CommandHandler("buy", self.buy_command))
+        application.add_handler(CommandHandler("profile", self.profile_command))
         
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
+        
+        # Add payment handlers
+        application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, payment_service.handle_successful_payment))
+        application.add_handler(PreCheckoutQueryHandler(payment_service.handle_pre_checkout_query))
         
         # Add message handler for waiting user input after empty /info
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
