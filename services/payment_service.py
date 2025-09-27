@@ -195,17 +195,34 @@ class PaymentService:
             update: Telegram update object
             context: Bot context
         """
-        query = update.callback_query
-        await query.answer()
-        
-        if query.data == "buy_pro":
-            await self.send_stars_payment(update, context)
-        elif query.data == "pay_stars":
-            await self.send_invoice(update, context)
-        elif query.data == "cancel_payment":
-            await query.edit_message_text("❌ Покупка отменена")
-        elif query.data == "show_profile":
-            await self.show_profile(update, context)
+        try:
+            query = update.callback_query
+            if not query:
+                self.logger.error("No callback query found in update")
+                return
+                
+            await query.answer()
+            
+            if query.data == "buy_pro":
+                await self.send_stars_payment(update, context)
+            elif query.data == "pay_stars":
+                await self.send_invoice(update, context)
+            elif query.data == "cancel_payment":
+                await query.edit_message_text("❌ Покупка отменена")
+            elif query.data == "show_profile":
+                await self.show_profile(update, context)
+            else:
+                self.logger.warning(f"Unknown payment callback: {query.data}")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling payment callback: {e}")
+            # Try to send error message
+            try:
+                if update.callback_query and update.callback_query.message:
+                    chat_id = update.callback_query.message.chat_id
+                    await context.bot.send_message(chat_id, f"❌ Ошибка при обработке кнопки: {str(e)}")
+            except Exception as fallback_error:
+                self.logger.error(f"Failed to send error message: {fallback_error}")
     
     async def show_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -235,6 +252,8 @@ class PaymentService:
             total = user_status['daily_limit']
             requests_info = f"📊 {remaining}/{total} запросов сегодня"
         
+        # Add timestamp to make message unique and avoid "Message is not modified" error
+        timestamp = datetime.now().strftime("%H:%M:%S")
         message = f"""👤 <b>Профиль пользователя</b>
 
 <b>Имя:</b> {full_name}
@@ -247,17 +266,35 @@ class PaymentService:
 <b>Доступные команды:</b>
 /buy - Купить Pro доступ
 /profile - Этот профиль
-/support - Поддержка"""
+/support - Поддержка
+
+<i>Обновлено: {timestamp}</i>"""
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("💎 Купить Pro", callback_data="buy_pro")],
             [InlineKeyboardButton("🔄 Обновить", callback_data="show_profile")]
         ])
         
-        if update.callback_query:
-            await update.callback_query.edit_message_text(message, reply_markup=keyboard, parse_mode='HTML')
-        else:
-            await update.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
+        try:
+            if update.callback_query and update.callback_query.message:
+                # Try to edit the existing message
+                await update.callback_query.edit_message_text(message, reply_markup=keyboard, parse_mode='HTML')
+            elif update.message:
+                # Send new message
+                await update.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
+            else:
+                # Fallback: send message using context.bot
+                chat_id = update.effective_chat.id
+                await context.bot.send_message(chat_id, message, reply_markup=keyboard, parse_mode='HTML')
+        except Exception as e:
+            # If editing fails (e.g., "Message is not modified"), send a new message
+            try:
+                chat_id = update.effective_chat.id
+                await context.bot.send_message(chat_id, message, reply_markup=keyboard, parse_mode='HTML')
+            except Exception as fallback_error:
+                # Last resort: send without markup
+                chat_id = update.effective_chat.id
+                await context.bot.send_message(chat_id, message, parse_mode='HTML')
 
 # Global payment service instance
 payment_service = PaymentService()

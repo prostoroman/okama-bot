@@ -223,6 +223,17 @@ class RateLimiter:
         Returns:
             Tuple of (allowed, error_message_if_denied)
         """
+        # Check if user is pro with active subscription first
+        user_status = get_user_status(user_id)
+        if user_status['is_pro_active']:
+            # Pro users have unlimited access - only check global bucket
+            allowed_g, wait_g = await self.global_bucket.allow(cost=cost)
+            if not allowed_g:
+                wait_time = wait_g if wait_g != float("inf") else 9999.0
+                return False, BLOCK_MESSAGE_GLOBAL.format(wait=wait_time)
+            return True, None
+        
+        # Regular user flow
         # 1) Check global bucket first
         allowed_g, wait_g = await self.global_bucket.allow(cost=cost)
         if not allowed_g:
@@ -235,12 +246,10 @@ class RateLimiter:
             return False, error_message
 
         # 3) Check per-user bucket (only for free users)
-        user_status = get_user_status(user_id)
-        if not user_status['is_pro_active']:
-            allowed_u, wait_u = await self.user_buckets.allow(user_id, cost=cost)
-            if not allowed_u:
-                wait_time = wait_u if wait_u != float("inf") else 9999.0
-                return False, BLOCK_MESSAGE_USER.format(wait=wait_time)
+        allowed_u, wait_u = await self.user_buckets.allow(user_id, cost=cost)
+        if not allowed_u:
+            wait_time = wait_u if wait_u != float("inf") else 9999.0
+            return False, BLOCK_MESSAGE_USER.format(wait=wait_time)
 
         return True, None
 
@@ -283,7 +292,19 @@ class RateLimiter:
             Formatted status message
         """
         status = await self.get_status(user_id)
+        user_status = get_user_status(user_id)
         
+        # Check if user is pro with active subscription
+        if user_status['is_pro_active']:
+            pro_msg = "💎 <b>Pro пользователь</b> - безлимитные запросы"
+            global_msg = (
+                f"Глобальный лимит: {self._fmt_num(status['global_tokens'])}/{self._fmt_num(GLOBAL_BUCKET_CAPACITY)} токенов, "
+                f"пополнение {self._fmt_num(status['global_rate'])} ток/сек "
+                f"(≈ {int(status['global_rate'])} rps). Активных пользователей: {status['active_users']}"
+            )
+            return f"Статус лимитов:\n• {pro_msg}\n• {global_msg}"
+        
+        # Regular user status
         per_user_msg = (
             f"Персональный лимит: {self._fmt_num(status['user_tokens'])}/{self._fmt_num(BUCKET_CAPACITY)} токенов, "
             f"пополнение {self._fmt_num(status['user_rate'])} ток/сек "
@@ -318,8 +339,9 @@ class RateLimiter:
             if not user_status['is_pro_active']:
                 await self.user_buckets.refund(user_id, cost)
             
-            # Refund daily request count
-            refund_request_count(user_id)
+            # Refund daily request count (only for free users)
+            if not user_status['is_pro_active']:
+                refund_request_count(user_id)
             
             return True
         except Exception as e:
@@ -357,8 +379,11 @@ async def check_user_rate_limit(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text(error_message)
         return False
     
-    # Increment request count if allowed
-    increment_request_count(user_id)
+    # Increment request count if allowed (only for free users)
+    user_status = get_user_status(user_id)
+    if not user_status['is_pro_active']:
+        increment_request_count(user_id)
+    
     return True
 
 async def send_paywall_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
