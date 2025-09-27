@@ -42,10 +42,17 @@ class PaymentService:
         # Check if user already has active Pro subscription
         if user_status['is_pro_active']:
             paid_until = datetime.fromisoformat(user_status['paid_until'])
-            await update.message.reply_text(
-                f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\n"
-                f"Используйте /profile для просмотра статуса."
-            )
+            message_text = f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\nИспользуйте /profile для просмотра статуса."
+            
+            # Handle both regular messages and callback queries
+            if update.message:
+                await update.message.reply_text(message_text)
+            elif update.callback_query and update.callback_query.message:
+                await update.callback_query.message.reply_text(message_text)
+            else:
+                # Fallback: send message using context.bot
+                chat_id = update.effective_chat.id
+                await context.bot.send_message(chat_id, message_text)
             return
         
         try:
@@ -75,9 +82,17 @@ class PaymentService:
             
         except TelegramError as e:
             self.logger.error(f"Failed to send invoice to user {user_id}: {e}")
-            await update.message.reply_text(
-                "❌ Ошибка при создании счета. Попробуйте позже или обратитесь к поддержке."
-            )
+            error_message = "❌ Ошибка при создании счета. Попробуйте позже или обратитесь к поддержке."
+            
+            # Handle both regular messages and callback queries
+            if update.message:
+                await update.message.reply_text(error_message)
+            elif update.callback_query and update.callback_query.message:
+                await update.callback_query.message.reply_text(error_message)
+            else:
+                # Fallback: send message using context.bot
+                chat_id = update.effective_chat.id
+                await context.bot.send_message(chat_id, error_message)
     
     async def send_stars_payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -93,10 +108,17 @@ class PaymentService:
         # Check if user already has active Pro subscription
         if user_status['is_pro_active']:
             paid_until = datetime.fromisoformat(user_status['paid_until'])
-            await update.message.reply_text(
-                f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\n"
-                f"Используйте /profile для просмотра статуса."
-            )
+            message_text = f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\nИспользуйте /profile для просмотра статуса."
+            
+            # Handle both regular messages and callback queries
+            if update.message:
+                await update.message.reply_text(message_text)
+            elif update.callback_query and update.callback_query.message:
+                await update.callback_query.message.reply_text(message_text)
+            else:
+                # Fallback: send message using context.bot
+                chat_id = update.effective_chat.id
+                await context.bot.send_message(chat_id, message_text)
             return
         
         message = f"""💎 <b>Pro доступ - {PRO_PRICE_STARS} ⭐</b>
@@ -117,7 +139,15 @@ class PaymentService:
             [InlineKeyboardButton("❌ Отмена", callback_data="cancel_payment")]
         ])
         
-        await update.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
+        # Handle both regular messages and callback queries
+        if update.message:
+            await update.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
+        elif update.callback_query and update.callback_query.message:
+            await update.callback_query.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
+        else:
+            # Fallback: send message using context.bot
+            chat_id = update.effective_chat.id
+            await context.bot.send_message(chat_id, message, reply_markup=keyboard, parse_mode='HTML')
     
     async def handle_successful_payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
