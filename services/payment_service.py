@@ -108,17 +108,38 @@ class PaymentService:
         # Check if user already has active Pro subscription
         if user_status['is_pro_active']:
             paid_until = datetime.fromisoformat(user_status['paid_until'])
-            message_text = f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\nИспользуйте /profile для просмотра статуса."
+            new_expiry = paid_until + timedelta(days=PRO_DURATION_DAYS)
+            
+            message = f"""🔄 <b>Продление Pro подписки</b>
+
+<b>Текущая подписка:</b> до {paid_until.strftime('%d.%m.%Y')}
+<b>После продления:</b> до {new_expiry.strftime('%d.%m.%Y')}
+
+<b>Что включено:</b>
+✅ Безлимитные запросы к боту
+✅ Приоритетная поддержка
+✅ Расширенные функции анализа
+✅ Доступ к новым возможностям
+✅ Дополнительно {PRO_DURATION_DAYS} дней
+
+<b>Оплата через Telegram Stars</b>
+{f"🧪 <b>ТЕСТОВЫЙ РЕЖИМ</b> - используйте тестовые Stars" if STARS_TEST_MODE else ""}
+Нажмите кнопку ниже для продления:"""
+            
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"🔄 Продлить на {PRO_DURATION_DAYS} дней - {PRO_PRICE_STARS} ⭐", callback_data="pay_stars")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="cancel_payment")]
+            ])
             
             # Handle both regular messages and callback queries
             if update.message:
-                await update.message.reply_text(message_text)
+                await update.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
             elif update.callback_query and update.callback_query.message:
-                await update.callback_query.message.reply_text(message_text)
+                await update.callback_query.edit_message_text(message, reply_markup=keyboard, parse_mode='HTML')
             else:
                 # Fallback: send message using context.bot
                 chat_id = update.effective_chat.id
-                await context.bot.send_message(chat_id, message_text)
+                await context.bot.send_message(chat_id, message, reply_markup=keyboard, parse_mode='HTML')
             return
         
         message = f"""💎 <b>Pro доступ - {PRO_PRICE_STARS} ⭐</b>
@@ -277,11 +298,13 @@ class PaymentService:
             paid_until = datetime.fromisoformat(user_status['paid_until'])
             plan_info = f"💎 <b>Pro</b> (до {paid_until.strftime('%d.%m.%Y')})"
             requests_info = "♾️ Безлимитные запросы"
+            button_text = "🔄 Продлить Pro"
         else:
             plan_info = "🆓 <b>Бесплатный</b>"
             remaining = user_status['remaining_requests']
             total = user_status['daily_limit']
             requests_info = f"📊 {remaining}/{total} запросов сегодня"
+            button_text = "💎 Купить Pro"
         
         # Add timestamp to make message unique and avoid "Message is not modified" error
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -294,16 +317,12 @@ class PaymentService:
 <b>Подписка:</b> {plan_info}
 <b>Запросы:</b> {requests_info}
 
-<b>Доступные команды:</b>
-/buy - Купить Pro доступ
-/profile - Этот профиль
 /support - Поддержка
 
 <i>Обновлено: {timestamp}</i>"""
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💎 Купить Pro", callback_data="buy_pro")],
-            [InlineKeyboardButton("🔄 Обновить", callback_data="show_profile")]
+            [InlineKeyboardButton(button_text, callback_data="buy_pro")]
         ])
         
         try:

@@ -2595,10 +2595,6 @@ class ShansAi:
 
 📚 Просмотр всех доступных данных /list
 
-💎 Pro доступ: безлимитные запросы и расширенные функции /buy
-
-🆓 Бесплатный доступ: {int(rate_limiter.user_buckets.capacity)} запросов в день
-
 Бета-версия © Okama, tushare, YandexGPT, Google Gemini.
 """
 
@@ -2631,23 +2627,19 @@ class ShansAi:
 
 🔹 *Подписка и лимиты*
 
-/profile — ваш профиль и статус подписки
-/buy — купить Pro доступ (безлимитные запросы)
-/rate — текущий статус лимитов запросов
-/limits — информация о системе ограничений
+/profile — Ваш профиль
+/buy — Pro доступ
 /status — статус сервисов и API
 
 🔹 *Поддержка*
 
 /support — отправить запрос в службу поддержки
 
-💎 *Pro доступ включает:*
-• Безлимитные запросы к боту
-• Приоритетная поддержка
-• Расширенные функции анализа
-• Доступ к новым возможностям
+🆓 *Базовый доступ:* {int(rate_limiter.user_buckets.capacity)} запросов в день
 
-🆓 *Бесплатный доступ:* {int(rate_limiter.user_buckets.capacity)} запросов в день
+💎 *Pro доступ:*
+• Безлимитные запросы
+• Доступ к расширенным возможностям
 
 🔹 *Информация предоставляется в образовательных целях и не является инвестиционной рекомендацией*"""
 
@@ -2762,50 +2754,6 @@ class ShansAi:
             "Опишите проблему или вопрос. "
             "Ваше сообщение будет отправлено в поддержку вместе с историей.")
     
-    async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /rate command to show current rate limit status"""
-        # Send analytics to Botality
-        await send_botality_analytics(update)
-        
-        # Check rate limit first
-        if not await check_user_rate_limit(update, context, cost=0.5):
-            return
-            
-        try:
-            status_message = await get_rate_limit_status(update, context)
-            await self._send_message_safe(update, status_message)
-        except Exception as e:
-            logger.error(f"Error in rate_command: {e}")
-            await self._send_message_safe(update, "Ошибка при получении статуса лимитов.")
-
-    async def limits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /limits command to show rate limiting information"""
-        # Send analytics to Botality
-        await send_botality_analytics(update)
-        
-        # Check rate limit first
-        if not await check_user_rate_limit(update, context, cost=0.5):
-            return
-            
-        try:
-            limits_info = """📊 *Информация о лимитах*
-
-🔹 *Персональные лимиты*
-• Целевое количество запросов: ~30 в день
-• Максимальный burst: 5 запросов подряд
-• Пополнение: ~0.000347 токенов/сек
-
-🔹 *Глобальные лимиты*
-• Защита от перегрузки сервера
-• Максимальный burst: 50 запросов
-• Пополнение: 5 токенов/сек
-
-Используйте `/rate` для просмотра текущего статуса лимитов."""
-            
-            await self._send_message_safe(update, limits_info)
-        except Exception as e:
-            logger.error(f"Error in limits_command: {e}")
-            await self._send_message_safe(update, "Ошибка при получении информации о лимитах.")
     
     async def show_info_help(self, update: Update):
         """Показать справку по команде /info"""
@@ -10756,7 +10704,7 @@ class ShansAi:
             # Row 3: Subscription actions
             keyboard.append([
                 KeyboardButton("💎 Pro доступ"),
-                KeyboardButton("📊 Мой профиль")
+                KeyboardButton("👤 Мой профиль")
             ])
             
             return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -10872,7 +10820,7 @@ class ShansAi:
             "База данных",
             "Справка",
             "💎 Pro доступ",
-            "📊 Мой профиль"
+            "👤 Мой профиль"
         ]
         return text in start_buttons
 
@@ -11300,7 +11248,7 @@ class ShansAi:
             elif text == "💎 Pro доступ":
                 # Execute buy command
                 await self.buy_command(update, context)
-            elif text == "📊 Мой профиль":
+            elif text == "👤 Мой профиль":
                 # Execute profile command
                 await self.profile_command(update, context)
             else:
@@ -18289,8 +18237,6 @@ class ShansAi:
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
         application.add_handler(CommandHandler("support", self.support_command))
-        application.add_handler(CommandHandler("rate", self.rate_command))
-        application.add_handler(CommandHandler("limits", self.limits_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
         application.add_handler(CommandHandler("search", self.search_command))
