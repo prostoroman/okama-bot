@@ -342,7 +342,7 @@ class PaymentService:
 <i>Обновлено: {timestamp}</i>"""
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(button_text, url="https://t.me/okama_finance_bot?start=buy")]
+            [InlineKeyboardButton(button_text, callback_data="buy_pro")]
         ])
         
         try:
