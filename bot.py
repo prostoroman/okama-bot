@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any, Union
 import io
 from datetime import datetime
+import datetime
 
 # Load environment variables from config.env
 try:
@@ -65,7 +66,7 @@ except ImportError:
 
 # Telegram imports
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler, PreCheckoutQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler, PreCheckoutQueryHandler, JobQueue
 
 # Check Python version compatibility
 if sys.version_info < (3, 7):
@@ -81,7 +82,7 @@ from services.examples_service import ExamplesService
 from services.support_service import SupportService
 from services.rate_limiter import rate_limiter, check_user_rate_limit, get_rate_limit_status
 from services.payment_service import PaymentService
-from services.db import init_db
+from services.db import init_db, cleanup_expired_subscriptions
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -193,6 +194,9 @@ class ShansAi:
         
         # Initialize payment service with bot instance
         self.payment_service = PaymentService(bot_instance=self)
+        
+        # Initialize job queue for periodic tasks
+        self.job_queue = None
 
     def get_risk_free_rate(self, currency: str, period_years: float = None) -> float:
         """
@@ -7314,6 +7318,32 @@ class ShansAi:
             return
         
         await self.payment_service.show_profile(update, context)
+
+    async def cleanup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /cleanup command for manual subscription cleanup (admin only)"""
+        user_id = update.effective_user.id
+        
+        # Check if user is admin (you can modify this check as needed)
+        admin_user_id = os.getenv('ADMIN_USER_ID')
+        if admin_user_id and str(user_id) != admin_user_id:
+            await update.message.reply_text("❌ Эта команда доступна только администратору.")
+            return
+        
+        try:
+            self.logger.info(f"Manual cleanup triggered by user {user_id}")
+            
+            cleaned_count = cleanup_expired_subscriptions()
+            
+            if cleaned_count > 0:
+                message = f"✅ Очистка завершена. Удалено {cleaned_count} истекших подписок."
+            else:
+                message = "✅ Очистка завершена. Истекших подписок не найдено."
+                
+            await update.message.reply_text(message)
+            
+        except Exception as e:
+            self.logger.error(f"Error during manual cleanup: {e}")
+            await update.message.reply_text(f"❌ Ошибка при очистке: {str(e)}")
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
@@ -18234,10 +18264,31 @@ class ShansAi:
             # If we can't send error report, just log it
             self.logger.error(f"Failed to send error report: {e}")
 
+    async def cleanup_subscriptions_job(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Periodic job to cleanup expired subscriptions
+        Runs daily at midnight UTC
+        """
+        try:
+            self.logger.info("Starting scheduled cleanup of expired subscriptions...")
+            
+            cleaned_count = cleanup_expired_subscriptions()
+            
+            if cleaned_count > 0:
+                self.logger.info(f"Successfully cleaned up {cleaned_count} expired subscriptions")
+            else:
+                self.logger.info("No expired subscriptions found")
+                
+        except Exception as e:
+            self.logger.error(f"Error during scheduled cleanup: {e}")
+
     def run(self):
         """Run the bot"""
-        # Create application
-        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
+        # Create application with job queue
+        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).job_queue(JobQueue()).build()
+        
+        # Store job queue reference
+        self.job_queue = application.job_queue
         
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
@@ -18251,6 +18302,7 @@ class ShansAi:
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("buy", self.buy_command))
         application.add_handler(CommandHandler("profile", self.profile_command))
+        application.add_handler(CommandHandler("cleanup", self.cleanup_command))
         
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -18264,6 +18316,14 @@ class ShansAi:
         
         # Add global error handler
         application.add_error_handler(self.error_handler)
+        
+        # Schedule periodic cleanup job (daily at midnight UTC)
+        self.job_queue.run_daily(
+            self.cleanup_subscriptions_job,
+            time=datetime.time(0, 0, 0),  # midnight UTC
+            name="cleanup_subscriptions"
+        )
+        logger.info("Scheduled daily cleanup job for expired subscriptions")
         
         # Start the bot
         logger.info("Starting Okama Finance Bot...")

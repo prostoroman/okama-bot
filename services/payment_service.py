@@ -191,7 +191,7 @@ class PaymentService:
                 message = f"""🎉 <b>Продление успешно!</b>
 
 ✅ Ваша Pro подписка продлена
-📅 Действует до: {new_paid_until.strftime('%d.%m.%Y %H:%M')} UTC
+📅 Действует до: {new_paid_until.strftime('%d.%m.%Y')}
 💎 Спасибо за продление!
 
 Теперь у вас безлимитный доступ ко всем функциям бота.
@@ -217,7 +217,7 @@ class PaymentService:
                 message = f"""🎉 <b>Оплата успешна!</b>
 
 ✅ Ваш Pro доступ активирован
-📅 Действует до: {paid_until.strftime('%d.%m.%Y %H:%M')} UTC
+📅 Действует до: {paid_until.strftime('%d.%m.%Y')}
 💎 Спасибо за покупку!
 
 Теперь у вас безлимитный доступ ко всем функциям бота.
@@ -381,20 +381,20 @@ class PaymentService:
             else:
                 # Fallback: send a simple message
                 if update.callback_query and update.callback_query.message:
-                    await update.callback_query.edit_message_text("❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                    await update.callback_query.edit_message_text("Покупка отменена. Используйте /start для возврата в главное меню.")
                 else:
                     chat_id = update.effective_chat.id
-                    await context.bot.send_message(chat_id, "❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                    await context.bot.send_message(chat_id, "Покупка отменена. Используйте /start для возврата в главное меню.")
             
         except Exception as e:
             self.logger.error(f"Error redirecting to start command: {e}")
             # Fallback: send a simple message
             try:
                 if update.callback_query and update.callback_query.message:
-                    await update.callback_query.edit_message_text("❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                    await update.callback_query.edit_message_text("Покупка отменена. Используйте /start для возврата в главное меню.")
                 else:
                     chat_id = update.effective_chat.id
-                    await context.bot.send_message(chat_id, "❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                    await context.bot.send_message(chat_id, "Покупка отменена. Используйте /start для возврата в главное меню.")
             except Exception as fallback_error:
                 self.logger.error(f"Failed to send fallback message: {fallback_error}")
 
