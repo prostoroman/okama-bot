@@ -2759,8 +2759,8 @@ class ShansAi:
         
         await self._send_message_safe(update, 
             "📝 *Поддержка*\n\n"
-            "Опишите проблему или вопрос одним сообщением. "
-            "Ваше сообщение будет отправлено администраторам вместе с историей.")
+            "Опишите проблему или вопрос. "
+            "Ваше сообщение будет отправлено в поддержку вместе с историей.")
     
     async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /rate command to show current rate limit status"""
@@ -4864,7 +4864,7 @@ class ShansAi:
                             self.logger.info(f"Successfully created AssetList comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                         else:
                             self.logger.info(f"DEBUG: No period specified for portfolio comparison, creating AssetList without period filter")
-                            comparison = okama_service.create_asset_list(assets_for_comparison, ccy=currency, inflation=True)
+                            comparison = okama_service.create_asset_list(assets_for_comparison, currency=currency, inflation=True)
                             self.logger.info(f"Successfully created AssetList comparison with inflation ({inflation_ticker})")
                     except Exception as asset_list_error:
                         self.logger.error(f"Error creating AssetList: {asset_list_error}")
@@ -4939,7 +4939,7 @@ class ShansAi:
                         self.logger.info(f"DEBUG: Creating AssetList with period {specified_period}, start_date={start_date.strftime('%Y-%m-%d')}, end_date={end_date.strftime('%Y-%m-%d')}")
                         comparison = okama_service.create_asset_list(
                             symbols, 
-                            ccy=currency, 
+                            currency=currency, 
                             inflation=True,
                             first_date=start_date.strftime('%Y-%m-%d'), 
                             last_date=end_date.strftime('%Y-%m-%d')
@@ -4947,7 +4947,7 @@ class ShansAi:
                         self.logger.info(f"Successfully created regular comparison with period {specified_period} and inflation ({inflation_ticker}) using first_date/last_date parameters")
                     else:
                         self.logger.info(f"DEBUG: No period specified, creating AssetList without period filter")
-                        comparison = okama_service.create_asset_list(symbols, ccy=currency, inflation=True)
+                        comparison = okama_service.create_asset_list(symbols, currency=currency, inflation=True)
                         self.logger.info(f"Successfully created regular comparison with inflation ({inflation_ticker})")
                 
                 # Store context for buttons - use clean portfolio symbols for current_symbols
@@ -7795,6 +7795,11 @@ class ShansAi:
             elif callback_data == 'noop':
                 # Handle page number buttons - do nothing
                 self.logger.info("Page number button clicked - no action needed")
+                return
+            elif callback_data in ['buy_pro', 'pay_stars', 'cancel_payment', 'show_profile']:
+                # Handle payment-related callbacks
+                self.logger.info(f"Payment callback received: {callback_data}")
+                await payment_service.handle_callback_query(update, context)
                 return
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
@@ -18296,7 +18301,6 @@ class ShansAi:
         
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
-        application.add_handler(CallbackQueryHandler(payment_service.handle_callback_query))
         
         # Add payment handlers
         application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, payment_service.handle_successful_payment))
