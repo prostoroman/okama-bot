@@ -24,8 +24,9 @@ class PaymentService:
     """Service for handling payment operations"""
     
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
         mode = "TEST" if STARS_TEST_MODE else "PRODUCTION"
-        logger.info(f"Payment service initialized for Telegram Stars ({mode} mode)")
+        self.logger.info(f"Payment service initialized for Telegram Stars ({mode} mode)")
     
     async def send_invoice(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -73,7 +74,7 @@ class PaymentService:
             )
             
         except TelegramError as e:
-            logger.error(f"Failed to send invoice to user {user_id}: {e}")
+            self.logger.error(f"Failed to send invoice to user {user_id}: {e}")
             await update.message.reply_text(
                 "❌ Ошибка при создании счета. Попробуйте позже или обратитесь к поддержке."
             )
@@ -134,7 +135,7 @@ class PaymentService:
         
         # Verify payment details
         if payment.total_amount != PRO_PRICE_STARS:
-            logger.warning(f"Payment amount mismatch for user {user_id}: {payment.total_amount} != {PRO_PRICE_STARS}")
+            self.logger.warning(f"Payment amount mismatch for user {user_id}: {payment.total_amount} != {PRO_PRICE_STARS}")
         
         # Upgrade user to Pro
         success = upgrade_to_pro(user_id, PRO_DURATION_DAYS)
@@ -155,13 +156,13 @@ class PaymentService:
             await update.message.reply_text(message, parse_mode='HTML')
             
             # Log successful payment
-            logger.info(f"User {user_id} successfully upgraded to Pro until {paid_until.isoformat()}")
+            self.logger.info(f"User {user_id} successfully upgraded to Pro until {paid_until.isoformat()}")
             
         else:
             await update.message.reply_text(
                 "❌ Ошибка при активации Pro доступа. Обратитесь к поддержке."
             )
-            logger.error(f"Failed to upgrade user {user_id} to Pro after payment")
+            self.logger.error(f"Failed to upgrade user {user_id} to Pro after payment")
     
     async def handle_pre_checkout_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -208,7 +209,7 @@ class PaymentService:
             elif query.data == "pay_stars":
                 await self.send_invoice(update, context)
             elif query.data == "cancel_payment":
-                await query.edit_message_text("❌ Покупка отменена")
+                await self._redirect_to_start(update, context)
             elif query.data == "show_profile":
                 await self.show_profile(update, context)
             else:
@@ -295,6 +296,75 @@ class PaymentService:
                 # Last resort: send without markup
                 chat_id = update.effective_chat.id
                 await context.bot.send_message(chat_id, message, parse_mode='HTML')
+    
+    async def _redirect_to_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Redirect user to start command after canceling payment
+        
+        Args:
+            update: Telegram update object
+            context: Bot context
+        """
+        try:
+            # Send the start command message directly
+            user = update.effective_user
+            user_name = user.first_name or "User"
+            # Remove any special characters that could break Markdown
+            user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
+            
+            welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары 12 бирж, всего более 120 000 инструментов.
+
+Попробуйте одну из ключевых функций прямо сейчас:
+
+🔍 Анализ: полная сводка по любой бумаге, валюте или товару /info
+
+⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик /compare
+
+💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей /portfolio
+
+📚 Просмотр всех доступных данных /list
+
+💎 Pro доступ: безлимитные запросы и расширенные функции /buy
+
+🆓 Бесплатный доступ: 10 запросов в день
+
+Бета-версия © Okama, tushare, YandexGPT, Google Gemini.
+"""
+            
+            # Create reply keyboard with interactive buttons
+            from telegram import ReplyKeyboardMarkup, KeyboardButton
+            reply_markup = ReplyKeyboardMarkup([
+                [KeyboardButton("🔍 Анализ"), KeyboardButton("⚖️ Сравнение")],
+                [KeyboardButton("💼 Портфель"), KeyboardButton("📚 Список")],
+                [KeyboardButton("💎 Pro доступ"), KeyboardButton("📘 Справка")]
+            ], resize_keyboard=True)
+            
+            # Try to edit the message first, then fallback to sending new message
+            if update.callback_query and update.callback_query.message:
+                try:
+                    await update.callback_query.edit_message_text(welcome_message, reply_markup=None)
+                    # Send keyboard separately since edit_message_text doesn't support reply_markup
+                    chat_id = update.callback_query.message.chat_id
+                    await context.bot.send_message(chat_id, "Выберите действие:", reply_markup=reply_markup)
+                except Exception:
+                    # If editing fails, send new message
+                    chat_id = update.callback_query.message.chat_id
+                    await context.bot.send_message(chat_id, welcome_message, reply_markup=reply_markup)
+            else:
+                chat_id = update.effective_chat.id
+                await context.bot.send_message(chat_id, welcome_message, reply_markup=reply_markup)
+            
+        except Exception as e:
+            self.logger.error(f"Error redirecting to start command: {e}")
+            # Fallback: send a simple message
+            try:
+                if update.callback_query and update.callback_query.message:
+                    await update.callback_query.edit_message_text("❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                else:
+                    chat_id = update.effective_chat.id
+                    await context.bot.send_message(chat_id, "❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+            except Exception as fallback_error:
+                self.logger.error(f"Failed to send fallback message: {fallback_error}")
 
 # Global payment service instance
 payment_service = PaymentService()
