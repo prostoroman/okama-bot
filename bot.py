@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any, Union
 import io
 from datetime import datetime
+import datetime
 
 # Load environment variables from config.env
 try:
@@ -65,7 +66,7 @@ except ImportError:
 
 # Telegram imports
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler, PreCheckoutQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler, PreCheckoutQueryHandler, JobQueue
 
 # Check Python version compatibility
 if sys.version_info < (3, 7):
@@ -80,8 +81,8 @@ from services.gemini_service import GeminiService
 from services.examples_service import ExamplesService
 from services.support_service import SupportService
 from services.rate_limiter import rate_limiter, check_user_rate_limit, get_rate_limit_status
-from services.payment_service import payment_service
-from services.db import init_db
+from services.payment_service import PaymentService
+from services.db import init_db, cleanup_expired_subscriptions
 
 from services.chart_styles import chart_styles
 from services.context_store import JSONUserContextStore
@@ -190,6 +191,12 @@ class ShansAi:
         self.user_sessions = {}
         # Persistent context store
         self.context_store = JSONUserContextStore()
+        
+        # Initialize payment service with bot instance
+        self.payment_service = PaymentService(bot_instance=self)
+        
+        # Initialize job queue for periodic tasks
+        self.job_queue = None
 
     def get_risk_free_rate(self, currency: str, period_years: float = None) -> float:
         """
@@ -2575,6 +2582,12 @@ class ShansAi:
         # Send analytics to Botality
         await send_botality_analytics(update)
         
+        # Check if start command has parameters (e.g., /start buy)
+        if context.args and context.args[0] == "buy":
+            # Redirect to buy command
+            await self.buy_command(update, context)
+            return
+        
         # Ensure no reply keyboard is shown
         await self._ensure_no_reply_keyboard(update, context)
         
@@ -2594,10 +2607,6 @@ class ShansAi:
 💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей /portfolio
 
 📚 Просмотр всех доступных данных /list
-
-💎 Pro доступ: безлимитные запросы и расширенные функции /buy
-
-🆓 Бесплатный доступ: {int(rate_limiter.user_buckets.capacity)} запросов в день
 
 Бета-версия © Okama, tushare, YandexGPT, Google Gemini.
 """
@@ -2626,28 +2635,22 @@ class ShansAi:
 🔹 *Поиск и навигация*
 
 /list — список всех доступных бирж и активов
-/list <код> — активы конкретной биржи (US, MOEX, FX, COMM и др.)
-/search <название или ISIN> — поиск актива по базе данных
+/search — поиск
 
 🔹 *Подписка и лимиты*
 
-/profile — ваш профиль и статус подписки
-/buy — купить Pro доступ (безлимитные запросы)
-/rate — текущий статус лимитов запросов
-/limits — информация о системе ограничений
-/status — статус сервисов и API
+/profile — Ваш профиль
+/buy — Pro доступ
 
 🔹 *Поддержка*
 
 /support — отправить запрос в службу поддержки
 
-💎 *Pro доступ включает:*
-• Безлимитные запросы к боту
-• Приоритетная поддержка
-• Расширенные функции анализа
-• Доступ к новым возможностям
+🆓 *Базовый доступ:* {int(rate_limiter.user_buckets.capacity)} запросов в день
 
-🆓 *Бесплатный доступ:* {int(rate_limiter.user_buckets.capacity)} запросов в день
+💎 *Pro доступ:*
+• Безлимитные запросы
+• Доступ к расширенным возможностям
 
 🔹 *Информация предоставляется в образовательных целях и не является инвестиционной рекомендацией*"""
 
@@ -2762,50 +2765,6 @@ class ShansAi:
             "Опишите проблему или вопрос. "
             "Ваше сообщение будет отправлено в поддержку вместе с историей.")
     
-    async def rate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /rate command to show current rate limit status"""
-        # Send analytics to Botality
-        await send_botality_analytics(update)
-        
-        # Check rate limit first
-        if not await check_user_rate_limit(update, context, cost=0.5):
-            return
-            
-        try:
-            status_message = await get_rate_limit_status(update, context)
-            await self._send_message_safe(update, status_message)
-        except Exception as e:
-            logger.error(f"Error in rate_command: {e}")
-            await self._send_message_safe(update, "Ошибка при получении статуса лимитов.")
-
-    async def limits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /limits command to show rate limiting information"""
-        # Send analytics to Botality
-        await send_botality_analytics(update)
-        
-        # Check rate limit first
-        if not await check_user_rate_limit(update, context, cost=0.5):
-            return
-            
-        try:
-            limits_info = """📊 *Информация о лимитах*
-
-🔹 *Персональные лимиты*
-• Целевое количество запросов: ~30 в день
-• Максимальный burst: 5 запросов подряд
-• Пополнение: ~0.000347 токенов/сек
-
-🔹 *Глобальные лимиты*
-• Защита от перегрузки сервера
-• Максимальный burst: 50 запросов
-• Пополнение: 5 токенов/сек
-
-Используйте `/rate` для просмотра текущего статуса лимитов."""
-            
-            await self._send_message_safe(update, limits_info)
-        except Exception as e:
-            logger.error(f"Error in limits_command: {e}")
-            await self._send_message_safe(update, "Ошибка при получении информации о лимитах.")
     
     async def show_info_help(self, update: Update):
         """Показать справку по команде /info"""
@@ -7347,7 +7306,7 @@ class ShansAi:
         if not await check_user_rate_limit(update, context, cost=1.0):
             return
         
-        await payment_service.send_stars_payment(update, context)
+        await self.payment_service.send_stars_payment(update, context)
 
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /profile command for showing user profile"""
@@ -7358,7 +7317,33 @@ class ShansAi:
         if not await check_user_rate_limit(update, context, cost=1.0):
             return
         
-        await payment_service.show_profile(update, context)
+        await self.payment_service.show_profile(update, context)
+
+    async def cleanup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /cleanup command for manual subscription cleanup (admin only)"""
+        user_id = update.effective_user.id
+        
+        # Check if user is admin (you can modify this check as needed)
+        admin_user_id = os.getenv('ADMIN_USER_ID')
+        if admin_user_id and str(user_id) != admin_user_id:
+            await update.message.reply_text("❌ Эта команда доступна только администратору.")
+            return
+        
+        try:
+            self.logger.info(f"Manual cleanup triggered by user {user_id}")
+            
+            cleaned_count = cleanup_expired_subscriptions()
+            
+            if cleaned_count > 0:
+                message = f"✅ Очистка завершена. Удалено {cleaned_count} истекших подписок."
+            else:
+                message = "✅ Очистка завершена. Истекших подписок не найдено."
+                
+            await update.message.reply_text(message)
+            
+        except Exception as e:
+            self.logger.error(f"Error during manual cleanup: {e}")
+            await update.message.reply_text(f"❌ Ошибка при очистке: {str(e)}")
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
@@ -7799,7 +7784,7 @@ class ShansAi:
             elif callback_data in ['buy_pro', 'pay_stars', 'cancel_payment', 'show_profile']:
                 # Handle payment-related callbacks
                 self.logger.info(f"Payment callback received: {callback_data}")
-                await payment_service.handle_callback_query(update, context)
+                await self.payment_service.handle_callback_query(update, context)
                 return
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
@@ -10756,7 +10741,7 @@ class ShansAi:
             # Row 3: Subscription actions
             keyboard.append([
                 KeyboardButton("💎 Pro доступ"),
-                KeyboardButton("📊 Мой профиль")
+                KeyboardButton("👤 Мой профиль")
             ])
             
             return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -10872,7 +10857,7 @@ class ShansAi:
             "База данных",
             "Справка",
             "💎 Pro доступ",
-            "📊 Мой профиль"
+            "👤 Мой профиль"
         ]
         return text in start_buttons
 
@@ -11300,7 +11285,7 @@ class ShansAi:
             elif text == "💎 Pro доступ":
                 # Execute buy command
                 await self.buy_command(update, context)
-            elif text == "📊 Мой профиль":
+            elif text == "👤 Мой профиль":
                 # Execute profile command
                 await self.profile_command(update, context)
             else:
@@ -18279,18 +18264,37 @@ class ShansAi:
             # If we can't send error report, just log it
             self.logger.error(f"Failed to send error report: {e}")
 
+    async def cleanup_subscriptions_job(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Periodic job to cleanup expired subscriptions
+        Runs daily at midnight UTC
+        """
+        try:
+            self.logger.info("Starting scheduled cleanup of expired subscriptions...")
+            
+            cleaned_count = cleanup_expired_subscriptions()
+            
+            if cleaned_count > 0:
+                self.logger.info(f"Successfully cleaned up {cleaned_count} expired subscriptions")
+            else:
+                self.logger.info("No expired subscriptions found")
+                
+        except Exception as e:
+            self.logger.error(f"Error during scheduled cleanup: {e}")
+
     def run(self):
         """Run the bot"""
-        # Create application
-        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
+        # Create application with job queue
+        application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).job_queue(JobQueue()).build()
+        
+        # Store job queue reference
+        self.job_queue = application.job_queue
         
         # Add handlers
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
         application.add_handler(CommandHandler("support", self.support_command))
-        application.add_handler(CommandHandler("rate", self.rate_command))
-        application.add_handler(CommandHandler("limits", self.limits_command))
         application.add_handler(CommandHandler("info", self.info_command))
         application.add_handler(CommandHandler("list", self.namespace_command))
         application.add_handler(CommandHandler("search", self.search_command))
@@ -18298,19 +18302,28 @@ class ShansAi:
         application.add_handler(CommandHandler("portfolio", self.portfolio_command))
         application.add_handler(CommandHandler("buy", self.buy_command))
         application.add_handler(CommandHandler("profile", self.profile_command))
+        application.add_handler(CommandHandler("cleanup", self.cleanup_command))
         
         # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(self.button_callback))
         
         # Add payment handlers
-        application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, payment_service.handle_successful_payment))
-        application.add_handler(PreCheckoutQueryHandler(payment_service.handle_pre_checkout_query))
+        application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, self.payment_service.handle_successful_payment))
+        application.add_handler(PreCheckoutQueryHandler(self.payment_service.handle_pre_checkout_query))
         
         # Add message handler for waiting user input after empty /info
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
         # Add global error handler
         application.add_error_handler(self.error_handler)
+        
+        # Schedule periodic cleanup job (daily at midnight UTC)
+        self.job_queue.run_daily(
+            self.cleanup_subscriptions_job,
+            time=datetime.time(0, 0, 0),  # midnight UTC
+            name="cleanup_subscriptions"
+        )
+        logger.info("Scheduled daily cleanup job for expired subscriptions")
         
         # Start the bot
         logger.info("Starting Okama Finance Bot...")

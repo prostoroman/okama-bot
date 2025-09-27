@@ -23,8 +23,9 @@ STARS_TEST_MODE = os.getenv('STARS_TEST_MODE', 'false').lower() == 'true'
 class PaymentService:
     """Service for handling payment operations"""
     
-    def __init__(self):
+    def __init__(self, bot_instance=None):
         self.logger = logging.getLogger(__name__)
+        self.bot_instance = bot_instance
         mode = "TEST" if STARS_TEST_MODE else "PRODUCTION"
         self.logger.info(f"Payment service initialized for Telegram Stars ({mode} mode)")
     
@@ -39,21 +40,8 @@ class PaymentService:
         user_id = update.effective_user.id
         user_status = get_user_status(user_id)
         
-        # Check if user already has active Pro subscription
-        if user_status['is_pro_active']:
-            paid_until = datetime.fromisoformat(user_status['paid_until'])
-            message_text = f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\nИспользуйте /profile для просмотра статуса."
-            
-            # Handle both regular messages and callback queries
-            if update.message:
-                await update.message.reply_text(message_text)
-            elif update.callback_query and update.callback_query.message:
-                await update.callback_query.message.reply_text(message_text)
-            else:
-                # Fallback: send message using context.bot
-                chat_id = update.effective_chat.id
-                await context.bot.send_message(chat_id, message_text)
-            return
+        # For active Pro users, show renewal invoice instead of blocking
+        # This allows users to extend their subscription
         
         try:
             # Create invoice with empty provider_token for Telegram Stars
@@ -108,17 +96,38 @@ class PaymentService:
         # Check if user already has active Pro subscription
         if user_status['is_pro_active']:
             paid_until = datetime.fromisoformat(user_status['paid_until'])
-            message_text = f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\nИспользуйте /profile для просмотра статуса."
+            new_expiry = paid_until + timedelta(days=PRO_DURATION_DAYS)
+            
+            message = f"""🔄 <b>Продление Pro подписки</b>
+
+<b>Текущая подписка:</b> до {paid_until.strftime('%d.%m.%Y')}
+<b>После продления:</b> до {new_expiry.strftime('%d.%m.%Y')}
+
+<b>Что включено:</b>
+✅ Безлимитные запросы к боту
+✅ Приоритетная поддержка
+✅ Расширенные функции анализа
+✅ Доступ к новым возможностям
+✅ Дополнительно {PRO_DURATION_DAYS} дней
+
+<b>Оплата через Telegram Stars</b>
+{f"🧪 <b>ТЕСТОВЫЙ РЕЖИМ</b> - используйте тестовые Stars" if STARS_TEST_MODE else ""}
+Нажмите кнопку ниже для продления:"""
+            
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"🔄 Продлить на {PRO_DURATION_DAYS} дней - {PRO_PRICE_STARS} ⭐", callback_data="pay_stars")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="cancel_payment")]
+            ])
             
             # Handle both regular messages and callback queries
             if update.message:
-                await update.message.reply_text(message_text)
+                await update.message.reply_text(message, reply_markup=keyboard, parse_mode='HTML')
             elif update.callback_query and update.callback_query.message:
-                await update.callback_query.message.reply_text(message_text)
+                await update.callback_query.edit_message_text(message, reply_markup=keyboard, parse_mode='HTML')
             else:
                 # Fallback: send message using context.bot
                 chat_id = update.effective_chat.id
-                await context.bot.send_message(chat_id, message_text)
+                await context.bot.send_message(chat_id, message, reply_markup=keyboard, parse_mode='HTML')
             return
         
         message = f"""💎 <b>Pro доступ - {PRO_PRICE_STARS} ⭐</b>
@@ -167,32 +176,64 @@ class PaymentService:
         if payment.total_amount != PRO_PRICE_STARS:
             self.logger.warning(f"Payment amount mismatch for user {user_id}: {payment.total_amount} != {PRO_PRICE_STARS}")
         
-        # Upgrade user to Pro
-        success = upgrade_to_pro(user_id, PRO_DURATION_DAYS)
+        # Check if user already has active Pro subscription for renewal
+        user_status = get_user_status(user_id)
         
-        if success:
-            paid_until = datetime.utcnow().replace(microsecond=0) + timedelta(days=PRO_DURATION_DAYS)
+        if user_status['is_pro_active']:
+            # Extend existing subscription
+            current_paid_until = datetime.fromisoformat(user_status['paid_until'])
+            new_paid_until = current_paid_until + timedelta(days=PRO_DURATION_DAYS)
             
-            message = f"""🎉 <b>Оплата успешна!</b>
+            # Update subscription in database
+            success = upgrade_to_pro(user_id, PRO_DURATION_DAYS)
+            
+            if success:
+                message = f"""🎉 <b>Продление успешно!</b>
+
+✅ Ваша Pro подписка продлена
+📅 Действует до: {new_paid_until.strftime('%d.%m.%Y')}
+💎 Спасибо за продление!
+
+Теперь у вас безлимитный доступ ко всем функциям бота.
+
+Используйте /profile для просмотра статуса."""
+                
+                await update.message.reply_text(message, parse_mode='HTML')
+                
+                # Log successful renewal
+                self.logger.info(f"User {user_id} successfully renewed Pro subscription until {new_paid_until.isoformat()}")
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при продлении Pro доступа. Обратитесь к поддержке."
+                )
+                self.logger.error(f"Failed to renew Pro subscription for user {user_id}")
+        else:
+            # Upgrade new user to Pro
+            success = upgrade_to_pro(user_id, PRO_DURATION_DAYS)
+            
+            if success:
+                paid_until = datetime.utcnow().replace(microsecond=0) + timedelta(days=PRO_DURATION_DAYS)
+                
+                message = f"""🎉 <b>Оплата успешна!</b>
 
 ✅ Ваш Pro доступ активирован
-📅 Действует до: {paid_until.strftime('%d.%m.%Y %H:%M')} UTC
+📅 Действует до: {paid_until.strftime('%d.%m.%Y')}
 💎 Спасибо за покупку!
 
 Теперь у вас безлимитный доступ ко всем функциям бота.
 
 Используйте /profile для просмотра статуса."""
-            
-            await update.message.reply_text(message, parse_mode='HTML')
-            
-            # Log successful payment
-            self.logger.info(f"User {user_id} successfully upgraded to Pro until {paid_until.isoformat()}")
-            
-        else:
-            await update.message.reply_text(
-                "❌ Ошибка при активации Pro доступа. Обратитесь к поддержке."
-            )
-            self.logger.error(f"Failed to upgrade user {user_id} to Pro after payment")
+                
+                await update.message.reply_text(message, parse_mode='HTML')
+                
+                # Log successful payment
+                self.logger.info(f"User {user_id} successfully upgraded to Pro until {paid_until.isoformat()}")
+                
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при активации Pro доступа. Обратитесь к поддержке."
+                )
+                self.logger.error(f"Failed to upgrade user {user_id} to Pro after payment")
     
     async def handle_pre_checkout_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -277,11 +318,13 @@ class PaymentService:
             paid_until = datetime.fromisoformat(user_status['paid_until'])
             plan_info = f"💎 <b>Pro</b> (до {paid_until.strftime('%d.%m.%Y')})"
             requests_info = "♾️ Безлимитные запросы"
+            button_text = "🔄 Продлить Pro"
         else:
             plan_info = "🆓 <b>Бесплатный</b>"
             remaining = user_status['remaining_requests']
             total = user_status['daily_limit']
             requests_info = f"📊 {remaining}/{total} запросов сегодня"
+            button_text = "💎 Купить Pro"
         
         # Add timestamp to make message unique and avoid "Message is not modified" error
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -294,16 +337,12 @@ class PaymentService:
 <b>Подписка:</b> {plan_info}
 <b>Запросы:</b> {requests_info}
 
-<b>Доступные команды:</b>
-/buy - Купить Pro доступ
-/profile - Этот профиль
 /support - Поддержка
 
 <i>Обновлено: {timestamp}</i>"""
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💎 Купить Pro", callback_data="buy_pro")],
-            [InlineKeyboardButton("🔄 Обновить", callback_data="show_profile")]
+            [InlineKeyboardButton(button_text, callback_data="buy_pro")]
         ])
         
         try:
@@ -336,64 +375,28 @@ class PaymentService:
             context: Bot context
         """
         try:
-            # Send the start command message directly
-            user = update.effective_user
-            user_name = user.first_name or "User"
-            # Remove any special characters that could break Markdown
-            user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
-            
-            welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары 12 бирж, всего более 120 000 инструментов.
-
-Попробуйте одну из ключевых функций прямо сейчас:
-
-🔍 Анализ: полная сводка по любой бумаге, валюте или товару /info
-
-⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик /compare
-
-💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей /portfolio
-
-📚 Просмотр всех доступных данных /list
-
-💎 Pro доступ: безлимитные запросы и расширенные функции /buy
-
-🆓 Бесплатный доступ: 10 запросов в день
-
-Бета-версия © Okama, tushare, YandexGPT, Google Gemini.
-"""
-            
-            # Create reply keyboard with interactive buttons
-            reply_markup = ReplyKeyboardMarkup([
-                [KeyboardButton("🔍 Анализ"), KeyboardButton("⚖️ Сравнение")],
-                [KeyboardButton("💼 Портфель"), KeyboardButton("📚 Список")],
-                [KeyboardButton("💎 Pro доступ"), KeyboardButton("📘 Справка")]
-            ], resize_keyboard=True)
-            
-            # Try to edit the message first, then fallback to sending new message
-            if update.callback_query and update.callback_query.message:
-                try:
-                    await update.callback_query.edit_message_text(welcome_message, reply_markup=None)
-                    # Send keyboard separately since edit_message_text doesn't support reply_markup
-                    chat_id = update.callback_query.message.chat_id
-                    await context.bot.send_message(chat_id, "Выберите действие:", reply_markup=reply_markup)
-                except Exception:
-                    # If editing fails, send new message
-                    chat_id = update.callback_query.message.chat_id
-                    await context.bot.send_message(chat_id, welcome_message, reply_markup=reply_markup)
+            # Call the actual start_command method if bot instance is available
+            if self.bot_instance:
+                await self.bot_instance.start_command(update, context)
             else:
-                chat_id = update.effective_chat.id
-                await context.bot.send_message(chat_id, welcome_message, reply_markup=reply_markup)
+                # Fallback: send a simple message
+                if update.callback_query and update.callback_query.message:
+                    await update.callback_query.edit_message_text("Покупка отменена. Используйте /start для возврата в главное меню.")
+                else:
+                    chat_id = update.effective_chat.id
+                    await context.bot.send_message(chat_id, "Покупка отменена. Используйте /start для возврата в главное меню.")
             
         except Exception as e:
             self.logger.error(f"Error redirecting to start command: {e}")
             # Fallback: send a simple message
             try:
                 if update.callback_query and update.callback_query.message:
-                    await update.callback_query.edit_message_text("❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                    await update.callback_query.edit_message_text("Покупка отменена. Используйте /start для возврата в главное меню.")
                 else:
                     chat_id = update.effective_chat.id
-                    await context.bot.send_message(chat_id, "❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                    await context.bot.send_message(chat_id, "Покупка отменена. Используйте /start для возврата в главное меню.")
             except Exception as fallback_error:
                 self.logger.error(f"Failed to send fallback message: {fallback_error}")
 
-# Global payment service instance
-payment_service = PaymentService()
+# Global payment service instance (will be initialized with bot instance)
+payment_service = None
