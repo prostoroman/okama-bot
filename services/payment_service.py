@@ -16,7 +16,7 @@ from .db import upgrade_to_pro, get_user_status
 logger = logging.getLogger(__name__)
 
 # Payment configuration
-PRO_PRICE_STARS = int(os.getenv('PRO_PRICE_STARS', '1000'))  # Price in Telegram Stars
+PRO_PRICE_STARS = int(os.getenv('PRO_PRICE_STARS', '10'))  # Price in Telegram Stars
 PRO_DURATION_DAYS = int(os.getenv('PRO_DURATION_DAYS', '30'))
 STARS_TEST_MODE = os.getenv('STARS_TEST_MODE', 'false').lower() == 'true'
 
