@@ -40,21 +40,8 @@ class PaymentService:
         user_id = update.effective_user.id
         user_status = get_user_status(user_id)
         
-        # Check if user already has active Pro subscription
-        if user_status['is_pro_active']:
-            paid_until = datetime.fromisoformat(user_status['paid_until'])
-            message_text = f"✅ У вас уже есть активная Pro подписка до {paid_until.strftime('%d.%m.%Y')}\n\nИспользуйте /profile для просмотра статуса."
-            
-            # Handle both regular messages and callback queries
-            if update.message:
-                await update.message.reply_text(message_text)
-            elif update.callback_query and update.callback_query.message:
-                await update.callback_query.message.reply_text(message_text)
-            else:
-                # Fallback: send message using context.bot
-                chat_id = update.effective_chat.id
-                await context.bot.send_message(chat_id, message_text)
-            return
+        # For active Pro users, show renewal invoice instead of blocking
+        # This allows users to extend their subscription
         
         try:
             # Create invoice with empty provider_token for Telegram Stars
@@ -189,13 +176,45 @@ class PaymentService:
         if payment.total_amount != PRO_PRICE_STARS:
             self.logger.warning(f"Payment amount mismatch for user {user_id}: {payment.total_amount} != {PRO_PRICE_STARS}")
         
-        # Upgrade user to Pro
-        success = upgrade_to_pro(user_id, PRO_DURATION_DAYS)
+        # Check if user already has active Pro subscription for renewal
+        user_status = get_user_status(user_id)
         
-        if success:
-            paid_until = datetime.utcnow().replace(microsecond=0) + timedelta(days=PRO_DURATION_DAYS)
+        if user_status['is_pro_active']:
+            # Extend existing subscription
+            current_paid_until = datetime.fromisoformat(user_status['paid_until'])
+            new_paid_until = current_paid_until + timedelta(days=PRO_DURATION_DAYS)
             
-            message = f"""🎉 <b>Оплата успешна!</b>
+            # Update subscription in database
+            success = upgrade_to_pro(user_id, PRO_DURATION_DAYS)
+            
+            if success:
+                message = f"""🎉 <b>Продление успешно!</b>
+
+✅ Ваша Pro подписка продлена
+📅 Действует до: {new_paid_until.strftime('%d.%m.%Y %H:%M')} UTC
+💎 Спасибо за продление!
+
+Теперь у вас безлимитный доступ ко всем функциям бота.
+
+Используйте /profile для просмотра статуса."""
+                
+                await update.message.reply_text(message, parse_mode='HTML')
+                
+                # Log successful renewal
+                self.logger.info(f"User {user_id} successfully renewed Pro subscription until {new_paid_until.isoformat()}")
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при продлении Pro доступа. Обратитесь к поддержке."
+                )
+                self.logger.error(f"Failed to renew Pro subscription for user {user_id}")
+        else:
+            # Upgrade new user to Pro
+            success = upgrade_to_pro(user_id, PRO_DURATION_DAYS)
+            
+            if success:
+                paid_until = datetime.utcnow().replace(microsecond=0) + timedelta(days=PRO_DURATION_DAYS)
+                
+                message = f"""🎉 <b>Оплата успешна!</b>
 
 ✅ Ваш Pro доступ активирован
 📅 Действует до: {paid_until.strftime('%d.%m.%Y %H:%M')} UTC
@@ -204,17 +223,17 @@ class PaymentService:
 Теперь у вас безлимитный доступ ко всем функциям бота.
 
 Используйте /profile для просмотра статуса."""
-            
-            await update.message.reply_text(message, parse_mode='HTML')
-            
-            # Log successful payment
-            self.logger.info(f"User {user_id} successfully upgraded to Pro until {paid_until.isoformat()}")
-            
-        else:
-            await update.message.reply_text(
-                "❌ Ошибка при активации Pro доступа. Обратитесь к поддержке."
-            )
-            self.logger.error(f"Failed to upgrade user {user_id} to Pro after payment")
+                
+                await update.message.reply_text(message, parse_mode='HTML')
+                
+                # Log successful payment
+                self.logger.info(f"User {user_id} successfully upgraded to Pro until {paid_until.isoformat()}")
+                
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при активации Pro доступа. Обратитесь к поддержке."
+                )
+                self.logger.error(f"Failed to upgrade user {user_id} to Pro after payment")
     
     async def handle_pre_checkout_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -323,7 +342,7 @@ class PaymentService:
 <i>Обновлено: {timestamp}</i>"""
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(button_text, callback_data="buy_pro")]
+            [InlineKeyboardButton(button_text, url="https://t.me/okama_finance_bot?start=buy")]
         ])
         
         try:

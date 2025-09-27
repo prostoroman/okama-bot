@@ -2578,6 +2578,12 @@ class ShansAi:
         # Send analytics to Botality
         await send_botality_analytics(update)
         
+        # Check if start command has parameters (e.g., /start buy)
+        if context.args and context.args[0] == "buy":
+            # Redirect to buy command
+            await self.buy_command(update, context)
+            return
+        
         # Ensure no reply keyboard is shown
         await self._ensure_no_reply_keyboard(update, context)
         

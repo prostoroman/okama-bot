@@ -194,7 +194,7 @@ def refund_request_count(user_id: int) -> None:
 
 def upgrade_to_pro(user_id: int, days: int = 30) -> bool:
     """
-    Upgrade user to pro plan
+    Upgrade user to pro plan or extend existing subscription
     
     Args:
         user_id: Telegram user ID
@@ -205,7 +205,23 @@ def upgrade_to_pro(user_id: int, days: int = 30) -> bool:
     """
     try:
         now = datetime.utcnow()
-        paid_until = now + timedelta(days=days)
+        
+        # Get current user status
+        user = ensure_user(user_id)
+        
+        # Calculate new paid_until date
+        if user['plan'] == 'pro' and user['paid_until']:
+            # Extend existing subscription
+            current_paid_until = datetime.fromisoformat(user['paid_until'])
+            # Only extend if current subscription is still active
+            if now < current_paid_until:
+                paid_until = current_paid_until + timedelta(days=days)
+            else:
+                # Subscription expired, start from now
+                paid_until = now + timedelta(days=days)
+        else:
+            # New subscription
+            paid_until = now + timedelta(days=days)
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
@@ -218,7 +234,7 @@ def upgrade_to_pro(user_id: int, days: int = 30) -> bool:
             ''', (paid_until.isoformat(), now.isoformat(), user_id))
             conn.commit()
             
-        logger.info(f"User {user_id} upgraded to pro until {paid_until.isoformat()}")
+        logger.info(f"User {user_id} upgraded/extended to pro until {paid_until.isoformat()}")
         return True
         
     except Exception as e:
