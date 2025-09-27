@@ -69,9 +69,7 @@ class PaymentService:
                 protect_content=False,
                 reply_to_message_id=None,
                 allow_sending_without_reply=False,
-                reply_markup=None,
-                # Test mode configuration
-                **({"test_mode": STARS_TEST_MODE} if STARS_TEST_MODE else {})
+                reply_markup=None
             )
             
         except TelegramError as e:
