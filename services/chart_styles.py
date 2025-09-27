@@ -267,8 +267,33 @@ class ChartStyles:
         """Обновляет кэш шрифтов matplotlib (полезно в Render окружении)"""
         try:
             import matplotlib.font_manager as fm
-            # Очищаем кэш шрифтов
-            fm._rebuild()
+            import matplotlib
+            import os
+            import glob
+            
+            # Современный способ обновления кэша шрифтов
+            # Удаляем файлы кэша шрифтов, чтобы matplotlib пересоздал их
+            cache_dir = matplotlib.get_cachedir()
+            font_cache_files = glob.glob(os.path.join(cache_dir, 'fontlist-v*.json'))
+            
+            for font_cache_file in font_cache_files:
+                try:
+                    os.remove(font_cache_file)
+                    logger.debug(f"Removed font cache file: {font_cache_file}")
+                except OSError as e:
+                    logger.debug(f"Could not remove font cache file {font_cache_file}: {e}")
+            
+            # Принудительно перезагружаем кэш шрифтов
+            try:
+                # Попытка использовать новый API (matplotlib >= 3.3)
+                if hasattr(fm, '_rebuild'):
+                    fm._rebuild()
+                else:
+                    # Альтернативный способ - очистка кэша через font_manager
+                    fm._load_fontmanager(try_read_cache=False)
+            except Exception as rebuild_error:
+                logger.debug(f"Could not rebuild font cache via API: {rebuild_error}")
+            
             logger.info("Font cache refreshed successfully")
             
             # Дополнительно обновляем fontconfig в Render

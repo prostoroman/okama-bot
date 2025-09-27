@@ -10,7 +10,7 @@ import asyncio
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Optional, Any, Union
 import io
-from datetime import datetime
+from datetime import datetime, time
 
 # Load environment variables from config.env
 try:
@@ -1271,7 +1271,7 @@ class ShansAi:
     def _create_portfolio_with_period(self, symbols: list, weights: list, currency: str, user_context: dict) -> object:
         """Create portfolio with period from user context"""
         import okama as ok
-        from datetime import datetime, timedelta
+        from datetime import datetime, time, timedelta
         
         current_period = user_context.get('current_period')
         if current_period:
@@ -3631,7 +3631,7 @@ class ShansAi:
             list_date = symbol_info.get('list_date', '')
             if list_date and len(str(list_date)) == 8:
                 # Calculate years since listing
-                from datetime import datetime
+                from datetime import datetime, time
                 try:
                     listing_date = datetime.strptime(str(list_date), '%Y%m%d')
                     years_since_listing = (datetime.now() - listing_date).days / 365.25
@@ -8566,7 +8566,7 @@ class ShansAi:
                 if portfolio.first_date and portfolio.last_date:
                     try:
                         # Convert to datetime if needed and format as date only
-                        from datetime import datetime
+                        from datetime import datetime, time
                         
                         # Handle different date formats
                         if isinstance(portfolio.first_date, str):
@@ -14617,7 +14617,7 @@ class ShansAi:
                 return 0
             # Try to get actual dates from portfolio object
             if hasattr(portfolio, 'first_date') and hasattr(portfolio, 'last_date'):
-                from datetime import datetime
+                from datetime import datetime, time
                 try:
                     # Parse dates from portfolio object
                     if isinstance(portfolio.first_date, str):
@@ -14676,7 +14676,7 @@ class ShansAi:
                 return 0
             # Try to get actual dates from asset object
             if hasattr(asset, 'first_date') and hasattr(asset, 'last_date'):
-                from datetime import datetime
+                from datetime import datetime, time
                 try:
                     # Parse dates from asset object
                     if isinstance(asset.first_date, str):
@@ -16136,7 +16136,7 @@ class ShansAi:
                     import okama as ok
                     if current_period:
                         years = int(current_period[:-1])
-                        from datetime import datetime, timedelta
+                        from datetime import datetime, time, timedelta
                         end_date = datetime.now()
                         start_date = end_date - timedelta(days=years * 365)
                         asset_list = ok.AssetList(symbols, ccy=currency,
@@ -18319,7 +18319,7 @@ class ShansAi:
         # Schedule periodic cleanup job (daily at midnight UTC)
         self.job_queue.run_daily(
             self.cleanup_subscriptions_job,
-            time=datetime.time(0, 0, 0),  # midnight UTC
+            time=time(0, 0, 0),  # midnight UTC
             name="cleanup_subscriptions"
         )
         logger.info("Scheduled daily cleanup job for expired subscriptions")
