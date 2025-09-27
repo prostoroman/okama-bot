@@ -65,7 +65,6 @@ class PaymentService:
                 need_shipping_address=False,
                 send_phone_number_to_provider=False,
                 send_email_to_provider=False,
-                is_flexible=False,
                 disable_notification=False,
                 protect_content=False,
                 reply_to_message_id=None,
