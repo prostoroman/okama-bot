@@ -23,8 +23,9 @@ STARS_TEST_MODE = os.getenv('STARS_TEST_MODE', 'false').lower() == 'true'
 class PaymentService:
     """Service for handling payment operations"""
     
-    def __init__(self):
+    def __init__(self, bot_instance=None):
         self.logger = logging.getLogger(__name__)
+        self.bot_instance = bot_instance
         mode = "TEST" if STARS_TEST_MODE else "PRODUCTION"
         self.logger.info(f"Payment service initialized for Telegram Stars ({mode} mode)")
     
@@ -355,52 +356,16 @@ class PaymentService:
             context: Bot context
         """
         try:
-            # Send the start command message directly
-            user = update.effective_user
-            user_name = user.first_name or "User"
-            # Remove any special characters that could break Markdown
-            user_name = user_name.replace("*", "").replace("_", "").replace("`", "").replace("[", "").replace("]", "")
-            
-            welcome_message = f"""👋 Здравствуйте! Я помогаю принимать взвешенные инвестиционные решения на основе данных, а не эмоций. Анализирую акции, ETF, валюты и товары 12 бирж, всего более 120 000 инструментов.
-
-Попробуйте одну из ключевых функций прямо сейчас:
-
-🔍 Анализ: полная сводка по любой бумаге, валюте или товару /info
-
-⚖️ Сравнение: объективная оценка нескольких активов по десяткам метрик /compare
-
-💼 Портфель: создание, анализ и прогнозирование доходности ваших портфелей /portfolio
-
-📚 Просмотр всех доступных данных /list
-
-💎 Pro доступ: безлимитные запросы и расширенные функции /buy
-
-🆓 Бесплатный доступ: 10 запросов в день
-
-Бета-версия © Okama, tushare, YandexGPT, Google Gemini.
-"""
-            
-            # Create reply keyboard with interactive buttons
-            reply_markup = ReplyKeyboardMarkup([
-                [KeyboardButton("🔍 Анализ"), KeyboardButton("⚖️ Сравнение")],
-                [KeyboardButton("💼 Портфель"), KeyboardButton("📚 Список")],
-                [KeyboardButton("💎 Pro доступ"), KeyboardButton("📘 Справка")]
-            ], resize_keyboard=True)
-            
-            # Try to edit the message first, then fallback to sending new message
-            if update.callback_query and update.callback_query.message:
-                try:
-                    await update.callback_query.edit_message_text(welcome_message, reply_markup=None)
-                    # Send keyboard separately since edit_message_text doesn't support reply_markup
-                    chat_id = update.callback_query.message.chat_id
-                    await context.bot.send_message(chat_id, "Выберите действие:", reply_markup=reply_markup)
-                except Exception:
-                    # If editing fails, send new message
-                    chat_id = update.callback_query.message.chat_id
-                    await context.bot.send_message(chat_id, welcome_message, reply_markup=reply_markup)
+            # Call the actual start_command method if bot instance is available
+            if self.bot_instance:
+                await self.bot_instance.start_command(update, context)
             else:
-                chat_id = update.effective_chat.id
-                await context.bot.send_message(chat_id, welcome_message, reply_markup=reply_markup)
+                # Fallback: send a simple message
+                if update.callback_query and update.callback_query.message:
+                    await update.callback_query.edit_message_text("❌ Покупка отменена. Используйте /start для возврата в главное меню.")
+                else:
+                    chat_id = update.effective_chat.id
+                    await context.bot.send_message(chat_id, "❌ Покупка отменена. Используйте /start для возврата в главное меню.")
             
         except Exception as e:
             self.logger.error(f"Error redirecting to start command: {e}")
@@ -414,5 +379,5 @@ class PaymentService:
             except Exception as fallback_error:
                 self.logger.error(f"Failed to send fallback message: {fallback_error}")
 
-# Global payment service instance
-payment_service = PaymentService()
+# Global payment service instance (will be initialized with bot instance)
+payment_service = None

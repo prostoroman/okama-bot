@@ -80,7 +80,7 @@ from services.gemini_service import GeminiService
 from services.examples_service import ExamplesService
 from services.support_service import SupportService
 from services.rate_limiter import rate_limiter, check_user_rate_limit, get_rate_limit_status
-from services.payment_service import payment_service
+from services.payment_service import PaymentService
 from services.db import init_db
 
 from services.chart_styles import chart_styles
@@ -190,6 +190,9 @@ class ShansAi:
         self.user_sessions = {}
         # Persistent context store
         self.context_store = JSONUserContextStore()
+        
+        # Initialize payment service with bot instance
+        self.payment_service = PaymentService(bot_instance=self)
 
     def get_risk_free_rate(self, currency: str, period_years: float = None) -> float:
         """
@@ -2622,14 +2625,12 @@ class ShansAi:
 🔹 *Поиск и навигация*
 
 /list — список всех доступных бирж и активов
-/list <код> — активы конкретной биржи (US, MOEX, FX, COMM и др.)
-/search <название или ISIN> — поиск актива по базе данных
+/search — поиск
 
 🔹 *Подписка и лимиты*
 
 /profile — Ваш профиль
 /buy — Pro доступ
-/status — статус сервисов и API
 
 🔹 *Поддержка*
 
@@ -7295,7 +7296,7 @@ class ShansAi:
         if not await check_user_rate_limit(update, context, cost=1.0):
             return
         
-        await payment_service.send_stars_payment(update, context)
+        await self.payment_service.send_stars_payment(update, context)
 
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /profile command for showing user profile"""
@@ -7306,7 +7307,7 @@ class ShansAi:
         if not await check_user_rate_limit(update, context, cost=1.0):
             return
         
-        await payment_service.show_profile(update, context)
+        await self.payment_service.show_profile(update, context)
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle button callbacks for additional analysis"""
@@ -7747,7 +7748,7 @@ class ShansAi:
             elif callback_data in ['buy_pro', 'pay_stars', 'cancel_payment', 'show_profile']:
                 # Handle payment-related callbacks
                 self.logger.info(f"Payment callback received: {callback_data}")
-                await payment_service.handle_callback_query(update, context)
+                await self.payment_service.handle_callback_query(update, context)
                 return
             else:
                 self.logger.warning(f"Unknown button callback: {callback_data}")
@@ -18249,8 +18250,8 @@ class ShansAi:
         application.add_handler(CallbackQueryHandler(self.button_callback))
         
         # Add payment handlers
-        application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, payment_service.handle_successful_payment))
-        application.add_handler(PreCheckoutQueryHandler(payment_service.handle_pre_checkout_query))
+        application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, self.payment_service.handle_successful_payment))
+        application.add_handler(PreCheckoutQueryHandler(self.payment_service.handle_pre_checkout_query))
         
         # Add message handler for waiting user input after empty /info
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
