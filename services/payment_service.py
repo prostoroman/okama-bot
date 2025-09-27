@@ -7,7 +7,7 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError
 
@@ -362,7 +362,6 @@ class PaymentService:
 """
             
             # Create reply keyboard with interactive buttons
-            from telegram import ReplyKeyboardMarkup, KeyboardButton
             reply_markup = ReplyKeyboardMarkup([
                 [KeyboardButton("🔍 Анализ"), KeyboardButton("⚖️ Сравнение")],
                 [KeyboardButton("💼 Портфель"), KeyboardButton("📚 Список")],
