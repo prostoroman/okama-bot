@@ -18,12 +18,14 @@ logger = logging.getLogger(__name__)
 # Payment configuration
 PRO_PRICE_STARS = int(os.getenv('PRO_PRICE_STARS', '1000'))  # Price in Telegram Stars
 PRO_DURATION_DAYS = int(os.getenv('PRO_DURATION_DAYS', '30'))
+STARS_TEST_MODE = os.getenv('STARS_TEST_MODE', 'false').lower() == 'true'
 
 class PaymentService:
     """Service for handling payment operations"""
     
     def __init__(self):
-        logger.info("Payment service initialized for Telegram Stars")
+        mode = "TEST" if STARS_TEST_MODE else "PRODUCTION"
+        logger.info(f"Payment service initialized for Telegram Stars ({mode} mode)")
     
     async def send_invoice(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -56,7 +58,21 @@ class PaymentService:
                 currency="XTR",  # Telegram Stars currency code
                 prices=[LabeledPrice("Pro доступ", PRO_PRICE_STARS)],
                 start_parameter=f"pro_{user_id}",
-                is_flexible=False
+                is_flexible=False,
+                need_name=False,
+                need_phone_number=False,
+                need_email=False,
+                need_shipping_address=False,
+                send_phone_number_to_provider=False,
+                send_email_to_provider=False,
+                is_flexible=False,
+                disable_notification=False,
+                protect_content=False,
+                reply_to_message_id=None,
+                allow_sending_without_reply=False,
+                reply_markup=None,
+                # Test mode configuration
+                **({"test_mode": STARS_TEST_MODE} if STARS_TEST_MODE else {})
             )
             
         except TelegramError as e:
@@ -95,6 +111,7 @@ class PaymentService:
 ✅ Действует {PRO_DURATION_DAYS} дней
 
 <b>Оплата через Telegram Stars</b>
+{f"🧪 <b>ТЕСТОВЫЙ РЕЖИМ</b> - используйте тестовые Stars" if STARS_TEST_MODE else ""}
 Нажмите кнопку ниже для покупки:"""
         
         keyboard = InlineKeyboardMarkup([

@@ -39,6 +39,9 @@ class Config:
     PRO_PRICE_STARS = int(os.getenv('PRO_PRICE_STARS', '1000'))
     PRO_DURATION_DAYS = int(os.getenv('PRO_DURATION_DAYS', '30'))
     
+    # Telegram Stars Payment Mode
+    STARS_TEST_MODE = os.getenv('STARS_TEST_MODE', 'false').lower() == 'true'
+    
     # Chart Style Configuration
     CHART_STYLE = os.getenv('CHART_STYLE', 'nordic')  # 'nordic' (единственный доступный стиль)
     
