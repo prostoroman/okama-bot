@@ -2171,6 +2171,8 @@ class ShansAi:
                     except Exception as fallback_error:
                         self.logger.error(f"Fallback callback message sending also failed: {fallback_error}")
                 return
+            elif hasattr(update, 'callback_query') and update.callback_query is None:
+                self.logger.info("_send_message_safe: callback_query exists but is None, treating as regular message")
             
             # Проверяем, что message не None для обычных сообщений
             if not hasattr(update, 'message') or update.message is None:
@@ -6799,9 +6801,15 @@ class ShansAi:
             if len(text) > max_length:
                 self.logger.info(f"Splitting long message ({len(text)} chars) into multiple parts")
                 # Check if we have a valid callback_query for the special function
-                if hasattr(update, 'callback_query') and update.callback_query is not None:
+                has_callback_query = hasattr(update, 'callback_query')
+                callback_query_is_not_none = has_callback_query and update.callback_query is not None
+                self.logger.info(f"callback_query check: has_callback_query={has_callback_query}, callback_query_is_not_none={callback_query_is_not_none}")
+                
+                if callback_query_is_not_none:
+                    self.logger.info("Using _send_long_callback_message_with_keyboard_removal")
                     await self._send_long_callback_message_with_keyboard_removal(update, context, text, parse_mode, reply_markup)
                 else:
+                    self.logger.info("Using _send_long_message_with_keyboard_removal")
                     # Use regular long message splitting for non-callback messages
                     await self._send_long_message_with_keyboard_removal(update, context, text, parse_mode, reply_markup)
                 return
@@ -7318,12 +7326,15 @@ class ShansAi:
     async def _send_long_message_with_keyboard_removal(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, reply_markup=None):
         """Отправить длинное сообщение по частям для обычных сообщений с удалением клавиатуры"""
         try:
+            self.logger.info(f"_send_long_message_with_keyboard_removal: Starting with text length {len(text)}")
+            
             # Clean Markdown if parse_mode is Markdown
             if parse_mode == 'Markdown':
                 text = self._safe_markdown(text)
             
             # Разбиваем текст на части
             parts = self._split_text_smart(text)
+            self.logger.info(f"_send_long_message_with_keyboard_removal: Split into {len(parts)} parts")
             
             for i, part in enumerate(parts):
                 # Добавляем индикатор части для многочастных сообщений
