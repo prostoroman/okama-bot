@@ -6790,6 +6790,17 @@ class ShansAi:
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
             
+            # Clean Markdown if parse_mode is Markdown
+            if parse_mode == 'Markdown':
+                text = self._safe_markdown(text)
+            
+            # Check if message is too long and needs to be split
+            max_length = 4000  # Leave some margin for safety
+            if len(text) > max_length:
+                self.logger.info(f"Splitting long message ({len(text)} chars) into multiple parts")
+                await self._send_long_callback_message_with_keyboard_removal(update, context, text, parse_mode, reply_markup)
+                return
+            
             # Send new message with keyboard using context.bot.send_message directly
             if hasattr(update, 'callback_query') and update.callback_query is not None:
                 self.logger.info(f"Sending new message to chat_id: {update.callback_query.message.chat_id}")
@@ -7237,6 +7248,64 @@ class ShansAi:
                     await context.bot.send_message(
                         chat_id=update.callback_query.message.chat_id,
                         text=f"❌ Ошибка разбивки сообщения: {text[:1000]}..."
+                    )
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback long message sending also failed: {fallback_error}")
+
+    async def _send_long_callback_message_with_keyboard_removal(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, reply_markup=None):
+        """Отправить длинное сообщение по частям через callback query с удалением клавиатуры"""
+        try:
+            # Clean Markdown if parse_mode is Markdown
+            if parse_mode == 'Markdown':
+                text = self._safe_markdown(text)
+            
+            # Разбиваем текст на части
+            parts = self._split_text_smart(text)
+            
+            for i, part in enumerate(parts):
+                # Добавляем индикатор части для многочастных сообщений
+                if len(parts) > 1:
+                    part_text = f"📄 **Часть {i+1} из {len(parts)}:**\n\n{part}"
+                else:
+                    part_text = part
+                
+                # Clean Markdown for each part
+                if parse_mode == 'Markdown':
+                    part_text = self._safe_markdown(part_text)
+                
+                # Отправляем каждую часть
+                if hasattr(update, 'callback_query') and update.callback_query is not None:
+                    try:
+                        # Для первой части добавляем reply_markup если есть
+                        current_reply_markup = reply_markup if i == 0 else None
+                        
+                        await context.bot.send_message(
+                            chat_id=update.callback_query.message.chat_id,
+                            text=part_text,
+                            parse_mode=parse_mode,
+                            reply_markup=current_reply_markup
+                        )
+                    except Exception as part_error:
+                        self.logger.error(f"Error sending message part {i+1}: {part_error}")
+                        # Fallback для этой части
+                        await self._send_message_safe(update, part_text)
+                elif hasattr(update, 'message') and update.message is not None:
+                    await self._send_message_safe(update, part_text)
+                
+                # Небольшая пауза между частями для избежания rate limiting
+                if i < len(parts) - 1:  # Не делаем паузу после последней части
+                    import asyncio
+                    await asyncio.sleep(0.5)
+                    
+        except Exception as e:
+            self.logger.error(f"Error sending long callback message with keyboard removal: {e}")
+            # Fallback: отправляем обрезанную версию
+            try:
+                if hasattr(update, 'callback_query') and update.callback_query is not None:
+                    await context.bot.send_message(
+                        chat_id=update.callback_query.message.chat_id,
+                        text=f"❌ Ошибка разбивки сообщения: {text[:1000]}...",
+                        reply_markup=reply_markup
                     )
             except Exception as fallback_error:
                 self.logger.error(f"Fallback long message sending also failed: {fallback_error}")
