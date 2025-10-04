@@ -6787,7 +6787,7 @@ class ShansAi:
     async def _send_callback_message_with_keyboard_removal(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, reply_markup=None):
         """Отправить сообщение в callback query с удалением клавиатуры с предыдущего сообщения"""
         try:
-            self.logger.info("Starting _send_callback_message_with_keyboard_removal")
+            self.logger.info(f"Starting _send_callback_message_with_keyboard_removal with text length: {len(text)}")
             
             # Remove keyboard from previous message before sending new message
             await self._remove_keyboard_before_new_message(update, context)
@@ -6795,9 +6795,11 @@ class ShansAi:
             # Clean Markdown if parse_mode is Markdown
             if parse_mode == 'Markdown':
                 text = self._safe_markdown(text)
+                self.logger.info(f"After Markdown cleaning, text length: {len(text)}")
             
             # Check if message is too long and needs to be split
             max_length = 4000  # Leave some margin for safety
+            self.logger.info(f"Checking if text length {len(text)} > {max_length}")
             if len(text) > max_length:
                 self.logger.info(f"Splitting long message ({len(text)} chars) into multiple parts")
                 # Check if we have a valid callback_query for the special function
@@ -6813,6 +6815,8 @@ class ShansAi:
                     # Use regular long message splitting for non-callback messages
                     await self._send_long_message_with_keyboard_removal(update, context, text, parse_mode, reply_markup)
                 return
+            else:
+                self.logger.info(f"Message is not too long ({len(text)} chars), proceeding with normal sending")
             
             # Send new message with keyboard using context.bot.send_message directly
             if hasattr(update, 'callback_query') and update.callback_query is not None:
