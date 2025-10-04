@@ -6798,7 +6798,12 @@ class ShansAi:
             max_length = 4000  # Leave some margin for safety
             if len(text) > max_length:
                 self.logger.info(f"Splitting long message ({len(text)} chars) into multiple parts")
-                await self._send_long_callback_message_with_keyboard_removal(update, context, text, parse_mode, reply_markup)
+                # Check if we have a valid callback_query for the special function
+                if hasattr(update, 'callback_query') and update.callback_query is not None:
+                    await self._send_long_callback_message_with_keyboard_removal(update, context, text, parse_mode, reply_markup)
+                else:
+                    # Use regular long message splitting for non-callback messages
+                    await self._send_long_message_with_keyboard_removal(update, context, text, parse_mode, reply_markup)
                 return
             
             # Send new message with keyboard using context.bot.send_message directly
@@ -7307,6 +7312,54 @@ class ShansAi:
                         text=f"❌ Ошибка разбивки сообщения: {text[:1000]}...",
                         reply_markup=reply_markup
                     )
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback long message sending also failed: {fallback_error}")
+
+    async def _send_long_message_with_keyboard_removal(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, parse_mode: str = None, reply_markup=None):
+        """Отправить длинное сообщение по частям для обычных сообщений с удалением клавиатуры"""
+        try:
+            # Clean Markdown if parse_mode is Markdown
+            if parse_mode == 'Markdown':
+                text = self._safe_markdown(text)
+            
+            # Разбиваем текст на части
+            parts = self._split_text_smart(text)
+            
+            for i, part in enumerate(parts):
+                # Добавляем индикатор части для многочастных сообщений
+                if len(parts) > 1:
+                    part_text = f"📄 **Часть {i+1} из {len(parts)}:**\n\n{part}"
+                else:
+                    part_text = part
+                
+                # Clean Markdown for each part
+                if parse_mode == 'Markdown':
+                    part_text = self._safe_markdown(part_text)
+                
+                # Отправляем каждую часть через _send_message_safe
+                try:
+                    # Для первой части добавляем reply_markup если есть
+                    current_reply_markup = reply_markup if i == 0 else None
+                    
+                    await self._send_message_safe(update, part_text, reply_markup=current_reply_markup, parse_mode=parse_mode)
+                except Exception as part_error:
+                    self.logger.error(f"Error sending message part {i+1}: {part_error}")
+                    # Fallback для этой части
+                    try:
+                        await self._send_message_safe(update, part_text)
+                    except Exception as fallback_error:
+                        self.logger.error(f"Fallback for part {i+1} also failed: {fallback_error}")
+                
+                # Небольшая пауза между частями для избежания rate limiting
+                if i < len(parts) - 1:  # Не делаем паузу после последней части
+                    import asyncio
+                    await asyncio.sleep(0.5)
+                    
+        except Exception as e:
+            self.logger.error(f"Error sending long message with keyboard removal: {e}")
+            # Fallback: отправляем обрезанную версию
+            try:
+                await self._send_message_safe(update, f"❌ Ошибка разбивки сообщения: {text[:1000]}...", reply_markup=reply_markup)
             except Exception as fallback_error:
                 self.logger.error(f"Fallback long message sending also failed: {fallback_error}")
 
